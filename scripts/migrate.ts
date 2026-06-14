@@ -121,15 +121,20 @@ if (invokedDirectly) {
   const postgres = (await import("postgres")).default;
   config({ path: join(HERE, "..", ".env.local") });
 
-  const url = process.env.DATABASE_URL;
+  // Migrations use the session-mode connection (DIRECT_URL) when present; the
+  // transaction pooler (DATABASE_URL) is for the app runtime.
+  const url = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
   if (!url || url.trim() === "") {
-    console.error("DATABASE_URL is not set. Copy .env.example to .env.local.");
+    console.error(
+      "Neither DIRECT_URL nor DATABASE_URL is set. Copy .env.example to .env.local.",
+    );
     process.exit(1);
   }
 
   const cmd = process.argv[2] ?? "up";
   const all = process.argv.includes("--all");
-  const sql = postgres(url, { max: 1, onnotice: () => {} });
+  // prepare:false keeps this compatible with the Supabase connection pooler.
+  const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
 
   try {
     if (cmd === "up") {
