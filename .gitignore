@@ -1,0 +1,28 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# production
+/build
+
+# env — never commit real secrets (commit .env.example only)
+.env
+.env.local
+.env*.local
+
+# drizzle generated artifacts (migrations/ are hand-authored and committed)
+/drizzle
+
+# logs / os
+*.log
+npm-debug.log*
+.DS_Store
+
+# typescript
+*.tsbuildinfo
