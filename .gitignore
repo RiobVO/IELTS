@@ -26,3 +26,9 @@ npm-debug.log*
 
 # typescript
 *.tsbuildinfo
+
+# client-owned test content (BRIEF §11) — don't commit raw HTML/audio
+/samples/*.html
+/samples/*.htm
+/samples/*.mp3
+/samples/*.m4a
