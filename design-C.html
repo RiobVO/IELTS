@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NINE — Direction C · Playful Mastery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FFF7F0; --ink:#2B2440; --muted:#6E6685; --card:#FFFFFF;
+    --p1:#FF6B5E; --p2:#6C5CE7; --p3:#00C2A8; --p4:#FFC247; --line:#F0E6DC;
+    --ease:cubic-bezier(.34,1.56,.64,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:"Nunito",sans-serif;overflow-x:hidden;
+    line-height:1.55;-webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(circle at 90% 8%,rgba(108,92,231,.10),transparent 40%),
+      radial-gradient(circle at 5% 80%,rgba(0,194,168,.10),transparent 40%)}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  nav{display:flex;align-items:center;justify-content:space-between;padding:24px 28px;max-width:1180px;margin:0 auto}
+  .logo{font-family:"Baloo 2";font-weight:800;font-size:27px;color:var(--ink);display:flex;align-items:center;gap:8px}
+  .logo .face{width:32px;height:32px;border-radius:11px;background:var(--p1);display:grid;place-items:center;
+    font-size:17px;transform:rotate(-6deg);box-shadow:0 6px 0 #E0533F}
+  .navlinks{display:flex;gap:28px;font-weight:700;font-size:15px;color:var(--muted)}
+  .navlinks a{color:inherit;text-decoration:none;transition:.2s}.navlinks a:hover{color:var(--p2)}
+  .btn{font-family:"Baloo 2";font-weight:700;font-size:16px;cursor:pointer;border:none;
+    padding:11px 24px;border-radius:16px;transition:transform .25s var(--ease)}
+  .btn-primary{background:var(--p2);color:#fff;box-shadow:0 6px 0 #5346c4}
+  .btn-primary:hover{transform:translateY(-2px)}.btn-primary:active{transform:translateY(3px);box-shadow:0 3px 0 #5346c4}
+  .btn-ghost{background:#fff;color:var(--ink);box-shadow:0 5px 0 var(--line);border:2px solid var(--line)}
+  .btn-ghost:hover{transform:translateY(-2px)}
+  .hero{padding:54px 0 30px;display:grid;grid-template-columns:1.05fr .95fr;gap:50px;align-items:center}
+  .badge{display:inline-flex;align-items:center;gap:8px;background:#fff;border:2px solid var(--line);
+    padding:8px 15px;border-radius:999px;font-weight:800;font-size:13px;color:var(--p2);margin-bottom:22px;box-shadow:0 4px 0 var(--line)}
+  h1{font-family:"Baloo 2";font-weight:800;font-size:clamp(42px,6vw,76px);line-height:1.02;letter-spacing:-1px}
+  h1 .w1{color:var(--p1)}h1 .w2{color:var(--p2)}h1 .w3{color:var(--p3)}
+  .sub{font-size:18px;color:var(--muted);font-weight:600;max-width:450px;margin:22px 0 30px}
+  .cta-row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .proof{margin-top:30px;display:flex;align-items:center;gap:12px;font-weight:700;color:var(--muted);font-size:14px}
+  .streak{background:var(--p4);color:#5a4500;padding:6px 12px;border-radius:12px;font-family:"Baloo 2";font-weight:800;box-shadow:0 4px 0 #e0a82f}
+  /* mascot card */
+  .panel{background:var(--card);border:2px solid var(--line);border-radius:26px;padding:22px;
+    box-shadow:0 14px 0 var(--line);position:relative}
+  .mascot{position:absolute;top:-34px;right:18px;width:64px;height:64px;border-radius:20px;background:var(--p3);
+    display:grid;place-items:center;font-size:34px;transform:rotate(8deg);box-shadow:0 8px 0 #00a18b;animation:bob 3s ease-in-out infinite}
+  @keyframes bob{50%{transform:rotate(8deg) translateY(-7px)}}
+  .ptop{font-family:"Baloo 2";font-weight:700;font-size:17px;margin-bottom:14px}
+  .filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+  .chip{font-family:"Nunito";font-weight:800;font-size:12.5px;padding:7px 14px;border-radius:13px;
+    border:2px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;transition:.2s var(--ease)}
+  .chip.on{background:var(--p2);color:#fff;border-color:var(--p2)}
+  .chip:hover{transform:translateY(-2px)}
+  .item{display:flex;align-items:center;gap:13px;padding:13px;border-radius:16px;transition:.25s var(--ease)}
+  .item:hover{background:var(--bg)}
+  .ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-family:"Baloo 2";font-weight:800;color:#fff;font-size:15px}
+  .meta{flex:1}.meta h4{font-family:"Baloo 2";font-weight:700;font-size:15px}.meta p{font-size:12.5px;color:var(--muted);font-weight:700}
+  .xp{font-family:"Baloo 2";font-weight:800;font-size:13px;color:var(--p3);background:rgba(0,194,168,.12);padding:5px 11px;border-radius:10px}
+  .strip{margin-top:46px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .stat{background:#fff;border:2px solid var(--line);border-radius:20px;padding:18px;box-shadow:0 7px 0 var(--line)}
+  .stat .k{font-family:"Baloo 2";font-weight:800;font-size:38px;line-height:1}
+  .stat:nth-child(1) .k{color:var(--p1)}.stat:nth-child(2) .k{color:var(--p2)}
+  .stat:nth-child(3) .k{color:var(--p3)}.stat:nth-child(4) .k{color:var(--p4)}
+  .stat .l{font-size:12.5px;color:var(--muted);font-weight:700;margin-top:5px}
+  .reveal{opacity:0;transform:translateY(22px);animation:rise .7s var(--ease) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.25s}.d4{animation-delay:.35s}
+  @media(max-width:880px){.hero{grid-template-columns:1fr;gap:48px}.navlinks{display:none}.strip{grid-template-columns:1fr 1fr;gap:22px}}
+  @media(prefers-reduced-motion:reduce){.reveal{animation:none;opacity:1;transform:none}.mascot{animation:none}}
+</style>
+</head>
+<body>
+  <nav>
+    <div class="logo"><span class="face">🦉</span>NINE</div>
+    <div class="navlinks"><a href="#">Reading</a><a href="#">Listening</a><a href="#">Leaderboard</a><a href="#">Pricing</a></div>
+    <button class="btn btn-primary">Start free</button>
+  </nav>
+
+  <div class="wrap">
+    <section class="hero">
+      <div>
+        <span class="badge reveal d1">⚡ Reading · Listening · AI Writing soon</span>
+        <h1 class="reveal d2"><span class="w1">Learn</span> it.<br><span class="w2">Drill</span> it.<br><span class="w3">Band 9</span> it.</h1>
+        <p class="sub reveal d3">The fun way to crush IELTS. Real exam tests, streaks, badges —
+          and analytics that show <strong>exactly</strong> which question types to practice next.</p>
+        <div class="cta-row reveal d3">
+          <button class="btn btn-primary">Take a free test</button>
+          <button class="btn btn-ghost">See how it works</button>
+        </div>
+        <div class="proof reveal d4"><span class="streak">🔥 7-day streak</span> Join 500+ students leveling up</div>
+      </div>
+
+      <div class="panel reveal d3">
+        <div class="mascot">🦉</div>
+        <div class="ptop">📚 Reading — pick your quest</div>
+        <div class="filters">
+          <span class="chip on">All</span><span class="chip">Matching Headings</span>
+          <span class="chip on">T/F/NG</span><span class="chip">Sentence Comp</span><span class="chip">MCQ</span>
+        </div>
+        <div class="item"><div class="ic" style="background:var(--p1);box-shadow:0 5px 0 #e0533f">P2</div>
+          <div class="meta"><h4>Academic Reading — Set 12</h4><p>Passage 2 · T/F/NG · Matching</p></div><div class="xp">+120 XP</div></div>
+        <div class="item"><div class="ic" style="background:var(--p3);box-shadow:0 5px 0 #00a18b">P1</div>
+          <div class="meta"><h4>The History of Tea</h4><p>Passage 1 · Sentence Comp</p></div><div class="xp">+90 XP</div></div>
+        <div class="item"><div class="ic" style="background:var(--p2);box-shadow:0 5px 0 #5346c4">FR</div>
+          <div class="meta"><h4>Full Reading Mock #4</h4><p>Full Reading · 60 min · Boss level</p></div><div class="xp">+300 XP</div></div>
+      </div>
+    </section>
+
+    <section class="strip">
+      <div class="stat reveal d1"><div class="k">11</div><div class="l">question types</div></div>
+      <div class="stat reveal d2"><div class="k">500+</div><div class="l">students playing</div></div>
+      <div class="stat reveal d3"><div class="k">🏅</div><div class="l">badges to unlock</div></div>
+      <div class="stat reveal d4"><div class="k">9.0</div><div class="l">final boss</div></div>
+    </section>
+  </div>
+<script>document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('on')));</script>
+</body>
+</html>
