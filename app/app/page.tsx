@@ -46,8 +46,22 @@ export default async function Dashboard() {
           Роль: {profile?.role} · Тариф: {profile?.tier} · Рейтинг:{" "}
           {profile?.rating}
         </p>
-        <p style={{ color: "#999", marginTop: "1.5rem" }}>
-          Каталог, exam-режим и аналитика — следующие шаги (§9).
+        <a
+          href="/app/reading"
+          style={{
+            display: "inline-block",
+            marginTop: "1.5rem",
+            padding: "0.7rem 1.1rem",
+            background: "#6C5CE7",
+            color: "#fff",
+            borderRadius: 10,
+            fontWeight: 700,
+          }}
+        >
+          Reading — каталог тестов →
+        </a>
+        <p style={{ color: "#999", marginTop: "1rem", fontSize: ".85rem" }}>
+          Exam-режим и аналитика — следующие шаги (§9).
         </p>
       </div>
     </main>
