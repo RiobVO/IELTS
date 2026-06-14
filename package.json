@@ -18,6 +18,8 @@
     "verify": "tsx scripts/verify.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.1",
     "drizzle-orm": "^0.38.3",
     "next": "^15.5.0",
     "postgres": "^3.4.5",

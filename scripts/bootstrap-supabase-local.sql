@@ -25,6 +25,11 @@ CREATE TABLE IF NOT EXISTS auth.users (
   id    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email text
 );
+-- Columns the on_auth_user_created trigger reads (real Supabase auth.users has
+-- these). Added via ALTER ... IF NOT EXISTS so this stays idempotent.
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS raw_app_meta_data  jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS created_at         timestamptz NOT NULL DEFAULT now();
 
 -- auth.uid(): on Supabase this reads the `sub` claim from the request JWT.
 -- Local stub returns a GUC so RLS policies that call auth.uid() stay valid.

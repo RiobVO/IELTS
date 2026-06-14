@@ -1,0 +1,41 @@
+import { redirect } from "next/navigation";
+import { createClient } from "./supabase/server";
+
+/** The current authenticated user (or null). */
+export async function getUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+}
+
+/** The current user's profile row (or null). Read under RLS (own row only). */
+export async function getProfile() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("profile")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+  return data;
+}
+
+/** Redirects to /auth if not signed in; otherwise returns the user. */
+export async function requireUser() {
+  const user = await getUser();
+  if (!user) redirect("/auth");
+  return user;
+}
+
+/** Redirects unless the signed-in user is an admin (BRIEF §4.5 / §6.1). */
+export async function requireAdmin() {
+  const profile = await getProfile();
+  if (!profile) redirect("/auth");
+  if (profile.role !== "admin") redirect("/app");
+  return profile;
+}
