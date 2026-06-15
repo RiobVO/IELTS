@@ -77,7 +77,7 @@ export function parseListening(html: string): ParsedTest {
       clone.find("input").replaceWith(" ____ ");
       const prompt = clone.text().replace(/\s+/g, " ").trim();
       questions.push(
-        mk(num, inTable ? "table_completion" : completionType, prompt, null, null, key),
+        mk(num, part, inTable ? "table_completion" : completionType, prompt, null, null, key),
       );
     });
 
@@ -97,7 +97,7 @@ export function parseListening(html: string): ParsedTest {
           const label = $(r).closest("label").text().replace(/\s+/g, " ").trim();
           return { value, label: label || value };
         });
-      questions.push(mk(num, "mcq_single", prompt, options, null, key));
+      questions.push(mk(num, part, "mcq_single", prompt, options, null, key));
     });
 
     // 3) matching (chip-bank letters dropped into .dropzone[data-q] rows)
@@ -122,7 +122,7 @@ export function parseListening(html: string): ParsedTest {
         .text()
         .replace(/\s+/g, " ")
         .trim();
-      questions.push(mk(num, "matching_features", prompt, chips, groupKey, key));
+      questions.push(mk(num, part, "matching_features", prompt, chips, groupKey, key));
     }
   });
 
@@ -158,6 +158,7 @@ export function parseListening(html: string): ParsedTest {
 /** Build a ParsedQuestion with its answer routed from KEY (variants). */
 function mk(
   number: number,
+  passageOrder: number,
   qtype: string,
   promptHtml: string,
   options: ParsedOption[] | null,
@@ -166,6 +167,7 @@ function mk(
 ): ParsedQuestion {
   return {
     number,
+    passageOrder,
     qtype,
     promptHtml,
     options,

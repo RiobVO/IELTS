@@ -77,6 +77,7 @@ export async function persistTest(
         tierRequired: "basic",
         bandType: parsed.bandType as ContentInsert["bandType"],
         questionTypes: parsed.questionTypes,
+        bandScale: parsed.bandScale, // raw->band table for Full tests; null otherwise
         status: "draft",
         createdBy: opts.createdBy ?? null,
       })
@@ -99,16 +100,18 @@ export async function persistTest(
         .returning({ id: passageT.id });
       passageIdByOrder.set(p.order, row!.id);
     }
-    // TODO(full-tests): map each question to its section's passage. Single
-    // passage/part tests (this template) have exactly one.
-    const defaultPassageId = passageIdByOrder.get(1) ?? [...passageIdByOrder.values()][0]!;
+    // Map each question to its passage/part via passageOrder (Listening: 4 parts;
+    // single Reading: order 1). Falls back to the first passage if the order is
+    // somehow missing, so a question is never orphaned.
+    const fallbackPassageId =
+      passageIdByOrder.get(1) ?? [...passageIdByOrder.values()][0]!;
 
     for (const q of parsed.questions) {
       const [qrow] = await tx
         .insert(questionT)
         .values({
           contentItemId,
-          passageId: defaultPassageId,
+          passageId: passageIdByOrder.get(q.passageOrder) ?? fallbackPassageId,
           number: q.number,
           qtype: q.qtype as QuestionInsert["qtype"],
           promptHtml: q.promptHtml,
