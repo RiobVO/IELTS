@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, desc, eq, gte, lt } from "drizzle-orm";
+import { and, count, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { answerKey, attempt, contentItem, profile, question } from "@/db/schema";
@@ -97,7 +97,7 @@ export async function ensureAttempt(contentItemId: string): Promise<{
     };
   }
 
-  const [row] = await db
+  const inserted = await db
     .insert(attempt)
     .values({
       userId: user.id,
@@ -107,10 +107,42 @@ export async function ensureAttempt(contentItemId: string): Promise<{
       answers: {},
       startedAt: new Date(), // SERVER time — authoritative for §4.6 timing
     })
+    // 0007 partial unique index: at most one in_progress attempt per (user, test).
+    // The loser of a concurrent first-start inserts nothing (resumed below).
+    .onConflictDoNothing({
+      target: [attempt.userId, attempt.contentItemId],
+      where: sql`${attempt.status} = 'in_progress'`,
+    })
     .returning({ id: attempt.id });
 
-  // test_start — событие воронки (§11). Только на ВНОВЬ открытой попытке (resume
-  // выше уже вернулся), иначе метрика «стартов» раздулась бы на каждый перезаход.
+  // Lost the race: another call created the in_progress row first — resume IT,
+  // don't open a second one and don't double-fire test_start.
+  if (inserted.length === 0) {
+    const [winner] = await db
+      .select({ id: attempt.id, answers: attempt.answers })
+      .from(attempt)
+      .where(
+        and(
+          eq(attempt.userId, user.id),
+          eq(attempt.contentItemId, contentItemId),
+          eq(attempt.status, "in_progress"),
+        ),
+      )
+      .orderBy(desc(attempt.startedAt))
+      .limit(1);
+    if (winner) {
+      return {
+        attemptId: winner.id,
+        answers: (winner.answers as Record<string, string>) ?? {},
+      };
+    }
+    // Vanishingly rare: the winner's row was submitted between the conflict and
+    // this read, so no in_progress row exists now. Re-enter the page so the next
+    // ensureAttempt opens a fresh attempt cleanly.
+    redirect(`/app/reading/${contentItemId}`);
+  }
+
+  // We created the attempt -> test_start (§11), exactly once per real start.
   const [meta] = await db
     .select({
       section: contentItem.section,
@@ -127,7 +159,7 @@ export async function ensureAttempt(contentItemId: string): Promise<{
     mode: "practice",
   });
 
-  return { attemptId: row!.id, answers: {} };
+  return { attemptId: inserted[0]!.id, answers: {} };
 }
 
 /**

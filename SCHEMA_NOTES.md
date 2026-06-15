@@ -340,3 +340,28 @@ through the server-privileged path (Drizzle owner / `service_role`). Idempotency
   throwaway script (valid pending → applied + upgrade; replay → duplicate, no double
   extend; **forged tx with attacker payload → rejected, no grant, victim untouched**;
   amount≠plan → failed, no grant), then deleted. `0006` applied to Supabase.
+
+## 0007 — one in_progress attempt per (user, test)
+
+Anti-cheat / integrity (BRIEF §4.6). `ensureAttempt` resumes an existing
+in_progress attempt via a check-then-insert, but the gap between the resume
+SELECT and the INSERT let two concurrent first-starts (double-click / two tabs /
+retry) each miss the resume and both INSERT — two in_progress rows for one
+(user, content_item), and a doubled `test_start` funnel event (§11; surfaced by
+the telemetry review).
+
+- **Schema (lockstep):** partial unique index `attempt_one_in_progress_idx ON
+  attempt (user_id, content_item_id) WHERE status = 'in_progress'` (schema.ts
+  `uniqueIndex(...).where(...)` + migration `0007`). `up` first collapses any
+  pre-existing duplicate in_progress rows (keep the most recent per pair) so the
+  index can't fail to build on legacy data; `down` only drops the index (the
+  dedup is a one-way data repair, not restored).
+- **App:** `ensureAttempt` inserts with `ON CONFLICT (user_id, content_item_id)
+  WHERE status='in_progress' DO NOTHING`. Empty `returning` => lost the race =>
+  resume the winner's row and do NOT fire `test_start`. Exactly one row + one
+  event per real start.
+- **Verification.** `verify` gate green (up→down→up idempotent, index builds +
+  drops). Behavioral invariant proven on local docker by a throwaway script
+  (2nd in_progress via ON CONFLICT inserts nothing; plain 2nd raises a unique
+  violation; a fresh in_progress is allowed once the prior one is submitted),
+  then deleted. NOT yet applied to Supabase — see heads-up.
