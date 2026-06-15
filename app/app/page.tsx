@@ -88,6 +88,9 @@ export default async function Dashboard() {
           <Link href="/app/reading" style={S.cta}>
             Reading — каталог тестов →
           </Link>
+          <Link href="/app/listening" style={S.cta}>
+            Listening — каталог тестов →
+          </Link>
           <Link href="/app/leaderboard" style={S.ctaSecondary}>
             Лидерборд →
           </Link>
