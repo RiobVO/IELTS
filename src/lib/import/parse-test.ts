@@ -12,7 +12,9 @@ import type {
 interface KeyData {
   correctAnswers: Record<string, string>;
   acceptableAnswers: Record<string, string[]>;
-  mcqGroups: Record<string, string[]>;
+  // Real files key mcq-multi by a RANGE ("8-12") -> the member numbers + the
+  // shared correct letter-set (data-mcq-group / mcqGroups in the source JS).
+  mcqGroups: Record<string, { qs: number[]; correct: string[] }>;
   explanations: Record<string, string>;
   evidence: Record<string, { para: string; snippet: string }>;
 }
@@ -42,6 +44,15 @@ export function parseTest(html: string): ParsedTest {
   };
   const questionTypesRaw: Record<string, string> =
     extractData(script, "questionTypes") ?? {};
+
+  // Map each mcq-multi member question number -> its group key + shared correct
+  // letter-set, so a "8-12" group keys all five questions as one mcq_set.
+  const mcqByNum = new Map<number, { groupKey: string; correct: string[] }>();
+  for (const [groupKey, g] of Object.entries(data.mcqGroups)) {
+    for (const n of g?.qs ?? []) {
+      mcqByNum.set(n, { groupKey, correct: g.correct ?? [] });
+    }
+  }
 
   // --- meta ---
   const h1 = $("#passageContent h1").first().text().trim();
@@ -101,18 +112,62 @@ export function parseTest(html: string): ParsedTest {
     );
   });
 
+  // letter options (A, B, ...) from .mcq-row inputs of an MCQ block.
+  const optionsIn = (block: cheerio.Cheerio<ReturnType<typeof $>[number]>) =>
+    block
+      .find(".mcq-row")
+      .toArray()
+      .map((row) => {
+        const value = $(row).find("input").attr("value") ?? "";
+        const label = $(row).find("span").last().text().trim();
+        return { value, label: label || value };
+      });
+  // question stem shown above an MCQ block's options.
+  const promptOf = (block: cheerio.Cheerio<ReturnType<typeof $>[number]>) =>
+    block.closest(".question").find(".question-rubric p").last().text().trim();
+
+  // MCQ single: one radio block per question (.mcq-single, id="question-N").
+  $(".mcq-single").each((_, el) => {
+    const $el = $(el);
+    const num = Number.parseInt(($el.attr("id") ?? "").replace(/\D+/g, ""), 10);
+    if (!Number.isFinite(num)) return;
+    byNumber.set(
+      num,
+      blank(num, promptOf($el), optionsIn($el), grpKey($el.closest(".question").attr("id"))),
+    );
+  });
+
+  // MCQ multi: one .mcq-block (data-mcq-group="8-12") covers several questions
+  // (mcq-q-num-box) that share one option list and one correct letter-set.
+  $(".mcq-block").each((_, el) => {
+    const $el = $(el);
+    const groupKey = $el.attr("data-mcq-group") || null;
+    const options = optionsIn($el);
+    const prompt = promptOf($el);
+    $el.find(".mcq-q-num-box").each((__, box) => {
+      const num = Number.parseInt($(box).text().trim(), 10);
+      if (!Number.isFinite(num)) return;
+      byNumber.set(num, blank(num, prompt, options, groupKey));
+    });
+  });
+
   // assign canon type + answer key per question
   for (const [num, q] of byNumber) {
-    const rawType = questionTypesRaw[String(num)] ?? "";
-    const { type, confident } = canonQuestionType(rawType);
-    if (type) {
-      q.qtype = type;
-      if (!confident)
-        warnings.push(`Q${num}: fuzzy type match "${rawType}" -> ${type}`);
+    if (mcqByNum.has(num)) {
+      // mcq-multi member: the type is unambiguous from the group structure.
+      q.qtype = "mcq_multi";
     } else {
-      warnings.push(`Q${num}: unknown question type label "${rawType}"`);
+      const rawType = questionTypesRaw[String(num)] ?? "";
+      const { type, confident } = canonQuestionType(rawType);
+      if (type) {
+        q.qtype = type;
+        if (!confident)
+          warnings.push(`Q${num}: fuzzy type match "${rawType}" -> ${type}`);
+      } else {
+        warnings.push(`Q${num}: unknown question type label "${rawType}"`);
+      }
     }
-    q.answer = routeAnswer(num, data, warnings);
+    q.answer = routeAnswer(num, data, mcqByNum, warnings);
     q.evidenceRef = data.evidence[String(num)]?.para ?? null;
   }
 
@@ -122,7 +177,8 @@ export function parseTest(html: string): ParsedTest {
   const keyCount = new Set([
     ...Object.keys(data.correctAnswers),
     ...Object.keys(data.acceptableAnswers),
-    ...Object.keys(data.mcqGroups),
+    // mcqGroups are keyed by range ("8-12") — count their MEMBER numbers.
+    ...Object.values(data.mcqGroups).flatMap((g) => (g?.qs ?? []).map(String)),
   ]).size;
   if (keyCount !== questions.length) {
     warnings.push(
@@ -176,14 +232,17 @@ const NORM = (s: string) => s.trim().toUpperCase().replace(/\s+/g, " ");
 function routeAnswer(
   num: number,
   data: KeyData,
+  mcqByNum: Map<number, { groupKey: string; correct: string[] }>,
   warnings: string[],
 ): ParsedAnswerKey {
   const key = String(num);
   const explanation = data.explanations[key] ?? null;
   const evidence = data.evidence[key] ?? null;
 
-  if (data.mcqGroups[key]) {
-    return { mode: "mcq_set", accept: data.mcqGroups[key], explanation, evidence };
+  const grp = mcqByNum.get(num);
+  if (grp) {
+    // mcq-multi member: graded as a set of letters (BRIEF §4.2 mcq_set).
+    return { mode: "mcq_set", accept: grp.correct, explanation, evidence };
   }
   if (data.acceptableAnswers[key]) {
     return {
