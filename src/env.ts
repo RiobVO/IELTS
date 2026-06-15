@@ -58,3 +58,21 @@ export function cronSecret(): string | null {
   const v = process.env.CRON_SECRET;
   return v && v.trim() !== "" ? v : null;
 }
+
+/**
+ * Опциональная конфигурация PostHog (продуктовая аналитика, BRIEF §11). Как и
+ * платёжные ключи — НЕ обязательна для старта: без ключа аналитика работает
+ * no-op (fail-open — телеметрия некритична, в отличие от платежей). Один
+ * project-ключ обслуживает и браузер, и серверный capture; host по умолчанию —
+ * US-облако PostHog, переопределяется через env. Ключ публичный (NEXT_PUBLIC_,
+ * ingest-only) — безопасен в браузере. SERVER-ONLY-чтение здесь; клиентский
+ * провайдер получает эти значения пропсами из server-компонента, а не импортом
+ * этого модуля (он валидирует серверные секреты при загрузке).
+ */
+export function posthogConfig(): { key: string; host: string } | null {
+  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  if (!key || key.trim() === "") return null;
+  const host =
+    process.env.NEXT_PUBLIC_POSTHOG_HOST?.trim() || "https://us.i.posthog.com";
+  return { key, host };
+}
