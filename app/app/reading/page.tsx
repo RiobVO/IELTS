@@ -1,6 +1,11 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
+import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import {
+  effectiveTier,
+  meetsTier,
+  type Tier,
+} from "@/lib/tiers";
 import {
   categoryLabel,
   qtypeLabel,
@@ -15,8 +20,14 @@ interface TestRow {
   category: string;
   question_types: string[];
   duration_seconds: number | null;
-  tier_required: string;
+  tier_required: Tier;
 }
+
+const TIER_LABEL: Record<Tier, string> = {
+  basic: "Basic",
+  premium: "Premium",
+  ultra: "Ultra",
+};
 
 export default async function ReadingCatalog({
   searchParams,
@@ -26,6 +37,13 @@ export default async function ReadingCatalog({
   await requireUser();
   const sp = await searchParams;
   const supabase = await createClient();
+
+  // Effective tier drives the per-card lock badge: an expired premium counts as
+  // basic, so a stale profile.tier never unlocks a card it shouldn't (§4.8).
+  const profile = await getProfile();
+  const userTier = profile
+    ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
+    : "basic";
 
   let query = supabase
     .from("content_item")
@@ -98,27 +116,45 @@ export default async function ReadingCatalog({
           <div style={S.empty}>Нет тестов под этот фильтр.</div>
         ) : (
           <div style={S.grid}>
-            {tests.map((t) => (
-              <Link key={t.id} href={`/app/reading/${t.id}`} style={S.card}>
-                <div style={S.cardTop}>
-                  <span style={S.badge}>{categoryLabel(t.category)}</span>
-                  {t.duration_seconds ? (
-                    <span style={S.duration}>
-                      {Math.round(t.duration_seconds / 60)} мин
-                    </span>
-                  ) : null}
-                </div>
-                <div style={S.cardTitle}>{t.title}</div>
-                <div style={S.types}>
-                  {t.question_types.map((qt) => (
-                    <span key={qt} style={S.typeChip}>
-                      {qtypeLabel(qt)}
-                    </span>
-                  ))}
-                </div>
-                <div style={S.start}>Начать →</div>
-              </Link>
-            ))}
+            {tests.map((t) => {
+              // Locked tests stay listed (so the user sees what Premium unlocks)
+              // but route to the upgrade page instead of the exam (§4.8).
+              const locked = !meetsTier(userTier, t.tier_required);
+              return (
+                <Link
+                  key={t.id}
+                  href={locked ? "/app/upgrade" : `/app/reading/${t.id}`}
+                  style={S.card}
+                >
+                  <div style={S.cardTop}>
+                    <span style={S.badge}>{categoryLabel(t.category)}</span>
+                    <div style={S.cardTopRight}>
+                      {locked && (
+                        <span style={S.lock}>
+                          🔒 {TIER_LABEL[t.tier_required]}
+                        </span>
+                      )}
+                      {t.duration_seconds ? (
+                        <span style={S.duration}>
+                          {Math.round(t.duration_seconds / 60)} мин
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div style={S.cardTitle}>{t.title}</div>
+                  <div style={S.types}>
+                    {t.question_types.map((qt) => (
+                      <span key={qt} style={S.typeChip}>
+                        {qtypeLabel(qt)}
+                      </span>
+                    ))}
+                  </div>
+                  <div style={S.start}>
+                    {locked ? "Открыть на Premium →" : "Начать →"}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
@@ -196,6 +232,15 @@ const S: Record<string, React.CSSProperties> = {
   badge: {
     background: "#efeafe",
     color: "#5a44d6",
+    fontWeight: 700,
+    fontSize: ".72rem",
+    padding: "3px 9px",
+    borderRadius: 6,
+  },
+  cardTopRight: { display: "flex", alignItems: "center", gap: ".5rem" },
+  lock: {
+    background: "#fff4e5",
+    color: "#b45309",
     fontWeight: 700,
     fontSize: ".72rem",
     padding: "3px 9px",

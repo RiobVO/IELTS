@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { notFound, redirect } from "next/navigation";
+import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { categoryLabel } from "@/lib/labels";
 import ExamRunner from "./ExamRunner";
 
@@ -26,10 +27,20 @@ export default async function ReadingTestPage({
 
   const { data: test } = await supabase
     .from("content_item")
-    .select("id,title,category,duration_seconds")
+    .select("id,title,category,duration_seconds,tier_required")
     .eq("id", id)
     .single();
   if (!test) notFound();
+
+  // Access gate (§4.8): a Basic user must not even reach the exam for a
+  // Premium/Ultra test. effectiveTier downgrades an expired premium to basic,
+  // so a stale profile.tier can't slip past. The submit action re-checks
+  // server-side (defense in depth) — this redirect is the UX-facing guard.
+  const profile = await getProfile();
+  const userTier = profile
+    ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
+    : "basic";
+  if (!meetsTier(userTier, test.tier_required as Tier)) redirect("/app/upgrade");
 
   const { data: passages } = await supabase
     .from("passage")
