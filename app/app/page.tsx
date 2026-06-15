@@ -27,15 +27,23 @@ export default async function Dashboard() {
   const profile = await getProfile();
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from("attempt")
-    .select(
-      "id,content_item_id,raw_score,per_type_breakdown,submitted_at,content_item:content_item_id(title,category)",
-    )
-    .eq("status", "submitted")
-    .order("submitted_at", { ascending: false })
-    .limit(20);
+  const [{ data }, { count: unreadCount }] = await Promise.all([
+    supabase
+      .from("attempt")
+      .select(
+        "id,content_item_id,raw_score,per_type_breakdown,submitted_at,content_item:content_item_id(title,category)",
+      )
+      .eq("status", "submitted")
+      .order("submitted_at", { ascending: false })
+      .limit(20),
+    // Непрочитанные уведомления (RLS notification_select_own) — счётчик в навигации.
+    supabase
+      .from("notification")
+      .select("id", { count: "exact", head: true })
+      .is("read_at", null),
+  ]);
   const attempts = (data ?? []) as unknown as AttemptRow[];
+  const unread = unreadCount ?? 0;
 
   const completed = attempts.length;
   const avg =
@@ -88,6 +96,9 @@ export default async function Dashboard() {
           </Link>
           <Link href="/app/invite" style={S.ctaSecondary}>
             Пригласить →
+          </Link>
+          <Link href="/app/notifications" style={S.ctaSecondary}>
+            Уведомления{unread > 0 ? ` (${unread})` : ""} →
           </Link>
         </div>
 
