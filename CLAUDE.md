@@ -162,11 +162,26 @@ already locked (async eval: store → API-route → poll; seeded topics + minima
 form; soft daily cap for Ultra; Speaking input modality still open). **Current focus:
 core polish (Phase 1) + Phase 2 hardening to launch.**
 
+Launch hardening on `main` (§11 / §4.6, toward audience growth):
+- **Product telemetry (PostHog)** — server-authoritative funnel capture (`signup`
+  / `test_start` / `test_submit` / `upgrade`, distinctId = Supabase user.id, can't
+  be spoofed client-side) + a client pageview/identify provider; key-optional,
+  fail-open seam in `src/lib/analytics/` (no key → silent no-op; flush bounded so a
+  down PostHog can't hang a request; autocapture/session-replay off + URL query
+  stripped for exam/auth privacy). Activated against a live US-cloud project.
+- **Submit rate-limit throttle** (§4.6) — per-user velocity cap on the submit
+  action (`src/lib/anti-cheat.ts`), the last open anti-cheat gap, now closed.
+- **One in_progress attempt per (user, test)** — migration `0007` partial unique
+  index + `ensureAttempt` `ON CONFLICT DO NOTHING`, closing the concurrent
+  first-start race (two in_progress rows / doubled `test_start`). On local docker;
+  **NOT yet applied to Supabase.**
+
 Pending: Listening (blocked — needs a sample Listening HTML + audio), Full-test
-band scoring (blocked — needs a 40-question file), submit rate-limit throttle
-(idempotency + server timing are done; per-frequency throttle still open), i18n
-(deferred — EN at launch per §10). Branch per phase, merge to `main` when a phase
-is done.
+band scoring (blocked — needs a 40-question file), anti-bot on signup
+(Turnstile/captcha + email-verify + signup velocity — needs Cloudflare keys +
+Supabase toggle), notifications + weekly digest (§11 — table exists; jobs/content
+TODO, email delivery needs a provider), i18n (deferred — EN at launch per §10).
+Branch per phase, merge to `main` when a phase is done.
 
 ## Git attribution (hard rule)
 
