@@ -32,3 +32,8 @@ npm-debug.log*
 /samples/*.htm
 /samples/*.mp3
 /samples/*.m4a
+# ...and the same content dropped in the repo root (audio anywhere)
+*.mp3
+*.m4a
+/listening-test.html
+/design-*.html

@@ -48,6 +48,8 @@ export interface ParsedTest {
   durationSeconds: number | null;
   /** canon question_type enum values present, deduped (fills the catalog filter) */
   questionTypes: string[];
+  /** raw->band scale {raw: band} for Full tests (40Q); null for single passage/part (§11). */
+  bandScale: Record<string, number> | null;
   passages: ParsedPassage[];
   questions: ParsedQuestion[];
   /** low-confidence spots for the admin review screen (BRIEF §4.2.1) */
