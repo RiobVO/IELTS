@@ -154,8 +154,13 @@ Banff, exposed the gap), passage HTML sanitization (XSS), server-stamped
 idempotent submit (§4.6), and the admin browser upload + publish UI (§4.2.1).
 
 **Phases 0, 1 (minus the blocked Listening + Full-band items), and 2 are all on
-`main`. Phase 3 (AI Writing/Speaking, §4.10) is next** — the first LLM in the
-codebase (core stays LLM-free per §4.2); `topic` table already exists as a stub.
+`main`. Phase 3 (AI Writing/Speaking, §4.10) is FROZEN — «coming soon».** Not being
+built now: audience-first; AI stays a marketing hook + Ultra upsell for later. NOT
+deleted — the `topic` table + `topic_skill` enum remain stubs (the first LLM in the
+codebase is deferred; core stays LLM-free per §4.2). On unfreeze the decisions are
+already locked (async eval: store → API-route → poll; seeded topics + minimal admin
+form; soft daily cap for Ultra; Speaking input modality still open). **Current focus:
+core polish (Phase 1) + Phase 2 hardening to launch.**
 
 Pending: Listening (blocked — needs a sample Listening HTML + audio), Full-test
 band scoring (blocked — needs a 40-question file), submit rate-limit throttle
