@@ -261,6 +261,15 @@ export async function submitAttempt(
   }));
   const result = grade(keys, answers);
 
+  // Band only for Full tests (40Q): map raw score via the stored band_scale
+  // (§11). Single passage/part has no band_scale -> null (percent only).
+  const [ci] = await db
+    .select({ bandScale: contentItem.bandScale })
+    .from(contentItem)
+    .where(eq(contentItem.id, contentItemId));
+  const scale = (ci?.bandScale as Record<string, number> | null) ?? null;
+  const bandValue = scale ? (scale[String(result.rawScore)] ?? null) : null;
+
   const submittedAt = new Date();
   // SERVER-trusted elapsed: now - started_at (stamped at exam start). The client
   // never supplies the duration anymore (§4.6 — closes the "too-fast" forgery).
@@ -281,7 +290,7 @@ export async function submitAttempt(
       submittedAt,
       timeUsedSeconds,
       rawScore: result.rawScore,
-      bandScore: null,
+      bandScore: bandValue != null ? String(bandValue) : null,
       perTypeBreakdown: result.perType,
     })
     .where(and(eq(attempt.id, attemptId), eq(attempt.status, "in_progress")))

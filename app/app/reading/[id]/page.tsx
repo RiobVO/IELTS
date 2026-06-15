@@ -45,9 +45,20 @@ export default async function ReadingTestPage({
 
   const { data: passages } = await supabase
     .from("passage")
-    .select('title,body_html,"order"')
+    .select('title,body_html,"order",audio_path')
     .eq("content_item_id", id)
     .order("order");
+
+  // Listening: one audio file for the whole test. Local public/ path now;
+  // a full Storage URL (signed, §11) once audio lives in the cloud.
+  const rawAudio =
+    (passages ?? []).find((p) => (p as { audio_path: string | null }).audio_path)
+      ?.audio_path ?? null;
+  const audioSrc = rawAudio
+    ? /^https?:\/\//.test(rawAudio)
+      ? rawAudio
+      : `/${rawAudio.replace(/^\/+/, "")}`
+    : null;
 
   // answer_key is intentionally NOT fetched (RLS-locked; no leak before submit).
   const { data: questionsData } = await supabase
@@ -78,6 +89,7 @@ export default async function ReadingTestPage({
         passages={(passages ?? []) as never}
         questions={(questionsData ?? []) as Question[]}
         durationSeconds={test.duration_seconds}
+        audioSrc={audioSrc}
       />
     </main>
   );
