@@ -57,15 +57,25 @@ BEGIN
   -- replayed signup never duplicates the invitee's row. referral.code is a
   -- fresh per-row id (UNIQUE), distinct from the shared link code above.
   IF v_inviter IS NOT NULL THEN
-    INSERT INTO public.referral (inviter_id, invitee_id, code, status)
-    SELECT
-      v_inviter,
-      NEW.id,
-      upper(substr(translate(gen_random_uuid()::text, '-', ''), 1, 12)),
-      'registered'
-    WHERE NOT EXISTS (
-      SELECT 1 FROM public.referral WHERE invitee_id = NEW.id
-    );
+    -- The referral row is a non-essential perk: it must NEVER abort the auth
+    -- user's signup. Guard only this INSERT (the profile INSERT above stays
+    -- unguarded on purpose — a user without a profile is broken and SHOULD
+    -- abort). So a referral.code collision or any future constraint degrades
+    -- to a warning instead of blocking account creation.
+    BEGIN
+      INSERT INTO public.referral (inviter_id, invitee_id, code, status)
+      SELECT
+        v_inviter,
+        NEW.id,
+        upper(substr(translate(gen_random_uuid()::text, '-', ''), 1, 12)),
+        'registered'
+      WHERE NOT EXISTS (
+        SELECT 1 FROM public.referral WHERE invitee_id = NEW.id
+      );
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'handle_new_user: referral insert skipped for invitee %: %',
+        NEW.id, SQLERRM;
+    END;
   END IF;
 
   RETURN NEW;
