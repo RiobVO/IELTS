@@ -111,77 +111,96 @@ module load.
 
 ## Status
 
-Phase 1 (MVP core, §9) is complete on `main`: auth, content import, catalog with
-filters, exam mode, server-side grading with per-question-type breakdown, dashboard.
+> Линейная карта фаз: `0 → 1 → 2 (2A→2B→2C→2D) → launch hardening → [FROZEN] 3`.
+> Каждая миграция `000N` = маркер под-этапа. Высокоуровневый roadmap — BRIEF §9;
+> разрешённые неоднозначности — SCHEMA_NOTES. AI (Phase 3) намеренно последняя и
+> заморожена.
 
-Phase 2 (Engagement) complete and merged to `main`: rating+leaderboard, badges,
-referrals, tiers+payment. **2A (rating + leaderboard) done** (migration `0003`): Elo
-rating on first attempt + adaptive test difficulty, post-submit engine
-(`src/lib/progress/apply-post-submit.ts`: streak/XP + rating + leaderboard
-recompute), `leaderboard_entry` precompute (`src/lib/progress/leaderboard.ts`),
-`/app/leaderboard` UI, UZ region seed. **2B (badges) done** (migration `0004`):
-criteria engine (`src/lib/progress/badges.ts`) wired into the post-submit hook,
-12 seeded badges, `/app/badges` showcase, result-page unlock animation (codes
-passed on the redirect). **2C (referrals) done + applied** (migration `0005`):
-`handle_new_user` trigger extended to link `referred_by` + create a `referral` row
-(fresh per-row UNIQUE code, `status='registered'`) from a signup `ref_code`, with
-the referral INSERT EXCEPTION-guarded so the perk never aborts signup;
-`maybeRewardReferral` (`src/lib/progress/referral.ts`) rewards inviter +100 /
-invitee +50 XP exactly once after the invitee's first submit, claim + grants in one
-`db.transaction`; `?ref=` capture in `/auth`; `/app/invite` UI. Adversarial review
-passed (SQL-injection / anti-abuse §11 / migration-lockstep lenses); `0005` applied
-to Supabase. Known accepted gaps (NOT 2C scope): multi-account referral farming and
-reward-on-any-submit — the real §11 control is the separate anti-bot milestone
-(Turnstile/captcha + velocity cap). See SCHEMA_NOTES "Phase 2C". **2D (tiers +
-payment) done + applied** (migration `0006`, 14th table `payment`): tier gating via
-`src/lib/tiers.ts` (`effectiveTier` demotes expired premium; catalog lock / exam-
-start / submit-action / result-review gates, all defense-in-depth on the server),
-Basic daily limit; payment seam (`src/lib/payments/`) keys-optional with a production
-fail-closed stub; `initiatePayment` creates a `pending` row only, the webhook
-(`/api/webhooks/[provider]`) is the sole grant path — idempotent + single-fire,
-deriving entitlement from the trusted pending row (NOT the request body) and
-validating against `findPlan`; cron downgrade (`/api/cron/expire-premium`, Bearer
-`CRON_SECRET`, fail-closed); `/app/upgrade` + stub checkout + `/app/profile` +
-landing pricing. Adversarial review (payment-integrity / access-control / auth-infra)
-caught a critical body-trust webhook escalation — fixed; lifecycle proven E2E
-(valid/duplicate/forged/mismatch) on local docker; `0006` applied. Known accepted
-gaps: daily-limit TOCTOU (soft nudge), HMAC signature is a placeholder until merchant
-keys (§10). See SCHEMA_NOTES "Phase 2D".
+### ✅ Phase 0 — Foundation (on `main`)
+DB schema (`schema.ts` + up/down SQL migrations), dual DB access (Supabase
+anon+RLS / Drizzle owner), `on_auth_user_created` trigger, local Supabase
+emulation + verify gate.
 
-Phase-1 tail merged to `main`: MCQ single/multi parsing (the first real MCQ file,
-Banff, exposed the gap), passage HTML sanitization (XSS), server-stamped
-`in_progress` attempts + autosave/resume (§4.3) with server-trusted timing +
-idempotent submit (§4.6), and the admin browser upload + publish UI (§4.2.1).
+### ✅ Phase 1 — MVP core (on `main`)
+*Done = студент проходит реальный тест и видит разбор по типам.*
+- Auth (email + OAuth seams)
+- Content import (deterministic parser, no LLM) + admin browser upload + publish UI (§4.2.1)
+- Catalog with filters (category / question types)
+- Exam mode: server-stamped `in_progress` + autosave/resume (§4.3), server-trusted timing, idempotent submit (§4.6)
+- Server-side grading + per-question-type breakdown
+- Dashboard
+- *Tail:* MCQ single/multi parsing (gap exposed by the first real MCQ file, Banff), passage HTML sanitization (XSS)
+- **Listening** — dedicated parser (`parse-listening.ts`: key in `KEY`, band as `band(r)` function materialized to a scale, `.part`/`.gap`/radio/`.dropzone`); persist (4 parts→passages, audio path, `band_scale`); exam audio player + Listening catalog. Real 40Q file verified end-to-end (parse + persist on local docker).
+- **Full Reading** — `parse-reading-full.ts` (3 passages, `acceptableVariants` key, `getBand` scale, matching/classification radio tables, MCQ-two checkboxes, question→passage mapping); band scoring for Full tests (40Q) wired into submit + result. Closes the §11 band gap for Listening + Full Reading.
+- **All single-passage question types** — single parser gained matching-headings (heading-drop + bank), matching-table rows, sentence-endings (`.ending-*`/`.dd-*`); **all 9 real Reading files now parse every question with a key** (was: Population 7/13, Tuatara 9/14, Happy 5/13, Animals 10/14).
+- **Shared catalog** (`_CatalogView`) for Reading + Listening; exam route is content-generic.
+- *Launch steps (NOT code — done at deploy):* load tests into the live DB via `/admin`; host audio in Supabase Storage (local `public/` for dev); apply `0007` to Supabase. Browser e2e (login + content) not yet eyeballed; every layer verified separately (parse probes on all files + persist on local docker + tsc + build).
 
-**Phases 0, 1 (minus the blocked Listening + Full-band items), and 2 are all on
-`main`. Phase 3 (AI Writing/Speaking, §4.10) is FROZEN — «coming soon».** Not being
-built now: audience-first; AI stays a marketing hook + Ultra upsell for later. NOT
-deleted — the `topic` table + `topic_skill` enum remain stubs (the first LLM in the
-codebase is deferred; core stays LLM-free per §4.2). On unfreeze the decisions are
-already locked (async eval: store → API-route → poll; seeded topics + minimal admin
-form; soft daily cap for Ultra; Speaking input modality still open). **Current focus:
-core polish (Phase 1) + Phase 2 hardening to launch.**
+### ✅ Phase 2 — Engagement (on `main`, all applied to Supabase)
+- **2A — rating + leaderboard** (migration `0003`): Elo rating on first attempt +
+  adaptive difficulty, post-submit engine (`src/lib/progress/apply-post-submit.ts`:
+  streak/XP + rating + leaderboard recompute), `leaderboard_entry` precompute
+  (`src/lib/progress/leaderboard.ts`), `/app/leaderboard`, UZ region seed.
+- **2B — badges** (migration `0004`): criteria engine (`src/lib/progress/badges.ts`)
+  wired into the post-submit hook, 12 seeded badges, `/app/badges` showcase,
+  result-page unlock animation (codes passed on the redirect).
+- **2C — referrals** (migration `0005`, applied): `handle_new_user` trigger links
+  `referred_by` + creates a `referral` row (per-row UNIQUE code, `status='registered'`)
+  from a signup `ref_code`, INSERT EXCEPTION-guarded so the perk never aborts signup;
+  `maybeRewardReferral` (`src/lib/progress/referral.ts`) rewards inviter +100 /
+  invitee +50 XP once after the invitee's first submit (claim + grants in one
+  `db.transaction`); `?ref=` capture in `/auth`; `/app/invite` UI. Adversarial review
+  passed (SQL-injection / anti-abuse / migration-lockstep).
+  *Accepted gaps (NOT 2C scope):* multi-account farming, reward-on-any-submit — the
+  real §11 control is the separate anti-bot milestone. See SCHEMA_NOTES "Phase 2C".
+- **2D — tiers + payment** (migration `0006`, 14th table `payment`, applied): tier
+  gating via `src/lib/tiers.ts` (`effectiveTier` demotes expired premium; catalog /
+  exam-start / submit / result-review gates, defense-in-depth on the server), Basic
+  daily limit; payment seam (`src/lib/payments/`) keys-optional with a production
+  fail-closed stub; `initiatePayment` creates a `pending` row only, the webhook
+  (`/api/webhooks/[provider]`) is the sole grant path — idempotent + single-fire,
+  entitlement derived from the trusted pending row (NOT the request body), validated
+  against `findPlan`; cron downgrade (`/api/cron/expire-premium`, Bearer `CRON_SECRET`,
+  fail-closed); `/app/upgrade` + stub checkout + `/app/profile` + landing pricing.
+  Adversarial review caught a critical body-trust webhook escalation — fixed;
+  lifecycle proven E2E (valid/duplicate/forged/mismatch) on local docker.
+  *Accepted gaps:* daily-limit TOCTOU (soft nudge), HMAC signature is a placeholder
+  until merchant keys (§10). See SCHEMA_NOTES "Phase 2D".
 
-Launch hardening on `main` (§11 / §4.6, toward audience growth):
-- **Product telemetry (PostHog)** — server-authoritative funnel capture (`signup`
-  / `test_start` / `test_submit` / `upgrade`, distinctId = Supabase user.id, can't
-  be spoofed client-side) + a client pageview/identify provider; key-optional,
-  fail-open seam in `src/lib/analytics/` (no key → silent no-op; flush bounded so a
-  down PostHog can't hang a request; autocapture/session-replay off + URL query
-  stripped for exam/auth privacy). Activated against a live US-cloud project.
-- **Submit rate-limit throttle** (§4.6) — per-user velocity cap on the submit
-  action (`src/lib/anti-cheat.ts`), the last open anti-cheat gap, now closed.
-- **One in_progress attempt per (user, test)** — migration `0007` partial unique
-  index + `ensureAttempt` `ON CONFLICT DO NOTHING`, closing the concurrent
-  first-start race (two in_progress rows / doubled `test_start`). On local docker;
-  **NOT yet applied to Supabase.**
+### 🟡 Launch hardening — current focus (on `main`, §11 / §4.6)
+- ✅ **Product telemetry (PostHog)** — server-authoritative funnel (`signup` /
+  `test_start` / `test_submit` / `upgrade`, distinctId = Supabase user.id, not
+  client-spoofable) + client pageview/identify provider; key-optional fail-open seam
+  in `src/lib/analytics/` (no key → no-op; bounded flush; autocapture/session-replay
+  off, URL query stripped for exam/auth privacy). Activated on a live US-cloud project.
+- ✅ **Sentry** error monitoring — key-optional, fail-open.
+- ✅ **Submit rate-limit throttle** (§4.6) — per-user velocity cap on submit
+  (`src/lib/anti-cheat.ts`), the last open anti-cheat gap, now closed.
+- ✅ **In-app notification centre** (§11) — commit `87cb048`.
+- ✅ **Re-import data-loss guard** — `persistTest` refuses a destructive re-import
+  when the test already has attempts (`RegradeRequiredError`), so re-importing a sat
+  test can't FK-cascade away attempt history. (Full Re-grade — version bump +
+  recompute + "score adjusted" mark — still deferred; this just stops the data loss.)
+- 🟡 **One in_progress attempt per (user, test)** — migration `0007` partial unique
+  index + `ensureAttempt` `ON CONFLICT DO NOTHING`, closing the concurrent first-start
+  race (two in_progress rows / doubled `test_start`). On local docker;
+  **NOT yet applied to Supabase.** ← вероятно «в процессе у Claude Code».
 
-Pending: Listening (blocked — needs a sample Listening HTML + audio), Full-test
-band scoring (blocked — needs a 40-question file), anti-bot on signup
-(Turnstile/captcha + email-verify + signup velocity — needs Cloudflare keys +
-Supabase toggle), notifications + weekly digest (§11 — table exists; jobs/content
-TODO, email delivery needs a provider), i18n (deferred — EN at launch per §10).
-Branch per phase, merge to `main` when a phase is done.
+### ⛔ Blocked / pending (needs external input)
+- **Anti-bot on signup** — Turnstile/captcha + email-verify + signup velocity; needs
+  Cloudflare keys + Supabase toggle. This is the real §11 control behind the 2C gaps.
+- **Weekly digest / email delivery** — `notification` table + in-app centre exist;
+  digest jobs/content + email provider still TODO.
+- **i18n** — deferred (EN at launch per §10).
+
+### 🧊 Phase 3 — AI Writing/Speaking (§4.10) — FROZEN, «coming soon», LAST
+Frozen 2026-06-15: audience-first; AI stays a marketing hook + Ultra upsell. NOT
+deleted — `topic` table + `topic_skill` enum remain stubs (core stays LLM-free per
+§4.2). On unfreeze the decisions are already locked (async eval: store → API-route →
+poll; seeded topics + minimal admin form; soft daily cap for Ultra; Speaking input
+modality still open).
+
+> Branch per phase, merge to `main` when a phase is done.
 
 ## Git attribution (hard rule)
 
