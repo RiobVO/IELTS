@@ -39,9 +39,18 @@ export const READING_CATEGORIES = [
   "full_reading",
 ] as const;
 
+export const PERIOD_LABELS: Record<string, string> = {
+  weekly: "Эта неделя",
+  monthly: "Этот месяц",
+  all_time: "За всё время",
+};
+
 export function qtypeLabel(v: string): string {
   return QTYPE_LABELS[v] ?? v;
 }
 export function categoryLabel(v: string): string {
   return CATEGORY_LABELS[v] ?? v;
+}
+export function periodLabel(v: string): string {
+  return PERIOD_LABELS[v] ?? v;
 }

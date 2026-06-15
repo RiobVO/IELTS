@@ -192,6 +192,10 @@ export const contentItem = pgTable(
     bandScale: jsonb("band_scale"),
     status: contentStatus("status").notNull().default("draft"),
     version: integer("version").notNull().default(1),
+    // Elo difficulty rating of the test itself (BRIEF §4.6 anti-cheat / Elo).
+    // Updated server-side after each rated attempt; count tracks rated attempts.
+    difficultyRating: integer("difficulty_rating").notNull().default(1000),
+    difficultyCount: integer("difficulty_count").notNull().default(0),
     createdBy: uuid("created_by").references(() => profile.id, {
       onDelete: "set null",
     }),

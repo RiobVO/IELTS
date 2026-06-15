@@ -3,7 +3,12 @@ import { signIn, signUp } from "./actions";
 export default async function AuthPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; message?: string; next?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    message?: string;
+    next?: string;
+    ref?: string;
+  }>;
 }) {
   const sp = await searchParams;
 
@@ -52,8 +57,23 @@ export default async function AuthPage({
           </p>
         )}
 
+        {sp.ref && (
+          <p
+            style={{
+              background: "#f1eefe",
+              color: "#4b3fb0",
+              padding: "0.6rem 0.75rem",
+              borderRadius: 8,
+              fontSize: ".9rem",
+            }}
+          >
+            Регистрация по приглашению — ты и пригласивший получите бонус.
+          </p>
+        )}
+
         <form style={{ display: "grid", gap: "0.75rem", marginTop: "0.5rem" }}>
           <input type="hidden" name="next" value={sp.next ?? "/app"} />
+          <input type="hidden" name="ref" value={sp.ref ?? ""} />
           <input
             name="email"
             type="email"

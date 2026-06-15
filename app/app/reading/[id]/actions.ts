@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { answerKey, attempt, question } from "@/db/schema";
 import { getUser } from "@/lib/auth";
 import { grade, type GradeKey } from "@/lib/grading/grade";
+import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
 
 /**
  * Submit an attempt. Grading is server-only (BRIEF §4.6 anti-cheat): the client
@@ -42,6 +43,12 @@ export async function submitAttempt(
 
   const result = grade(keys, answers);
 
+  // One timestamp for the row and the streak/day calc (avoid a midnight-boundary
+  // mismatch). NOTE: started_at is still derived from the client-supplied
+  // duration — server-trusted timing lands with the autosave/resume milestone
+  // (an in_progress row stamped server-side at exam start); see §4.6.
+  const submittedAt = new Date();
+
   // band is only meaningful for Full (40-question) tests (BRIEF §11); single
   // passage/part -> percent only, band_score null.
   const [row] = await db
@@ -52,8 +59,8 @@ export async function submitAttempt(
       mode: "practice",
       status: "submitted",
       answers,
-      startedAt: new Date(Date.now() - timeUsedSeconds * 1000),
-      submittedAt: new Date(),
+      startedAt: new Date(submittedAt.getTime() - timeUsedSeconds * 1000),
+      submittedAt,
       timeUsedSeconds,
       rawScore: result.rawScore,
       bandScore: null,
@@ -61,5 +68,21 @@ export async function submitAttempt(
     })
     .returning({ id: attempt.id });
 
-  redirect(`/app/reading/${contentItemId}/result?a=${row!.id}`);
+  // Post-submit progression (BRIEF §4.6): streak/XP always, Elo rating on the
+  // first submitted attempt, leaderboard recompute. Best-effort — applyPostSubmit
+  // never throws, so no try/catch, and redirect() stays outside any try block.
+  const post = await applyPostSubmit({
+    userId: user.id,
+    contentItemId,
+    attemptId: row!.id,
+    rawScore: result.rawScore,
+    total: result.total,
+    submittedAt,
+  });
+
+  // Carry the exact badge codes this submit unlocked to the result page, so it
+  // celebrates them once — no timestamp inference, no cross-attempt misattribution.
+  const unlocked = post.awardedBadges.map((b) => b.code).join(",");
+  const q = unlocked ? `&unlocked=${encodeURIComponent(unlocked)}` : "";
+  redirect(`/app/reading/${contentItemId}/result?a=${row!.id}${q}`);
 }

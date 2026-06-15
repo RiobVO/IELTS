@@ -113,9 +113,28 @@ module load.
 
 Phase 1 (MVP core, §9) is complete on `main`: auth, content import, catalog with
 filters, exam mode, server-side grading with per-question-type breakdown, dashboard.
-Pending: browser admin-upload UI, autosave/resume, Listening (blocked — no sample
-file), Full-test band scoring (needs a 40-question file), i18n, HTML sanitization.
-Branch per phase, merge to `main` when a phase is done.
+
+Phase 2 in progress. **2A (rating + leaderboard) done** (migration `0003`): Elo
+rating on first attempt + adaptive test difficulty, post-submit engine
+(`src/lib/progress/apply-post-submit.ts`: streak/XP + rating + leaderboard
+recompute), `leaderboard_entry` precompute (`src/lib/progress/leaderboard.ts`),
+`/app/leaderboard` UI, UZ region seed. **2B (badges) done** (migration `0004`):
+criteria engine (`src/lib/progress/badges.ts`) wired into the post-submit hook,
+12 seeded badges, `/app/badges` showcase, result-page unlock animation (codes
+passed on the redirect). **2C (referrals) — code landed, NOT yet reviewed/verified**
+(migration `0005`): `handle_new_user` trigger extended to link `referred_by` +
+create a `referral` row from a signup `ref_code`; `maybeRewardReferral`
+(`src/lib/progress/referral.ts`) rewards the inviter after the invitee's first
+test; `?ref=` capture in `/auth`; `/app/invite` UI. ⚠️ Migration `0005` is NOT yet
+applied to Supabase, and the 2C adversarial review (esp. the SECURITY DEFINER
+trigger / SQL-injection lens) did not finish — re-run it before relying on 2C.
+See SCHEMA_NOTES "Phase 2A"/"Phase 2B". Next: finish 2C review + apply `0005`, then
+2D tiers+payment.
+
+Pending: browser admin-upload UI, autosave/resume (+ the server-trusted-timing and
+submit rate-limit/idempotency §4.6 gaps noted in SCHEMA_NOTES), Listening (blocked
+— no sample file), Full-test band scoring (needs a 40-question file), i18n, HTML
+sanitization. Branch per phase, merge to `main` when a phase is done.
 
 ## Git attribution (hard rule)
 
