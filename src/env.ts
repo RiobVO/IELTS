@@ -76,3 +76,22 @@ export function posthogConfig(): { key: string; host: string } | null {
     process.env.NEXT_PUBLIC_POSTHOG_HOST?.trim() || "https://us.i.posthog.com";
   return { key, host };
 }
+
+/**
+ * Опциональная конфигурация Sentry (error-monitoring, BRIEF §11). Как и PostHog —
+ * НЕ обязательна для старта: без DSN мониторинг работает no-op (fail-open). DSN
+ * публичный (NEXT_PUBLIC_, ingest-only) — безопасен в браузере; один DSN
+ * обслуживает server/edge/browser. SERVER/EDGE-чтение здесь (sentry.*.config);
+ * клиентский init читает process.env напрямую, не импортируя этот модуль (он
+ * валидирует серверные секреты при загрузке). Source-map upload (читаемые
+ * стектрейсы) требует auth-token — отложен до запуска; ошибки ловятся и без него.
+ */
+export function sentryConfig(): { dsn: string; environment: string } | null {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+  if (!dsn || dsn.trim() === "") return null;
+  const environment =
+    process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT?.trim() ||
+    process.env.NODE_ENV ||
+    "development";
+  return { dsn, environment };
+}
