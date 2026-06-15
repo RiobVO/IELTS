@@ -43,6 +43,8 @@ const EXACT: Record<string, QuestionType> = {
   sentencecompletion: "sentence_completion",
   summarycompletion: "summary_completion",
   notecompletion: "note_completion",
+  notescompletion: "note_completion",
+  classification: "matching_features",
   flowchartcompletion: "flowchart_completion",
   flowchartcompletion2: "flowchart_completion",
   tablecompletion: "table_completion",
