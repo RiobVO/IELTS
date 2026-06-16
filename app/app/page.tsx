@@ -2,11 +2,10 @@ import Link from "next/link";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { categoryLabel, qtypeLabel } from "@/lib/labels";
-import { AppHeader } from "@/components/app/AppHeader";
+import { AppShell } from "./_AppShell";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
 import { Icon, type IconName } from "@/components/core/icons";
-import { signOut } from "../auth/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,12 +26,6 @@ function total(b: Breakdown): number {
   return Object.values(b).reduce((s, x) => s + x.total, 0);
 }
 
-function computeInitials(name: string, email?: string | null): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const fromName = parts.slice(0, 2).map((s) => s[0]).join("");
-  return (fromName || email?.[0] || "U").toUpperCase();
-}
-
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
 export default async function Dashboard() {
@@ -40,33 +33,21 @@ export default async function Dashboard() {
   const profile = await getProfile();
   const supabase = await createClient();
 
-  const [{ data }, { count: unreadCount }] = await Promise.all([
-    supabase
-      .from("attempt")
-      .select(
-        "id,content_item_id,raw_score,band_score,per_type_breakdown,submitted_at,content_item:content_item_id(title,category)",
-      )
-      .eq("status", "submitted")
-      .order("submitted_at", { ascending: false })
-      .limit(20),
-    // Непрочитанные уведомления (RLS notification_select_own) — счётчик в шапке.
-    supabase
-      .from("notification")
-      .select("id", { count: "exact", head: true })
-      .is("read_at", null),
-  ]);
+  const { data } = await supabase
+    .from("attempt")
+    .select(
+      "id,content_item_id,raw_score,band_score,per_type_breakdown,submitted_at,content_item:content_item_id(title,category)",
+    )
+    .eq("status", "submitted")
+    .order("submitted_at", { ascending: false })
+    .limit(20);
   const attempts = (data ?? []) as unknown as AttemptRow[];
-  const unread = unreadCount ?? 0;
 
-  // Профиль → шапка + band-кольцо.
+  // Профиль → band-кольцо + stat-строка.
   const streak = profile?.current_streak ?? 0;
   const xp = profile?.xp ?? 0;
   const rating = profile?.rating ?? 1000;
   const bandTarget = profile?.target_band != null ? Number(profile.target_band) : null;
-  const initials = computeInitials(
-    (profile?.display_name ?? profile?.email ?? "") as string,
-    profile?.email,
-  );
 
   // Последняя попытка с выставленным band (single-passage тесты band не имеют).
   const banded = attempts.find((a) => a.band_score != null);
@@ -102,98 +83,94 @@ export default async function Dashboard() {
       : "Take a test to see your current band here.";
 
   return (
-    <div style={S.shell}>
-      <AppHeader active="dashboard" streak={streak} xp={xp} initials={initials} unread={unread} signOut={signOut} />
-
-      <div style={S.scroll}>
-        <div style={S.wrap}>
-          {/* Top — прогресс + кольцо */}
-          <div style={S.split}>
-            <div style={{ ...S.card, padding: 34, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-              <div style={S.eyebrow}>Current progress</div>
-              <div style={S.bigBand}>{bandLatest ?? "—"}</div>
-              <p style={S.bandLead}>
-                {gap ? (
-                  <>
-                    You&apos;re only <strong style={S.strong}>{gap} band</strong> away from your target score of{" "}
-                    <strong style={S.strong}>{bandTarget}</strong>.
-                  </>
-                ) : (
-                  progressCopy
-                )}
-              </p>
-              <div style={{ marginTop: 26 }}>
-                <Button size="lg" trailingIcon="arrow-right" href="/app/reading">
-                  Continue practice
-                </Button>
-              </div>
-            </div>
-            <div style={{ ...S.card, padding: 34, display: "grid", placeItems: "center" }}>
-              <BandRing current={bandLatest} target={bandTarget} />
+    <AppShell active="dashboard">
+      <div style={S.wrap}>
+        {/* Top — прогресс + кольцо */}
+        <div style={S.split}>
+          <div style={{ ...S.card, padding: 34, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={S.eyebrow}>Current progress</div>
+            <div style={S.bigBand}>{bandLatest ?? "—"}</div>
+            <p style={S.bandLead}>
+              {gap ? (
+                <>
+                  You&apos;re only <strong style={S.strong}>{gap} band</strong> away from your target score of{" "}
+                  <strong style={S.strong}>{bandTarget}</strong>.
+                </>
+              ) : (
+                progressCopy
+              )}
+            </p>
+            <div style={{ marginTop: 26 }}>
+              <Button size="lg" trailingIcon="arrow-right" href="/app/reading">
+                Continue practice
+              </Button>
             </div>
           </div>
-
-          {/* Stats */}
-          <div style={S.stats}>
-            <Stat icon="flame" color="var(--streak)" value={streak} label="Day streak" />
-            <Stat icon="zap" color="var(--gold-500)" value={fmt(xp)} label="Total XP" />
-            <Stat icon="crown" color="var(--brand)" value={rating} label="Rating" />
-          </div>
-
-          {/* Weak areas + focus today */}
-          {weakest && (
-            <div style={S.splitStretch}>
-              <div style={{ ...S.card, padding: 30 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-                  <h2 style={S.sectionTitle}>Weak areas</h2>
-                  <Badge tone="error">Worst first</Badge>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                  {weak.map((w) => (
-                    <SkillBar key={w.type} item={w} />
-                  ))}
-                </div>
-              </div>
-
-              <div style={S.focus}>
-                <img src="/bando-mark.svg" alt="" aria-hidden="true" style={S.focusMark} />
-                <div style={{ position: "relative", display: "flex", flexDirection: "column", height: "100%" }}>
-                  <div style={S.focusEyebrow}>
-                    <Icon name="target" size={15} strokeWidth={2.6} /> Focus today
-                  </div>
-                  <h2 style={S.focusTitle}>{weakest.label}</h2>
-                  <p style={S.focusText}>
-                    Currently your weakest type — only {weakest.correct} of {weakest.total} right. It has the biggest single impact on your band.
-                  </p>
-                  <div style={{ marginTop: "auto", paddingTop: 24 }}>
-                    <Button variant="secondary" trailingIcon="arrow-right" href="/app/reading">
-                      Fix this weakness
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Recent tests */}
-          <div style={{ ...S.card, padding: "26px 30px 10px" }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-              <h2 style={S.sectionTitle}>Recent tests</h2>
-              <Link href="/app/reading" style={S.viewAll}>
-                View all →
-              </Link>
-            </div>
-            {attempts.length === 0 ? (
-              <div style={S.empty}>
-                Ещё нет попыток. Пройди первый тест из каталога — здесь появится результат и разбивка по типам.
-              </div>
-            ) : (
-              attempts.slice(0, 8).map((a) => <TestRow key={a.id} a={a} />)
-            )}
+          <div style={{ ...S.card, padding: 34, display: "grid", placeItems: "center" }}>
+            <BandRing current={bandLatest} target={bandTarget} />
           </div>
         </div>
+
+        {/* Stats */}
+        <div style={S.stats}>
+          <Stat icon="flame" color="var(--streak)" value={streak} label="Day streak" />
+          <Stat icon="zap" color="var(--gold-500)" value={fmt(xp)} label="Total XP" />
+          <Stat icon="crown" color="var(--brand)" value={rating} label="Rating" />
+        </div>
+
+        {/* Weak areas + focus today */}
+        {weakest && (
+          <div style={S.splitStretch}>
+            <div style={{ ...S.card, padding: 30 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+                <h2 style={S.sectionTitle}>Weak areas</h2>
+                <Badge tone="error">Worst first</Badge>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                {weak.map((w) => (
+                  <SkillBar key={w.type} item={w} />
+                ))}
+              </div>
+            </div>
+
+            <div style={S.focus}>
+              <img src="/bando-mark.svg" alt="" aria-hidden="true" style={S.focusMark} />
+              <div style={{ position: "relative", display: "flex", flexDirection: "column", height: "100%" }}>
+                <div style={S.focusEyebrow}>
+                  <Icon name="target" size={15} strokeWidth={2.6} /> Focus today
+                </div>
+                <h2 style={S.focusTitle}>{weakest.label}</h2>
+                <p style={S.focusText}>
+                  Currently your weakest type — only {weakest.correct} of {weakest.total} right. It has the biggest single impact on your band.
+                </p>
+                <div style={{ marginTop: "auto", paddingTop: 24 }}>
+                  <Button variant="secondary" trailingIcon="arrow-right" href="/app/reading">
+                    Fix this weakness
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recent tests */}
+        <div style={{ ...S.card, padding: "26px 30px 10px" }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+            <h2 style={S.sectionTitle}>Recent tests</h2>
+            <Link href="/app/reading" style={S.viewAll}>
+              View all →
+            </Link>
+          </div>
+          {attempts.length === 0 ? (
+            <div style={S.empty}>
+              No tests yet. Take your first test from the catalog — your score and per-type breakdown will show up here.
+            </div>
+          ) : (
+            attempts.slice(0, 8).map((a) => <TestRow key={a.id} a={a} />)
+          )}
+        </div>
       </div>
-    </div>
+    </AppShell>
   );
 }
 
@@ -305,8 +282,6 @@ function TestRow({ a }: { a: AttemptRow }) {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  shell: { minHeight: "100dvh", display: "flex", flexDirection: "column", background: "var(--bg-base)" },
-  scroll: { flex: 1, minHeight: 0 },
   wrap: { maxWidth: 1160, margin: "0 auto", padding: "32px 28px 56px", display: "flex", flexDirection: "column", gap: 22 },
   card: {
     background: "var(--surface)",
