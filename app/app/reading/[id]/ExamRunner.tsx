@@ -21,9 +21,51 @@ interface Passage {
 }
 
 function fmt(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  return `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/**
+ * ExamTimer — серверно-авторитетный отсчёт. Спокойный по умолчанию; warn ≤5мин,
+ * error (с мягким миганием) ≤1мин. Цифры mono, тонкий рейл показывает израсходованное
+ * время. Без durationSeconds (нет лимита) — спокойный счёт вверх по elapsed, без рейла.
+ * Перенос 1:1 с design-drop ExamTimer.
+ */
+function ExamTimer({ remaining, total, elapsed }: { remaining: number | null; total: number | null; elapsed: number }) {
+  const hasCountdown = remaining != null && total != null;
+  const secs = hasCountdown ? remaining : elapsed;
+  const critical = hasCountdown && remaining <= 60;
+  const warning = hasCountdown && !critical && remaining <= 300;
+  const tone = critical ? "var(--error)" : warning ? "var(--warn)" : "var(--text-primary)";
+  const rail = critical ? "var(--error)" : warning ? "var(--warn)" : "var(--brand)";
+  const ratio = hasCountdown && total ? Math.max(0, Math.min(1, remaining / total)) : 0;
+
+  return (
+    <div
+      style={{
+        position: "relative", display: "inline-flex", alignItems: "center", gap: 10,
+        padding: "9px 14px", background: "var(--surface-raised)",
+        border: `1px solid ${critical ? "var(--error)" : warning ? "var(--warn)" : "var(--border)"}`,
+        borderRadius: "var(--radius-md)", overflow: "hidden",
+        boxShadow: critical ? "var(--glow-brand)" : "var(--shadow-xs)",
+      }}
+    >
+      <Icon name="clock" size={18} style={{ color: tone }} />
+      <span
+        style={{
+          fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
+          fontSize: "var(--text-lg)", fontWeight: 500, letterSpacing: "-0.02em",
+          color: tone, animation: critical ? "nine-blink 1s var(--ease-in-out) infinite" : "none",
+        }}
+      >
+        {fmt(secs)}
+      </span>
+      {hasCountdown && (
+        <span style={{ position: "absolute", left: 0, bottom: 0, height: 2, width: `${ratio * 100}%`, background: rail, transition: "width 1s linear, background-color var(--duration-base) var(--ease-standard)" }} />
+      )}
+    </div>
+  );
 }
 
 export default function ExamRunner({
@@ -79,7 +121,6 @@ export default function ExamRunner({
 
   const answered = Object.values(answers).filter((v) => v && v.trim()).length;
   const remaining = durationSeconds != null ? Math.max(0, durationSeconds - elapsed) : null;
-  const lowTime = remaining != null && remaining <= 60;
 
   const submit = () => {
     if (pending) return;
@@ -111,7 +152,7 @@ export default function ExamRunner({
 
       {/* Top bar */}
       <div style={S.top}>
-        <Link href="/app/reading" aria-label="Exit test" title="Exit test" style={S.exit}>
+        <Link href="/app/reading" aria-label="Exit test" title="Exit test" className="exam-exit" style={S.exit}>
           <Icon name="arrow-left" size={18} strokeWidth={2.4} />
         </Link>
         <div style={{ minWidth: 0 }}>
@@ -119,10 +160,7 @@ export default function ExamRunner({
           <div style={S.topMeta}>{meta}</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ ...S.timer, ...(lowTime ? S.timerLow : {}) }}>
-            <Icon name="clock" size={15} strokeWidth={2.3} />
-            {remaining != null ? fmt(remaining) : fmt(elapsed)}
-          </span>
+          <ExamTimer remaining={remaining} total={durationSeconds} elapsed={elapsed} />
           <Button trailingIcon="arrow-right" onClick={submit} loading={pending}>
             Submit
           </Button>
@@ -169,7 +207,7 @@ export default function ExamRunner({
               <span style={S.passageHeadText}>Reading passage</span>
             </div>
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-              <article className="bando-reading" style={{ padding: "26px 32px 48px", maxWidth: "64ch", margin: "0 auto" }}>
+              <article className="bando-reading" style={{ padding: "26px 32px 40px", maxWidth: "62ch", margin: "0 auto" }}>
                 {passages.map((p, i) => (
                   <div key={i} dangerouslySetInnerHTML={{ __html: p.body_html }} />
                 ))}
@@ -327,17 +365,19 @@ const READING_CSS = `
 .bando-reading p{margin:0 0 1em}
 .bando-reading h1,.bando-reading h2,.bando-reading h3{font-family:var(--font-reading);color:var(--reading-text);line-height:1.25}
 .bando-reading mark{background:var(--reading-mark);border-radius:3px;padding:0 .08em}
+.exam-exit{background:transparent;transition:var(--transition-colors)}
+.exam-exit:hover{background:var(--surface-hover)}
+@keyframes nine-blink{0%,100%{opacity:1}50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){[style*="nine-blink"]{animation:none!important}}
 `;
 
 const S: Record<string, React.CSSProperties> = {
   shell: { height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-base)" },
 
   top: { display: "flex", alignItems: "center", gap: 14, padding: "12px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg-raised)", flex: "none" },
-  exit: { flex: "none", width: 38, height: 38, borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", color: "var(--text-secondary)", background: "var(--surface-hover)", textDecoration: "none" },
+  exit: { flex: "none", width: 38, height: 38, borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", color: "var(--text-secondary)", textDecoration: "none" },
   topTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   topMeta: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
-  timer: { display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: "var(--radius-md)", background: "var(--surface-hover)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 600 },
-  timerLow: { background: "var(--error-subtle)", color: "var(--error-text)" },
 
   audioBar: { padding: "16px 24px", background: "var(--bg-raised)", borderBottom: "1px solid var(--border)", flex: "none" },
 
