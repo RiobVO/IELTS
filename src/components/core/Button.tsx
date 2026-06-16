@@ -89,7 +89,7 @@ export function Button({
   // и двойной остановки фокуса. Рендерим как <button> только без href или когда выключена.
   if (href && !isOff) {
     return (
-      <Link href={href} style={composedStyle} {...handlers}>
+      <Link href={href} style={composedStyle} {...handlers} {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}>
         {content}
       </Link>
     );
