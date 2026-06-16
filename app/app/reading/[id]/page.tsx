@@ -31,21 +31,33 @@ export default async function ReadingTestPage({
     .single();
   if (!test) notFound();
 
+  // Профиль и контент теста (пассажи + вопросы) независимы → тянем параллельно
+  // одним round-trip-ом вместо трёх последовательных. answer_key намеренно НЕ
+  // выбирается (RLS-locked; не утекает до submit).
+  const [profile, passagesRes, questionsRes] = await Promise.all([
+    getProfile(),
+    supabase
+      .from("passage")
+      .select('title,body_html,"order",audio_path')
+      .eq("content_item_id", id)
+      .order("order"),
+    supabase
+      .from("question")
+      .select("id,number,qtype,prompt_html,options,group_key")
+      .eq("content_item_id", id)
+      .order("number"),
+  ]);
+  const passages = passagesRes.data;
+  const questionsData = questionsRes.data;
+
   // Access gate (§4.8): a Basic user must not even reach the exam for a
   // Premium/Ultra test. effectiveTier downgrades an expired premium to basic,
   // so a stale profile.tier can't slip past. The submit action re-checks
   // server-side (defense in depth) — this redirect is the UX-facing guard.
-  const profile = await getProfile();
   const userTier = profile
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
     : "basic";
   if (!meetsTier(userTier, test.tier_required as Tier)) redirect("/app/upgrade");
-
-  const { data: passages } = await supabase
-    .from("passage")
-    .select('title,body_html,"order",audio_path')
-    .eq("content_item_id", id)
-    .order("order");
 
   // Listening: one audio file for the whole test. Local public/ path now;
   // a full Storage URL (signed, §11) once audio lives in the cloud.
@@ -57,13 +69,6 @@ export default async function ReadingTestPage({
       ? rawAudio
       : `/${rawAudio.replace(/^\/+/, "")}`
     : null;
-
-  // answer_key is intentionally NOT fetched (RLS-locked; no leak before submit).
-  const { data: questionsData } = await supabase
-    .from("question")
-    .select("id,number,qtype,prompt_html,options,group_key")
-    .eq("content_item_id", id)
-    .order("number");
 
   // Open (or resume) the server-stamped in_progress attempt — also re-runs the
   // access + daily-limit gate (§4.8) authoritatively before the exam loads.
