@@ -215,8 +215,22 @@ grading, submit, RLS, tiers, рейтинг). На каждом экране: в
   + `Input`, 1:1 с `AuthScreen.jsx`. Формы подключены к существующим server-actions
   (`signIn`/`signUp`), `actions.ts` **byte-identical**. В отличие от лендинга, экран строится
   на ОБЩИХ токенах+компонентах (не самодостаточный CSS).
-- **TODO экраны** (из `design-drop/ui_kits/nine/*.jsx`, по одному): dashboard, catalog
-  (reading/listening), exam runner, result, leaderboard, badges, pricing, profile, admin.
+- **✅ Все экраны переверстаны под bando и в `main`** (dashboard, catalog reading/listening,
+  exam runner, result, leaderboard, badges, pricing+checkout, profile, invite, notifications,
+  admin). Новые: password reset/update-password, legal (about/privacy/terms).
+- **✅ Exam component kit** (`src/components/exam/`, 1:1 с `design-drop/components/exam`):
+  `ExamTimer` (calm→warn→critical + прогресс-рейл), `QuestionNavigator` (+легенда),
+  `QuestionFilter`, `AudioPlayer` (single-pass waveform — заменил нативный `<audio>`),
+  `MapLabelling`. Timer/Navigator/Audio проведены в `ExamRunner` (раннер владеет `<audio>`).
+  Превью всех пяти — `/dev/exam-kit` (публичный dev-роут, **удалить перед запуском**).
+- **✅ Quality pass:** a11y (видимый `:focus-visible`, exam radiogroup/`role=timer`, контраст
+  muted/streak/warn/success/`--ink-3` → WCAG AA, посчитано), perf (rAF scroll, lazy hero-картинки,
+  `memo` вопросов, **параллельные Supabase-запросы** на exam/dashboard, дедуп auth round-trip в
+  `getProfile`), catalog `?limit=1`/`?throttled=1`-нотисы (вместо молчаливого отскока), фикс значка
+  шапки (inline-SVG вместо `<img>` с `currentColor`), Google OAuth (нужны ключи в Supabase).
+- **⏸ Mobile/responsive — НЕ сделано** (отложено пользователем). Весь `/app` **desktop-only**:
+  inline-стили без медиа-запросов, дизайн-дроп был только под desktop. Шапка без коллапса,
+  auth-карточка 940×580 и часть гридов не стекаются. Лендинг адаптивен (свой `landing.css`).
 
 **Gotcha — dev-сервер на Windows:** `TaskStop` НЕ убивает дочерний `next` → зомби висят на
 :3000/:3001/:3002, новый dev уходит на следующий порт, браузер попадает на протухший (CSS
@@ -224,6 +238,20 @@ grading, submit, RLS, tiers, рейтинг). На каждом экране: в
 по всем, затем один `npm run dev`. После переключения веток/`rm .next` обязательно перезапуск
 dev. **Проверять реальный порт из лога** («using available port 3001») и — по правилу
 `ui-verify-live-browser` — смотреть страницу в браузере, `fetch`-проба HTML стили не доказывает.
+
+**Gotcha — `build` рушит живой `dev`:** `npm run build` при поднятом `npm run dev` затирает
+общий `.next` → dev падает с `Cannot find module './vendor-chunks/next.js'` (500 на роутах).
+Пока сайт открыт у пользователя — НЕ гонять `build` поверх dev (только `npx tsc --noEmit`).
+Для прод-замера: убить dev → `rm -rf .next` → `npm run build` → `npm start`.
+
+### 🔜 Next session — perf/lag (приоритет, очень раздражает пользователя)
+`/app`-страницы тормозят из-за round-trip'ов к **облачному Supabase**: публичные роуты в проде
+5–8 мс, а дашборд ~0.6–0.9с и экзамен 1.3–2.5с (server-render на БД-запросах, и в проде тоже).
+Уже сделано: параллельные запросы + дедуп auth `getUser`. План: (1) замерить per-query (где
+именно время), (2) резать число round-trip'ов — объединить выборки / RPC / кэш редко-меняющегося
+контента (список published-тестов), (3) **проверить РЕГИОН Supabase-проекта** — если он далеко от
+UZ, это структурный потолок (лечится инфрой: регион ближе / edge-кэш, не кодом). middleware
+`getUser()` — обязательный auth round-trip на каждый `/app`, дедупнуть его с рендером нельзя.
 
 ### 🧊 Phase 3 — AI Writing/Speaking (§4.10) — FROZEN, «coming soon», LAST
 Frozen 2026-06-15: audience-first; AI stays a marketing hook + Ultra upsell. NOT
