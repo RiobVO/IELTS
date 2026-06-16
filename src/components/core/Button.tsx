@@ -1,5 +1,6 @@
 "use client";
 import type * as React from "react";
+import Link from "next/link";
 import { useInteractive, sx, RING } from "./util";
 import { Icon, type IconName } from "./icons";
 
@@ -14,6 +15,8 @@ interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>
   loading?: boolean;
   fullWidth?: boolean;
   children?: React.ReactNode;
+  /** Если задан — кнопка рендерится как ссылка (next/link), сохраняя вид кнопки. */
+  href?: string;
   style?: React.CSSProperties;
 }
 
@@ -43,7 +46,7 @@ function variant(v: ButtonVariant): { bg: string; fg: string; edge: string; inse
  */
 export function Button({
   children, variant: v = "primary", size = "md", icon, trailingIcon,
-  loading = false, disabled = false, fullWidth = false, type = "button", style, ...rest
+  loading = false, disabled = false, fullWidth = false, type = "button", href, style, ...rest
 }: ButtonProps) {
   const s = SIZES[size] || SIZES.md;
   const cfg = variant(v);
@@ -59,31 +62,49 @@ export function Button({
   if (focus && !isOff) layers.push(RING);
   const boxShadow = layers.join(", ") || undefined;
 
+  const composedStyle = sx({
+    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: s.gap,
+    height: s.height, minWidth: s.height, padding: s.padding, width: fullWidth ? "100%" : undefined,
+    marginBottom: edge && !pressed ? edge : 0,
+    fontFamily: "var(--font-ui)", fontSize: s.font, fontWeight: "var(--weight-extrabold)",
+    letterSpacing: "var(--tracking-snug)", lineHeight: 1,
+    whiteSpace: "nowrap",
+    color: cfg.fg, background: hover && !isOff ? cfg.hover : cfg.bg,
+    border: "none", borderRadius: s.radius, cursor: isOff ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.5 : 1, boxShadow,
+    transform: pressed ? `translateY(${edge}px)` : "none",
+    transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)",
+    WebkitTapHighlightColor: "transparent",
+  }, style);
+
+  const content = (
+    <>
+      {loading ? <Spinner size={s.icon} /> : (icon && <Icon name={icon} size={s.icon} strokeWidth={2.5} />)}
+      {children && <span>{children}</span>}
+      {!loading && trailingIcon && <Icon name={trailingIcon} size={s.icon} strokeWidth={2.5} />}
+    </>
+  );
+
+  // С href кнопка — это ссылка (next/link): избегаем невалидной вложенности <a><button>
+  // и двойной остановки фокуса. Рендерим как <button> только без href или когда выключена.
+  if (href && !isOff) {
+    return (
+      <Link href={href} style={composedStyle} {...handlers}>
+        {content}
+      </Link>
+    );
+  }
+
   return (
     <button
       type={type}
       disabled={isOff}
       aria-busy={loading || undefined}
-      style={sx({
-        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: s.gap,
-        height: s.height, minWidth: s.height, padding: s.padding, width: fullWidth ? "100%" : undefined,
-        marginBottom: edge && !pressed ? edge : 0,
-        fontFamily: "var(--font-ui)", fontSize: s.font, fontWeight: "var(--weight-extrabold)",
-        letterSpacing: "var(--tracking-snug)", lineHeight: 1,
-        whiteSpace: "nowrap",
-        color: cfg.fg, background: hover && !isOff ? cfg.hover : cfg.bg,
-        border: "none", borderRadius: s.radius, cursor: isOff ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1, boxShadow,
-        transform: pressed ? `translateY(${edge}px)` : "none",
-        transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)",
-        WebkitTapHighlightColor: "transparent",
-      }, style)}
+      style={composedStyle}
       {...handlers}
       {...rest}
     >
-      {loading ? <Spinner size={s.icon} /> : (icon && <Icon name={icon} size={s.icon} strokeWidth={2.5} />)}
-      {children && <span>{children}</span>}
-      {!loading && trailingIcon && <Icon name={trailingIcon} size={s.icon} strokeWidth={2.5} />}
+      {content}
     </button>
   );
 }

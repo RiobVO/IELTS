@@ -25,12 +25,12 @@ export default function Home() {
         <Logo />
         <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
           <Link href="/auth" style={{ color: "var(--text-secondary)", fontWeight: 600, fontSize: "var(--text-sm)" }}>Log in</Link>
-          <Link href="/auth"><Button>Start free</Button></Link>
+          <Button href="/auth">Start free</Button>
         </div>
       </nav>
 
       {/* Hero */}
-      <header style={{ maxWidth: 880, margin: "0 auto", padding: "72px 24px 56px", textAlign: "center" }}>
+      <section style={{ maxWidth: 880, margin: "0 auto", padding: "72px 24px 56px", textAlign: "center" }}>
         <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-5xl)", fontWeight: 800, lineHeight: "var(--leading-tight)", letterSpacing: "var(--tracking-tighter)", margin: 0 }}>
           Stop guessing your <span style={{ color: "var(--brand)" }}>band.</span>
         </h1>
@@ -38,10 +38,10 @@ export default function Home() {
           See exactly where you lose points across every IELTS Reading and Listening question type — then drill that weakness until it&apos;s gone.
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 32 }}>
-          <Link href="/auth"><Button size="lg" trailingIcon="arrow-right">Get your band</Button></Link>
-          <Link href="#pricing"><Button size="lg" variant="secondary">See pricing</Button></Link>
+          <Button href="/auth" size="lg" trailingIcon="arrow-right">Get your band</Button>
+          <Button href="#pricing" size="lg" variant="secondary">See pricing</Button>
         </div>
-      </header>
+      </section>
 
       {/* The bando difference */}
       <section style={{ maxWidth: 720, margin: "0 auto", padding: "8px 24px 64px", textAlign: "center" }}>
@@ -55,7 +55,10 @@ export default function Home() {
       </section>
 
       {/* How it works */}
-      <section id="how" style={{ maxWidth: 980, margin: "0 auto", padding: "0 24px 72px" }}>
+      <section id="how" aria-label="How it works" style={{ maxWidth: 980, margin: "0 auto", padding: "0 24px 72px" }}>
+        <h2 style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", margin: -1, padding: 0, border: 0 }}>
+          How it works
+        </h2>
         <FeatureGrid features={FEATURES} columns={2} variant="tactile" />
       </section>
 
