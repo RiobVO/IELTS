@@ -1,5 +1,7 @@
 "use client";
 
+import { Icon, type IconName } from "@/components/core/icons";
+
 interface UnlockedBadge {
   id: string;
   code: string;
@@ -8,67 +10,41 @@ interface UnlockedBadge {
   icon: string | null;
 }
 
+/**
+ * BadgeUnlock — единственный праздничный момент (BRIEF §4.7): spring-pop на
+ * появлении, с уважением к reduced-motion. Визуал — bando.
+ */
 export default function BadgeUnlock({ badges }: { badges: UnlockedBadge[] }) {
   if (badges.length === 0) return null;
-
-  const heading = badges.length === 1 ? "🎉 Новый бейдж!" : "🎉 Новые бейджи!";
-
   return (
-    <section style={S.section}>
-      <div style={S.heading}>{heading}</div>
-      <div style={S.row}>
-        {badges.map((b, i) => (
-          <div
-            key={b.id}
-            className="badge-unlock"
-            style={{ ...S.card, animationDelay: `${i * 0.12}s` }}
-          >
-            <div style={S.icon}>{b.icon ?? "🏅"}</div>
-            <div style={S.name}>{b.name}</div>
-            {b.description && <div style={S.desc}>{b.description}</div>}
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+      <style>{`@keyframes bando-badge-pop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}@media (prefers-reduced-motion:reduce){.bando-badge{animation:none!important}}`}</style>
+      {badges.map((b, i) => (
+        <div
+          key={b.code || b.id}
+          className="bando-badge"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-4)",
+            padding: "var(--space-4)",
+            background: "linear-gradient(180deg, var(--surface-raised), var(--surface))",
+            border: "1px solid var(--brand-border)",
+            borderRadius: "var(--radius-lg)",
+            boxShadow: "var(--glow-brand)",
+            animation: `bando-badge-pop 560ms var(--ease-spring) ${i * 110}ms`,
+          }}
+        >
+          <div style={{ width: 48, height: 48, flex: "none", display: "grid", placeItems: "center", borderRadius: "var(--radius-md)", background: "var(--brand-subtle)", color: "var(--brand-hover)" }}>
+            <Icon name={(b.icon as IconName) || "trophy"} size={24} />
           </div>
-        ))}
-      </div>
-    </section>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-link)" }}>Badge unlocked</div>
+            <div style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--text-primary)", marginTop: 2 }}>{b.name}</div>
+            {b.description && <div style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 2 }}>{b.description}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
-
-const S: Record<string, React.CSSProperties> = {
-  section: {
-    marginTop: "1rem",
-    background: "#f4f2ff",
-    border: "1px solid #ddd6fe",
-    borderRadius: 14,
-    padding: "1rem",
-    textAlign: "center",
-  },
-  heading: {
-    fontWeight: 800,
-    color: "#6C5CE7",
-    fontSize: "1.05rem",
-    marginBottom: ".75rem",
-  },
-  row: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: ".6rem",
-    justifyContent: "center",
-  },
-  card: {
-    background: "#fff",
-    border: "1px solid #ececf1",
-    borderRadius: 12,
-    padding: "1rem .9rem",
-    minWidth: 130,
-    maxWidth: 170,
-    textAlign: "center",
-  },
-  icon: { fontSize: "2.4rem", lineHeight: 1 },
-  name: { fontWeight: 700, fontSize: ".95rem", marginTop: ".5rem" },
-  desc: {
-    color: "#888",
-    fontSize: ".76rem",
-    marginTop: ".3rem",
-    lineHeight: 1.4,
-  },
-};
