@@ -201,7 +201,7 @@ const S: Record<string, React.CSSProperties> = {
     fontWeight: 600,
   },
   chipSubtle: { fontWeight: 500, fontSize: ".8rem", color: "#555" },
-  chipActive: { background: "#6C5CE7", color: "#fff", borderColor: "#6C5CE7" },
+  chipActive: { background: "#6C5CE7", color: "#fff", border: "1px solid #6C5CE7" },
   grid: { display: "grid", gap: ".9rem", marginTop: "1.25rem" },
   card: {
     display: "block",
