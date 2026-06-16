@@ -164,7 +164,7 @@ export function AppHeader({ active, streak, xp, initials, unread, signOut }: App
                     height: 16,
                     padding: "0 4px",
                     borderRadius: "var(--radius-full)",
-                    background: "var(--error)",
+                    background: "var(--error-edge)",
                     color: "#fff",
                     fontFamily: "var(--font-mono)",
                     fontSize: 10,
