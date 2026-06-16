@@ -21,7 +21,7 @@ h1,h2,h3{font-weight:800;letter-spacing:-.03em;line-height:1.04;text-wrap:balanc
 em{font-style:normal;color:var(--ink)}
 h1 em{color:var(--v)}
 .ico{stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--v),var(--vb));width:0;z-index:200}
+.progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--v),var(--vb));width:100%;transform:scaleX(0);transform-origin:left;will-change:transform;z-index:200}
 
 nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--rule)}
 .nav-in{display:flex;align-items:center;gap:34px;height:72px}

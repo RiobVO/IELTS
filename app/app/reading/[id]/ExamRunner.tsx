@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { memo, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { categoryLabel } from "@/lib/labels";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
@@ -118,8 +118,10 @@ export default function ExamRunner({
     return () => clearTimeout(t);
   }, [answers, attemptId]);
 
-  const set = (n: number, v: string) => setAnswers((a) => ({ ...a, [String(n)]: v }));
-  const flag = (n: number) => setFlags((f) => ({ ...f, [String(n)]: !f[String(n)] }));
+  // useCallback → стабильные ссылки, чтобы memo(QuestionBlock) реально срабатывал
+  // (functional setState, deps пусты).
+  const set = useCallback((n: number, v: string) => setAnswers((a) => ({ ...a, [String(n)]: v })), []);
+  const flag = useCallback((n: number) => setFlags((f) => ({ ...f, [String(n)]: !f[String(n)] })), []);
 
   const answered = Object.values(answers).filter((v) => v && v.trim()).length;
   const remaining = durationSeconds != null ? Math.max(0, durationSeconds - elapsed) : null;
@@ -299,7 +301,7 @@ function NavStrip({
   );
 }
 
-function QuestionBlock({
+const QuestionBlock = memo(function QuestionBlock({
   q,
   value,
   flagged,
@@ -363,7 +365,7 @@ function QuestionBlock({
       </div>
     </div>
   );
-}
+});
 
 const READING_CSS = `
 .bando-reading{font-family:var(--font-reading);color:var(--reading-text);font-size:var(--text-base);line-height:var(--leading-relaxed)}
