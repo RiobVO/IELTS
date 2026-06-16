@@ -21,11 +21,11 @@ export const getUser = cache(async () => {
  * делят один запрос profile вместо двух.
  */
 export const getProfile = cache(async () => {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Переиспользуем кэшированный getUser() (тот же, что в requireUser) — иначе это
+  // второй auth.getUser() round-trip к Supabase на каждой /app-странице.
+  const user = await getUser();
   if (!user) return null;
+  const supabase = await createClient();
   const { data } = await supabase
     .from("profile")
     .select("*")
