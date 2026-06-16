@@ -14,7 +14,7 @@ export default async function ReadingCatalog({
       section="reading"
       categories={READING_CATEGORIES}
       title="Reading"
-      sub="Выбери тест. Фильтруй по части и типам вопросов."
+      sub="Pick your weak spot. Filter by part and by question type."
       filterBase="/app/reading"
       sp={sp}
     />

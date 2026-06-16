@@ -3,13 +3,18 @@ import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { categoryLabel, qtypeLabel } from "@/lib/labels";
+import { AppShell } from "./_AppShell";
+import { Card } from "@/components/core/Card";
+import { Badge } from "@/components/core/Badge";
+import { Icon } from "@/components/core/icons";
+import { FilterChip } from "@/components/app/FilterChip";
 
 /**
  * Shared catalog for Reading and Listening (BRIEF §4.1 — filter by category and
- * question type). Both sections render the same UI; only the section, the
- * category list and the filter base path differ. The exam route is
- * content-generic, so every card links to /app/reading/[id] regardless of
- * section.
+ * question type). Both sections render the same UI; only the section, category
+ * list and filter base path differ. Filtering stays URL-based (server-side); the
+ * filter chips are links, not client multi-select. The exam route is
+ * content-generic, so every card links to /app/reading/[id] regardless of section.
  */
 
 interface TestRow {
@@ -61,197 +66,171 @@ export async function CatalogView({
   const { data } = await query;
   const tests = (data ?? []) as TestRow[];
 
+  // Полный список секции — для счётчиков по категориям/типам и доступных типов.
   const { data: all } = await supabase
     .from("content_item")
-    .select("question_types")
+    .select("category,question_types")
     .eq("section", section)
     .eq("status", "published");
-  const availableTypes = [
-    ...new Set((all ?? []).flatMap((r) => r.question_types as string[])),
-  ].sort();
+  const catCounts: Record<string, number> = {};
+  const typeCounts: Record<string, number> = {};
+  for (const r of all ?? []) {
+    const cat = r.category as string;
+    catCounts[cat] = (catCounts[cat] ?? 0) + 1;
+    for (const qt of (r.question_types as string[]) ?? []) {
+      typeCounts[qt] = (typeCounts[qt] ?? 0) + 1;
+    }
+  }
+  const availableTypes = Object.keys(typeCounts).sort();
+  const totalCount = (all ?? []).length;
+  const activeCount = (sp.category ? 1 : 0) + (sp.q_type ? 1 : 0);
+
+  // URL-хелперы: переключают одно измерение, сохраняя другое.
+  const catHref = (c?: string) => {
+    const p = new URLSearchParams();
+    if (c) p.set("category", c);
+    if (sp.q_type) p.set("q_type", sp.q_type);
+    const q = p.toString();
+    return q ? `${filterBase}?${q}` : filterBase;
+  };
+  const typeHref = (t?: string) => {
+    const p = new URLSearchParams();
+    if (sp.category) p.set("category", sp.category);
+    if (t) p.set("q_type", t);
+    const q = p.toString();
+    return q ? `${filterBase}?${q}` : filterBase;
+  };
 
   return (
-    <main style={S.page}>
+    <AppShell active={section}>
       <div style={S.wrap}>
-        <Link href="/app" style={S.back}>
-          ← Дашборд
-        </Link>
         <h1 style={S.h1}>{title}</h1>
         <p style={S.sub}>{sub}</p>
 
-        <div style={S.filterRow}>
-          <Chip href={filterBase} active={!sp.category} label="Все части" />
-          {categories.map((c) => (
-            <Chip
-              key={c}
-              href={`${filterBase}?category=${c}${sp.q_type ? `&q_type=${sp.q_type}` : ""}`}
-              active={sp.category === c}
-              label={categoryLabel(c)}
-            />
-          ))}
-        </div>
+        {/* Filter panel — URL-based, chips = links */}
+        <div style={S.filter}>
+          <div style={S.filterHead}>
+            <Icon name="filter" size={18} style={{ color: "var(--brand)" }} />
+            <span style={S.filterTitle}>Filter</span>
+            {activeCount > 0 && <span style={S.filterBadge}>{activeCount}</span>}
+            {activeCount > 0 && (
+              <Link href={filterBase} style={S.clear}>
+                <Icon name="x" size={13} /> Clear
+              </Link>
+            )}
+          </div>
 
-        {availableTypes.length > 0 && (
-          <div style={S.filterRow}>
-            <Chip
-              href={`${filterBase}${sp.category ? `?category=${sp.category}` : ""}`}
-              active={!sp.q_type}
-              label="Все типы"
-              subtle
-            />
-            {availableTypes.map((t) => (
-              <Chip
-                key={t}
-                href={`${filterBase}?${sp.category ? `category=${sp.category}&` : ""}q_type=${t}`}
-                active={sp.q_type === t}
-                label={qtypeLabel(t)}
-                subtle
-              />
+          <div style={S.groupLabel}>Category</div>
+          <div style={S.chips}>
+            <FilterChip href={catHref()} active={!sp.category} label="All parts" count={totalCount} />
+            {categories.map((c) => (
+              <FilterChip key={c} href={catHref(c)} active={sp.category === c} label={categoryLabel(c)} count={catCounts[c] ?? 0} />
             ))}
           </div>
-        )}
 
+          {availableTypes.length > 0 && (
+            <>
+              <div style={S.divider} />
+              <div style={S.groupLabel}>Question type</div>
+              <div style={S.chips}>
+                <FilterChip href={typeHref()} active={!sp.q_type} label="All types" subtle />
+                {availableTypes.map((t) => (
+                  <FilterChip key={t} href={typeHref(t)} active={sp.q_type === t} label={qtypeLabel(t)} count={typeCounts[t]} subtle />
+                ))}
+              </div>
+            </>
+          )}
+
+          <div style={S.resultRow}>
+            <span style={S.resultText}>
+              <b style={S.resultNum}>{tests.length}</b> {tests.length === 1 ? "test" : "tests"}
+            </span>
+          </div>
+        </div>
+
+        {/* Cards */}
         {tests.length === 0 ? (
-          <div style={S.empty}>Нет тестов под этот фильтр.</div>
+          <div style={S.empty}>No tests match this filter yet.</div>
         ) : (
-          <div style={S.grid}>
+          <div style={S.list}>
             {tests.map((t) => {
               const locked = !meetsTier(userTier, t.tier_required);
+              const isFull = t.category === "full_reading" || t.category === "full_listening";
               return (
-                <Link
-                  key={t.id}
-                  href={locked ? "/app/upgrade" : `/app/reading/${t.id}`}
-                  style={S.card}
-                >
-                  <div style={S.cardTop}>
-                    <span style={S.badge}>{categoryLabel(t.category)}</span>
-                    <div style={S.cardTopRight}>
-                      {locked && (
-                        <span style={S.lock}>🔒 {TIER_LABEL[t.tier_required]}</span>
-                      )}
+                <Link key={t.id} href={locked ? "/app/upgrade" : `/app/reading/${t.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                  <Card interactive padding="var(--space-4)" style={{ opacity: locked ? 0.92 : 1 }}>
+                    <div style={S.cardTop}>
+                      <Badge tone="brand">{categoryLabel(t.category)}</Badge>
+                      {isFull && <Badge>40 Q · band</Badge>}
                       {t.duration_seconds ? (
                         <span style={S.duration}>
-                          {Math.round(t.duration_seconds / 60)} мин
+                          <Icon name="clock" size={13} /> {Math.round(t.duration_seconds / 60)}m
                         </span>
                       ) : null}
                     </div>
-                  </div>
-                  <div style={S.cardTitle}>{t.title}</div>
-                  <div style={S.types}>
-                    {t.question_types.map((qt) => (
-                      <span key={qt} style={S.typeChip}>
-                        {qtypeLabel(qt)}
-                      </span>
-                    ))}
-                  </div>
-                  <div style={S.start}>
-                    {locked ? "Открыть на Premium →" : "Начать →"}
-                  </div>
+                    <div style={S.cardTitle}>{t.title}</div>
+                    <div style={S.types}>
+                      {t.question_types.map((qt) => (
+                        <span key={qt} style={S.typeChip}>
+                          {qtypeLabel(qt)}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={S.cardFoot}>
+                      {locked ? (
+                        <span style={S.lockFoot}>
+                          <Icon name="lock" size={14} /> {TIER_LABEL[t.tier_required]}
+                        </span>
+                      ) : (
+                        <span style={S.startFoot}>
+                          Start <Icon name="arrow-right" size={14} />
+                        </span>
+                      )}
+                    </div>
+                  </Card>
                 </Link>
               );
             })}
           </div>
         )}
       </div>
-    </main>
+    </AppShell>
   );
 }
 
-function Chip({
-  href,
-  active,
-  label,
-  subtle,
-}: {
-  href: string;
-  active: boolean;
-  label: string;
-  subtle?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      style={{
-        ...S.chip,
-        ...(subtle ? S.chipSubtle : {}),
-        ...(active ? S.chipActive : {}),
-      }}
-    >
-      {label}
-    </Link>
-  );
-}
-
-const FONT =
-  "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
 const S: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", padding: "2rem 1.25rem 4rem", fontFamily: FONT },
-  wrap: { maxWidth: 880, margin: "0 auto" },
-  back: { color: "#6C5CE7", fontSize: ".9rem" },
-  h1: { fontSize: "1.8rem", margin: ".5rem 0 .25rem" },
-  sub: { color: "#777", margin: "0 0 1.25rem" },
-  filterRow: { display: "flex", flexWrap: "wrap", gap: ".5rem", margin: "0 0 .75rem" },
-  chip: {
-    padding: ".4rem .8rem",
-    borderRadius: 999,
-    border: "1px solid #e3e3e8",
-    background: "#fff",
-    color: "#333",
-    fontSize: ".85rem",
-    fontWeight: 600,
+  wrap: { maxWidth: 980, margin: "0 auto", padding: "var(--space-8) var(--space-6) var(--space-12)" },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "0 0 4px", color: "var(--text-primary)" },
+  sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "0 0 16px" },
+
+  filter: {
+    background: "var(--surface)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-xl)",
+    padding: "var(--space-5)",
+    boxShadow: "var(--shadow-sm)",
+    marginBottom: 18,
   },
-  chipSubtle: { fontWeight: 500, fontSize: ".8rem", color: "#555" },
-  chipActive: { background: "#6C5CE7", color: "#fff", border: "1px solid #6C5CE7" },
-  grid: { display: "grid", gap: ".9rem", marginTop: "1.25rem" },
-  card: {
-    display: "block",
-    border: "1px solid #ececf1",
-    borderRadius: 14,
-    padding: "1.1rem 1.2rem",
-    background: "#fff",
-    boxShadow: "0 1px 2px rgba(0,0,0,.03)",
-    color: "inherit",
-  },
-  cardTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: ".5rem",
-  },
-  badge: {
-    background: "#efeafe",
-    color: "#5a44d6",
-    fontWeight: 700,
-    fontSize: ".72rem",
-    padding: "3px 9px",
-    borderRadius: 6,
-  },
-  cardTopRight: { display: "flex", alignItems: "center", gap: ".5rem" },
-  lock: {
-    background: "#fff4e5",
-    color: "#b45309",
-    fontWeight: 700,
-    fontSize: ".72rem",
-    padding: "3px 9px",
-    borderRadius: 6,
-  },
-  duration: { color: "#999", fontSize: ".8rem" },
-  cardTitle: { fontSize: "1.05rem", fontWeight: 700, marginBottom: ".6rem" },
-  types: { display: "flex", flexWrap: "wrap", gap: ".35rem", marginBottom: ".75rem" },
-  typeChip: {
-    fontSize: ".72rem",
-    color: "#666",
-    background: "#f5f5f8",
-    padding: "2px 8px",
-    borderRadius: 5,
-  },
-  start: { color: "#6C5CE7", fontWeight: 700, fontSize: ".9rem" },
-  empty: {
-    marginTop: "1.5rem",
-    padding: "2rem",
-    textAlign: "center",
-    color: "#999",
-    border: "1px dashed #ddd",
-    borderRadius: 12,
-  },
+  filterHead: { display: "flex", alignItems: "center", gap: 10, marginBottom: "var(--space-4)" },
+  filterTitle: { fontFamily: "var(--font-ui)", fontWeight: "var(--weight-bold)", fontSize: "var(--text-base)", color: "var(--text-primary)" },
+  filterBadge: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--text-on-brand)", background: "var(--brand)", borderRadius: "var(--radius-full)", padding: "2px 8px" },
+  clear: { marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", textDecoration: "none" },
+  groupLabel: { textTransform: "uppercase", letterSpacing: "var(--tracking-caps)", fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--text-muted)", marginBottom: "var(--space-3)" },
+  chips: { display: "flex", flexWrap: "wrap", gap: "var(--space-2)" },
+  divider: { height: 1, background: "var(--border-subtle)", margin: "var(--space-4) 0" },
+  resultRow: { marginTop: "var(--space-5)", display: "flex", alignItems: "center", justifyContent: "space-between" },
+  resultText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
+  resultNum: { fontFamily: "var(--font-mono)", color: "var(--text-primary)" },
+
+  empty: { padding: "var(--space-8)", textAlign: "center", color: "var(--text-muted)", border: "1px dashed var(--border)", borderRadius: "var(--radius-lg)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
+  list: { display: "flex", flexDirection: "column", gap: 12 },
+
+  cardTop: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 },
+  duration: { marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" },
+  cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "var(--tracking-snug)" },
+  types: { display: "flex", flexWrap: "wrap", gap: 6, margin: "12px 0 14px" },
+  typeChip: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", background: "var(--surface-inset)", padding: "3px 9px", borderRadius: "var(--radius-full)" },
+  cardFoot: { display: "flex", alignItems: "center", justifyContent: "space-between" },
+  lockFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--warn-text)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600 },
+  startFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600 },
 };
