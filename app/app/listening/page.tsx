@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function ListeningCatalog({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; q_type?: string }>;
+  searchParams: Promise<{ category?: string; q_type?: string; limit?: string; throttled?: string }>;
 }) {
   const sp = await searchParams;
   return (
