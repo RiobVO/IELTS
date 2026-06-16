@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/core/Button";
 
-// Имитируем callback провайдера. В тело шлём ТОЛЬКО идемпотентный ключ —
-// сумму/тариф/срок/владельца сервер берёт из своей PENDING-строки, телу не доверяет.
+// Simulate a provider callback. The body carries ONLY the idempotency key — the
+// server takes amount/tier/term/owner from its trusted PENDING row, never the body.
 export default function SimulatePayment({
   provider,
   providerTransactionId,
@@ -29,25 +30,19 @@ export default function SimulatePayment({
         const text = await res.text().catch(() => "");
         throw new Error(text || `HTTP ${res.status}`);
       }
-      // Подписка продлена вебхуком — перезагружаем серверный стейт страницы.
       router.refresh();
     } catch (err) {
-      // Ошибку показываем пользователю, не глотаем: песочница должна быть видимой.
+      // Surface the error — the sandbox should be visible, not silent.
       setState("error");
-      setMessage(err instanceof Error ? err.message : "Не удалось завершить платёж");
+      setMessage(err instanceof Error ? err.message : "Payment could not be completed");
     }
   }
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={simulate}
-        disabled={state === "loading"}
-        style={btn}
-      >
-        {state === "loading" ? "Обработка…" : "Оплатить (тест)"}
-      </button>
+      <Button onClick={simulate} loading={state === "loading"} size="lg" fullWidth trailingIcon="arrow-right">
+        {state === "loading" ? "Processing…" : "Pay (test)"}
+      </Button>
       {state === "error" && (
         <p role="alert" style={errorBox}>
           {message}
@@ -57,22 +52,12 @@ export default function SimulatePayment({
   );
 }
 
-const btn: React.CSSProperties = {
-  width: "100%",
-  padding: ".8rem",
-  border: "none",
-  borderRadius: 10,
-  background: "#6C5CE7",
-  color: "#fff",
-  fontWeight: 700,
-  fontSize: "1rem",
-  cursor: "pointer",
-};
 const errorBox: React.CSSProperties = {
-  background: "#fdecec",
-  color: "#a11",
-  padding: ".6rem .75rem",
-  borderRadius: 8,
-  fontSize: ".85rem",
-  marginTop: ".75rem",
+  background: "var(--error-subtle)",
+  color: "var(--error-text)",
+  padding: "10px 12px",
+  borderRadius: "var(--radius-md)",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-sm)",
+  marginTop: 12,
 };
