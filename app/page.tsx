@@ -413,8 +413,8 @@ export default function Home() {
             <span className="seal"><i></i><i></i><i></i></span>band<span className="o">o</span>
           </a>
           <div className="nav-links">
-            <a href="#">Reading</a>
-            <a href="#">Listening</a>
+            <a href="/app/reading">Reading</a>
+            <a href="/app/listening">Listening</a>
             <a href="#how">How it works</a>
             <a href="#types">Pricing</a>
           </div>
@@ -702,15 +702,15 @@ export default function Home() {
           </div>
           <div>
             <h4>Product</h4>
-            <a href="#">Reading</a>
-            <a href="#">Listening</a>
+            <a href="/app/reading">Reading</a>
+            <a href="/app/listening">Listening</a>
             <a href="#types">Pricing</a>
           </div>
           <div>
             <h4>Learn</h4>
             <a href="#how">How it works</a>
-            <a href="#">Leaderboard</a>
-            <a href="#">Badges</a>
+            <a href="/app/leaderboard">Leaderboard</a>
+            <a href="/app/badges">Badges</a>
           </div>
           <div>
             <h4>Company</h4>
