@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useRef, useState, useTransition } from "r
 import { categoryLabel } from "@/lib/labels";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
+import { AudioPlayer } from "./AudioPlayer";
 import { saveProgress, submitAttempt } from "./actions";
 
 interface Question {
@@ -173,12 +174,11 @@ export default function ExamRunner({
 
       {isListening ? (
         <>
-          {/* Audio banner (BRIEF §4.3). MVP uses native controls; strict single-pass
-              (no rewind) is a later refinement. */}
+          {/* Audio banner (BRIEF §4.3) — bando single-pass player: waveform, no
+              rewind/seek (waveform not interactive), «Plays once» badge. */}
           <div style={S.audioBar}>
             <div style={{ maxWidth: 720, margin: "0 auto" }}>
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-              <audio controls src={audioSrc ?? undefined} style={{ width: "100%" }} />
+              {audioSrc && <AudioPlayer src={audioSrc} />}
             </div>
           </div>
 
