@@ -302,7 +302,7 @@ const S: Record<string, React.CSSProperties> = {
   bigBand: { fontFamily: "var(--font-mono)", fontSize: 88, fontWeight: 600, lineHeight: 1, color: "var(--text-primary)", letterSpacing: "-0.03em", margin: "14px 0 0" },
   bandLead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", lineHeight: 1.5, color: "var(--text-muted)", margin: "16px 0 0", maxWidth: 420 },
   strong: { color: "var(--text-primary)", fontWeight: 700 },
-  stats: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22 },
+  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 22 },
   sectionTitle: {
     fontFamily: "var(--font-ui)",
     fontSize: "var(--text-xl)",
