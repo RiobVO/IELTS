@@ -1,37 +1,16 @@
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  padding: 0;
-}
-
-a {
-  text-decoration: none;
-}
+/* bando design system — global entry point. Light-first; [data-theme="dark"] derived. */
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./tokens/radii.css";
+@import "./tokens/elevation.css";
+@import "./tokens/motion.css";
+@import "./tokens/base.css";
 
 /* Badge unlock reveal (Milestone 2B) — slight overshoot on reveal. */
 @keyframes badge-pop {
-  from {
-    transform: scale(0.6);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
 }
-
-.badge-unlock {
-  animation: badge-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .badge-unlock {
-    animation: none;
-  }
-}
+.badge-unlock { animation: badge-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@media (prefers-reduced-motion: reduce) { .badge-unlock { animation: none; } }
