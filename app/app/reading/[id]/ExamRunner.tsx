@@ -43,6 +43,8 @@ function ExamTimer({ remaining, total, elapsed }: { remaining: number | null; to
 
   return (
     <div
+      role="timer"
+      aria-label={hasCountdown ? "Time remaining" : "Time elapsed"}
       style={{
         position: "relative", display: "inline-flex", alignItems: "center", gap: 10,
         padding: "9px 14px", background: "var(--surface-raised)",
@@ -328,12 +330,14 @@ function QuestionBlock({
         </div>
         <div style={{ marginTop: 13, paddingLeft: 39 }}>
           {q.options && q.options.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div role="radiogroup" aria-label={`Answer for question ${q.number}`} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {q.options.map((o) => {
                 const sel = value === o.value;
                 return (
                   <button
                     key={o.value}
+                    role="radio"
+                    aria-checked={sel}
                     onClick={() => onAnswer(q.number, o.value)}
                     style={{ display: "flex", alignItems: "center", gap: 11, textAlign: "left", padding: "11px 14px", borderRadius: "var(--radius-md)", border: `2px solid ${sel ? "var(--brand)" : "var(--border)"}`, background: sel ? "var(--brand-subtle)" : "var(--surface-raised)", color: sel ? "var(--text-primary)" : "var(--text-secondary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, cursor: "pointer", transition: "var(--transition-colors)" }}
                   >
@@ -350,6 +354,7 @@ function QuestionBlock({
               value={value}
               onChange={(e) => onAnswer(q.number, e.target.value)}
               placeholder="Type your answer"
+              aria-label={`Answer for question ${q.number}`}
               autoComplete="off"
               style={{ width: "100%", maxWidth: 300, height: 44, padding: "0 15px", borderRadius: "var(--radius-md)", border: `2px solid ${value ? "var(--brand)" : "var(--border)"}`, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", outline: "none" }}
             />
