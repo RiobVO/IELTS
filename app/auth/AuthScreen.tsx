@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/core/Button";
 import { Input } from "@/components/core/Input";
+import { createClient } from "@/lib/supabase/client";
 import { signIn, signUp } from "./actions";
 
 interface AuthScreenProps {
@@ -44,6 +45,16 @@ export function AuthScreen({ error, message, refCode, next }: AuthScreenProps) {
       setPhase("reveal");
       t2.current = setTimeout(() => setPhase("idle"), 720);
     }, 430);
+  };
+
+  // OAuth-вход через клиентский Supabase: штатный путь, AuthScreen уже client.
+  // redirectTo несёт исходный next — callback/route.ts обменяет код и уведёт туда.
+  const googleSignIn = async () => {
+    const supabase = createClient();
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+    });
   };
 
   const signup = mode === "signup";
@@ -116,7 +127,7 @@ export function AuthScreen({ error, message, refCode, next }: AuthScreenProps) {
                 <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
               </div>
               <div className="auth-rise" style={{ animationDelay: "410ms" }}>
-                <button type="button" onClick={(e) => e.preventDefault()} title="Coming soon" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, width: "100%", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer", boxShadow: "0 3px 0 0 var(--neutral-edge)" }}>
+                <button type="button" onClick={googleSignIn} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, width: "100%", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer", boxShadow: "0 3px 0 0 var(--neutral-edge)" }}>
                   <GoogleG /> Continue with Google
                 </button>
               </div>
@@ -171,7 +182,7 @@ export function AuthScreen({ error, message, refCode, next }: AuthScreenProps) {
                 <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
               </div>
               <div className="auth-rise" style={{ animationDelay: "410ms" }}>
-                <button type="button" onClick={(e) => e.preventDefault()} title="Coming soon" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, width: "100%", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer", boxShadow: "0 3px 0 0 var(--neutral-edge)" }}>
+                <button type="button" onClick={googleSignIn} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, width: "100%", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer", boxShadow: "0 3px 0 0 var(--neutral-edge)" }}>
                   <GoogleG /> Continue with Google
                 </button>
               </div>
