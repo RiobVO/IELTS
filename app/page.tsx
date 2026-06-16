@@ -409,7 +409,7 @@ export default function Home() {
 
       <nav>
         <div className="wrap nav-in">
-          <a className="logo" href="#">
+          <a className="logo" href="/">
             <span className="seal"><i></i><i></i><i></i></span>band<span className="o">o</span>
           </a>
           <div className="nav-links">
@@ -458,7 +458,7 @@ export default function Home() {
                 Take a free test
                 <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
               </a>
-              <a href="#" className="btn btn-g btn-lg">
+              <a href="#how" className="btn btn-g btn-lg">
                 <svg className="ico" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
                 Watch 60-sec demo
               </a>
@@ -695,7 +695,7 @@ export default function Home() {
       <footer>
         <div className="wrap foot">
           <div>
-            <a className="logo" href="#">
+            <a className="logo" href="/">
               <span className="seal"><i></i><i></i><i></i></span>band<span className="o">o</span>
             </a>
             <p className="ft">The IELTS trainer that shows you where you lose points — then fixes them.</p>
