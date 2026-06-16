@@ -13,6 +13,7 @@ interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>
   trailingIcon?: IconName;
   loading?: boolean;
   fullWidth?: boolean;
+  children?: React.ReactNode;
   style?: React.CSSProperties;
 }
 
@@ -36,14 +37,14 @@ function variant(v: ButtonVariant): { bg: string; fg: string; edge: string; inse
 }
 
 /**
- * Button — the chunky 3D "push" button that is NINE's signature affordance. A
+ * Button — the chunky 3D "push" button that is bando's signature affordance. A
  * solid colored bottom edge gives it depth; pressing translates it down onto the
  * edge. Variants primary/secondary/ghost/danger/success; sizes sm/md/lg.
  */
 export function Button({
   children, variant: v = "primary", size = "md", icon, trailingIcon,
   loading = false, disabled = false, fullWidth = false, type = "button", style, ...rest
-}: ButtonProps & { children?: React.ReactNode }) {
+}: ButtonProps) {
   const s = SIZES[size] || SIZES.md;
   const cfg = variant(v);
   const { hover, focus, active, handlers } = useInteractive();
