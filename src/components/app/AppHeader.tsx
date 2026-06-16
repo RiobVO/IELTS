@@ -11,7 +11,8 @@ export type ActivePage =
   | "leaderboard"
   | "badges"
   | "pricing"
-  | "profile";
+  | "profile"
+  | "notifications";
 
 interface AppHeaderProps {
   active: ActivePage;

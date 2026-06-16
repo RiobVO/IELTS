@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { AppShell } from "../_AppShell";
+import { Button } from "@/components/core/Button";
 import { markAllRead } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export default async function NotificationsPage() {
   await requireUser();
   const supabase = await createClient();
 
-  // notification: RLS notification_select_own (0001) — возвращает только свои.
+  // notification: RLS notification_select_own (0001) — only the user's own rows.
   const { data } = await supabase
     .from("notification")
     .select("id,type,title,body,read_at,created_at")
@@ -28,102 +29,56 @@ export default async function NotificationsPage() {
   const unread = items.filter((n) => n.read_at === null).length;
 
   return (
-    <main style={S.page}>
+    <AppShell active="notifications">
       <div style={S.wrap}>
-        <Link href="/app" style={S.back}>
-          ← Дашборд
-        </Link>
-
         <div style={S.head}>
-          <h1 style={S.h1}>Уведомления</h1>
+          <h1 style={S.h1}>Notifications</h1>
           {unread > 0 && (
             <form action={markAllRead}>
-              <button type="submit" style={S.markBtn}>
-                Отметить всё прочитанным
-              </button>
+              <Button type="submit" variant="secondary" size="sm">
+                Mark all read
+              </Button>
             </form>
           )}
         </div>
 
         {items.length === 0 ? (
           <div style={S.empty}>
-            Пока нет уведомлений. Проходи тесты — здесь появятся разблокированные
-            бейджи, напоминания о стрике и недельный дайджест.
+            No notifications yet. Keep practising — unlocked badges, streak reminders and the weekly digest will land here.
           </div>
         ) : (
           <div style={S.list}>
-            {items.map((n) => (
-              <div
-                key={n.id}
-                style={n.read_at ? S.row : { ...S.row, ...S.rowUnread }}
-              >
-                <div style={S.rowTop}>
-                  <span style={S.rowTitle}>{n.title}</span>
-                  {n.read_at === null && <span style={S.dot} />}
+            {items.map((n) => {
+              const isUnread = n.read_at === null;
+              return (
+                <div key={n.id} style={{ ...S.row, ...(isUnread ? S.rowUnread : {}) }}>
+                  <div style={S.rowTop}>
+                    <span style={S.rowTitle}>{n.title}</span>
+                    {isUnread && <span style={S.dot} />}
+                  </div>
+                  {n.body && <div style={S.body}>{n.body}</div>}
+                  <div style={S.meta}>{new Date(n.created_at).toLocaleDateString("en-US")}</div>
                 </div>
-                {n.body && <div style={S.body}>{n.body}</div>}
-                <div style={S.meta}>
-                  {new Date(n.created_at).toLocaleDateString("ru-RU")}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
-    </main>
+    </AppShell>
   );
 }
 
-const FONT =
-  "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
 const S: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", padding: "2rem 1.25rem 4rem", fontFamily: FONT },
-  wrap: { maxWidth: 720, margin: "0 auto" },
-  back: { color: "#6C5CE7", fontSize: ".9rem" },
-  head: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    margin: "1rem 0 1.5rem",
-    gap: "1rem",
-  },
-  h1: { fontSize: "1.7rem", margin: 0 },
-  markBtn: {
-    padding: ".5rem .9rem",
-    border: "1px solid #6C5CE7",
-    borderRadius: 8,
-    background: "#fff",
-    color: "#6C5CE7",
-    fontWeight: 700,
-    fontSize: ".82rem",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  empty: {
-    padding: "1.5rem",
-    textAlign: "center",
-    color: "#999",
-    border: "1px dashed #ddd",
-    borderRadius: 12,
-    fontSize: ".9rem",
-  },
-  list: { display: "grid", gap: ".5rem" },
-  row: {
-    border: "1px solid #ececf1",
-    borderRadius: 10,
-    padding: ".8rem .9rem",
-    background: "#fff",
-  },
-  rowUnread: { borderColor: "#6C5CE7", background: "#f6f5ff" },
-  rowTop: { display: "flex", alignItems: "center", gap: ".5rem" },
-  rowTitle: { fontWeight: 700, fontSize: ".95rem" },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    background: "#6C5CE7",
-    display: "inline-block",
-  },
-  body: { color: "#555", fontSize: ".85rem", marginTop: ".3rem", lineHeight: 1.4 },
-  meta: { color: "#999", fontSize: ".75rem", marginTop: ".4rem" },
+  wrap: { maxWidth: 720, margin: "0 auto", padding: "30px 28px 48px" },
+  head: { display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 18px", gap: 16 },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
+  empty: { padding: "1.5rem", textAlign: "center", color: "var(--text-muted)", border: "1px dashed var(--border)", borderRadius: "var(--radius-lg)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
+  list: { display: "flex", flexDirection: "column", gap: 8 },
+  row: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "14px 16px" },
+  rowUnread: { borderColor: "var(--brand-border)", background: "var(--brand-subtle)" },
+  rowTop: { display: "flex", alignItems: "center", gap: 8 },
+  rowTitle: { fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--text-primary)" },
+  dot: { width: 8, height: 8, borderRadius: "50%", background: "var(--brand)", display: "inline-block" },
+  body: { fontFamily: "var(--font-ui)", color: "var(--text-secondary)", fontSize: "var(--text-sm)", marginTop: 4, lineHeight: 1.45 },
+  meta: { fontFamily: "var(--font-mono)", color: "var(--text-muted)", fontSize: "var(--text-2xs)", marginTop: 6 },
 };
