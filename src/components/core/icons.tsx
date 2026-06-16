@@ -1,6 +1,6 @@
 import type { ReactNode, SVGProps } from "react";
 
-const PATHS: Record<string, ReactNode> = {
+const PATHS = {
   clock: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>,
   flag: <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" x2="4" y1="22" y2="15" /></>,
   check: <polyline points="20 6 9 17 4 12" />,
@@ -27,7 +27,7 @@ const PATHS: Record<string, ReactNode> = {
   "chevron-up": <path d="m18 15-6-6-6 6" />,
   crown: <><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z" /><path d="M5 21h14" /></>,
   "bar-chart": <><line x1="12" x2="12" y1="20" y2="10" /><line x1="18" x2="18" y1="20" y2="4" /><line x1="6" x2="6" y1="20" y2="16" /></>,
-};
+} satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;
 
