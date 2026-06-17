@@ -84,11 +84,20 @@ export default async function Dashboard() {
     .slice(0, 3);
   const weakest = weak[0];
 
+  // Band is only assigned by Full 40-question mocks; a drill-only user (single
+  // passages) never gets one — so don't show a mute "—" with "take a test" even
+  // after they've sat several. Distinguish: has a band / has attempts but no
+  // band (push them to a Full mock) / no attempts yet.
+  const hasAttempts = attempts.length > 0;
   const progressCopy = gap
     ? null
     : bandLatest != null
       ? "Keep practising to push your band higher."
-      : "Take a test to see your current band here.";
+      : hasAttempts
+        ? "Sit a full 40-question mock to unlock your band score."
+        : "Take your first test to start tracking your band.";
+  const bandCta =
+    bandLatest != null ? "Continue practice" : hasAttempts ? "Sit a full mock" : "Take your first test";
 
   return (
     <AppShell active="dashboard">
@@ -110,7 +119,7 @@ export default async function Dashboard() {
             </p>
             <div style={{ marginTop: 26 }}>
               <Button size="lg" trailingIcon="arrow-right" href="/app/reading">
-                Continue practice
+                {bandCta}
               </Button>
             </div>
           </div>

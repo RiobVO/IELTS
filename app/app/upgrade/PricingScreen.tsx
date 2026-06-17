@@ -71,7 +71,7 @@ const CARDS: PlanCardMeta[] = [
 
 const FAQ = [
   { q: "Can I cancel anytime?", a: "Yes — cancel in one tap from your profile. You keep access until the end of the billing period." },
-  { q: "Is there a student discount?", a: "Premium is already priced for the region, and inviting friends earns you free Premium weeks." },
+  { q: "Is there a student discount?", a: "Premium is already priced for the region, and inviting friends earns you both XP to climb the league faster." },
   { q: "What payment methods work?", a: "Local cards via Payme, Click and Uzum. More options are coming soon." },
 ];
 
