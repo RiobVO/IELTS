@@ -11,6 +11,7 @@ import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
 import { Icon } from "@/components/core/icons";
 import BadgeUnlock from "./BadgeUnlock";
+import { ShareResult } from "./ShareResult";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,12 @@ export default async function ResultPage({
       : [];
 
   const banded = att.bandScore != null;
+
+  // Shareable one-liner for the Telegram viral loop (W1-5). The share link
+  // carries the user's referral code, so a friend who joins ties into 2C.
+  const shareScore = banded ? `band ${att.bandScore}` : `${result.percent}%`;
+  const weakestType = perType.length ? qtypeLabel(perType[0][0]) : null;
+  const shareHeadline = `I scored ${shareScore} on bando${weakestType ? ` — weakest type: ${weakestType}` : ""}. Train your IELTS Reading & Listening:`;
 
   return (
     <AppShell active="reading">
@@ -215,6 +222,12 @@ export default async function ResultPage({
             <Button href="/app/upgrade" trailingIcon="arrow-right">
               Go Premium
             </Button>
+          </div>
+        )}
+
+        {profile?.referral_code && (
+          <div style={{ marginTop: 18 }}>
+            <ShareResult refCode={profile.referral_code} headline={shareHeadline} />
           </div>
         )}
 
