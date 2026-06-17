@@ -95,3 +95,26 @@ export function sentryConfig(): { dsn: string; environment: string } | null {
     "development";
   return { dsn, environment };
 }
+
+/**
+ * Опциональная конфигурация Telegram-бота импорта контента (admin-канал загрузки
+ * тестов). Без TELEGRAM_BOT_TOKEN бот выключен — его webhook отвечает no-op.
+ * SERVER-ONLY секреты. adminIds — whitelist Telegram user_id, которым разрешён
+ * импорт: бот пишет в БД owner-путём (в обход RLS), не из пользовательской сессии,
+ * поэтому круг отправителей и есть граница безопасности. webhookSecret сверяется с
+ * заголовком X-Telegram-Bot-Api-Secret-Token (его же передаём в setWebhook).
+ */
+export function telegramConfig(): {
+  token: string;
+  adminIds: number[];
+  webhookSecret: string | null;
+} | null {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || token.trim() === "") return null;
+  const adminIds = (process.env.TELEGRAM_ADMIN_IDS ?? "")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || null;
+  return { token, adminIds, webhookSecret };
+}
