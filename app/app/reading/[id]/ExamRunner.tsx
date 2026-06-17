@@ -29,6 +29,11 @@ function fmt(sec: number): string {
   return `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** Вопрос отвечен: непустая строка ИЛИ непустой набор букв (mcq_multi). */
+function isAnswered(v: string | string[] | undefined): boolean {
+  return Array.isArray(v) ? v.length > 0 : !!(v && v.trim());
+}
+
 export default function ExamRunner({
   attemptId,
   initialAnswers,
@@ -40,7 +45,7 @@ export default function ExamRunner({
   category,
 }: {
   attemptId: string;
-  initialAnswers: Record<string, string>;
+  initialAnswers: Record<string, string | string[]>;
   passages: Passage[];
   questions: Question[];
   durationSeconds: number | null;
@@ -49,7 +54,7 @@ export default function ExamRunner({
   title: string;
   category: string;
 }) {
-  const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>(initialAnswers);
   // Флаги «отметить на потом» — клиентские/эфемерные (review aid, не персистятся).
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [elapsed, setElapsed] = useState(0);
@@ -92,9 +97,23 @@ export default function ExamRunner({
   // useCallback → стабильные ссылки, чтобы memo(QuestionBlock) реально срабатывал
   // (functional setState, deps пусты).
   const set = useCallback((n: number, v: string) => setAnswers((a) => ({ ...a, [String(n)]: v })), []);
+  // mcq_multi: переключаем букву в наборе ответа (string[]). Порядок грейдеру не важен
+  // (mcq_set сверяет множества), сортируем лишь для стабильного отображения.
+  const toggle = useCallback(
+    (n: number, letter: string) =>
+      setAnswers((a) => {
+        const cur = a[String(n)];
+        const arr = Array.isArray(cur) ? cur : cur ? [cur] : [];
+        const next = arr.includes(letter)
+          ? arr.filter((x) => x !== letter)
+          : [...arr, letter].sort();
+        return { ...a, [String(n)]: next };
+      }),
+    [],
+  );
   const flag = useCallback((n: number) => setFlags((f) => ({ ...f, [String(n)]: !f[String(n)] })), []);
 
-  const answered = Object.values(answers).filter((v) => v && v.trim()).length;
+  const answered = Object.values(answers).filter(isAnswered).length;
   const remaining = durationSeconds != null ? Math.max(0, durationSeconds - elapsed) : null;
 
   const submit = () => {
@@ -114,7 +133,7 @@ export default function ExamRunner({
 
   const navQuestions = questions.map((q) => ({
     number: q.number,
-    answered: !!answers[String(q.number)]?.trim(),
+    answered: isAnswered(answers[String(q.number)]),
     flagged: !!flags[String(q.number)],
   }));
   const nav = (
@@ -199,6 +218,7 @@ export default function ExamRunner({
                   value={answers[String(q.number)] ?? ""}
                   flagged={!!flags[String(q.number)]}
                   onAnswer={set}
+                  onToggle={toggle}
                   onFlag={flag}
                 />
               ))}
@@ -239,6 +259,7 @@ export default function ExamRunner({
                   value={answers[String(q.number)] ?? ""}
                   flagged={!!flags[String(q.number)]}
                   onAnswer={set}
+                  onToggle={toggle}
                   onFlag={flag}
                 />
               ))}
@@ -250,24 +271,52 @@ export default function ExamRunner({
   );
 }
 
+// Общий стиль кнопки-варианта (radio/checkbox) — один источник, чтобы две ветки
+// не расходились визуально.
+const optBtn = (sel: boolean): React.CSSProperties => ({
+  display: "flex",
+  alignItems: "center",
+  gap: 11,
+  textAlign: "left",
+  padding: "11px 14px",
+  borderRadius: "var(--radius-md)",
+  border: `2px solid ${sel ? "var(--brand)" : "var(--border)"}`,
+  background: sel ? "var(--brand-subtle)" : "var(--surface-raised)",
+  color: sel ? "var(--text-primary)" : "var(--text-secondary)",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-sm)",
+  fontWeight: 600,
+  cursor: "pointer",
+  transition: "var(--transition-colors)",
+});
+
 const QuestionBlock = memo(function QuestionBlock({
   q,
   value,
   flagged,
   onAnswer,
+  onToggle,
   onFlag,
 }: {
   q: Question;
-  value: string;
+  value: string | string[];
   flagged: boolean;
   onAnswer: (n: number, v: string) => void;
+  onToggle: (n: number, letter: string) => void;
   onFlag: (n: number) => void;
 }) {
+  const hasOptions = !!q.options && q.options.length > 0;
+  // mcq_multi оценивается как набор букв (mcq_set) → нужен мультивыбор; остальные
+  // option-вопросы — одиночный radio. Нормализуем value к набору/строке.
+  const multi = hasOptions && q.qtype === "mcq_multi";
+  const selected = Array.isArray(value) ? value : value ? [value] : [];
+  const single = Array.isArray(value) ? (value[0] ?? "") : value;
+  const has = selected.length > 0;
   return (
     <div id={`q-${q.number}`} style={{ marginBottom: 12 }}>
       <div style={S.card}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 11 }}>
-          <span style={{ ...S.qNum, background: value ? "var(--brand)" : "var(--surface-hover)", color: value ? "var(--text-on-brand)" : "var(--text-secondary)" }}>{q.number}</span>
+          <span style={{ ...S.qNum, background: has ? "var(--brand)" : "var(--surface-hover)", color: has ? "var(--text-on-brand)" : "var(--text-secondary)" }}>{q.number}</span>
           <div style={S.qPrompt}>{q.prompt_html}</div>
           <button
             onClick={() => onFlag(q.number)}
@@ -280,17 +329,37 @@ const QuestionBlock = memo(function QuestionBlock({
           </button>
         </div>
         <div style={{ marginTop: 13, paddingLeft: 39 }}>
-          {q.options && q.options.length > 0 ? (
+          {multi ? (
+            <div role="group" aria-label={`Answer for question ${q.number} — choose one or more`} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {q.options!.map((o) => {
+                const sel = selected.includes(o.value);
+                return (
+                  <button
+                    key={o.value}
+                    role="checkbox"
+                    aria-checked={sel}
+                    onClick={() => onToggle(q.number, o.value)}
+                    style={optBtn(sel)}
+                  >
+                    <span style={{ width: 18, height: 18, borderRadius: 5, flex: "none", border: `2px solid ${sel ? "var(--brand)" : "var(--border-strong)"}`, background: sel ? "var(--brand)" : "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                      {sel && <Icon name="check" size={12} style={{ color: "var(--text-on-brand)" }} />}
+                    </span>
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : hasOptions ? (
             <div role="radiogroup" aria-label={`Answer for question ${q.number}`} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {q.options.map((o) => {
-                const sel = value === o.value;
+              {q.options!.map((o) => {
+                const sel = single === o.value;
                 return (
                   <button
                     key={o.value}
                     role="radio"
                     aria-checked={sel}
                     onClick={() => onAnswer(q.number, o.value)}
-                    style={{ display: "flex", alignItems: "center", gap: 11, textAlign: "left", padding: "11px 14px", borderRadius: "var(--radius-md)", border: `2px solid ${sel ? "var(--brand)" : "var(--border)"}`, background: sel ? "var(--brand-subtle)" : "var(--surface-raised)", color: sel ? "var(--text-primary)" : "var(--text-secondary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, cursor: "pointer", transition: "var(--transition-colors)" }}
+                    style={optBtn(sel)}
                   >
                     <span style={{ width: 18, height: 18, borderRadius: "50%", flex: "none", border: `2px solid ${sel ? "var(--brand)" : "var(--border-strong)"}`, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                       {sel && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--brand)" }} />}
@@ -302,12 +371,12 @@ const QuestionBlock = memo(function QuestionBlock({
             </div>
           ) : (
             <input
-              value={value}
+              value={single}
               onChange={(e) => onAnswer(q.number, e.target.value)}
               placeholder="Type your answer"
               aria-label={`Answer for question ${q.number}`}
               autoComplete="off"
-              style={{ width: "100%", maxWidth: 300, height: 44, padding: "0 15px", borderRadius: "var(--radius-md)", border: `2px solid ${value ? "var(--brand)" : "var(--border)"}`, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", outline: "none" }}
+              style={{ width: "100%", maxWidth: 300, height: 44, padding: "0 15px", borderRadius: "var(--radius-md)", border: `2px solid ${single ? "var(--brand)" : "var(--border)"}`, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", outline: "none" }}
             />
           )}
         </div>
