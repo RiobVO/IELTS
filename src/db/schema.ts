@@ -175,6 +175,10 @@ export const profile = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // Onboarding completion stamp (W1-2). NULL = the user has not finished the
+    // post-signup onboarding (capture display_name/region/target_band); the
+    // dashboard redirects them to /app/onboarding until it is set.
+    onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
   },
   (t) => [
     index("profile_region_id_idx").on(t.regionId),
