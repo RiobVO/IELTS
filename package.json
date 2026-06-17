@@ -16,7 +16,9 @@
     "docker:db": "docker compose up -d db",
     "docker:db:down": "docker compose down -v",
     "verify": "tsx scripts/verify.ts",
-    "import": "tsx scripts/import-file.ts"
+    "import": "tsx scripts/import-file.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.58.0",
@@ -38,6 +40,7 @@
     "dotenv": "^16.4.7",
     "drizzle-kit": "^0.30.1",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.9"
   }
 }

@@ -40,7 +40,7 @@
 E2E прогнан на проде (2026-06-17): реальный submit → grade 8/13 [6], applyPostSubmit rated Δ3 [2],
   recompute → leaderboard rank=1 [2], rating 1000→1003/xp→18; каталог список+фильтры+счётчики [4];
   region self-join Navoiy←Uzbekistan [7]. Все поведенческие дыры закрыты машинно.
-Сейчас в работе: — (следующая фаза — дизайн, раздел 4).
+Сейчас в работе: тестовая инфра (Vitest, раздел 4b) — волна 1 закрыта. Затем — фаза дизайна (раздел 4).
 Тестовая БД восстановлена после db:down-инцидента: 2 профиля (eleru340 = admin), 9 Reading + Full +
   Listening published, eleru340 имеет демо-attempt. (db:down = revert ALL — НЕ гонять на проде.)
 </state>
@@ -115,6 +115,24 @@ E2E прогнан на проде (2026-06-17): реальный submit → gra
 
 - `☐` Доработка дизайна (детали согласуем, когда дойдём). Mobile/responsive — отдельно
   (сейчас `/app` desktop-only, см. `CLAUDE.md`).
+
+---
+
+## 4b. ТЕСТОВАЯ ИНФРА (Vitest) — параллельный трек
+
+Раннер: Vitest (devDep, в прод-бандл не идёт). Конфиг `vitest.config.ts` (env node,
+co-located `src/**/*.test.ts`). Запуск: `npm test` (= `vitest run`) / `npm run test:watch`.
+Жёсткое правило: unit — чистые, без I/O; integration — ТОЛЬКО локальный docker
+(`VERIFY_DATABASE_URL`), НИКОГДА Supabase (прод недавно снесли `db:down`).
+
+- `✅ 2026-06-17` **Волна 1 — чистая бизнес-логика** (62 теста, 6 файлов, зелёные; `tsc` 0).
+  Покрыто: грейдинг `isCorrect`/`grade` (режимы mcq_set/text_accept/exact, нормализация,
+  округление percent, защита от деления на ноль), Elo `expectedScore`/`ratingDeltas`
+  (0.5 / симметрия / zero-sum / знак / округление / масштаб K), tiers `effectiveTier`
+  (фейк-таймеры) / `meetsTier` / `hasFullReview`, `canonQuestionType`, `findPlan`, `scrubEvent`.
+- `☐` Волна 2 — импорт-парсеры (fixture-driven из `samples/`).
+- `☐` Волна 3 — integration на local docker (RLS / answer_key / изоляция attempt / идемпотентность submit).
+- `☐` Волна 4 (опц.) — e2e Playwright (login → exam → submit → result).
 
 ---
 
