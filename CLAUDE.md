@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **⚠️ READ [WORKLOG.md](./WORKLOG.md) FIRST every session** — it is the live entry point
+> **⚠️ READ [BACKLOG.md](./BACKLOG.md) FIRST every session** — it is the live entry point
 > (where we are / what's closed / what's left) for the current perf+design work. Follow its
 > session contract before touching anything else.
 
@@ -203,9 +203,26 @@ emulation + verify gate.
   (webhook no-op). Webhook на prod, все 3 этапа E2E проверены. Закрывает launch-аудио
   (теперь в Storage, не локальный `public/`).
 
+### ✅ Продуктовый бэклог — Волна 1 (BACKLOG.md, 2026-06-18)
+*«20 → 100» — продуктовые ходы из живого ревью прод-сайта. Все 7 пунктов закрыты, на проде, проверены вживую.*
+- **W1-1+3 пейволл** (`058ffee`): per-type breakdown + ✓/✗ по вопросам — бесплатно; правильные
+  ответы/объяснения/evidence — Premium (рендерятся только при `fullReview`, в HTML free не утекают).
+- **W1-2 онбординг** (`26279d6`): 2-шаговый визард `/app/onboarding` — захват
+  display_name/region/target_band (миграция `0012` `onboarded_at`, гейт на дашборде) +
+  мини-диагностика (`723096f`: зашитый пассаж + 6 вопросов, клиентский грейд → слабый тип).
+- **W1-4 band** (`d19046d`): три честных состояния (есть band / попытки без band / нет попыток) + CTA.
+- **W1-6 EN + `/pricing`** (`cea76c4`, `3f60fa8`): все UI-строки EN (бейджи via миграция `0011`),
+  публичный `/pricing` (общий `PricingScreen` в guest-режиме), честный реферал-копирайт (XP, не Premium).
+- **W1-7 анти-бот seam** (`bd7f1e3`): Turnstile fail-open (`src/lib/anti-bot/`); identity в
+  лидерборде уже работала — разблокирована онбордингом.
+- **W1-5 шеринг** (`9b047e0`): «Share on Telegram» на result (t.me/share + реф-ссылка), без бота.
+- **Отложено → после Волн 2–3:** W1-5b полный student-Telegram-бот (тест дня / стрик-напоминания /
+  мини-апп / image band-карточка) — нужен отдельный бот-токен + scheduler + image-стек.
+
 ### ⛔ Blocked / pending (needs external input)
-- **Anti-bot on signup** — Turnstile/captcha + email-verify + signup velocity; needs
-  Cloudflare keys + Supabase toggle. This is the real §11 control behind the 2C gaps.
+- **Anti-bot on signup** — Turnstile code-seam DONE (`src/lib/anti-bot/turnstile.ts`, fail-open,
+  off until keys set); just needs Cloudflare keys (`NEXT_PUBLIC_TURNSTILE_SITE_KEY` +
+  `TURNSTILE_SECRET_KEY`). Email-verify + signup velocity still TODO. Real §11 control behind 2C gaps.
 - **Weekly digest / email delivery** — `notification` table + in-app centre exist;
   digest jobs/content + email provider still TODO.
 - **i18n** — deferred (EN at launch per §10).
