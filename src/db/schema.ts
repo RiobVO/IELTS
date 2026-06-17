@@ -306,7 +306,12 @@ export const attempt = pgTable(
     perTypeBreakdown: jsonb("per_type_breakdown"),
   },
   (t) => [
-    index("attempt_user_submitted_idx").on(t.userId, t.submittedAt),
+    // Partial over submitted: every hot attempt-by-user query filters
+    // status='submitted' (computeStats, daily-limit, throttle, lists), and
+    // in_progress rows are short-lived (migration 0008).
+    index("attempt_user_submitted_idx")
+      .on(t.userId, t.submittedAt)
+      .where(sql`${t.status} = 'submitted'`),
     index("attempt_content_item_id_idx").on(t.contentItemId),
     // At most one in_progress attempt per (user, test) — DB-level guard behind
     // ensureAttempt's ON CONFLICT DO NOTHING (anti-cheat §4.6, migration 0007).
@@ -425,7 +430,14 @@ export const notification = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("notification_user_created_idx").on(t.userId, t.createdAt)],
+  (t) => [
+    index("notification_user_created_idx").on(t.userId, t.createdAt),
+    // Unread badge count (AppShell) — partial keeps only the few unread rows
+    // (migration 0008).
+    index("notification_user_unread_idx")
+      .on(t.userId)
+      .where(sql`${t.readAt} is null`),
+  ],
 );
 
 /* -------------------------------------------------------------------------- */
