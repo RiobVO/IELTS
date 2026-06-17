@@ -56,8 +56,8 @@ body ≥ 4.5:1 (muted/streak/warn/success-токены затемнены до A
 ## Design state (обновлено в текущей сессии)
 
 - **Редизайн bando — завершён** по всем экранам + exam component kit (`src/components/exam/`:
-  ExamTimer/QuestionNavigator/QuestionFilter/AudioPlayer/MapLabelling). Превью — `/dev/exam-kit`
-  (публичный dev-роут, **удалить перед запуском**). Эталон вида — `design-drop/` (gitignored).
+  ExamTimer/QuestionNavigator/QuestionFilter/AudioPlayer/MapLabelling). Dev-превью-роут `/dev/exam-kit`
+  снят перед запуском. Эталон вида — `design-drop/` (gitignored).
 - **Тёмная тема — мёртвый код:** `[data-theme="dark"]` полностью описана в `app/tokens/colors.css`,
   но НИГДЕ не активируется (нет тоггла / `prefers-color-scheme`). Решить: удалить или развести тоггл.
 - **Адаптив — НЕ сделан:** весь `/app` desktop-only (inline-стили без медиа-запросов; дизайн-дроп
