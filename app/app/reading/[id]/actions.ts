@@ -2,6 +2,7 @@
 
 import { and, count, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { db } from "@/db";
 import { answerKey, attempt, contentItem, profile, question } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
@@ -13,6 +14,7 @@ import {
 import { getUser } from "@/lib/auth";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
+import { recomputeLeaderboard } from "@/lib/progress/leaderboard";
 import { BASIC_DAILY_LIMIT, effectiveTier, meetsTier } from "@/lib/tiers";
 
 /**
@@ -312,8 +314,8 @@ export async function submitAttempt(
   });
 
   // Post-submit progression (BRIEF §4.6): streak/XP always, Elo rating on the
-  // first submitted attempt, leaderboard recompute. Best-effort (never throws),
-  // so redirect() stays outside any try block.
+  // first submitted attempt. Best-effort (never throws), so redirect() stays
+  // outside any try block.
   const post = await applyPostSubmit({
     userId: user.id,
     contentItemId,
@@ -322,6 +324,22 @@ export async function submitAttempt(
     total: result.total,
     submittedAt,
   });
+
+  // Leaderboard rebuild is deferred to AFTER the response (Next after()): a full
+  // recompute on every rated submit adds hundreds of ms to the user-facing submit
+  // for no UI benefit. Only a rated (first) attempt changes ranks. after() runs
+  // post-response; if it fails the board simply catches up on the next rated
+  // submit. The champion badge is evaluated synchronously (profile ratings), so
+  // it does NOT depend on this deferred rebuild.
+  if (post.rated) {
+    after(async () => {
+      try {
+        await recomputeLeaderboard();
+      } catch (e) {
+        console.error("submitAttempt: deferred recomputeLeaderboard failed", e);
+      }
+    });
+  }
 
   const unlocked = post.awardedBadges.map((b) => b.code).join(",");
   const q = unlocked ? `&unlocked=${encodeURIComponent(unlocked)}` : "";
