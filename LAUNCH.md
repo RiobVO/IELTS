@@ -8,7 +8,7 @@
 
 Фазы **0, 1, 2 закрыты на уровне кода** (проверено пофайлово, не по статусу):
 
-- **Phase 0** — 14 таблиц (`src/db/schema.ts`), миграции `0000`–`0007` (up/down),
+- **Phase 0** — 14 таблиц (`src/db/schema.ts`), миграции `0000`–`0009` (up/down),
   два DB-пути (Supabase anon+RLS / Drizzle owner), auth-триггер.
 - **Phase 1** — auth, 6 импорт-парсеров (`src/lib/import/`, включая Listening и
   Full Reading), admin-загрузка+publish, каталог с фильтрами, exam-режим
@@ -27,9 +27,9 @@ Phase 3 (AI) — заморожена, последняя. Не входит в 
 
 ## Gate A — Развернуть инфраструктуру (нужны аккаунты/ключи, кода почти нет)
 
-1. **Supabase prod**: применить **все** миграции `0000`–`0007`. ⚠️ `0007`
-   (`one in_progress attempt`) на Supabase **ещё не применён** — это последний
-   незакрытый шаг в hardening.
+1. **Supabase prod**: применить **все** миграции `0000`–`0009` (включая `0007`
+   one-in-progress, `0008` perf-индексы, `0009` RLS на `_migrations`).
+   ✅ Все применены к боевому Supabase (проверено в `_migrations`).
 2. **Env в Vercel**: `DATABASE_URL` (pooler :6543), `DIRECT_URL` (:5432),
    `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`.
    Спецсимволы в пароле БД — percent-encode.
