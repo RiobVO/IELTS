@@ -425,7 +425,7 @@ export default function Home() {
             <a href="/app/reading">Reading</a>
             <a href="/app/listening">Listening</a>
             <a href="#how">How it works</a>
-            <a href="#types">Pricing</a>
+            <a href="/pricing">Pricing</a>
           </div>
           <div className="nav-r">
             <a href="/auth" style={{ color: "var(--ink-2)" }}>Log in</a>
@@ -713,7 +713,7 @@ export default function Home() {
             <h4>Product</h4>
             <a href="/app/reading">Reading</a>
             <a href="/app/listening">Listening</a>
-            <a href="#types">Pricing</a>
+            <a href="/pricing">Pricing</a>
           </div>
           <div>
             <h4>Learn</h4>
