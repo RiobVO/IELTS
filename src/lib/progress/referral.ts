@@ -71,8 +71,8 @@ export async function maybeRewardReferral(userId: string): Promise<void> {
       await db.insert(notification).values({
         userId: inviterId,
         type: "system",
-        title: "Реферал активирован",
-        body: "Твой друг сдал первый тест — тебе +100 XP",
+        title: "Referral activated",
+        body: "Your friend completed their first test — you earned +100 XP",
       });
     } catch (e) {
       console.error("maybeRewardReferral: inviter notification failed", e);
@@ -82,8 +82,8 @@ export async function maybeRewardReferral(userId: string): Promise<void> {
       await db.insert(notification).values({
         userId,
         type: "system",
-        title: "Добро пожаловать",
-        body: "Тебе +50 XP за регистрацию по приглашению",
+        title: "Welcome",
+        body: "You earned +50 XP for signing up via an invite",
       });
     } catch (e) {
       console.error("maybeRewardReferral: invitee notification failed", e);

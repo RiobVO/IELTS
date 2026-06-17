@@ -56,7 +56,7 @@ export async function signUp(formData: FormData) {
   // profile row is created server-side by the on_auth_user_created trigger
   // (migrations/0002_auth) — no client write needed.
   redirect(
-    `/auth?message=${encodeURIComponent("Письмо для подтверждения отправлено на почту.")}`,
+    `/auth?message=${encodeURIComponent("A confirmation email has been sent to your inbox.")}`,
   );
 }
 

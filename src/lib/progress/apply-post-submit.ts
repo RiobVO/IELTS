@@ -203,7 +203,7 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
         awardedBadges.map((b) => ({
           userId: input.userId,
           type: "badge_unlocked" as const,
-          title: `Бейдж разблокирован: ${b.name}`,
+          title: `Badge unlocked: ${b.name}`,
           body: b.description,
           data: { code: b.code, icon: b.icon },
         })),
