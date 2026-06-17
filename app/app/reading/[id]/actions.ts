@@ -185,21 +185,27 @@ export async function ensureAttempt(contentItemId: string): Promise<{
     redirect(`/app/reading/${contentItemId}`);
   }
 
-  // We created the attempt -> test_start (§11), exactly once per real start.
-  const [meta] = await db
-    .select({
-      section: contentItem.section,
-      category: contentItem.category,
-      tierRequired: contentItem.tierRequired,
-    })
-    .from(contentItem)
-    .where(eq(contentItem.id, contentItemId));
-  await captureServer("test_start", user.id, {
-    content_item_id: contentItemId,
-    section: meta?.section ?? "",
-    category: meta?.category ?? "",
-    tier_required: meta?.tierRequired ?? "",
-    mode: "practice",
+  // We created the attempt -> test_start (§11), exactly once per real start. Both
+  // the meta lookup (needed ONLY for the event props) and the PostHog flush are
+  // deferred to after() so they never block the user-facing start — capture is
+  // best-effort telemetry, not part of the response (same pattern as the deferred
+  // recomputeLeaderboard). distinctId stays server-authoritative (user.id).
+  after(async () => {
+    const [meta] = await db
+      .select({
+        section: contentItem.section,
+        category: contentItem.category,
+        tierRequired: contentItem.tierRequired,
+      })
+      .from(contentItem)
+      .where(eq(contentItem.id, contentItemId));
+    await captureServer("test_start", user.id, {
+      content_item_id: contentItemId,
+      section: meta?.section ?? "",
+      category: meta?.category ?? "",
+      tier_required: meta?.tierRequired ?? "",
+      mode: "practice",
+    });
   });
 
   return { attemptId: inserted[0]!.id, answers: {} };
@@ -351,16 +357,19 @@ export async function submitAttempt(
     redirect(`/app/reading/${contentItemId}/result?a=${attemptId}`);
   }
 
-  // test_submit — событие воронки (§11). Ставится ПОСЛЕ выигранного single-fire
+  // test_submit — событие воронки (§11). Регистрируется ПОСЛЕ выигранного single-fire
   // claim (updated.length > 0): идемпотентный ре-сабмит и проигравший гонку
   // редиректят выше, поэтому ровно одно событие на реальную сдачу — без накрутки.
-  await captureServer("test_submit", user.id, {
-    content_item_id: contentItemId,
-    raw_score: result.rawScore,
-    total: result.total,
-    time_used_seconds: timeUsedSeconds,
-    mode: att.mode,
-  });
+  // В after() (как leaderboard): flush PostHog (до 2с) не блокирует сабмит.
+  after(() =>
+    captureServer("test_submit", user.id, {
+      content_item_id: contentItemId,
+      raw_score: result.rawScore,
+      total: result.total,
+      time_used_seconds: timeUsedSeconds,
+      mode: att.mode,
+    }),
+  );
 
   // Post-submit progression (BRIEF §4.6): streak/XP always, Elo rating on the
   // first submitted attempt. Best-effort (never throws), so redirect() stays
