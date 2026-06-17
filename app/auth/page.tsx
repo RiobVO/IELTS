@@ -1,3 +1,4 @@
+import { turnstileConfig } from "@/env";
 import { AuthScreen } from "./AuthScreen";
 
 export default async function AuthPage({
@@ -18,6 +19,7 @@ export default async function AuthPage({
       message={sp.message}
       refCode={sp.ref}
       next={sp.next ?? "/app"}
+      turnstileSiteKey={turnstileConfig()?.siteKey}
     />
   );
 }
