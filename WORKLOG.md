@@ -40,8 +40,9 @@
 E2E прогнан на проде (2026-06-17): реальный submit → grade 8/13 [6], applyPostSubmit rated Δ3 [2],
   recompute → leaderboard rank=1 [2], rating 1000→1003/xp→18; каталог список+фильтры+счётчики [4];
   region self-join Navoiy←Uzbekistan [7]. Все поведенческие дыры закрыты машинно.
-Сейчас в работе: SECURITY+CORRECTNESS трек (раздел 3c). P0 закрыт (0010 на Supabase + push, live).
-  P1-3 и P1-4 закрыты. Дальше P1-5 (атомарность applyPostSubmit), затем 6 (опц.) и 7 (заметка).
+Сейчас в работе: — SECURITY+CORRECTNESS трек ЗАКРЫТ (раздел 3c): P0 (RLS lockdown, на Supabase),
+  P1-3 (analytics в after()), P1-4 (mcq_multi checkbox), P1-5 (атомарная прогрессия) — все запушены;
+  п.6 осознанно оставлен (SSR refresh), п.7 — заметка на месте. Следующая активная фаза — дизайн (раздел 4).
 Тестовая БД восстановлена после db:down-инцидента: 2 профиля (eleru340 = admin), 9 Reading + Full +
   Listening published, eleru340 имеет демо-attempt. (db:down = revert ALL — НЕ гонять на проде.)
 </state>
@@ -140,9 +141,14 @@ E2E прогнан на проде (2026-06-17): реальный submit → gra
   badges/referral/notifications best-effort ПОСЛЕ коммита (вне блокировки). TDD: throwaway
   concurrency-скрипт против local docker (реальный applyPostSubmit, DATABASE_URL→docker) —
   RED флакал (lost update xp/rated_count), GREEN 8/8 чисто. tsc 0, build, vitest 93/93.
-- `☐ опц.` **[6] middleware getUser** — НЕ трогать без доказательства, что refresh токена не ломается.
-- `✅` **[7] result-пересчёт по текущему answer_key** — уже задокументирован (RegradeRequiredError,
-  full re-grade отложен); только сверка заметки, не фиксим.
+- `✅ 2026-06-17 (оставлено как есть)` **[6] middleware getUser** — сверено: `src/lib/supabase/
+  middleware.ts` это канонический Supabase SSR session-refresh (`getUser()` ротирует токен через
+  `setAll`-cookie; «do not run logic between createServerClient and getUser()» — официальный
+  паттерн). Убрать = разлогин на истечении токена; это НЕ причина лага (её закрыл fra1↔eu-central).
+  Решение: НЕ трогать.
+- `✅ 2026-06-17` **[7] result-пересчёт по текущему answer_key** — заметка/TODO добавлена на месте
+  кода (`result/page.tsx` перед `grade()`): live-пересчёт vs сохранённый `att.raw_score`, full
+  re-grade отложен (BRIEF §11), деструктивный ре-импорт уже заблокирован RegradeRequiredError. Не фиксим.
 
 ---
 
