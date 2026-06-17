@@ -1,0 +1,22 @@
+-- 0010_profile_attempt_write_lockdown :: up
+-- Privilege-escalation / score-forgery lockdown (BRIEF §6.1, anti-cheat §4.6).
+--
+-- RLS is ROW-level, not column-level. The 0001 policies (profile_update_own /
+-- attempt_insert_own / attempt_update_own) only check row ownership, so the
+-- `authenticated` (anon-key) role could PATCH any column of its OWN row via the
+-- Supabase REST API:
+--   * profile.role     -> escalate to admin (the /admin gate is profile.role,
+--                         src/lib/auth.ts), plus tier / premium_until / xp / rating;
+--   * attempt.raw_score / band_score / status -> forge a score, bypassing the
+--                         server-only grading (§4.6 — the client must never send a score).
+--
+-- Every legitimate write to BOTH tables already goes through a server action on
+-- the Drizzle OWNER path (bypasses RLS): profile via apply-post-submit / referral /
+-- payments / cron-expire; attempt via ensureAttempt / saveProgress / submitAttempt.
+-- No anon/authenticated client code path writes either table, and the signup
+-- profile INSERT is done by the SECURITY DEFINER trigger (0002), not by the
+-- client role. So we revoke the client write grants outright. SELECT (under the
+-- 0001 owner-only policies) is untouched — reads keep working. The insert/update
+-- policies stay as inert defense-in-depth (no grant => no access regardless).
+REVOKE INSERT, UPDATE ON profile FROM authenticated;
+REVOKE INSERT, UPDATE ON attempt FROM authenticated;
