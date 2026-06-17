@@ -33,7 +33,7 @@ a { color: var(--text-link); text-decoration: none; }
   border-radius: var(--radius-sm);
 }
 
-/* Custom scrollbar that fits the dark canvas */
+/* Custom scrollbar */
 * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-thumb {
