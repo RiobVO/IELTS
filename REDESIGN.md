@@ -103,7 +103,14 @@ map-pin. Elo/region self-join/readLeaderboard не тронуты. tsc+build+93 
 **Закрывает:** W1-7 (лидерборд про людей) + §4.6 регионы. · **Acceptance:** реальные
 ранги/регионы, «you» верно подсвечен; на проде.
 
-### `☐` S3 · Catalog → `app/app/reading/page.tsx` (+`_CatalogView`)
+### `✅` S3 · Catalog → `app/app/reading/page.tsx` (+`_CatalogView`)
+**✅ 2026-06-18:** Option C (Weak-spot first) в общем `_CatalogView` (Reading+Listening сразу) —
+«Recommended for you» баннер (тест под реальный слабейший тип из per_type_breakdown; показывается
+только без фильтра и при наличии данных+матча, иначе скрыт — без фейка), фильтр сохранён, compact
+2-up грид (бейдж + Q-count + duration + 3 тип-тега «+N» + Start/Premium-замок, равная высота).
+Q-count добавлен в кэш-функцию `getPublishedTests` (grouped count, тот же тег). tier-замок/фильтр-
+логика/`unstable_cache` не тронуты. Дедуп seed-карточек — это данные (prod БД), не код-скоуп.
+tsc+build+93 теста зелёные.
 **Источник:** `05-results (1).html`.
 **Меняем:** баннер «Recommended for you» (тест под слабейший тип); СОХРАНИТЬ фильтр
 (category + q_type чипы); compact 2-up грид, каждая карточка = category-бейдж + Q-count +
@@ -152,7 +159,7 @@ annotation-капсула (highlight / note / A−A+ / theme) по центру 
 |---|---|---|---|---|
 | S1 | Dashboard | `03-league (1).html` | W1-4 | ✅ |
 | S2 | League | `04-catalog (1).html` | W1-7 + §4.6 | ✅ |
-| S3 | Catalog | `05-results (1).html` | W2-4 | ☐ |
+| S3 | Catalog | `05-results (1).html` | W2-4 | ✅ |
 | S4 | Badges | `HANDOFF (1).md` | W2-5 | ☐ |
 | S5 | Results | `06-badges (1).html` | W1-1/W1-3 (open-флаг) | ☐ |
 | S6 | Exam-runner | `02-home-dashboard (1).html` | W2-1 + W2-7 | ☐ |
