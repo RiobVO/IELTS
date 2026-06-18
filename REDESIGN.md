@@ -137,7 +137,15 @@ EN-строки (миграция `0011`), unlock-анимацию с `prefers-r
 **Закрывает:** W2-5 (частично — визуал «учеба»). · **Acceptance:** earned/locked и прогресс
 реальные; на проде.
 
-### `☐` S5 · Results → `app/app/reading/[id]/result/page.tsx`
+### `✅` S5 · Results → `app/app/reading/[id]/result/page.tsx`
+**✅ 2026-06-18:** Option D (Clean analytics report) — report-header + donut (% correct) + band,
+key-metrics (time/avg из `time_used_seconds`, percentile vs others, Δ band/% since last — все из
+РЕАЛЬНЫХ запросов, показываются только при наличии данных), accuracy-by-type бары + per-type
+Practise-ссылка, одно-строчная рекомендация, полный answer-key. **Open-флаг (ГЛАВНОЕ):** `tiers.ts`
+получил `REVIEW_OPEN=true` + `hasFullReview(tier, open=REVIEW_OPEN)` — разбор бесплатен всем,
+гейтинг-код НЕ удалён (закрывается одной правкой `false`); answer_key только server-side, не течёт
+в HTML при closed. Грейдинг/`raw_score`/`grade()` не тронуты (score «до/после» идентичен). Тест-замок:
+open→free видит разбор, closed→гейт, default=REVIEW_OPEN (95 тестов, +2). +icon lightbulb.
 **Источник:** `06-badges (1).html` (clean analytics, no-premium).
 **Меняем:** donut (% correct) + band; key-metrics (время, avg/вопрос, percentile vs others,
 Δ vs прошлый); accuracy-by-type бар-чарт + per-type Practise-ссылка; одно-строчная
@@ -169,5 +177,5 @@ annotation-капсула (highlight / note / A−A+ / theme) по центру 
 | S2 | League | `04-catalog (1).html` | W1-7 + §4.6 | ✅ |
 | S3 | Catalog | `05-results (1).html` | W2-4 | ✅ |
 | S4 | Badges | `HANDOFF (1).md` | W2-5 | ✅ |
-| S5 | Results | `06-badges (1).html` | W1-1/W1-3 (open-флаг) | ☐ |
+| S5 | Results | `06-badges (1).html` | W1-1/W1-3 (open-флаг) | ✅ |
 | S6 | Exam-runner | `02-home-dashboard (1).html` | W2-1 + W2-7 | ☐ |

@@ -1,11 +1,12 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/db";
-import { answerKey, attempt, badge, question } from "@/db/schema";
+import { answerKey, attempt, badge, contentItem, question } from "@/db/schema";
 import { getProfile, getUser } from "@/lib/auth";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
-import { qtypeLabel } from "@/lib/labels";
+import { categoryLabel, qtypeLabel } from "@/lib/labels";
 import { AppShell } from "../../../_AppShell";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
@@ -14,6 +15,18 @@ import BadgeUnlock from "./BadgeUnlock";
 import { ShareResult } from "./ShareResult";
 
 export const dynamic = "force-dynamic";
+
+const barColor = (pct: number) =>
+  pct < 45 ? "var(--error)" : pct < 70 ? "var(--warn)" : "var(--success)";
+const barText = (pct: number) =>
+  pct < 45 ? "var(--error-text)" : pct < 70 ? "var(--warn-text)" : "var(--success-text)";
+
+function fmtDuration(sec: number): string {
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return s ? `${m}m ${s}s` : `${m}m`;
+}
 
 export default async function ResultPage({
   params,
@@ -32,32 +45,67 @@ export default async function ResultPage({
   // Ownership check — a user can only see their own attempt's review.
   if (!att || att.userId !== user.id || att.contentItemId !== id) notFound();
 
-  // Review depth is tier-gated (§4.8): Basic sees score + percent only; the
-  // per-type breakdown, explanations and evidence are Premium+. effectiveTier
-  // downgrades an expired premium so a stale tier can't unlock the full review.
-  const profile = await getProfile();
+  // Review depth seam (§4.8): `hasFullReview` follows the launch flag REVIEW_OPEN
+  // — currently OPEN, so the review is free for everyone. The Premium gate is
+  // intact (flip REVIEW_OPEN to re-gate). effectiveTier still downgrades an
+  // expired premium so the gated path stays correct when the flag is closed.
+  // answer_key is read server-side (owner role) and revealed only AFTER submit,
+  // only to the attempt's owner, and only when `fullReview` is true.
+  const [profile, rows, ci, pctRow, prevRows] = await Promise.all([
+    getProfile(),
+    db
+      .select({
+        number: question.number,
+        qtype: question.qtype,
+        promptHtml: question.promptHtml,
+        mode: answerKey.mode,
+        accept: answerKey.accept,
+        explanation: answerKey.explanation,
+        evidence: answerKey.evidence,
+      })
+      .from(question)
+      .innerJoin(answerKey, eq(answerKey.questionId, question.id))
+      .where(eq(question.contentItemId, id))
+      .orderBy(question.number),
+    db
+      .select({ title: contentItem.title, category: contentItem.category })
+      .from(contentItem)
+      .where(eq(contentItem.id, id))
+      .limit(1),
+    // Percentile vs other students: count of submitted attempts on this test and
+    // how many scored strictly below this one (shown only when there are enough).
+    att.rawScore != null
+      ? db
+          .select({
+            total: sql<number>`count(*)::int`,
+            below: sql<number>`count(*) filter (where ${attempt.rawScore} < ${att.rawScore})::int`,
+          })
+          .from(attempt)
+          .where(and(eq(attempt.contentItemId, id), eq(attempt.status, "submitted")))
+      : Promise.resolve([{ total: 0, below: 0 }]),
+    // Previous submitted attempt on this test (for the "since last test" delta).
+    att.submittedAt
+      ? db
+          .select({ rawScore: attempt.rawScore, bandScore: attempt.bandScore })
+          .from(attempt)
+          .where(
+            and(
+              eq(attempt.userId, user.id),
+              eq(attempt.contentItemId, id),
+              eq(attempt.status, "submitted"),
+              lt(attempt.submittedAt, att.submittedAt),
+            ),
+          )
+          .orderBy(desc(attempt.submittedAt))
+          .limit(1)
+      : Promise.resolve([]),
+  ]);
+
   const fullReview = profile
     ? hasFullReview(
         effectiveTier(profile as { tier: Tier; premium_until: string | Date | null }),
       )
     : false;
-
-  // answer_key read server-side (owner role) — explanations/evidence revealed
-  // only AFTER submit (BRIEF §4.2), and only to the attempt's owner.
-  const rows = await db
-    .select({
-      number: question.number,
-      qtype: question.qtype,
-      promptHtml: question.promptHtml,
-      mode: answerKey.mode,
-      accept: answerKey.accept,
-      explanation: answerKey.explanation,
-      evidence: answerKey.evidence,
-    })
-    .from(question)
-    .innerJoin(answerKey, eq(answerKey.questionId, question.id))
-    .where(eq(question.contentItemId, id))
-    .orderBy(question.number);
 
   const answers = (att.answers ?? {}) as Record<string, string | string[]>;
   const keys: GradeKey[] = rows.map((r) => ({
@@ -67,45 +115,58 @@ export default async function ResultPage({
     accept: (r.accept as string[]) ?? [],
   }));
   // NB: разбор пересчитывается по ТЕКУЩЕМУ answer_key, а не по баллу, сохранённому
-  // в attempt на момент сдачи. Если ключ правят после сдачи, показанный здесь
-  // raw_score/percent может разойтись с att.raw_score (по которому начислены
-  // rating/XP). Полный re-grade (version bump + пересчёт затронутых attempt +
-  // пометка «балл уточнён») отложен — BRIEF §11 / CLAUDE.md. Деструктивный
-  // ре-импорт при наличии попыток уже заблокирован (RegradeRequiredError).
+  // в attempt на момент сдачи (полный re-grade отложен — BRIEF §11; деструктивный
+  // ре-импорт при наличии попыток уже заблокирован RegradeRequiredError).
   const result = grade(keys, answers);
   const meta = new Map(rows.map((r) => [r.number, r]));
 
   const perType = Object.entries(result.perType).sort(
     (a, b) => a[1].correct / a[1].total - b[1].correct / b[1].total,
   );
+  const weakest = perType.length ? perType[0] : null;
 
-  // Badges this submit just unlocked — passed as codes on the redirect from the
-  // submit action (the exact set, deduped server-side via the award insert's
-  // RETURNING). Absent on revisits, so the celebration shows exactly once.
-  const unlockedCodes = (unlocked ?? "")
-    .split(",")
-    .map((c) => c.trim())
-    .filter(Boolean);
+  const banded = att.bandScore != null;
+  const correctPct = result.total > 0 ? result.rawScore / result.total : 0;
+  const title = ci[0]?.title ?? "Your report";
+  const category = ci[0]?.category ?? null;
+
+  // Honest key metrics — only those backed by real data are rendered.
+  const metrics: { value: string; label: string; color: string }[] = [];
+  if (att.timeUsedSeconds != null) {
+    metrics.push({ value: fmtDuration(att.timeUsedSeconds), label: "Time taken", color: "var(--sky-500)" });
+    if (result.total > 0) {
+      metrics.push({ value: `${Math.round(att.timeUsedSeconds / result.total)}s`, label: "Avg / question", color: "var(--brand)" });
+    }
+  }
+  const pct = pctRow[0] ?? { total: 0, below: 0 };
+  if (pct.total >= 5 && att.rawScore != null) {
+    const topPct = Math.max(1, 100 - Math.round((pct.below / pct.total) * 100));
+    metrics.push({ value: `Top ${topPct}%`, label: "vs other students", color: "var(--success-text)" });
+  }
+  const prev = prevRows[0];
+  if (prev) {
+    if (banded && prev.bandScore != null) {
+      const d = Number(att.bandScore) - Number(prev.bandScore);
+      metrics.push({ value: `${d >= 0 ? "+" : ""}${d.toFixed(1)}`, label: "Band since last", color: d >= 0 ? "var(--success-text)" : "var(--error-text)" });
+    } else if (prev.rawScore != null && result.total > 0) {
+      const dp = result.percent - Math.round((prev.rawScore / result.total) * 100);
+      metrics.push({ value: `${dp >= 0 ? "+" : ""}${dp}%`, label: "Since last test", color: dp >= 0 ? "var(--success-text)" : "var(--error-text)" });
+    }
+  }
+
+  // Badges this submit just unlocked — codes passed on the submit redirect.
+  const unlockedCodes = (unlocked ?? "").split(",").map((c) => c.trim()).filter(Boolean);
   const unlockedBadges =
     unlockedCodes.length > 0
       ? await db
-          .select({
-            id: badge.id,
-            code: badge.code,
-            name: badge.name,
-            description: badge.description,
-            icon: badge.icon,
-          })
+          .select({ id: badge.id, code: badge.code, name: badge.name, description: badge.description, icon: badge.icon })
           .from(badge)
           .where(inArray(badge.code, unlockedCodes))
       : [];
 
-  const banded = att.bandScore != null;
-
-  // Shareable one-liner for the Telegram viral loop (W1-5). The share link
-  // carries the user's referral code, so a friend who joins ties into 2C.
+  // Shareable one-liner for the Telegram viral loop (W1-5).
   const shareScore = banded ? `band ${att.bandScore}` : `${result.percent}%`;
-  const weakestType = perType.length ? qtypeLabel(perType[0][0]) : null;
+  const weakestType = weakest ? qtypeLabel(weakest[0]) : null;
   const shareHeadline = `I scored ${shareScore} on bando${weakestType ? ` — weakest type: ${weakestType}` : ""}. Train your IELTS Reading & Listening:`;
 
   return (
@@ -117,75 +178,111 @@ export default async function ResultPage({
           </Button>
         </div>
 
-        {/* Score header — band present but secondary */}
-        <div style={S.scoreCard}>
-          <div>
-            <div style={S.scoreLabel}>{banded ? "Band score" : "Result"}</div>
-            <div style={S.scoreBig}>
-              {banded ? att.bandScore : <>{result.percent}<span style={S.pctSign}>%</span></>}
+        {/* Report header */}
+        <div style={S.repHead}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={S.h1}>Your report</h1>
+            <div style={S.repSub}>
+              {title}
+              {category ? ` · ${categoryLabel(category)}` : ""} · {result.total} questions
             </div>
           </div>
-          <div style={S.scoreMeta}>
-            <div style={S.scoreFrac}>
-              {result.rawScore}
-              <span style={S.scoreFracTot}>/{result.total}</span>
-            </div>
-            <div style={S.scoreSub}>
-              {result.percent}% correct{banded ? "" : " · single passage"}
-            </div>
-          </div>
+          {fullReview && (
+            <Badge tone="success">
+              <Icon name="book-open" size={12} /> Full report free
+            </Badge>
+          )}
         </div>
 
         {unlockedBadges.length > 0 && (
-          <div style={S.section}>
+          <div style={{ marginBottom: 14 }}>
             <BadgeUnlock badges={unlockedBadges} />
           </div>
         )}
 
-        {/* THE HERO — per-type breakdown. Shown to EVERYONE: it's the "aha" of
-            the whole offer, and §4.8 gives Basic the per-type analytics. Premium
-            adds depth (answers + why + evidence) below, not the breakdown itself. */}
-        <section style={S.section}>
-          <h2 style={S.h2}>Where you lose points</h2>
-          <p style={S.sub}>Worst type first.</p>
-          <div style={S.breakdownCard}>
-            {perType.map(([type, s], i) => {
-              const pct = Math.round((s.correct / s.total) * 100);
-              const tone =
-                pct >= 70
-                  ? { bar: "var(--success)", text: "var(--success-text)" }
-                  : pct >= 40
-                    ? { bar: "var(--warn)", text: "var(--warn-text)" }
-                    : { bar: "var(--error)", text: "var(--error-text)" };
-              return (
-                <div key={type} style={S.brRow}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={S.brHead}>
-                      <span style={S.brName}>{qtypeLabel(type)}</span>
+        {/* Top metrics — donut + band + key metrics */}
+        <div style={{ ...S.metricsCard, gridTemplateColumns: metrics.length ? "auto 1fr" : "auto" }}>
+          <div style={S.donutBlock}>
+            <Donut pct={correctPct} />
+            <div>
+              <div style={S.metricEyebrow}>{banded ? "Band score" : "Score"}</div>
+              <div style={S.bandBig}>{banded ? att.bandScore : `${result.percent}%`}</div>
+              <div style={S.rawLine}>
+                {result.rawScore}/{result.total} correct
+              </div>
+            </div>
+          </div>
+          {metrics.length > 0 && (
+            <div style={S.metricsGrid}>
+              {metrics.map((m) => (
+                <div key={m.label} style={S.metricTile}>
+                  <div style={{ ...S.metricValue, color: m.color }}>{m.value}</div>
+                  <div style={S.metricLabel}>{m.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Accuracy by question type */}
+        {perType.length > 0 && (
+          <div style={S.card}>
+            <div style={S.cardTitle}>Accuracy by question type</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+              {perType.map(([type, s], i) => {
+                const p = Math.round((s.correct / s.total) * 100);
+                return (
+                  <div key={type} style={S.accRow}>
+                    <div style={S.accName}>
+                      {qtypeLabel(type)}
                       {i === 0 && <span style={S.weakest}>WEAKEST</span>}
                     </div>
-                    <div style={S.brTrack}>
-                      <div style={{ ...S.brFill, width: `${pct}%`, background: tone.bar }} />
+                    <div style={S.accTrack}>
+                      <div style={{ height: "100%", width: `${Math.max(p, 2)}%`, borderRadius: "var(--radius-full)", background: barColor(p) }} />
                     </div>
+                    <span style={{ ...S.accScore, color: barText(p) }}>
+                      {s.correct}/{s.total}
+                    </span>
+                    <Link href={`/app/reading?q_type=${encodeURIComponent(type)}`} style={S.practise}>
+                      Practise →
+                    </Link>
                   </div>
-                  <span style={{ ...S.brScore, color: tone.text }}>
-                    {s.correct}/{s.total}
-                  </span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </section>
+        )}
 
-        {/* Per-question review. Everyone sees right/wrong per question (the lesson
-            — turns the result into a return, not a paywall). The correct answer,
-            the explanation and the text evidence are revealed ONLY for Premium
-            (`fullReview`): when false those props are simply not rendered, so the
-            answer_key never reaches a Basic user's HTML. */}
-        <section style={S.section}>
+        {/* Recommendation */}
+        {weakest && (
+          <div style={S.recoCard}>
+            <span style={S.recoIcon}>
+              <Icon name="target" size={20} strokeWidth={2.3} />
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <b style={{ color: "var(--text-primary)" }}>Recommended:</b> start with{" "}
+              {qtypeLabel(weakest[0])} — your weakest type and the fastest band gain.
+            </div>
+            <Button href={`/app/reading?q_type=${encodeURIComponent(weakest[0])}`} trailingIcon="arrow-right" style={{ flex: "none" }}>
+              Start
+            </Button>
+          </div>
+        )}
+
+        {/* Answer key. Everyone sees right/wrong per question. The correct answer,
+            explanation and text evidence are revealed only when `fullReview` is
+            true — currently free for all (REVIEW_OPEN). When the flag is closed,
+            those props aren't rendered, so the answer_key never reaches the HTML. */}
+        <section style={{ marginTop: 18 }}>
           <div style={S.reviewHead}>
-            <h2 style={S.h2b}>{fullReview ? "Answer review" : "What you missed"}</h2>
-            {!fullReview && <Badge tone="brand">Answers on Premium</Badge>}
+            <h2 style={S.h2}>{fullReview ? "Full answer key" : "What you missed"}</h2>
+            {fullReview ? (
+              <Badge tone="success">
+                <Icon name="book-open" size={12} /> Free
+              </Badge>
+            ) : (
+              <Badge tone="brand">Answers on Premium</Badge>
+            )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {result.perQuestion.map((q) => {
@@ -210,8 +307,8 @@ export default async function ResultPage({
           </div>
         </section>
 
-        {/* Basic: weak types + right/wrong are shown above; Premium reveals the
-            correct answers, the why, and the text evidence. */}
+        {/* Gated path (flag closed): weak types + right/wrong are free above;
+            Premium reveals the answers, the why, and the evidence. */}
         {!fullReview && (
           <div style={S.upsell}>
             <div style={S.upsellTitle}>See the answers and why</div>
@@ -244,6 +341,39 @@ export default async function ResultPage({
   );
 }
 
+/* Donut — % correct, server SVG. */
+function Donut({ pct }: { pct: number }) {
+  const size = 120;
+  const sw = 18;
+  const r = (size - sw) / 2;
+  const cx = size / 2;
+  const C = 2 * Math.PI * r;
+  const p = Math.max(0, Math.min(1, pct));
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flex: "none" }}>
+      <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--error-subtle)" strokeWidth={sw} />
+      <circle
+        cx={cx}
+        cy={cx}
+        r={r}
+        fill="none"
+        stroke="var(--success)"
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeDasharray={C}
+        strokeDashoffset={C * (1 - p)}
+        transform={`rotate(-90 ${cx} ${cx})`}
+      />
+      <text x={cx} y={cx - 2} textAnchor="middle" fontFamily="var(--font-mono)" fontSize="26" fontWeight="600" fill="var(--text-primary)">
+        {Math.round(p * 100)}%
+      </text>
+      <text x={cx} y={cx + 16} textAnchor="middle" fontFamily="var(--font-ui)" fontSize="10" fontWeight="600" fill="var(--text-muted)">
+        correct
+      </text>
+    </svg>
+  );
+}
+
 function ReviewCard({
   number,
   qtype,
@@ -261,8 +391,8 @@ function ReviewCard({
   answer: string;
   explanation: string | null;
   evidence: string | null;
-  /** Premium: reveal the correct answer, explanation and evidence. When false
-   *  they are NOT rendered, so the answer_key never reaches a Basic user. */
+  /** Reveal the correct answer, explanation and evidence. When false they are
+   *  NOT rendered, so the answer_key never reaches a gated user's HTML. */
   reveal: boolean;
 }) {
   return (
@@ -286,7 +416,12 @@ function ReviewCard({
           </div>
         )}
       </div>
-      {reveal && explanation && <div style={S.expl}>{explanation}</div>}
+      {reveal && explanation && (
+        <div style={S.expl}>
+          <Icon name="lightbulb" size={14} style={{ color: "var(--warn-text)", marginTop: 2, flex: "none" }} />
+          <span>{explanation}</span>
+        </div>
+      )}
       {reveal && evidence && (
         <div style={S.evidence}>
           <Icon name="book-open" size={15} style={{ color: "var(--reading-muted)", marginTop: 2, flex: "none" }} />
@@ -298,42 +433,37 @@ function ReviewCard({
 }
 
 const S: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 780, margin: "0 auto", padding: "16px 18px 40px", display: "flex", flexDirection: "column", gap: 4 },
+  wrap: { maxWidth: 760, margin: "0 auto", padding: "16px 18px 40px", display: "flex", flexDirection: "column" },
   backRow: { display: "flex", alignItems: "center", marginBottom: 4 },
 
-  scoreCard: {
-    display: "flex",
-    alignItems: "flex-end",
-    gap: 16,
-    padding: "18px 20px",
-    background: "linear-gradient(180deg, var(--brand-subtle), var(--surface))",
-    border: "2px solid var(--brand-border)",
-    borderRadius: "var(--radius-xl)",
-    boxShadow: "var(--shadow-solid)",
-  },
-  scoreLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
-  scoreBig: { fontFamily: "var(--font-ui)", fontSize: "var(--text-5xl)", fontWeight: 900, letterSpacing: "var(--tracking-tighter)", color: "var(--brand)", lineHeight: 1 },
-  pctSign: { fontSize: "var(--text-2xl)", fontWeight: 800 },
-  scoreMeta: { paddingBottom: 8 },
-  scoreFrac: { fontFamily: "var(--font-mono)", fontSize: "var(--text-lg)", color: "var(--text-secondary)" },
-  scoreFracTot: { color: "var(--text-muted)" },
-  scoreSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", marginTop: 2 },
+  repHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 14 },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
+  repSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
 
-  section: { marginTop: 18 },
-  h2: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "0 0 4px", color: "var(--text-primary)" },
-  h2b: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 700, margin: 0, color: "var(--text-primary)" },
-  sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "0 0 14px" },
+  metricsCard: { display: "grid", gap: 22, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", padding: 22, alignItems: "center", marginBottom: 14 },
+  donutBlock: { display: "flex", alignItems: "center", gap: 20 },
+  metricEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
+  bandBig: { fontFamily: "var(--font-mono)", fontSize: 46, fontWeight: 600, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.02em" },
+  rawLine: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 2 },
+  metricsGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, borderLeft: "1px solid var(--border-subtle)", paddingLeft: 22 },
+  metricTile: { background: "var(--surface-inset)", borderRadius: 12, padding: "12px 14px" },
+  metricValue: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xl)", fontWeight: 600 },
+  metricLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", fontWeight: 600, marginTop: 2 },
 
-  breakdownCard: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "var(--space-3)", display: "flex", flexDirection: "column", gap: 2 },
-  brRow: { display: "grid", gridTemplateColumns: "1fr auto", gap: "var(--space-3)", alignItems: "center", padding: "var(--space-3)" },
-  brHead: { display: "flex", alignItems: "center", gap: 8, marginBottom: 7 },
-  brName: { fontFamily: "var(--font-reading)", fontSize: "var(--text-base)", fontWeight: 500, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-  weakest: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--error-text)", background: "var(--error-subtle)", padding: "2px 7px", borderRadius: "var(--radius-full)", letterSpacing: "var(--tracking-wide)", flex: "none" },
-  brTrack: { height: 8, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
-  brFill: { height: "100%", borderRadius: "var(--radius-full)" },
-  brScore: { fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "var(--text-sm)", fontWeight: 600, minWidth: 38, textAlign: "right" },
+  card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", padding: "20px 24px", marginBottom: 14 },
+  cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", marginBottom: 14 },
+  accRow: { display: "flex", alignItems: "center", gap: 14 },
+  accName: { width: 168, flex: "none", display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  weakest: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--error-text)", background: "var(--error-subtle)", padding: "2px 6px", borderRadius: "var(--radius-full)", flex: "none" },
+  accTrack: { flex: 1, height: 9, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
+  accScore: { width: 44, flex: "none", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 600 },
+  practise: { width: 74, flex: "none", textAlign: "right", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
+
+  recoCard: { display: "flex", alignItems: "center", gap: 14, border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", borderRadius: "var(--radius-xl)", padding: "16px 20px", boxShadow: "var(--shadow-solid)", marginBottom: 14, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
+  recoIcon: { flex: "none", color: "var(--brand)" },
 
   reviewHead: { display: "flex", alignItems: "center", gap: 8, margin: "0 0 12px" },
+  h2: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 800, margin: 0, color: "var(--text-primary)" },
   rev: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "var(--space-4)" },
   revHead: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 },
   revMark: { width: 24, height: 24, borderRadius: 6, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" },
@@ -341,7 +471,7 @@ const S: Record<string, React.CSSProperties> = {
   revType: { fontFamily: "var(--font-reading)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
   revLines: { display: "flex", gap: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", marginBottom: 10 },
   revLabel: { color: "var(--text-muted)" },
-  expl: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: "var(--leading-relaxed)" },
+  expl: { display: "flex", gap: 8, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: "var(--leading-relaxed)" },
   evidence: { marginTop: 10, display: "flex", gap: 8, fontFamily: "var(--font-reading)", fontSize: "var(--text-sm)", color: "var(--reading-text)", background: "var(--reading-surface)", border: "1px solid var(--reading-rule)", borderRadius: "var(--radius-md)", padding: "10px 12px" },
 
   upsell: { marginTop: 18, border: "1px solid var(--brand-border)", background: "var(--brand-subtle)", borderRadius: "var(--radius-xl)", padding: "1.4rem 1.3rem", textAlign: "center" },

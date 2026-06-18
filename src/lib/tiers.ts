@@ -41,7 +41,21 @@ export function meetsTier(userTier: Tier, required: Tier): boolean {
   return TIER_RANK[userTier] >= TIER_RANK[required];
 }
 
-/** True if the tier gets the full post-submit review (breakdown + evidence). */
-export function hasFullReview(userTier: Tier): boolean {
+/**
+ * Launch flag (REDESIGN S5 / W1-1): the post-submit review — correct answers,
+ * explanations and text evidence — is FREE for everyone to grow the audience.
+ * The Premium gate below is intact: flip this to `false` to re-gate the review
+ * behind Premium in a single edit (no claw-back of anything new; see REDESIGN
+ * "Политика монетизации").
+ */
+export const REVIEW_OPEN = true;
+
+/**
+ * True if the tier gets the full post-submit review (breakdown + evidence).
+ * `open` defaults to the launch flag `REVIEW_OPEN` (free for all). Pass `open`
+ * explicitly to evaluate the underlying Premium gate (tests / when re-gating).
+ */
+export function hasFullReview(userTier: Tier, open: boolean = REVIEW_OPEN): boolean {
+  if (open) return true;
   return meetsTier(userTier, "premium");
 }
