@@ -156,7 +156,17 @@ answer_key только server-side (RLS), не утекает в free-HTML до
 **Связано:** W1-1/W1-3 (open-флаг = временный откат пейволла). · **Acceptance:** score
 идентичен «до/после»; разбор виден всем; флаг закрывается одной правкой; на проде.
 
-### `☐` S6 · Exam-runner → `app/app/reading/[id]` (`ExamRunner`)
+### `✅` S6 · Exam-runner → `app/app/reading/[id]` (`ExamRunner`)
+**✅ 2026-06-18:** Option A (Editorial paper) — вся аннотационная логика вынесена в новый клиентский
+`PassagePane` (submit/timer/autosave/audio в `ExamRunner` НЕ тронуты). Левая панель: reading-progress
+бар (rAF-скролл), masthead (mono overline · serif title · word-count & read-time · notes-count),
+drop-cap + буквы абзацев в поле (CSS `::before` по `data-letter` — НЕ ломает offset'ы), tool-капсула.
+**Highlight/notes — В БД** (выбор пользователя): миграция `0013_annotation` (RLS own-read, writes
+owner-path) + `schema.ts` lockstep; server-actions `addAnnotation`/`updateAnnotationNote`/
+`deleteAnnotation` (owner-checked, best-effort); выделение текста → offset-anchored `<mark>`,
+заметка в панели, персист по (user, content_item), переживают reload. A−/A+ (размер) и theme
+(paper/sepia) — localStorage. Применено к Supabase (down→up доказали обратимость). +icons sun/trash.
+tsc+build+95 тестов зелёные.
 **Источник:** `02-home-dashboard (1).html` (Editorial paper).
 **Меняем (ТОЛЬКО левая панель-пассаж):** masthead (mono overline · serif title · word-count
 & read-time); drop-cap; буквы абзацев в левом поле; reading-progress бар сверху панели;
@@ -178,4 +188,4 @@ annotation-капсула (highlight / note / A−A+ / theme) по центру 
 | S3 | Catalog | `05-results (1).html` | W2-4 | ✅ |
 | S4 | Badges | `HANDOFF (1).md` | W2-5 | ✅ |
 | S5 | Results | `06-badges (1).html` | W1-1/W1-3 (open-флаг) | ✅ |
-| S6 | Exam-runner | `02-home-dashboard (1).html` | W2-1 + W2-7 | ☐ |
+| S6 | Exam-runner | `02-home-dashboard (1).html` | W2-1 + W2-7 | ✅ |

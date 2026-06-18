@@ -8,6 +8,7 @@ import { Icon } from "@/components/core/icons";
 import { AudioPlayer } from "@/components/exam/AudioPlayer";
 import { ExamTimer } from "@/components/exam/ExamTimer";
 import { QuestionNavigator } from "@/components/exam/QuestionNavigator";
+import { PassagePane, type AnnotationRow } from "./PassagePane";
 import { saveProgress, submitAttempt } from "./actions";
 
 interface Question {
@@ -36,6 +37,7 @@ function isAnswered(v: string | string[] | undefined): boolean {
 
 export default function ExamRunner({
   attemptId,
+  contentItemId,
   initialAnswers,
   passages,
   questions,
@@ -43,8 +45,10 @@ export default function ExamRunner({
   audioSrc,
   title,
   category,
+  initialAnnotations,
 }: {
   attemptId: string;
+  contentItemId: string;
   initialAnswers: Record<string, string | string[]>;
   passages: Passage[];
   questions: Question[];
@@ -53,6 +57,8 @@ export default function ExamRunner({
   audioSrc?: string | null;
   title: string;
   category: string;
+  /** Reader highlights/notes for this test (W2-1) — reading mode only. */
+  initialAnnotations?: AnnotationRow[];
 }) {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>(initialAnswers);
   // Флаги «отметить на потом» — клиентские/эфемерные (review aid, не персистятся).
@@ -227,20 +233,14 @@ export default function ExamRunner({
         </>
       ) : (
         <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-          {/* Passage pane */}
-          <div style={S.passagePane}>
-            <div style={S.passageHead}>
-              <Icon name="book-open" size={15} style={{ color: "var(--reading-muted)" }} />
-              <span style={S.passageHeadText}>Reading passage</span>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-              <article className="bando-reading" style={{ padding: "26px 32px 40px", maxWidth: "62ch", margin: "0 auto" }}>
-                {passages.map((p, i) => (
-                  <div key={i} dangerouslySetInnerHTML={{ __html: p.body_html }} />
-                ))}
-              </article>
-            </div>
-          </div>
+          {/* Passage pane — editorial layout + reader annotations (S6 / W2-1) */}
+          <PassagePane
+            contentItemId={contentItemId}
+            title={title}
+            category={category}
+            passages={passages}
+            initialAnnotations={initialAnnotations ?? []}
+          />
 
           {/* Questions + navigator pane */}
           <div style={S.qPane}>
@@ -409,10 +409,6 @@ const S: Record<string, React.CSSProperties> = {
   sheetHead: { display: "flex", alignItems: "center", marginBottom: 14 },
   sheetHint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
   counter: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
-
-  passagePane: { flex: "1.15", minWidth: 0, display: "flex", flexDirection: "column", background: "var(--reading-surface)", borderRight: "1px solid var(--border)" },
-  passageHead: { display: "flex", alignItems: "center", gap: 8, padding: "12px 22px", borderBottom: "1px solid var(--reading-rule)", flex: "none" },
-  passageHeadText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--reading-muted)" },
 
   qPane: { width: 460, flex: "none", display: "flex", flexDirection: "column", background: "var(--bg-base)" },
   navHead: { padding: "14px 20px", borderBottom: "1px solid var(--border)", flex: "none" },

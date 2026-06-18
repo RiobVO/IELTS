@@ -403,6 +403,33 @@ export const leaderboardEntry = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
+/* annotation — reader highlights & notes (W2-1 / REDESIGN S6)                 */
+/* offset-anchored within a passage's plain text; owner-path writes, own reads */
+/* -------------------------------------------------------------------------- */
+export const annotation = pgTable(
+  "annotation",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profile.id, { onDelete: "cascade" }),
+    contentItemId: uuid("content_item_id")
+      .notNull()
+      .references(() => contentItem.id, { onDelete: "cascade" }),
+    passageOrder: integer("passage_order").notNull(),
+    kind: text("kind").notNull().default("highlight"),
+    startOffset: integer("start_offset").notNull(),
+    endOffset: integer("end_offset").notNull(),
+    quote: text("quote").notNull().default(""),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("annotation_user_content_idx").on(t.userId, t.contentItemId)],
+);
+
+/* -------------------------------------------------------------------------- */
 /* topic — Writing/Speaking stub (Phase 3)                                     */
 /* -------------------------------------------------------------------------- */
 export const topic = pgTable("topic", {
