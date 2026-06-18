@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useInteractive } from "@/components/core/util";
 import { Icon } from "@/components/core/icons";
+import { NotificationsBell, type NotifItem } from "./NotificationsBell";
 
 /** Активный раздел сайта — подсветка в навигации. */
 export type ActivePage =
@@ -11,8 +12,7 @@ export type ActivePage =
   | "leaderboard"
   | "badges"
   | "pricing"
-  | "profile"
-  | "notifications";
+  | "profile";
 
 interface AppHeaderProps {
   active: ActivePage;
@@ -20,7 +20,10 @@ interface AppHeaderProps {
   xp: number;
   initials: string;
   unread: number;
-  /** Server action выхода — проброшен со страницы (RSC), чтобы не тянуть импорт через границу. */
+  /** Последние уведомления для dropdown-окошка колокольчика. */
+  recent: NotifItem[];
+  /** Server actions проброшены со страницы (RSC), чтобы не тянуть импорт через границу. */
+  markAllRead: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -93,9 +96,8 @@ function IconAction({
   );
 }
 
-export function AppHeader({ active, streak, xp, initials, unread, signOut }: AppHeaderProps) {
+export function AppHeader({ active, streak, xp, initials, unread, recent, markAllRead, signOut }: AppHeaderProps) {
   const upgrade = useInteractive();
-  const bell = useInteractive();
   const out = useInteractive();
   const onPricing = active === "pricing";
 
@@ -155,35 +157,8 @@ export function AppHeader({ active, streak, xp, initials, unread, signOut }: App
             <Icon name="bar-chart" size={15} strokeWidth={2.4} /> Upgrade
           </Link>
 
-          {/* Колокольчик уведомлений (использует уже полученный unread; сохраняет доступ к /app/notifications). */}
-          <Link href="/app/notifications" aria-label="Notifications" title="Notifications" style={{ textDecoration: "none" }}>
-            <IconAction hover={bell.hover} handlers={bell.handlers}>
-              <Icon name="bell" size={19} strokeWidth={2.2} />
-              {unread > 0 && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: 4,
-                    right: 4,
-                    minWidth: 16,
-                    height: 16,
-                    padding: "0 4px",
-                    borderRadius: "var(--radius-full)",
-                    background: "var(--error-edge)",
-                    color: "#fff",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    display: "grid",
-                    placeItems: "center",
-                    lineHeight: 1,
-                  }}
-                >
-                  {unread > 9 ? "9+" : unread}
-                </span>
-              )}
-            </IconAction>
-          </Link>
+          {/* Колокольчик уведомлений — dropdown-окошко (вместо отдельной страницы). */}
+          <NotificationsBell unread={unread} items={recent} markAllRead={markAllRead} />
 
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--streak)" }} title="Day streak">
             <Icon name="flame" size={17} strokeWidth={2.4} /> {streak}
