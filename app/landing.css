@@ -237,6 +237,20 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
 .ti .tx{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-3)}
 .ti.hot .tt{color:var(--v2)}.ti.hot .tx{color:#D63554;background:rgba(240,80,106,.12);padding:3px 8px;border-radius:6px}
 
+/* #types — микро-анимации (стрелка/hover/nudge/stagger). Всё под no-preference,
+   чтобы при reduced-motion секция оставалась статичной. Токены смаплены на палитру
+   лендинга: --surface-inset → --vtint, --brand → --v. Стрелка — псевдоэлемент,
+   чтобы не плодить 14 span'ов в разметке. */
+@media (prefers-reduced-motion: no-preference){
+  .ti{--i:0;cursor:pointer;border-radius:10px;transition:padding .18s cubic-bezier(.22,1,.36,1),background .18s cubic-bezier(.22,1,.36,1),opacity .3s var(--ease)}
+  .ti::after{content:"→";margin-left:8px;flex:none;font-weight:700;color:var(--v);opacity:0;transform:translateX(-6px);transition:opacity .18s,transform .18s}
+  .ti:hover{padding-left:12px;background:var(--vtint)}
+  .ti:hover::after{opacity:1;transform:none}
+  @keyframes nudge{0%,100%{transform:none}50%{transform:scale(1.06)}}
+  .ti.hot:hover .tx{animation:nudge .4s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+}
+
 .final{position:relative;overflow:hidden;border-radius:30px;text-align:center;padding:88px 40px;color:#fff;
   background:linear-gradient(135deg,#6A52DE,#8170EA 60%,#9A7BFF)}
 .final .g{position:absolute;width:420px;height:420px;border-radius:50%;background:rgba(255,255,255,.12);top:-170px;left:-50px;filter:blur(40px)}
