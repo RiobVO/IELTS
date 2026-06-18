@@ -2,9 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **⚠️ READ [BACKLOG.md](./BACKLOG.md) FIRST every session** — it is the live entry point
-> (where we are / what's closed / what's left) for the current perf+design work. Follow its
-> session contract before touching anything else.
+> **⚠️ ТЕКУЩИЙ ТРЕК — [REDESIGN.md](./REDESIGN.md). Работаем СТРОГО по нему и только по нему.**
+> Визуальный редизайн 6 экранов по дизайн-дропу (`design-drop/redesign/`): один экран =
+> коммит+пуш в `main` + автогейт `tsc`+`build`+`vitest`; логику Волны 1 и grading/tiers НЕ
+> ломаем; results — бесплатно через open-флаг (гейтинг не удалять). Порядок и контракт — в
+> REDESIGN.md, читать его ПЕРВЫМ. Любую другую работу (новые фичи, Волна 2, perf) НЕ начинать
+> без явной просьбы пользователя.
+>
+> [BACKLOG.md](./BACKLOG.md) — продуктовый бэклог (Волна 1 закрыта, Волна 2 ждёт после редизайна).
+> [WORKLOG.md](./WORKLOG.md) — perf+security трек (закрыт). Оба — справка, активен REDESIGN.md.
 
 ## Source of truth
 
