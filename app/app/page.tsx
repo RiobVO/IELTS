@@ -351,7 +351,7 @@ function BandReadout({
     return (
       <div className="dash-band" style={{ ...S.card, ...S.bandCard }}>
         <div style={{ flex: "none" }}>
-          <div style={S.eyebrow}>Your band</div>
+          <div style={S.bandLabel}>Your band</div>
           <div style={S.bandEmptyNum}>—</div>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -380,7 +380,7 @@ function BandReadout({
   return (
     <div style={{ ...S.card, ...S.bandCard }}>
       <div style={{ flex: "none" }}>
-        <div style={S.eyebrow}>Your band</div>
+        <div style={S.bandLabel}>Your band</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
           <span style={S.bandNum}>{band}</span>
           {target != null && (
@@ -501,6 +501,9 @@ const S: Record<string, React.CSSProperties> = {
     textTransform: "uppercase",
     color: "var(--brand)",
   },
+  // Стат-лейбл (sentence case) — намеренно тише brand-eyebrow приветствия, чтобы
+  // надзаголовок не повторялся как один и тот же AI-каданс на каждой секции.
+  bandLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-secondary)" },
   hi: { fontFamily: "var(--font-ui)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "8px 0 0" },
   date: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", paddingBottom: 4 },
 
@@ -525,8 +528,6 @@ const S: Record<string, React.CSSProperties> = {
     fontFamily: "var(--font-ui)",
     fontSize: "var(--text-xs)",
     fontWeight: 800,
-    letterSpacing: "var(--tracking-caps)",
-    textTransform: "uppercase",
     color: "rgba(255,255,255,0.82)",
   },
   focusTitle: { fontFamily: "var(--font-ui)", fontSize: 30, fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "#fff", margin: "14px 0 0" },

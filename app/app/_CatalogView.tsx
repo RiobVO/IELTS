@@ -369,7 +369,7 @@ const S: Record<string, React.CSSProperties> = {
     margin: "0 0 18px",
     boxShadow: "var(--shadow-md)",
   },
-  bannerEyebrow: { display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "rgba(255,255,255,0.82)", fontWeight: 600 },
+  bannerEyebrow: { display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "rgba(255,255,255,0.82)", fontWeight: 700 },
   bannerTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "9px 0 4px" },
   bannerText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.86)" },
   bannerMeta: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.8)" },
