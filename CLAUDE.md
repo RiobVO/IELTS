@@ -277,6 +277,18 @@ grading, submit, RLS, tiers, рейтинг). На каждом экране: в
   (display/grid/width/padding), живут в CSS-классах (инжект `<style>` или `globals.css`), НЕ в
   inline — иначе inline перебивает media-query; у переключаемых узлов `display` убран из inline.
   Touch-таргеты ≥44px на `pointer:coarse`. Лендинг адаптивен отдельно (свой `landing.css`).
+- **✅ /impeccable UI-аудит (хвост P2–P3) — сделано** (на `main`). Пост-редизайн quality-проход,
+  один пункт = коммит+пуш, автогейт (`tsc`+`build`) зелёный, логика-замок не тронута.
+  **P2-1** (`2332b17`) a11y экзамена: radiogroup spec-correct (один tab-stop + roving tabindex,
+  ←↑→↓ двигают фокус+выбор, Home/End; mcq_multi — per-item Tab) + touch-таргеты ≥44px на
+  `pointer:coarse` (кнопка-флаг + reading-капсула, размеры в CSS-классах). **P2-2** (`f3fda6a`)
+  typeset: убран повтор ИИ-tell «eyebrow» — один якорный caps-кикер «Welcome back», остальные
+  надзаголовки (Your band / Today's focus / Recommended for you / profile hero·next) → sentence-case.
+  **P3-3** (`d6ee083`) extract: `--surface-premium*` + `--surface-logo*` в `colors.css`,
+  премиум-градиент / лого-плитка / `#fff`-ink через токены (значения не менялись). **P3-4**
+  (`f2ba6c2`, `57ac61f`) optimize: AudioPlayer waveform-fill через один `clip-path` поверх
+  мемоизированных баров (нет ре-рендера 56 спанов/тик) + sticky-шапка `translateZ(0)` (blur
+  рекомпозитится на GPU). Подробности — [REDESIGN.md](./REDESIGN.md). Аудит ~17–18 → ~19/20.
 
 **Gotcha — dev-сервер на Windows:** `TaskStop` НЕ убивает дочерний `next` → зомби висят на
 :3000/:3001/:3002, новый dev уходит на следующий порт, браузер попадает на протухший (CSS

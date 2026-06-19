@@ -189,3 +189,27 @@ annotation-капсула (highlight / note / A−A+ / theme) по центру 
 | S4 | Badges | `HANDOFF (1).md` | W2-5 | ✅ |
 | S5 | Results | `06-badges (1).html` | W1-1/W1-3 (open-флаг) | ✅ |
 | S6 | Exam-runner | `02-home-dashboard (1).html` | W2-1 + W2-7 | ✅ |
+
+---
+
+## `✅` /impeccable UI-аудит — хвост P2–P3 (закрыт, на `main`)
+
+Пост-редизайн quality-проход по стандартам `/impeccable`. Тот же контракт: один пункт =
+один коммит+пуш в `main`, автогейт (`tsc`+`build`) зелёный на каждом. Логика-замок
+(grading / submit / autosave / RLS / tiers / auth / модель ответов) **не тронута** —
+менялись только визуал / разметка / a11y-атрибуты / источник цвета.
+
+| Пункт | Коммит(ы) | Что закрыто |
+|---|---|---|
+| **P2-1** harden — a11y экзамена | `2332b17` | radiogroup spec-correct: один tab-stop + roving tabindex (←↑→↓ двигают фокус **и** выбор, Home/End, wrap по кругу); mcq_multi оставлен per-item Tab (корректно для чекбоксов). Touch-таргеты ≥44px на `pointer:coarse` — кнопка-флаг вопроса + reading-капсула (размеры в CSS-классах по инварианту) |
+| **P2-2** typeset — eyebrow | `f3fda6a` | Убран повтор ИИ-tell «eyebrow»: один якорный caps-кикер «Welcome back», остальные надзаголовки (Your band / Today's focus / Recommended for you / profile hero·next) → sentence-case (сняты uppercase+tracking). Mono «This week» и `S.sub`-секции профиля — другой каданс, не тронуты |
+| **P3-3** extract — premium-токены | `d6ee083` | `--surface-premium*` + `--surface-logo*` в `app/tokens/colors.css`; премиум-градиент (invite/profile/auth-панель) и лого-плитка (шапка/скелетон) ссылаются на токены; `#fff` → `--surface-premium-ink` (тёмные поверхности) / `--text-on-brand` (violet brand-градиенты). Значения не менялись |
+| **P3-4** optimize — перерисовки | `f2ba6c2`, `57ac61f` | AudioPlayer: waveform-fill гонит один `clip-path` поверх мемоизированных баров — нет ре-рендера 56 спанов за тик. Sticky-шапка: `translateZ(0)` промоутит её в свой compositor-слой — фрост-blur рекомпозитится на GPU, собственные пиксели не перерисовываются на скролле |
+
+**Осознанные границы:** SVG `fill/stroke="#fff"` и белые кнопки-фоны (`background:"#fff"`)
+оставлены хардкодом — `var()` не работает в presentation-атрибутах, а фон-кнопки не ink;
+`#fff`-свип не заходил в brand-градиенты дашборда/каталога (вне premium-скоупа) — чистый
+follow-up на единообразие. **Проверить на проде:** фрост-вид шапки на скролле (Chrome+Safari,
+моб.) — единственная правка с эффект-риском; если фрост пропал — откат одного коммита `57ac61f`.
+
+**Аудит:** ~17–18/20 после адаптива → **~19/20** после P2–P3.
