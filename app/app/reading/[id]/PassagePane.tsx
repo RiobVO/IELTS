@@ -298,21 +298,21 @@ export function PassagePane({
 
       {/* tool capsule */}
       <div style={S.capsule}>
-        <button onClick={() => setMode("highlight")} aria-pressed={mode === "highlight"} title="Highlight" style={S.capBtn(mode === "highlight")}>
+        <button className="cap-btn" onClick={() => setMode("highlight")} aria-pressed={mode === "highlight"} title="Highlight" style={S.capBtn(mode === "highlight")}>
           <Icon name="highlighter" size={18} strokeWidth={2.1} />
         </button>
-        <button onClick={() => setMode("note")} aria-pressed={mode === "note"} title="Note" style={S.capBtn(mode === "note")}>
+        <button className="cap-btn" onClick={() => setMode("note")} aria-pressed={mode === "note"} title="Note" style={S.capBtn(mode === "note")}>
           <Icon name="pen-line" size={18} strokeWidth={2.1} />
         </button>
         <span style={S.sep} />
-        <button onClick={() => setFontPx((f) => Math.max(FONT_MIN, f - 1))} title="Smaller text" style={{ ...S.capBtn(false), fontSize: 13 }}>
+        <button className="cap-btn" onClick={() => setFontPx((f) => Math.max(FONT_MIN, f - 1))} title="Smaller text" style={{ ...S.capBtn(false), fontSize: 13 }}>
           A−
         </button>
-        <button onClick={() => setFontPx((f) => Math.min(FONT_MAX, f + 1))} title="Larger text" style={{ ...S.capBtn(false), fontSize: 17 }}>
+        <button className="cap-btn" onClick={() => setFontPx((f) => Math.min(FONT_MAX, f + 1))} title="Larger text" style={{ ...S.capBtn(false), fontSize: 17 }}>
           A+
         </button>
         <span style={S.sep} />
-        <button onClick={() => setTheme((t) => (t === "paper" ? "sepia" : "paper"))} aria-pressed={theme === "sepia"} title="Toggle paper / sepia" style={S.capBtn(theme === "sepia")}>
+        <button className="cap-btn" onClick={() => setTheme((t) => (t === "paper" ? "sepia" : "paper"))} aria-pressed={theme === "sepia"} title="Toggle paper / sepia" style={S.capBtn(theme === "sepia")}>
           <Icon name="sun" size={18} strokeWidth={2.1} />
         </button>
       </div>
@@ -373,6 +373,9 @@ const PASSAGE_CSS = `
   background:var(--reading-note);border-bottom:2px solid color-mix(in oklab,var(--brand) 60%,transparent);
 }
 @media (prefers-reduced-motion:reduce){.bando-reading.editorial *{transition:none!important}}
+/* Touch target: кнопки капсулы 38px → ≥44px на грубом указателе (десктоп без изменений). */
+.cap-btn{width:38px;height:38px}
+@media (pointer:coarse){.cap-btn{width:44px;height:44px}}
 `;
 
 const S = {
@@ -387,8 +390,6 @@ const S = {
 
   capsule: { position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: 22, display: "flex", alignItems: "center", gap: 4, background: "var(--bg-raised)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)", padding: 6, boxShadow: "var(--shadow-lg)" } as React.CSSProperties,
   capBtn: (active: boolean): React.CSSProperties => ({
-    width: 38,
-    height: 38,
     borderRadius: "var(--radius-full)",
     border: "none",
     background: active ? "var(--brand)" : "transparent",

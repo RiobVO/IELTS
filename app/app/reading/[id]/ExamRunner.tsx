@@ -350,6 +350,38 @@ const QuestionBlock = memo(function QuestionBlock({
   const selected = Array.isArray(value) ? value : value ? [value] : [];
   const single = Array.isArray(value) ? (value[0] ?? "") : value;
   const has = selected.length > 0;
+
+  // Roving tabindex для radiogroup (ARIA APG radio): группа — единственный tab-stop,
+  // стрелки двигают фокус И выбор по кругу. Рефы — чтобы фокусировать соседа программно.
+  const radioRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const radioTabStop = hasOptions ? Math.max(0, q.options!.findIndex((o) => single === o.value)) : 0;
+  const onRadioKey = (e: React.KeyboardEvent, idx: number) => {
+    const opts = q.options;
+    if (!opts) return;
+    let next = idx;
+    switch (e.key) {
+      case "ArrowDown":
+      case "ArrowRight":
+        next = (idx + 1) % opts.length;
+        break;
+      case "ArrowUp":
+      case "ArrowLeft":
+        next = (idx - 1 + opts.length) % opts.length;
+        break;
+      case "Home":
+        next = 0;
+        break;
+      case "End":
+        next = opts.length - 1;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    onAnswer(q.number, opts[next].value);
+    radioRefs.current[next]?.focus();
+  };
+
   return (
     <div id={`q-${q.number}`} style={{ marginBottom: 12 }}>
       <div style={S.card}>
@@ -357,6 +389,7 @@ const QuestionBlock = memo(function QuestionBlock({
           <span style={{ ...S.qNum, background: has ? "var(--brand)" : "var(--surface-hover)", color: has ? "var(--text-on-brand)" : "var(--text-secondary)" }}>{q.number}</span>
           <div style={S.qPrompt}>{q.prompt_html}</div>
           <button
+            className="exam-flag"
             onClick={() => onFlag(q.number)}
             aria-pressed={flagged}
             aria-label="Flag for review"
@@ -389,14 +422,19 @@ const QuestionBlock = memo(function QuestionBlock({
             </div>
           ) : hasOptions ? (
             <div role="radiogroup" aria-label={`Answer for question ${q.number}`} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {q.options!.map((o) => {
+              {q.options!.map((o, i) => {
                 const sel = single === o.value;
                 return (
                   <button
                     key={o.value}
+                    ref={(el) => {
+                      radioRefs.current[i] = el;
+                    }}
                     role="radio"
                     aria-checked={sel}
+                    tabIndex={i === radioTabStop ? 0 : -1}
                     onClick={() => onAnswer(q.number, o.value)}
+                    onKeyDown={(e) => onRadioKey(e, i)}
                     style={optBtn(sel)}
                   >
                     <span style={{ width: 18, height: 18, borderRadius: "50%", flex: "none", border: `2px solid ${sel ? "var(--brand)" : "var(--border-strong)"}`, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
@@ -430,6 +468,9 @@ const READING_CSS = `
 .bando-reading mark{background:var(--reading-mark);border-radius:3px;padding:0 .08em}
 .exam-exit{background:transparent;transition:var(--transition-colors)}
 .exam-exit:hover{background:var(--surface-hover)}
+/* Touch target: кнопка-флаг ≥44px на грубом указателе (мышь/десктоп без изменений). */
+.exam-flag{display:inline-flex;align-items:center;justify-content:center}
+@media (pointer:coarse){.exam-flag{min-width:44px;min-height:44px}}
 @keyframes nine-blink{0%,100%{opacity:1}50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){[style*="nine-blink"]{animation:none!important}}
 
