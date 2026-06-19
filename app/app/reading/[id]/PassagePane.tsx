@@ -136,13 +136,7 @@ export function PassagePane({
     );
     let firstParaDone = false;
     for (const c of containers) {
-      // Тесты с семантическими метками абзацев (matching-headings и т.п.) уже
-      // несут буквы в разметке — НЕ генерируем поверх (иначе дубли). Генерим
-      // только там, где меток нет (TFNG и подобные с «голыми» <p>).
-      if (c.querySelector(".para-label, .para-letter")) continue;
-      const paras = Array.from(c.querySelectorAll<HTMLElement>(":scope > p")).filter(
-        (p) => !p.classList.contains("subtitle"),
-      );
+      const paras = c.querySelectorAll<HTMLElement>(":scope > p");
       paras.forEach((p, i) => {
         p.dataset.letter = String.fromCharCode(65 + (i % 26));
         if (!firstParaDone && i === 0) {
@@ -261,16 +255,6 @@ export function PassagePane({
     await deleteAnnotation(id);
   }, [editor, annotations, passageEl]);
 
-  // Убираем ведущий <h1>/<h2> — он дублирует заголовок masthead (title из contentItem).
-  const cleaned = useMemo(
-    () =>
-      passages.map((p) => ({
-        order: p.order,
-        html: p.body_html.replace(/^\s*<h[12]\b[^>]*>[\s\S]*?<\/h[12]>\s*/i, ""),
-      })),
-    [passages],
-  );
-
   const wordCount = useMemo(() => {
     const text = passages.map((p) => p.body_html).join(" ").replace(/<[^>]+>/g, " ");
     const words = text.trim().split(/\s+/).filter(Boolean).length;
@@ -313,12 +297,12 @@ export function PassagePane({
         <article
           ref={articleRef}
           className="bando-reading editorial"
-          style={{ padding: "24px 48px 80px", maxWidth: 820, margin: "0 auto", fontSize: fontPx }}
+          style={{ padding: "24px 44px 80px", maxWidth: "64ch", margin: "0 auto", fontSize: fontPx }}
           onMouseUp={onMouseUp}
           onClick={onClick}
         >
-          {cleaned.map((p) => (
-            <div key={p.order} data-order={p.order} dangerouslySetInnerHTML={{ __html: p.html }} />
+          {passages.map((p) => (
+            <div key={p.order} data-order={p.order} dangerouslySetInnerHTML={{ __html: p.body_html }} />
           ))}
         </article>
       </div>
@@ -380,12 +364,11 @@ const PASSAGE_CSS = `
 .bando-reading.editorial{font-family:var(--font-reading);color:var(--reading-text);line-height:1.75}
 .bando-reading.editorial p{margin:0 0 1.15em;position:relative}
 .bando-reading.editorial em{font-style:italic}
-.bando-reading.editorial p[data-letter]{padding-left:46px}
 .bando-reading.editorial p[data-letter]::before{
-  content:attr(data-letter);position:absolute;left:0;top:.1em;width:28px;height:28px;
+  content:attr(data-letter);position:absolute;left:-44px;top:.15em;width:26px;height:26px;
   border:1px solid var(--reading-rule);border-radius:50%;display:grid;place-items:center;
-  font-family:var(--font-ui);font-size:12.5px;font-weight:600;color:var(--reading-muted);line-height:1;
-  background:color-mix(in oklab,var(--reading-surface) 50%,white);
+  font-family:var(--font-reading);font-size:13px;font-weight:600;color:var(--reading-muted);line-height:1;
+  background:color-mix(in oklab,var(--reading-surface) 60%,white);
 }
 .bando-reading.editorial p.dropcap::first-letter{
   float:left;font-family:var(--font-reading);font-size:3.4em;line-height:.82;font-weight:600;
@@ -401,7 +384,7 @@ const PASSAGE_CSS = `
 const S = {
   pane: { flex: "1.15", minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)", position: "relative" } as React.CSSProperties,
   progressTop: { height: 3, background: "color-mix(in oklab, var(--reading-rule) 70%, transparent)", flex: "none" } as React.CSSProperties,
-  masthead: { padding: "30px 48px 0", maxWidth: 820, margin: "0 auto" } as React.CSSProperties,
+  masthead: { padding: "30px 44px 0", maxWidth: "64ch", margin: "0 auto" } as React.CSSProperties,
   overline: { fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--reading-muted)", fontWeight: 600 } as React.CSSProperties,
   ptitle: { fontFamily: "var(--font-reading)", fontWeight: 600, fontSize: 34, color: "var(--reading-text)", lineHeight: 1.18, letterSpacing: "-0.01em", margin: "12px 0 0" } as React.CSSProperties,
   pmeta: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 14, marginTop: 14, color: "var(--reading-muted)", fontSize: 12.5, fontFamily: "var(--font-ui)" } as React.CSSProperties,
