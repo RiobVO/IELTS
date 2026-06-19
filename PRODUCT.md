@@ -58,10 +58,11 @@ body ≥ 4.5:1 (muted/streak/warn/success-токены затемнены до A
 - **Редизайн bando — завершён** по всем экранам + exam component kit (`src/components/exam/`:
   ExamTimer/QuestionNavigator/QuestionFilter/AudioPlayer/MapLabelling). Dev-превью-роут `/dev/exam-kit`
   снят перед запуском. Эталон вида — `design-drop/` (gitignored).
-- **Тёмная тема — мёртвый код:** `[data-theme="dark"]` полностью описана в `app/tokens/colors.css`,
-  но НИГДЕ не активируется (нет тоггла / `prefers-color-scheme`). Решить: удалить или развести тоггл.
-- **Адаптив — НЕ сделан:** весь `/app` desktop-only (inline-стили без медиа-запросов; дизайн-дроп
-  только под desktop). Отложено пользователем; лендинг адаптивен.
+- **Тёмная тема — удалена:** `app/tokens/colors.css` теперь light-only (`:root`), `[data-theme]`
+  и `prefers-color-scheme` не используются нигде. На разморозку — развести токены + тоггл.
+- **Адаптив — сделан** (mobile-first, на `main`): шапка → бургер-drawer <1024px, exam → табы
+  Passage/Questions <1024px, контент-экраны стекаются на 640–768px, auth прячет раздвижную панель
+  <760px. Инвариант: брейкпоинт-свойства в CSS-классах (инжект `<style>`), не inline. Лендинг — отдельно.
 - **Лендинг на своей палитре** (`app/landing.css`, `--v/--ink…`) — отдельный источник правды от
   `app/tokens/*`; смена бренд-токена до лендинга не доходит.
 - **Perf-долг (след. сессия):** `/app` тормозит на round-trip'ах к облачному Supabase — это

@@ -269,9 +269,14 @@ grading, submit, RLS, tiers, рейтинг). На каждом экране: в
   `getProfile`), catalog `?limit=1`/`?throttled=1`-нотисы (вместо молчаливого отскока), фикс значка
   шапки (inline-SVG вместо `<img>` с `currentColor`), Google OAuth (✅ настроен: OAuth-client
   в Google Cloud + provider/URL-config в Supabase, вход работает на проде).
-- **⏸ Mobile/responsive — НЕ сделано** (отложено пользователем). Весь `/app` **desktop-only**:
-  inline-стили без медиа-запросов, дизайн-дроп был только под desktop. Шапка без коллапса,
-  auth-карточка 940×580 и часть гридов не стекаются. Лендинг адаптивен (свой `landing.css`).
+- **✅ Mobile/responsive — сделано** (на `main`). Весь `/app` адаптивен mobile-first:
+  шапка → бургер-drawer <1024px, exam → табы Passage/Questions <1024px, остальные экраны
+  (dashboard/catalog/result/leaderboard/badges/profile/pricing/onboarding/invite/checkout)
+  стекаются на 640–768px, auth прячет раздвижную панель <760px (форма на всю ширину + текст-тоггл),
+  loading-скелетоны зеркалят reflow. **Инвариант:** свойства, меняющиеся по брейкпоинту
+  (display/grid/width/padding), живут в CSS-классах (инжект `<style>` или `globals.css`), НЕ в
+  inline — иначе inline перебивает media-query; у переключаемых узлов `display` убран из inline.
+  Touch-таргеты ≥44px на `pointer:coarse`. Лендинг адаптивен отдельно (свой `landing.css`).
 
 **Gotcha — dev-сервер на Windows:** `TaskStop` НЕ убивает дочерний `next` → зомби висят на
 :3000/:3001/:3002, новый dev уходит на следующий порт, браузер попадает на протухший (CSS
