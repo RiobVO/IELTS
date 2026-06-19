@@ -171,6 +171,7 @@ export default async function ResultPage({
 
   return (
     <AppShell active="reading">
+      <style>{RESULT_CSS}</style>
       <div style={S.wrap}>
         <div style={S.backRow}>
           <Button variant="ghost" size="sm" icon="arrow-left" href="/app/reading">
@@ -201,7 +202,7 @@ export default async function ResultPage({
         )}
 
         {/* Top metrics — donut + band + key metrics */}
-        <div style={{ ...S.metricsCard, gridTemplateColumns: metrics.length ? "auto 1fr" : "auto" }}>
+        <div className="res-metrics" style={S.metricsCard}>
           <div style={S.donutBlock}>
             <Donut pct={correctPct} />
             <div>
@@ -213,7 +214,7 @@ export default async function ResultPage({
             </div>
           </div>
           {metrics.length > 0 && (
-            <div style={S.metricsGrid}>
+            <div className="res-mgrid" style={S.metricsGrid}>
               {metrics.map((m) => (
                 <div key={m.label} style={S.metricTile}>
                   <div style={{ ...S.metricValue, color: m.color }}>{m.value}</div>
@@ -226,14 +227,14 @@ export default async function ResultPage({
 
         {/* Accuracy by question type */}
         {perType.length > 0 && (
-          <div style={S.card}>
+          <div className="res-card" style={S.card}>
             <div style={S.cardTitle}>Accuracy by question type</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
               {perType.map(([type, s], i) => {
                 const p = Math.round((s.correct / s.total) * 100);
                 return (
-                  <div key={type} style={S.accRow}>
-                    <div style={S.accName}>
+                  <div key={type} className="res-acc" style={S.accRow}>
+                    <div className="res-accname" style={S.accName}>
                       {qtypeLabel(type)}
                       {i === 0 && <span style={S.weakest}>WEAKEST</span>}
                     </div>
@@ -243,8 +244,8 @@ export default async function ResultPage({
                     <span style={{ ...S.accScore, color: barText(p) }}>
                       {s.correct}/{s.total}
                     </span>
-                    <Link href={`/app/reading?q_type=${encodeURIComponent(type)}`} style={S.practise}>
-                      Practise →
+                    <Link href={`/app/reading?q_type=${encodeURIComponent(type)}`} className="res-practise" style={S.practise}>
+                      <span className="res-practise-label">Practise </span>→
                     </Link>
                   </div>
                 );
@@ -432,6 +433,25 @@ function ReviewCard({
   );
 }
 
+// Адаптив result. База = мобильный (метрики стек, узкая accName, practise → стрелка);
+// ≥560px = десктоп. Переключаемые grid/border/width — в классах, не inline.
+const RESULT_CSS = `
+.res-card{padding:18px 16px}
+.res-metrics{grid-template-columns:1fr;gap:18px;padding:18px 16px}
+.res-mgrid{border-top:1px solid var(--border-subtle);padding-top:16px}
+.res-acc{gap:10px}
+.res-accname{width:96px}
+.res-practise-label{display:none}
+@media (min-width:560px){
+  .res-card{padding:20px 24px}
+  .res-metrics{grid-template-columns:auto 1fr;gap:22px;padding:22px}
+  .res-mgrid{border-top:none;padding-top:0;border-left:1px solid var(--border-subtle);padding-left:22px}
+  .res-acc{gap:14px}
+  .res-accname{width:168px}
+  .res-practise-label{display:inline}
+}
+`;
+
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 760, margin: "0 auto", padding: "16px 18px 40px", display: "flex", flexDirection: "column" },
   backRow: { display: "flex", alignItems: "center", marginBottom: 4 },
@@ -440,24 +460,24 @@ const S: Record<string, React.CSSProperties> = {
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
   repSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
 
-  metricsCard: { display: "grid", gap: 22, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", padding: 22, alignItems: "center", marginBottom: 14 },
+  metricsCard: { display: "grid", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", alignItems: "center", marginBottom: 14 },
   donutBlock: { display: "flex", alignItems: "center", gap: 20 },
   metricEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
   bandBig: { fontFamily: "var(--font-mono)", fontSize: 46, fontWeight: 600, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.02em" },
   rawLine: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 2 },
-  metricsGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, borderLeft: "1px solid var(--border-subtle)", paddingLeft: 22 },
+  metricsGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   metricTile: { background: "var(--surface-inset)", borderRadius: 12, padding: "12px 14px" },
   metricValue: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xl)", fontWeight: 600 },
   metricLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", fontWeight: 600, marginTop: 2 },
 
-  card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", padding: "20px 24px", marginBottom: 14 },
+  card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", marginBottom: 14 },
   cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", marginBottom: 14 },
-  accRow: { display: "flex", alignItems: "center", gap: 14 },
-  accName: { width: 168, flex: "none", display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  accRow: { display: "flex", alignItems: "center" },
+  accName: { flex: "none", display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   weakest: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--error-text)", background: "var(--error-subtle)", padding: "2px 6px", borderRadius: "var(--radius-full)", flex: "none" },
   accTrack: { flex: 1, height: 9, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
   accScore: { width: 44, flex: "none", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 600 },
-  practise: { width: 74, flex: "none", textAlign: "right", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
+  practise: { flex: "none", textAlign: "right", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
 
   recoCard: { display: "flex", alignItems: "center", gap: 14, border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", borderRadius: "var(--radius-xl)", padding: "16px 20px", boxShadow: "var(--shadow-solid)", marginBottom: 14, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
   recoIcon: { flex: "none", color: "var(--brand)" },
