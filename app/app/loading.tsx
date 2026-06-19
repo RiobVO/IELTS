@@ -5,9 +5,10 @@ import { Skeleton } from "@/components/core/Skeleton";
 export default function Loading() {
   return (
     <AppShellSkeleton active="dashboard">
-      <div style={S.wrap}>
+      <style>{`.dl-wrap{padding:20px 16px 48px}.dl-split{display:grid;grid-template-columns:1fr;gap:14px}@media(min-width:768px){.dl-wrap{padding:32px 28px 56px}.dl-split{grid-template-columns:1.2fr 1fr;gap:22px}}`}</style>
+      <div className="dl-wrap" style={S.wrap}>
         {/* progress + ring */}
-        <div style={S.split}>
+        <div className="dl-split">
           <div style={{ ...S.card, padding: 34 }}>
             <Skeleton w={120} h={12} style={{ marginBottom: 18 }} />
             <Skeleton w={150} h={64} style={{ marginBottom: 18 }} />
@@ -34,7 +35,7 @@ export default function Loading() {
         </div>
 
         {/* weak + focus */}
-        <div style={S.splitStretch}>
+        <div className="dl-split" style={{ alignItems: "stretch" }}>
           <div style={{ ...S.card, padding: 30 }}>
             <Skeleton w={150} h={20} style={{ marginBottom: 24 }} />
             {Array.from({ length: 3 }).map((_, i) => (
@@ -76,10 +77,8 @@ export default function Loading() {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 1160, margin: "0 auto", padding: "32px 28px 56px", display: "flex", flexDirection: "column", gap: 22 },
+  wrap: { maxWidth: 1160, margin: "0 auto", display: "flex", flexDirection: "column", gap: 22 },
   card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)" },
-  split: { display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 22 },
-  splitStretch: { display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 22, alignItems: "stretch" },
   stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 22 },
   focus: { borderRadius: "var(--radius-xl)", padding: 32, background: "linear-gradient(150deg, var(--brand) 0%, var(--brand-active) 100%)", boxShadow: "var(--shadow-md)", display: "flex", flexDirection: "column", gap: 12 },
   recentRow: { display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: "1px solid var(--border-subtle)" },

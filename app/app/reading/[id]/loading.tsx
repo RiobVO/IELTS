@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/core/Skeleton";
 export default function Loading() {
   return (
     <div style={S.shell}>
+      {/* Скелет зеркалит exam-раннер: на мобиле показываем один пейн (без 460px-overflow). */}
+      <style>{`.exam-skel-q{display:none}@media(min-width:1024px){.exam-skel-q{display:flex}}`}</style>
       <div style={S.top}>
         <Skeleton w={38} h={38} r="var(--radius-md)" />
         <div>
@@ -33,7 +35,7 @@ export default function Loading() {
           </div>
         </div>
 
-        <div style={S.qPane}>
+        <div className="exam-skel-q" style={S.qPane}>
           <div style={S.navHead}>
             <Skeleton w={150} h={16} style={{ marginBottom: 12 }} />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 6 }}>
@@ -61,7 +63,7 @@ const S: Record<string, React.CSSProperties> = {
   top: { display: "flex", alignItems: "center", gap: 14, padding: "12px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg-raised)", flex: "none" },
   passagePane: { flex: "1.15", minWidth: 0, display: "flex", flexDirection: "column", background: "var(--reading-surface)", borderRight: "1px solid var(--border)" },
   passageHead: { display: "flex", alignItems: "center", gap: 8, padding: "12px 22px", borderBottom: "1px solid var(--reading-rule)", flex: "none" },
-  qPane: { width: 460, flex: "none", display: "flex", flexDirection: "column", background: "var(--bg-base)" },
+  qPane: { width: 460, flex: "none", flexDirection: "column", background: "var(--bg-base)" },
   navHead: { padding: "14px 20px", borderBottom: "1px solid var(--border)", flex: "none" },
   qCard: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "var(--space-4)", boxShadow: "var(--shadow-solid)" },
 };
