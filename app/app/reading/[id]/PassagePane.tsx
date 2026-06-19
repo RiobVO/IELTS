@@ -125,32 +125,12 @@ export function PassagePane({
     return articleRef.current?.querySelector(`[data-order="${order}"]`) ?? null;
   }, []);
 
-  // One-time DOM post-processing: hanging paragraph letters + drop cap + apply
-  // saved annotations. Runs once (the passage HTML is static, so the mutations
-  // persist); guarded against StrictMode double-invoke.
+  // One-time DOM post-processing: restore saved annotations. Буквы абзацев и
+  // drop-cap теперь рисуются ЧИСТЫМ CSS (counters + :has + ::first-letter) —
+  // клиентский JS для них оказался ненадёжен в проде, CSS-путь работает всегда.
   useLayoutEffect(() => {
     if (didInit.current || !articleRef.current) return;
     didInit.current = true;
-    const containers = Array.from(
-      articleRef.current.querySelectorAll<HTMLElement>("[data-order]"),
-    );
-    let firstParaDone = false;
-    for (const c of containers) {
-      // Тесты с готовыми метками абзацев (.para-label / .para-letter) уже несут
-      // буквы — НЕ генерируем поверх (иначе дубли); их кружки рисует CSS ниже.
-      // Генерируем только для «голых» <p> (single-passage без меток).
-      if (c.querySelector(".para-label, .para-letter")) continue;
-      const paras = Array.from(c.querySelectorAll<HTMLElement>(":scope > p")).filter(
-        (p) => !p.classList.contains("subtitle"),
-      );
-      paras.forEach((p, i) => {
-        p.dataset.letter = String.fromCharCode(65 + (i % 26));
-        if (!firstParaDone && i === 0) {
-          p.classList.add("dropcap");
-          firstParaDone = true;
-        }
-      });
-    }
     for (const a of initialAnnotations) {
       const c = passageEl(a.passage_order);
       if (c) wrapOffsets(c, a.start_offset, a.end_offset, a.id, a.kind === "note" ? "note" : "highlight");
@@ -321,7 +301,7 @@ export function PassagePane({
         <article
           ref={articleRef}
           className="bando-reading editorial"
-          style={{ padding: "24px 48px 80px", maxWidth: 820, margin: "0 auto", fontSize: fontPx }}
+          style={{ padding: "24px 48px 80px", maxWidth: 900, margin: "0 auto", fontSize: fontPx }}
           onMouseUp={onMouseUp}
           onClick={onClick}
         >
@@ -388,16 +368,18 @@ const PASSAGE_CSS = `
 .bando-reading.editorial{font-family:var(--font-reading);color:var(--reading-text);line-height:1.75}
 .bando-reading.editorial p{margin:0 0 1.15em;position:relative}
 .bando-reading.editorial em{font-style:italic}
-/* Висячая буква-кружок слева. Три источника: сгенерированный data-letter (голые
-   <p>), встроенный span.para-label (внутри <p>) и div.para-letter (внутри
-   .para-block). Лейн — padding-left у абзаца/блока; буква на left:0 (без
-   отрицательного офсета, который раньше клипал скролл-контейнер). */
-.bando-reading.editorial p[data-letter],
+/* Буквы абзацев — кружок в левом поле. ВСЁ на чистом CSS (клиентский JS для них
+   в проде не отрабатывал). Plain-пассаж = [data-order] без встроенных меток и без
+   question-UI (.para-label / .para-letter / .heading-drop / .paragraph-block):
+   нумеруем CSS-счётчиком A/B/C. Пассажи со своими метками используют их как есть.
+   Лейн — padding-left у абзаца/блока; кружок на left:0. */
+.bando-reading.editorial [data-order]:not(:has(.para-label, .para-letter, .heading-drop, .paragraph-block)){counter-reset:para}
+.bando-reading.editorial [data-order]:not(:has(.para-label, .para-letter, .heading-drop, .paragraph-block)) > p:not(.subtitle){counter-increment:para;padding-left:46px}
+.bando-reading.editorial [data-order]:not(:has(.para-label, .para-letter, .heading-drop, .paragraph-block)) > p:not(.subtitle)::before{content:counter(para,upper-alpha)}
 .bando-reading.editorial p:has(> .para-label){padding-left:46px}
 .bando-reading.editorial .para-block{padding-left:46px;position:relative;margin:0 0 1.15em}
 .bando-reading.editorial .para-block > p{margin:0}
-.bando-reading.editorial p[data-letter]::before{content:attr(data-letter)}
-.bando-reading.editorial p[data-letter]::before,
+.bando-reading.editorial [data-order]:not(:has(.para-label, .para-letter, .heading-drop, .paragraph-block)) > p:not(.subtitle)::before,
 .bando-reading.editorial .para-label,
 .bando-reading.editorial .para-letter{
   position:absolute;left:0;top:.12em;width:28px;height:28px;
@@ -405,7 +387,7 @@ const PASSAGE_CSS = `
   font-family:var(--font-ui);font-size:12.5px;font-weight:600;color:var(--reading-muted);line-height:1;
   background:#fff;
 }
-.bando-reading.editorial p.dropcap::first-letter{
+.bando-reading.editorial [data-order]:not(:has(.para-label, .para-letter, .heading-drop, .paragraph-block)) > p:not(.subtitle):first-of-type::first-letter{
   float:left;font-family:var(--font-reading);font-size:3.4em;line-height:.82;font-weight:600;
   padding:.06em .12em 0 0;color:var(--brand);
 }
@@ -419,7 +401,7 @@ const PASSAGE_CSS = `
 const S = {
   pane: { flex: "1.15", minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)", position: "relative" } as React.CSSProperties,
   progressTop: { height: 3, background: "color-mix(in oklab, var(--reading-rule) 70%, transparent)", flex: "none" } as React.CSSProperties,
-  masthead: { padding: "30px 48px 0", maxWidth: 820, margin: "0 auto" } as React.CSSProperties,
+  masthead: { padding: "30px 48px 0", maxWidth: 900, margin: "0 auto" } as React.CSSProperties,
   overline: { fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--reading-muted)", fontWeight: 600 } as React.CSSProperties,
   ptitle: { fontFamily: "var(--font-reading)", fontWeight: 600, fontSize: 34, color: "var(--reading-text)", lineHeight: 1.18, letterSpacing: "-0.01em", margin: "12px 0 0" } as React.CSSProperties,
   pmeta: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 14, marginTop: 14, color: "var(--reading-muted)", fontSize: 12.5, fontFamily: "var(--font-ui)" } as React.CSSProperties,
