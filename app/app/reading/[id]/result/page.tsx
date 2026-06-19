@@ -235,8 +235,8 @@ export default async function ResultPage({
                 return (
                   <div key={type} className="res-acc" style={S.accRow}>
                     <div className="res-accname" style={S.accName}>
-                      {qtypeLabel(type)}
-                      {i === 0 && <span style={S.weakest}>WEAKEST</span>}
+                      <span style={S.accLabel}>{qtypeLabel(type)}</span>
+                      {i === 0 && <span className="res-weakest" style={S.weakest}>WEAKEST</span>}
                     </div>
                     <div style={S.accTrack}>
                       <div style={{ height: "100%", width: `${Math.max(p, 2)}%`, borderRadius: "var(--radius-full)", background: barColor(p) }} />
@@ -442,13 +442,15 @@ const RESULT_CSS = `
 .res-acc{gap:10px}
 .res-accname{width:96px}
 .res-practise-label{display:none}
+.res-weakest{display:none}
 @media (min-width:560px){
   .res-card{padding:20px 24px}
   .res-metrics{grid-template-columns:auto 1fr;gap:22px;padding:22px}
   .res-mgrid{border-top:none;padding-top:0;border-left:1px solid var(--border-subtle);padding-left:22px}
   .res-acc{gap:14px}
-  .res-accname{width:168px}
+  .res-accname{width:200px}
   .res-practise-label{display:inline}
+  .res-weakest{display:inline-flex}
 }
 `;
 
@@ -473,7 +475,11 @@ const S: Record<string, React.CSSProperties> = {
   card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", marginBottom: 14 },
   cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", marginBottom: 14 },
   accRow: { display: "flex", alignItems: "center" },
-  accName: { flex: "none", display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  // Колонка имени держит фикс-ширину (бары всех строк выровнены). Подпись —
+  // сжимаемый ellipsis-span (minWidth:0), бейдж WEAKEST — flex:none, поэтому
+  // бейдж никогда не режется, а сокращается подпись.
+  accName: { flex: "none", display: "flex", alignItems: "center", gap: 7, minWidth: 0, overflow: "hidden", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)" },
+  accLabel: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   weakest: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--error-text)", background: "var(--error-subtle)", padding: "2px 6px", borderRadius: "var(--radius-full)", flex: "none" },
   accTrack: { flex: 1, height: 9, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
   accScore: { width: 44, flex: "none", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 600 },
