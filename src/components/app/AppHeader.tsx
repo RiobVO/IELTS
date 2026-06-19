@@ -1,7 +1,9 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useInteractive } from "@/components/core/util";
 import { Icon } from "@/components/core/icons";
+import { Button } from "@/components/core/Button";
 import { NotificationsBell, type NotifItem } from "./NotificationsBell";
 
 /** Активный раздел сайта — подсветка в навигации. */
@@ -29,16 +31,44 @@ interface AppHeaderProps {
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
-const LINKS: { id: ActivePage; label: string; href: string }[] = [
-  { id: "dashboard", label: "Home", href: "/app" },
-  { id: "reading", label: "Reading", href: "/app/reading" },
-  { id: "listening", label: "Listening", href: "/app/listening" },
-  { id: "leaderboard", label: "League", href: "/app/leaderboard" },
-  { id: "badges", label: "Badges", href: "/app/badges" },
+const LINKS: { id: ActivePage; label: string; href: string; icon: Parameters<typeof Icon>[0]["name"] }[] = [
+  { id: "dashboard", label: "Home", href: "/app", icon: "target" },
+  { id: "reading", label: "Reading", href: "/app/reading", icon: "book-open" },
+  { id: "listening", label: "Listening", href: "/app/listening", icon: "headphones" },
+  { id: "leaderboard", label: "League", href: "/app/leaderboard", icon: "crown" },
+  { id: "badges", label: "Badges", href: "/app/badges", icon: "award" },
 ];
 
 const COLORS_TRANSITION =
   "background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)";
+
+/* Адаптив шапки. Inline-стили не держат @media, поэтому переключаемые элементы
+   получают класс (display задаётся ТОЛЬКО классом, не inline — иначе inline
+   перебьёт media-query). База = мобильный (бургер, drawer-навигация);
+   ≥1024px = десктоп (горизонтальная навигация, скрытый бургер). */
+const HEADER_CSS = `
+.ah-bar{padding:11px 16px;gap:10px}
+.ah-nav{display:none}
+.ah-xp{display:none}
+.ah-upgrade{display:none}
+.ah-signout{display:none}
+.ah-burger{display:grid}
+.ah-drawer{display:flex;animation:ah-drawer-in var(--duration-base) var(--ease-out)}
+.ah-scrim{display:block;animation:ah-scrim-in var(--duration-base) var(--ease-standard)}
+@keyframes ah-drawer-in{from{transform:translateX(100%)}to{transform:translateX(0)}}
+@keyframes ah-scrim-in{from{opacity:0}to{opacity:1}}
+@media (min-width:1024px){
+  .ah-bar{padding:12px 34px;gap:18px}
+  .ah-nav{display:flex}
+  .ah-xp{display:inline-flex}
+  .ah-upgrade{display:inline-flex}
+  .ah-signout{display:flex}
+  .ah-burger{display:none}
+  .ah-drawer,.ah-scrim{display:none}
+}
+.ah-tap{width:40px;height:40px}
+@media (pointer:coarse){ .ah-tap{width:44px;height:44px} }
+`;
 
 function NavLink({ link, active }: { link: (typeof LINKS)[number]; active: boolean }) {
   const { hover, handlers } = useInteractive();
@@ -63,7 +93,36 @@ function NavLink({ link, active }: { link: (typeof LINKS)[number]; active: boole
   );
 }
 
-/** Ghost-иконка справа (колокольчик / выход). Hover — мягкая подложка. */
+/** Строка навигации внутри мобильного drawer — крупная touch-цель, активный фон. */
+function DrawerLink({ link, active, onClose }: { link: (typeof LINKS)[number]; active: boolean; onClose: () => void }) {
+  return (
+    <Link
+      href={link.href}
+      onClick={onClose}
+      aria-current={active ? "page" : undefined}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 13,
+        minHeight: 48,
+        padding: "0 14px",
+        borderRadius: "var(--radius-md)",
+        textDecoration: "none",
+        background: active ? "var(--brand-subtle)" : "transparent",
+        color: active ? "var(--text-link)" : "var(--text-secondary)",
+        fontFamily: "var(--font-ui)",
+        fontSize: "var(--text-md)",
+        fontWeight: 700,
+      }}
+    >
+      <Icon name={link.icon} size={19} strokeWidth={2.3} style={{ color: active ? "var(--brand)" : "var(--text-muted)" }} />
+      {link.label}
+      <Icon name="chevron-right" size={17} strokeWidth={2.2} style={{ marginLeft: "auto", color: "var(--text-disabled)" }} />
+    </Link>
+  );
+}
+
+/** Ghost-иконка справа (выход на десктопе). Hover — мягкая подложка. */
 function IconAction({
   children,
   hover,
@@ -96,10 +155,42 @@ function IconAction({
   );
 }
 
+function StatPill({ icon, value, label, color }: { icon: Parameters<typeof Icon>[0]["name"]; value: string; label: string; color: string }) {
+  return (
+    <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: "var(--radius-md)", background: "var(--surface-inset)" }}>
+      <Icon name={icon} size={20} strokeWidth={2.3} style={{ color }} />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-lg)", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1 }}>{value}</div>
+        <div style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--text-muted)", marginTop: 3 }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
 export function AppHeader({ active, streak, xp, initials, unread, recent, markAllRead, signOut }: AppHeaderProps) {
   const upgrade = useInteractive();
   const out = useInteractive();
+  const burger = useInteractive();
+  const [open, setOpen] = useState(false);
   const onPricing = active === "pricing";
+
+  // Drawer: Esc закрывает, body-scroll лочится пока открыт, ресайз в десктоп
+  // (≥1024px) закрывает — иначе скрытый классом drawer оставит scroll-lock висеть.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const mq = window.matchMedia("(min-width:1024px)");
+    const onMq = (e: MediaQueryListEvent) => { if (e.matches) setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    mq.addEventListener("change", onMq);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      mq.removeEventListener("change", onMq);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   return (
     <div
@@ -112,7 +203,9 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
         borderBottom: "1px solid var(--border-subtle)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "12px 34px", maxWidth: 1180, margin: "0 auto" }}>
+      <style>{HEADER_CSS}</style>
+
+      <div className="ah-bar" style={{ display: "flex", alignItems: "center", maxWidth: 1180, margin: "0 auto" }}>
         <Link href="/app" style={{ display: "flex", alignItems: "center", gap: 11, textDecoration: "none" }}>
           <span style={{ width: 34, height: 34, flex: "none", borderRadius: 10, display: "grid", placeItems: "center", background: "linear-gradient(165deg,#211B33,#0E0B17)", border: "1px solid #2C2640" }}>
             {/* inline SVG (не <img>) — иначе currentColor рисует бары чёрными на тёмной плитке */}
@@ -127,18 +220,18 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
           </span>
         </Link>
 
-        <nav style={{ marginLeft: 22, display: "flex", gap: 4 }}>
+        <nav className="ah-nav" style={{ marginLeft: 22, gap: 4 }}>
           {LINKS.map((l) => (
             <NavLink key={l.id} link={l} active={active === l.id} />
           ))}
         </nav>
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           <Link
             href="/app/upgrade"
+            className="ah-upgrade"
             {...upgrade.handlers}
             style={{
-              display: "inline-flex",
               alignItems: "center",
               gap: 6,
               height: 38,
@@ -163,7 +256,7 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--streak)" }} title="Day streak">
             <Icon name="flame" size={17} strokeWidth={2.4} /> {streak}
           </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--warn-text)" }} title="Total XP">
+          <span className="ah-xp" style={{ alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--warn-text)" }} title="Total XP">
             <Icon name="trophy" size={16} strokeWidth={2.4} /> {fmt(xp)}
           </span>
 
@@ -189,16 +282,113 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
             {initials}
           </Link>
 
-          {/* Выход — дизайн-хедер его не содержит; сохранён, т.к. иначе из нового UI не выйти. */}
-          <form action={signOut} style={{ display: "flex" }}>
+          {/* Выход — дизайн-хедер его не содержит; сохранён, т.к. иначе из нового UI не выйти.
+              На мобильном живёт в drawer (.ah-signout скрыт классом). */}
+          <form action={signOut} className="ah-signout" style={{ alignItems: "center" }}>
             <button type="submit" aria-label="Sign out" title="Sign out" style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer" }}>
               <IconAction hover={out.hover} handlers={out.handlers}>
                 <Icon name="log-out" size={18} strokeWidth={2.2} />
               </IconAction>
             </button>
           </form>
+
+          {/* Бургер — только мобильный (.ah-burger скрыт на десктопе). */}
+          <button
+            type="button"
+            className="ah-burger ah-tap"
+            aria-label="Menu"
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            aria-controls="ah-drawer"
+            onClick={() => setOpen(true)}
+            {...burger.handlers}
+            style={{
+              placeItems: "center",
+              borderRadius: "var(--radius-md)",
+              border: "none",
+              background: open || burger.hover ? "var(--surface-hover)" : "transparent",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              transition: COLORS_TRANSITION,
+            }}
+          >
+            <Icon name="menu" size={22} strokeWidth={2.3} />
+          </button>
         </div>
       </div>
+
+      {/* Scrim + drawer — только мобильный, рендерятся пока open (slide-in через
+          @keyframes; при закрытии элемент исчезает → нет off-screen overflow).
+          Класс .ah-drawer/.ah-scrim гасит их на десктопе на случай open при ресайзе. */}
+      {open && (
+        <>
+          <div
+            className="ah-scrim"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 60,
+              background: "color-mix(in oklab, var(--slate-950) 48%, transparent)",
+            }}
+          />
+          <nav
+            id="ah-drawer"
+            className="ah-drawer"
+            aria-label="Main menu"
+            style={{
+              position: "fixed",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 61,
+              width: "min(86vw, 340px)",
+              flexDirection: "column",
+              background: "var(--surface)",
+              borderLeft: "1px solid var(--border)",
+              boxShadow: "var(--shadow-lg)",
+              padding: "max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) 14px",
+              overflowY: "auto",
+            }}
+          >
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
+          <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)" }}>Menu</span>
+          <button
+            type="button"
+            className="ah-tap"
+            aria-label="Close menu"
+            onClick={() => setOpen(false)}
+            style={{ marginLeft: "auto", display: "grid", placeItems: "center", borderRadius: "var(--radius-md)", border: "none", background: "var(--surface-inset)", color: "var(--text-secondary)", cursor: "pointer" }}
+          >
+            <Icon name="x" size={20} strokeWidth={2.3} />
+          </button>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+          <StatPill icon="flame" value={String(streak)} label="day streak" color="var(--streak)" />
+          <StatPill icon="trophy" value={fmt(xp)} label="total XP" color="var(--warn-text)" />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {LINKS.map((l) => (
+            <DrawerLink key={l.id} link={l} active={active === l.id} onClose={() => setOpen(false)} />
+          ))}
+        </div>
+
+        <div style={{ height: 1, background: "var(--border-subtle)", margin: "16px 0" }} />
+
+        <Button href="/app/upgrade" icon="bar-chart" fullWidth onClick={() => setOpen(false)}>
+          Upgrade
+        </Button>
+        <form action={signOut} style={{ marginTop: 10 }}>
+          <Button type="submit" variant="secondary" icon="log-out" fullWidth>
+            Sign out
+          </Button>
+        </form>
+          </nav>
+        </>
+      )}
     </div>
   );
 }

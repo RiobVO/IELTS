@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Literata, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { posthogConfig } from "@/env";
@@ -17,6 +17,13 @@ const jbMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "bando — Get your band",
   description: "Premium IELTS Reading & Listening prep: real exam mode, per-type analytics, and a clear path to your target band.",
+};
+
+// viewport-fit=cover — корректные safe-area insets на телефонах с вырезом/закруглениями.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
