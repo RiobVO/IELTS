@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { Icon } from "@/components/core/icons";
 
 function fmt(sec: number): string {
@@ -13,6 +13,18 @@ const WAVE = Array.from({ length: 56 }, (_, i) => {
   const a = Math.sin(i * 0.7) * 0.5 + Math.sin(i * 0.27) * 0.3 + 0.6;
   return 0.25 + Math.abs(a) * 0.6;
 });
+
+// Waveform: бары статичны (высоты из WAVE), цвет берут от класса ряда; заполнение
+// гонит ОДИН clip-path на fill-ряде поверх base-ряда — без ре-рендера 56 баров за тик.
+const WAVE_CSS = `
+.ap-wave{position:relative;height:26px}
+.ap-wave-row{position:absolute;inset:0;display:flex;align-items:center;gap:2px}
+.ap-bar{flex:1;border-radius:2px}
+.ap-wave-base .ap-bar{background:var(--border-strong);opacity:.5}
+.ap-wave-fill{clip-path:inset(0 100% 0 0);transition:clip-path 120ms linear}
+.ap-wave-fill .ap-bar{background:var(--brand)}
+@media (prefers-reduced-motion:reduce){.ap-wave-fill{transition:none}}
+`;
 
 interface AudioPlayerProps {
   progress?: number; // 0..1
@@ -43,7 +55,15 @@ export function AudioPlayer({
   const pct = Math.max(0, Math.min(1, progress));
   const elapsed = pct * totalSeconds;
   const played = Math.round(pct * WAVE.length);
+  const playedPct = (played / WAVE.length) * 100;
   const hasParts = part != null && totalParts != null;
+
+  // Статичные бары — мемоизируем, чтобы тики progress не ре-рендерили 56 спанов
+  // (меняется только clip-path fill-ряда). Один и тот же набор для base и fill.
+  const bars = useMemo(
+    () => WAVE.map((h, i) => <span key={i} className="ap-bar" style={{ height: `${h * 100}%` }} />),
+    [],
+  );
 
   return (
     <div
@@ -59,6 +79,7 @@ export function AudioPlayer({
         ...style,
       }}
     >
+      <style>{WAVE_CSS}</style>
       <button
         type="button"
         onClick={onTogglePlay}
@@ -82,14 +103,13 @@ export function AudioPlayer({
             <Icon name="headphones" size={12} /> Plays once
           </span>
         </div>
-        {/* Waveform — НЕ кликабелен (single pass, без перемотки). */}
-        <div aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 2, height: 26 }}>
-          {WAVE.map((h, i) => (
-            <span
-              key={i}
-              style={{ flex: 1, height: `${h * 100}%`, borderRadius: 2, background: i < played ? "var(--brand)" : "var(--border-strong)", opacity: i < played ? 1 : 0.5, transition: "background-color 120ms linear, opacity 120ms linear" }}
-            />
-          ))}
+        {/* Waveform — НЕ кликабелен (single pass, без перемотки). Base-ряд (несыгранное)
+            + fill-ряд (brand); заполнение задаёт clip-path по playedPct. */}
+        <div className="ap-wave" aria-hidden="true">
+          <div className="ap-wave-row ap-wave-base">{bars}</div>
+          <div className="ap-wave-row ap-wave-fill" style={{ clipPath: `inset(0 ${100 - playedPct}% 0 0)` }}>
+            {bars}
+          </div>
         </div>
       </div>
 
