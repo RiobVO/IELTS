@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { annotation } from "@/db/schema";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
+import { normalizePassageHtml } from "@/lib/reading/normalize-passage";
 import { ensureAttempt } from "./actions";
 import ExamRunner from "./ExamRunner";
 
@@ -50,7 +51,13 @@ export default async function ReadingTestPage({
       .eq("content_item_id", id)
       .order("number"),
   ]);
-  const passages = passagesRes.data;
+  // Нормализуем разметку абзацев каждого пассажа к единому контракту (.rp +
+  // data-letter) на read-time — вся разнородность форматов в одной тестируемой
+  // функции, PassagePane рисует один CSS-путь. audio_path/order/title сохраняются.
+  const passages = passagesRes.data?.map((p) => ({
+    ...p,
+    body_html: normalizePassageHtml((p as { body_html: string }).body_html, test.title),
+  }));
   const questionsData = questionsRes.data;
 
   // Access gate (§4.8): a Basic user must not even reach the exam for a
