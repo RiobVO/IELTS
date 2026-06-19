@@ -127,7 +127,8 @@ export async function CatalogView({
 
   return (
     <AppShell active={section}>
-      <div style={S.wrap}>
+      <style>{CATALOG_CSS}</style>
+      <div className="cat-wrap" style={S.wrap}>
         <h1 style={S.h1}>{title}</h1>
         <p style={S.sub}>{sub}</p>
 
@@ -186,7 +187,7 @@ export async function CatalogView({
             {recommended ? "That's the catalog for now — more tests on the way." : "No tests match this filter yet."}
           </div>
         ) : (
-          <div style={S.grid}>
+          <div className="cat-grid" style={S.grid}>
             {gridTests.map((t) => (
               <TestCard key={t.id} t={t} locked={!meetsTier(userTier, t.tier_required)} />
             ))}
@@ -246,7 +247,7 @@ function TestCard({ t, locked }: { t: Test; locked: boolean }) {
 /* Brand banner — рекомендованный тест под слабейшие типы пользователя. */
 function RecommendedBanner({ test, weak, locked }: { test: Test; weak: string[]; locked: boolean }) {
   return (
-    <div style={S.banner}>
+    <div className="cat-banner" style={S.banner}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={S.bannerEyebrow}>
           <Icon name="target" size={14} strokeWidth={2.6} /> Recommended for you
@@ -340,8 +341,21 @@ function CatalogNotice({ kind, dismissHref }: { kind: "limit" | "throttled"; dis
   );
 }
 
+// Адаптив каталога. База = мобильный (1 колонка, баннер-стек); ≥640px = десктоп
+// (2-up grid, баннер в ряд). Переключаемое — в классах, не inline.
+const CATALOG_CSS = `
+.cat-wrap{padding:24px 16px 44px}
+.cat-grid{display:grid;grid-template-columns:1fr;gap:14px}
+.cat-banner{display:flex;flex-direction:column;align-items:flex-start;gap:16px}
+@media (min-width:640px){
+  .cat-wrap{padding:var(--space-8) var(--space-6) var(--space-12)}
+  .cat-grid{grid-template-columns:1fr 1fr}
+  .cat-banner{flex-direction:row;align-items:center;gap:22px}
+}
+`;
+
 const S: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 980, margin: "0 auto", padding: "var(--space-8) var(--space-6) var(--space-12)" },
+  wrap: { maxWidth: 980, margin: "0 auto" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "0 0 4px", color: "var(--text-primary)" },
   sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "0 0 16px" },
 
@@ -353,9 +367,6 @@ const S: Record<string, React.CSSProperties> = {
     color: "#fff",
     padding: "22px 24px",
     margin: "0 0 18px",
-    display: "flex",
-    alignItems: "center",
-    gap: 22,
     boxShadow: "var(--shadow-md)",
   },
   bannerEyebrow: { display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "rgba(255,255,255,0.82)", fontWeight: 600 },
@@ -383,7 +394,7 @@ const S: Record<string, React.CSSProperties> = {
   resultNum: { fontFamily: "var(--font-mono)", color: "var(--text-primary)" },
 
   empty: { padding: "var(--space-8)", textAlign: "center", color: "var(--text-muted)", border: "1px dashed var(--border)", borderRadius: "var(--radius-lg)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
-  grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch" },
+  grid: { alignItems: "stretch" },
 
   cardTop: { display: "flex", alignItems: "center", gap: 7, marginBottom: 11 },
   duration: { marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" },
