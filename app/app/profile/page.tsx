@@ -227,7 +227,7 @@ export default async function ProfilePage() {
               <Button href="/app/reading" icon="play" style={{ background: "#fff", color: "var(--brand-active)" }}>
                 Take a test
               </Button>
-              <Button href="/app" variant="ghost" trailingIcon="arrow-right" style={{ background: "rgba(255,255,255,.14)", color: "#fff" }}>
+              <Button href="/app" variant="ghost" trailingIcon="arrow-right" style={{ background: "rgba(255,255,255,.14)", color: "var(--text-on-brand)" }}>
                 View progress
               </Button>
             </div>
@@ -295,7 +295,7 @@ export default async function ProfilePage() {
                 <span style={S.inviteTitle}>Invite friends</span>
               </div>
               <p style={S.inviteText}>
-                Each friend who finishes a test earns you <b style={{ color: "#fff" }}>+100 XP</b> — they get <b style={{ color: "#fff" }}>+50</b>.
+                Each friend who finishes a test earns you <b style={{ color: "var(--surface-premium-ink)" }}>+100 XP</b> — they get <b style={{ color: "var(--surface-premium-ink)" }}>+50</b>.
               </p>
               <Button href="/app/invite" trailingIcon="arrow-right" size="sm" style={{ background: "#fff", color: "var(--brand-active)" }}>
                 Share invite
@@ -400,11 +400,11 @@ const PF_CSS = `
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 840, margin: "0 auto" },
   idRow: { display: "flex", alignItems: "center", gap: 18, marginBottom: 18 },
-  avatar: { width: 60, height: 60, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", color: "#fff", fontFamily: "var(--font-ui)", fontSize: 23, fontWeight: 800, boxShadow: "var(--shadow-md)" },
+  avatar: { width: 60, height: 60, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", color: "var(--text-on-brand)", fontFamily: "var(--font-ui)", fontSize: 23, fontWeight: 800, boxShadow: "var(--shadow-md)" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
   subLine: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 2 },
 
-  hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "radial-gradient(520px 280px at 88% -40%, color-mix(in oklab, var(--violet-400) 55%, transparent), transparent 70%), linear-gradient(155deg, var(--brand), var(--brand-active) 70%, var(--violet-700))", color: "#fff", marginBottom: 14 },
+  hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "radial-gradient(520px 280px at 88% -40%, color-mix(in oklab, var(--violet-400) 55%, transparent), transparent 70%), linear-gradient(155deg, var(--brand), var(--brand-active) 70%, var(--violet-700))", color: "var(--text-on-brand)", marginBottom: 14 },
   ringBox: { position: "relative", width: 128, height: 128, flex: "none" },
   ringCenter: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" },
   ringNum: { fontFamily: "var(--font-mono)", fontSize: 40, fontWeight: 600, lineHeight: 1, letterSpacing: "-0.02em" },
@@ -416,7 +416,7 @@ const S: Record<string, React.CSSProperties> = {
 
   duo: { marginBottom: 14, alignItems: "stretch" },
   nextCard: { display: "flex", alignItems: "center", gap: 16, padding: "20px 22px", background: "var(--surface)", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-solid)", textDecoration: "none", color: "inherit" },
-  nextIcon: { flex: "none", width: 48, height: 48, borderRadius: 14, background: "linear-gradient(160deg, var(--brand), var(--brand-active))", color: "#fff", display: "grid", placeItems: "center", boxShadow: "0 0 22px -6px var(--brand)" },
+  nextIcon: { flex: "none", width: 48, height: 48, borderRadius: 14, background: "linear-gradient(160deg, var(--brand), var(--brand-active))", color: "var(--text-on-brand)", display: "grid", placeItems: "center", boxShadow: "0 0 22px -6px var(--brand)" },
   nextEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--brand-active)" },
   nextTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, marginTop: 3 },
   nextSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", marginTop: 2 },
@@ -434,9 +434,9 @@ const S: Record<string, React.CSSProperties> = {
   achFoot: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", marginTop: 12 },
   achFootLink: { color: "var(--text-secondary)", fontWeight: 700, textDecoration: "none" },
 
-  invite: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-xl)", background: "linear-gradient(160deg, #2A2342, #14101F)", padding: 20, color: "#fff" },
+  invite: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-xl)", background: "linear-gradient(160deg, var(--surface-premium), var(--surface-premium-deep))", padding: 20, color: "var(--surface-premium-ink)" },
   inviteGlow: { position: "absolute", top: -80, right: -60, width: 240, height: 240, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--brand) 50%, transparent), transparent 64%)" },
-  inviteTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "#fff", whiteSpace: "nowrap" },
+  inviteTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--surface-premium-ink)", whiteSpace: "nowrap" },
   inviteText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "rgba(255,255,255,.7)", margin: "0 0 14px", lineHeight: 1.5 },
 
   quietCard: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", padding: "6px 22px 16px", marginBottom: 12 },

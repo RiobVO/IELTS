@@ -44,7 +44,7 @@ export default async function InvitePage() {
               <span style={S.title}>Your invite link</span>
             </div>
             <p style={S.text}>
-              Every friend who finishes their first test earns you <b style={{ color: "#fff" }}>+100 XP</b>, and gives them <b style={{ color: "#fff" }}>+50 XP</b> to start.
+              Every friend who finishes their first test earns you <b style={{ color: "var(--surface-premium-ink)" }}>+100 XP</b>, and gives them <b style={{ color: "var(--surface-premium-ink)" }}>+50 XP</b> to start.
             </p>
             <InviteLink url={url} />
             <div style={S.stats}>
@@ -61,7 +61,7 @@ const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 720, margin: "0 auto" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 4px" },
   lead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "0 0 20px" },
-  invite: { position: "relative", overflow: "hidden", background: "linear-gradient(160deg, #2A2342, #14101F)", borderRadius: "var(--radius-xl)", color: "#fff" },
+  invite: { position: "relative", overflow: "hidden", background: "linear-gradient(160deg, var(--surface-premium), var(--surface-premium-deep))", borderRadius: "var(--radius-xl)", color: "var(--surface-premium-ink)" },
   glow: { position: "absolute", top: -90, right: -70, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--brand) 50%, transparent), transparent 64%)" },
   titleRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8 },
   title: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-lg)" },
