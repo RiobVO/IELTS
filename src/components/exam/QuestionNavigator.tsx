@@ -14,7 +14,6 @@ interface QuestionNavigatorProps {
   questions: NavQuestion[];
   current: number;
   onJump?: (n: number) => void;
-  columns?: number;
   style?: CSSProperties;
 }
 
@@ -39,7 +38,7 @@ function NavCell({ q, active, onJump }: { q: NavQuestion; active: boolean; onJum
       style={{
         position: "relative",
         aspectRatio: "1 / 1",
-        minWidth: 34,
+        minWidth: 36,
         border: "none",
         borderRadius: "var(--radius-sm)",
         background: c.bg,
@@ -76,10 +75,12 @@ function Swatch({ bg, ring, dot, label }: { bg: string; ring?: string; dot?: boo
  * active > flagged > answered > unanswered. Клавиатурный фокус показывает
  * брендовый RING вместо resting-кольца. flagged несёт точку в углу.
  */
-export function QuestionNavigator({ questions, current, onJump, columns = 8, style }: QuestionNavigatorProps) {
+export function QuestionNavigator({ questions, current, onJump, style }: QuestionNavigatorProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)", ...style }}>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 6 }}>
+      {/* auto-fill: сетка сама выбирает число колонок под ширину пэйна (десктоп ~10,
+          узкий мобильный ~8) — без переполнения и без брейкпоинт-проп. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(36px, 1fr))", gap: 6 }}>
         {questions.map((q) => (
           <NavCell key={q.number} q={q} active={q.number === current} onJump={onJump} />
         ))}

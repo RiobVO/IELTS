@@ -65,6 +65,9 @@ export default function ExamRunner({
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [elapsed, setElapsed] = useState(0);
   const [current, setCurrent] = useState(questions[0]?.number ?? 1);
+  // Reading на мобильном: две панели → один full-width таб (Passage/Questions).
+  // Десктоп игнорирует это (обе панели видны, см. .exam-split CSS).
+  const [pane, setPane] = useState<"passage" | "questions">("passage");
   const [pending, startSubmit] = useTransition();
   const qScrollRef = useRef<HTMLDivElement>(null);
 
@@ -129,6 +132,7 @@ export default function ExamRunner({
 
   const jump = (n: number) => {
     setCurrent(n);
+    setPane("questions"); // на мобильном гарантируем, что таб вопросов активен
     const el = document.getElementById(`q-${n}`);
     const wrap = qScrollRef.current;
     if (el && wrap) wrap.scrollTo({ top: el.offsetTop - 14, behavior: "smooth" });
@@ -143,7 +147,7 @@ export default function ExamRunner({
     flagged: !!flags[String(q.number)],
   }));
   const nav = (
-    <QuestionNavigator questions={navQuestions} current={current} onJump={jump} columns={10} />
+    <QuestionNavigator questions={navQuestions} current={current} onJump={jump} />
   );
   const answeredCounter = (
     <span style={S.counter}>
@@ -156,7 +160,7 @@ export default function ExamRunner({
       <style>{READING_CSS}</style>
 
       {/* Top bar */}
-      <div style={S.top}>
+      <div className="exam-top" style={S.top}>
         <Link href="/app/reading" aria-label="Exit test" title="Exit test" className="exam-exit" style={S.exit}>
           <Icon name="arrow-left" size={18} strokeWidth={2.4} />
         </Link>
@@ -232,19 +236,32 @@ export default function ExamRunner({
           </div>
         </>
       ) : (
-        <div style={{ flex: 1, minHeight: 0, display: "flex", width: "100%", maxWidth: 1400, margin: "0 auto" }}>
-          {/* Passage pane — editorial layout + reader annotations (S6 / W2-1) */}
-          <PassagePane
-            contentItemId={contentItemId}
-            title={title}
-            category={category}
-            passages={passages}
-            initialAnnotations={initialAnnotations ?? []}
-          />
+        <>
+          {/* Mobile-only сегмент-переключатель панелей (скрыт ≥1024px). */}
+          <div className="exam-tabs" role="tablist" aria-label="Exam view" style={S.tabs}>
+            <button role="tab" aria-selected={pane === "passage"} onClick={() => setPane("passage")} style={tabBtn(pane === "passage")}>
+              <Icon name="book-open" size={16} strokeWidth={2.4} /> Passage
+            </button>
+            <button role="tab" aria-selected={pane === "questions"} onClick={() => setPane("questions")} style={tabBtn(pane === "questions")}>
+              Questions
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 700, opacity: 0.85 }}>{answered}/{questions.length}</span>
+            </button>
+          </div>
 
-          {/* Questions + navigator pane */}
-          <div style={S.qPane}>
-            <div style={S.navHead}>
+          <div className="exam-split" data-pane={pane} style={{ flex: 1, minHeight: 0, width: "100%", maxWidth: 1400, margin: "0 auto" }}>
+            {/* Passage pane — editorial layout + reader annotations (S6 / W2-1) */}
+            <PassagePane
+              className="exam-pane exam-pane-p"
+              contentItemId={contentItemId}
+              title={title}
+              category={category}
+              passages={passages}
+              initialAnnotations={initialAnnotations ?? []}
+            />
+
+            {/* Questions + navigator pane */}
+            <div className="exam-pane exam-pane-q" style={S.qPane}>
+              <div style={S.navHead}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 11 }}>
                 <span style={S.navTitle}>Question navigator</span>
                 {answeredCounter}
@@ -266,6 +283,7 @@ export default function ExamRunner({
             </div>
           </div>
         </div>
+        </>
       )}
     </div>
   );
@@ -278,7 +296,8 @@ const optBtn = (sel: boolean): React.CSSProperties => ({
   alignItems: "center",
   gap: 11,
   textAlign: "left",
-  padding: "11px 14px",
+  padding: "13px 14px",
+  minHeight: 46, // touch-комфортная цель
   borderRadius: "var(--radius-md)",
   border: `2px solid ${sel ? "var(--brand)" : "var(--border)"}`,
   background: sel ? "var(--brand-subtle)" : "var(--surface-raised)",
@@ -286,6 +305,25 @@ const optBtn = (sel: boolean): React.CSSProperties => ({
   fontFamily: "var(--font-ui)",
   fontSize: "var(--text-sm)",
   fontWeight: 600,
+  cursor: "pointer",
+  transition: "var(--transition-colors)",
+});
+
+// Сегмент-кнопка мобильного переключателя панелей (Passage / Questions).
+const tabBtn = (active: boolean): React.CSSProperties => ({
+  flex: 1,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 7,
+  height: 42,
+  borderRadius: "var(--radius-md)",
+  border: "none",
+  background: active ? "var(--brand)" : "var(--surface-inset)",
+  color: active ? "var(--text-on-brand)" : "var(--text-secondary)",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-sm)",
+  fontWeight: 700,
   cursor: "pointer",
   transition: "var(--transition-colors)",
 });
@@ -394,12 +432,35 @@ const READING_CSS = `
 .exam-exit:hover{background:var(--surface-hover)}
 @keyframes nine-blink{0%,100%{opacity:1}50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){[style*="nine-blink"]{animation:none!important}}
+
+/* --- Адаптив reading-раннера. База = мобильный: один full-width таб; ≥1024px =
+   две панели бок-о-бок (десктоп без изменений). display/flex/width переключаемых
+   узлов заданы ТОЛЬКО здесь, не inline — иначе media-query не победит. --- */
+.exam-top{padding:10px 12px;gap:9px}
+.exam-tabs{display:flex}
+.exam-split{display:flex}
+.exam-pane{min-width:0}
+.exam-pane-p,.exam-pane-q{display:flex;flex-direction:column}
+.exam-pane-p{flex:1}
+.exam-pane-q{flex:1}
+.exam-split[data-pane="passage"] .exam-pane-q{display:none}
+.exam-split[data-pane="questions"] .exam-pane-p{display:none}
+@media (min-width:1024px){
+  .exam-top{padding:12px 20px;gap:14px}
+  .exam-tabs{display:none}
+  .exam-pane-p{flex:1.15}
+  .exam-pane-q{flex:none;width:460px}
+  .exam-split[data-pane="passage"] .exam-pane-q,
+  .exam-split[data-pane="questions"] .exam-pane-p{display:flex}
+}
 `;
 
 const S: Record<string, React.CSSProperties> = {
   shell: { height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-base)" },
 
-  top: { display: "flex", alignItems: "center", gap: 14, padding: "12px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg-raised)", flex: "none" },
+  // padding/gap → .exam-top (адаптив)
+  top: { display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)", background: "var(--bg-raised)", flex: "none" },
+  tabs: { flex: "none", gap: 6, padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--bg-raised)" },
   exit: { flex: "none", width: 38, height: 38, borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", color: "var(--text-secondary)", textDecoration: "none" },
   topTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   topMeta: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
@@ -410,7 +471,8 @@ const S: Record<string, React.CSSProperties> = {
   sheetHint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
   counter: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
 
-  qPane: { width: 460, flex: "none", display: "flex", flexDirection: "column", background: "var(--bg-base)" },
+  // width/flex/display → .exam-pane-q (адаптив)
+  qPane: { flexDirection: "column", background: "var(--bg-base)" },
   navHead: { padding: "14px 20px", borderBottom: "1px solid var(--border)", flex: "none" },
   navTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--text-primary)", whiteSpace: "nowrap" },
 
