@@ -514,7 +514,9 @@ const S: Record<string, React.CSSProperties> = {
     borderRadius: "var(--radius-xl)",
     position: "relative",
     overflow: "hidden",
-    background: "linear-gradient(150deg, var(--brand) 0%, var(--brand-active) 100%)",
+    // Затемнён до brand-active→deeper: светлейший стоп = violet-700, чтобы белый
+    // ink-текст (вкл. body@0.85 / eyebrow@0.82) держал WCAG AA (5.0–5.3:1).
+    background: "linear-gradient(150deg, var(--brand-active), color-mix(in oklab, var(--brand-active) 78%, black))",
     boxShadow: "var(--shadow-md)",
     display: "flex",
     flexDirection: "column",
@@ -551,7 +553,7 @@ const S: Record<string, React.CSSProperties> = {
   flameNum: { fontFamily: "var(--font-mono)", fontSize: 32, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1, letterSpacing: "-0.02em" },
   flameSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)", marginTop: 3 },
   weekRow: { display: "flex", gap: 7, marginTop: 18 },
-  weekLab: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-disabled)", fontWeight: 600 },
+  weekLab: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", fontWeight: 600 },
   leagueRow: { display: "flex", alignItems: "center", gap: 13, padding: "16px 0", margin: "18px 0", borderTop: "1px solid var(--border-subtle)", textDecoration: "none", color: "inherit" },
   leagueIc: { width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)" },
   leagueName: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 600, color: "var(--text-secondary)" },

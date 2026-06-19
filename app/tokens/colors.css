@@ -84,7 +84,9 @@
   --warn-text:      oklch(0.520 0.120 65);
   --warn-subtle:    var(--gold-200);
   --error:          var(--red-500);
-  --error-text:     var(--red-600);
+  /* darkened from red-600 → AA as small text on error-subtle / white / surface-inset
+     (red-600 gave only 3.52:1 on error-subtle); now ≥4.9:1, still clearly error-red */
+  --error-text:     oklch(0.505 0.205 25);
   --error-subtle:   var(--red-200);
   --error-edge:     var(--red-600);
   --neutral-edge:   var(--slate-300);

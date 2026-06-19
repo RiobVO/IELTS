@@ -26,6 +26,10 @@ a { color: var(--text-link); text-decoration: none; }
 
 ::selection { background: color-mix(in oklab, var(--brand) 40%, transparent); }
 
+/* Placeholder — explicit AA token, not the UA default (which varies and often
+   fails contrast; Firefox also dims it, hence opacity:1). text-muted = ≥5.3:1. */
+::placeholder { color: var(--text-muted); opacity: 1; }
+
 /* Visible, branded focus ring — keyboard only */
 :focus-visible {
   outline: none;
