@@ -232,7 +232,7 @@ export default function ExamRunner({
           </div>
         </>
       ) : (
-        <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", width: "100%", maxWidth: 1400, margin: "0 auto" }}>
           {/* Passage pane — editorial layout + reader annotations (S6 / W2-1) */}
           <PassagePane
             contentItemId={contentItemId}
