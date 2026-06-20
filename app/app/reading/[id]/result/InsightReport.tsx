@@ -70,20 +70,22 @@ export function AccuracyByType({ rows }: { rows: AccRow[] }) {
   return (
     <div className="ir-card" style={S.card} ref={ref}>
       <style>{IR_CSS}</style>
-      <div style={S.cardTitle}>
+      <h2 style={S.cardTitle}>
         Accuracy by question type{" "}
-        <span style={S.cardHint}>· tap to see what you missed</span>
-      </div>
+        <span aria-hidden="true" style={S.cardHint}>· tap to see what you missed</span>
+      </h2>
       <div>
-        {rows.map((r) => {
+        {rows.map((r, i) => {
           const p = Math.round((r.correct / r.total) * 100);
           const isOpen = !!open[r.type];
+          const panelId = `acc-panel-${i}`;
           return (
             <div key={r.type} className={`ir-row${isOpen ? " open" : ""}`}>
               <button
                 type="button"
                 className="ir-head"
                 aria-expanded={isOpen}
+                aria-controls={panelId}
                 onClick={() => setOpen((o) => ({ ...o, [r.type]: !o[r.type] }))}
               >
                 <span className="ir-accname" style={S.accName}>
@@ -100,7 +102,7 @@ export function AccuracyByType({ rows }: { rows: AccRow[] }) {
                   <Icon name="chevron-down" size={18} />
                 </span>
               </button>
-              <div className="ir-panel">
+              <div className="ir-panel" id={panelId}>
                 <div>
                   <div style={S.panelIn}>
                     <p style={S.missLead}>
@@ -203,13 +205,12 @@ export function AnswerKeyFilter({ items, types }: { items: AKItem[]; types: AKTy
 
   return (
     <div>
-      <div className="ir-chips" style={S.chips} role="tablist" aria-label="Filter answers">
+      <div className="ir-chips" style={S.chips} role="group" aria-label="Filter answers">
         {chips.map((c) => (
           <button
             key={c.type}
             type="button"
-            role="tab"
-            aria-selected={filter === c.type}
+            aria-pressed={filter === c.type}
             className={`ir-chip${filter === c.type ? " on" : ""}`}
             style={filter === c.type ? { ...S.chip, ...S.chipOn } : S.chip}
             onClick={() => setFilter(c.type)}
@@ -280,18 +281,25 @@ const IR_CSS = `
 .ir-row.open .ir-chev{transform:rotate(180deg)}
 .ir-panel{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s var(--ease-out)}
 .ir-row.open .ir-panel{grid-template-rows:1fr}
-.ir-panel>div{overflow:hidden}
+/* visibility:hidden (not just clipped height) pulls the collapsed panel — and
+   its Practise link — out of the tab order / a11y tree; reveals on open. */
+.ir-panel>div{overflow:hidden;visibility:hidden;transition:visibility .3s}
+.ir-row.open .ir-panel>div{visibility:visible}
 .ir-practise:hover{filter:brightness(0.97)}
 .ir-chip:hover{color:var(--text-primary)}
 @media (min-width:560px){ .ir-accname{width:190px} }
+@media (pointer:coarse){
+  .ir-chip{min-height:44px}
+  .ir-practise{min-height:44px}
+}
 @media (prefers-reduced-motion:reduce){
-  .ir-chev,.ir-panel{transition:none}
+  .ir-chev,.ir-panel,.ir-panel>div{transition:none}
 }
 `;
 
 const S: Record<string, CSSProperties> = {
   card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", padding: "20px 22px", marginBottom: 14 },
-  cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", marginBottom: 14 },
+  cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", margin: "0 0 14px" },
   cardHint: { fontWeight: 500, color: "var(--text-muted)", fontSize: "var(--text-sm)" },
 
   accName: { flex: "none", display: "flex", alignItems: "center", gap: 8, minWidth: 0, overflow: "hidden", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)" },
@@ -308,7 +316,7 @@ const S: Record<string, CSSProperties> = {
   practiseBtn: { display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-primary)", background: "var(--surface)", border: "1px solid var(--border-strong)", boxShadow: "var(--shadow-solid)", padding: "9px 14px", borderRadius: "var(--radius-md)", textDecoration: "none" },
 
   chips: { display: "flex", gap: 6, background: "var(--surface-inset)", padding: 4, borderRadius: "var(--radius-md)", flexWrap: "wrap" },
-  chip: { border: 0, background: "transparent", fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-xs)", color: "var(--text-muted)", padding: "7px 12px", borderRadius: 10, cursor: "pointer" },
+  chip: { display: "inline-flex", alignItems: "center", justifyContent: "center", border: 0, background: "transparent", fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-xs)", color: "var(--text-muted)", padding: "7px 12px", borderRadius: 10, cursor: "pointer" },
   chipOn: { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-sm)" },
 
   empty: { padding: 24, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
