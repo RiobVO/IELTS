@@ -16,7 +16,6 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
 // Тот же expo-reveal, что и --ease-out в app/tokens/motion.css.
 const EASE_OUT = "cubic-bezier(0.16, 1, 0.3, 1)";
-const SPRING = "cubic-bezier(0.34, 1.56, 0.64, 1)"; // = --ease-spring
 
 function prefersReduced(): boolean {
   return (
@@ -128,55 +127,6 @@ export function CountUp({
     <span ref={ref} style={{ fontVariantNumeric: "tabular-nums" }}>
       {final}
     </span>
-  );
-}
-
-/** Оборачивает контейнер accuracy-баров: каждый `[data-grow]` вырастает scaleX
- *  каскадом worst-first, `[data-weakest]`-бейдж выскакивает spring-pop. */
-export function RevealBars({
-  children,
-  style,
-}: {
-  children: ReactNode;
-  style?: CSSProperties;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (prefersReduced()) return;
-    const root = ref.current;
-    if (!root) return;
-    const fills = Array.from(root.querySelectorAll<HTMLElement>("[data-grow]"));
-    const anims: Animation[] = [];
-    fills.forEach((el, i) => {
-      el.style.transformOrigin = "left center";
-      anims.push(
-        el.animate(
-          [{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }],
-          { duration: 620, delay: 320 + i * 85, easing: EASE_OUT, fill: "backwards" },
-        ),
-      );
-    });
-    // WEAKEST-бейдж выскакивает в момент, когда слабейший бар почти дорос.
-    const weak = root.querySelector<HTMLElement>("[data-weakest]");
-    if (weak) {
-      anims.push(
-        weak.animate(
-          [
-            { opacity: 0, transform: "scale(0.6)" },
-            { opacity: 1, transform: "scale(1)" },
-          ],
-          { duration: 440, delay: 760, easing: SPRING, fill: "backwards" },
-        ),
-      );
-    }
-    return () => anims.forEach((a) => a.cancel());
-  }, []);
-
-  return (
-    <div ref={ref} style={style}>
-      {children}
-    </div>
   );
 }
 
