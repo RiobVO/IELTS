@@ -121,5 +121,11 @@
   --surface-logo-deep:      #0E0B17;
   --surface-logo-border:    #2C2640;
 
+  /* Inverse neutral surface (dark panels in a light app): badge hero spotlight,
+     fixed tooltips. Semantic alias over the raw graphite ramp; ink is near-white. */
+  --surface-inverse:        var(--slate-900);
+  --surface-inverse-deep:   var(--slate-950);
+  --surface-inverse-ink:    oklch(0.99 0 0);
+
   color-scheme: light;
 }
