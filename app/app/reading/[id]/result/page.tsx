@@ -69,7 +69,11 @@ export default async function ResultPage({
       .where(eq(question.contentItemId, id))
       .orderBy(question.number),
     db
-      .select({ title: contentItem.title, category: contentItem.category })
+      .select({
+        title: contentItem.title,
+        category: contentItem.category,
+        durationSeconds: contentItem.durationSeconds,
+      })
       .from(contentItem)
       .where(eq(contentItem.id, id))
       .limit(1),
@@ -136,11 +140,18 @@ export default async function ResultPage({
   // A 0% result must never read as a win (no green "Top 100%", no green "+0%").
   const NEUTRAL = "var(--text-secondary)";
   const metrics: { value: string; label: string; color: string }[] = [];
-  if (att.timeUsedSeconds != null) {
-    metrics.push({ value: fmtDuration(att.timeUsedSeconds), label: "Time taken", color: "var(--sky-500)" });
+  // Server stamps time as (submit − start) with no active-time cap (§4.6), so an
+  // attempt left open and submitted days later yields absurd values ("3443m").
+  // Anything far past the test's allotted time is unreliable, not real reading
+  // time — omit it rather than display garbage. (A cap at submit-write is the
+  // separate root follow-up; this guards every legacy row already in the DB.)
+  const allottedSec = ci[0]?.durationSeconds ?? 3600;
+  const timeReliable = att.timeUsedSeconds != null && att.timeUsedSeconds <= allottedSec * 3;
+  if (timeReliable) {
+    metrics.push({ value: fmtDuration(att.timeUsedSeconds!), label: "Time taken", color: "var(--sky-500)" });
     if (result.total > 0) {
       // Sub-second averages round to "0s", which reads as broken — floor to "<1s".
-      const avg = att.timeUsedSeconds / result.total;
+      const avg = att.timeUsedSeconds! / result.total;
       metrics.push({ value: avg < 1 ? "<1s" : fmtDuration(Math.round(avg)), label: "Avg / question", color: "var(--brand)" });
     }
   }
