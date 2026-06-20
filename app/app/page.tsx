@@ -150,6 +150,15 @@ export default async function Dashboard() {
   const weakest = weak[0] ?? null;
   const hasAttempts = attempts.length > 0;
 
+  // Доля верных по всем типам — для тёплой строки нормализации, когда юзер реально
+  // буксует. Бренд candid, но не карающий: не сыпать «worst / lose points» без
+  // поддержки в самый уязвимый момент (ученик-не-носитель на низком старте).
+  const totals = Object.values(agg).reduce(
+    (s, v) => ({ c: s.c + v.correct, t: s.t + v.total }),
+    { c: 0, t: 0 },
+  );
+  const struggling = totals.t > 0 && totals.c / totals.t < 0.35;
+
   return (
     <AppShell active="dashboard">
       <style>{DASH_CSS}</style>
@@ -187,6 +196,11 @@ export default async function Dashboard() {
                 " to a higher band."
               )}
             </p>
+            {struggling && (
+              <p style={S.lossNorm}>
+                Everyone starts here — pick one type and your band climbs faster than you think.
+              </p>
+            )}
             {weak.slice(0, 3).map((w, i) => (
               <LossRow key={w.type} item={w} idx={i} />
             ))}
@@ -246,11 +260,11 @@ function FocusCard({ weakest }: { weakest: Weak | null }) {
           <>
             <h2 style={S.focusTitle}>{weakest.label}</h2>
             <p style={S.focusText}>
-              Your weakest type — only{" "}
+              Your weakest type so far —{" "}
               <b style={{ color: "#fff" }}>
                 {weakest.correct} of {weakest.total} right
               </b>
-              . It has the biggest single impact on your band.
+              . Closing it is the single fastest move toward your band.
             </p>
             <div style={{ marginTop: 20 }}>
               <div style={S.focusTrack}>
@@ -612,8 +626,11 @@ const S: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap",
   },
   drillAny: { marginLeft: "auto", color: "var(--brand-active)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
-  lossLead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "2px 0 14px" },
+  lossLead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "2px 0 12px" },
   leadStrong: { color: "var(--text-secondary)", fontWeight: 700 },
+  // Тёплая строка нормализации (full-bg тинт, без side-stripe) — только при низком
+  // старте: candid-секция остаётся, но не бьёт ученика без поддержки.
+  lossNorm: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--brand-active)", background: "var(--brand-subtle)", borderRadius: "var(--radius-md)", padding: "10px 14px", margin: "0 0 14px", lineHeight: 1.5 },
 
   /* Loss spine */
   loss: { display: "flex", alignItems: "center", gap: 16, padding: "13px 0", borderTop: "1px solid var(--border-subtle)", textDecoration: "none", color: "inherit" },
