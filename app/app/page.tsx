@@ -356,7 +356,9 @@ function WeekCard({
           ) : (
             <span style={S.leagueHint}>Take a rated test</span>
           )}
-          <span style={S.leagueRating}>{rating}</span>
+          {/* Голую Elo-цифру (rating) прячем до ranked — для не-носителя на старте
+              «1000» это шум; показываем её только когда место в лиге уже есть. */}
+          {rank != null && <span style={S.leagueRating}>{rating}</span>}
         </Link>
         <div className="dash-week-cta">
           <Button icon="play" href="/app/reading" style={{ justifyContent: "center" }}>
@@ -417,10 +419,13 @@ function BandReadout({
         <div style={S.bandLabel}>Your band</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
           <span style={S.bandNum}>{band}</span>
-          {target != null && (
+          {target != null ? (
             <span style={S.bandTarget}>
               / target <span style={{ fontFamily: "var(--font-mono)", color: "var(--brand)" }}>{target}</span>
             </span>
+          ) : (
+            // Якорь шкалы 0–9 для не-носителя, когда target ещё не задан (mobile-видимо).
+            <span style={S.bandTarget}>/ 9</span>
           )}
         </div>
       </div>
