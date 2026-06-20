@@ -257,7 +257,7 @@ function FocusCard({ weakest }: { weakest: Weak | null }) {
               </div>
             </div>
             <div style={S.focusCta}>
-              <Button variant="secondary" trailingIcon="arrow-right" href="/app/reading" style={{ color: "var(--brand-active)" }}>
+              <Button variant="secondary" trailingIcon="arrow-right" href={`/app/reading?q_type=${encodeURIComponent(weakest.type)}`} style={{ color: "var(--brand-active)" }}>
                 Fix this weakness
               </Button>
             </div>
@@ -372,7 +372,7 @@ function BandReadout({
               : "Take your first test to start tracking your band."}
           </p>
           <div style={{ marginTop: 12 }}>
-            <Link href="/app/reading" style={S.drillAny}>
+            <Link href={hasAttempts ? "/app/reading?category=full_reading" : "/app/reading"} style={S.drillAny}>
               {hasAttempts ? "Sit a full mock →" : "Take a test →"}
             </Link>
           </div>
@@ -423,7 +423,8 @@ function LossRow({ item, idx }: { item: Weak; idx: number }) {
   const lost = item.total - item.correct;
   const worst = idx === 0;
   return (
-    <Link href="/app/reading" style={S.loss}>
+    // Deep-link прямо в дрилл этого типа — каталог фильтрует по ?q_type (_CatalogView).
+    <Link href={`/app/reading?q_type=${encodeURIComponent(item.type)}`} style={S.loss}>
       <span style={{ ...S.lossRank, ...(worst ? S.lossRankWorst : null) }}>{idx + 1}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={S.lossName}>{item.label}</div>
