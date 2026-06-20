@@ -131,27 +131,35 @@ export default async function ResultPage({
   const title = ci[0]?.title ?? "Your report";
   const category = ci[0]?.category ?? null;
 
-  // Honest key metrics — only those backed by real data are rendered.
+  // Honest key metrics — only those backed by real data are rendered. Colour is
+  // semantic: green ONLY when the number is genuinely good; neutral otherwise.
+  // A 0% result must never read as a win (no green "Top 100%", no green "+0%").
+  const NEUTRAL = "var(--text-secondary)";
   const metrics: { value: string; label: string; color: string }[] = [];
   if (att.timeUsedSeconds != null) {
     metrics.push({ value: fmtDuration(att.timeUsedSeconds), label: "Time taken", color: "var(--sky-500)" });
     if (result.total > 0) {
-      metrics.push({ value: `${Math.round(att.timeUsedSeconds / result.total)}s`, label: "Avg / question", color: "var(--brand)" });
+      // Sub-second averages round to "0s", which reads as broken — floor to "<1s".
+      const avg = att.timeUsedSeconds / result.total;
+      metrics.push({ value: avg < 1 ? "<1s" : fmtDuration(Math.round(avg)), label: "Avg / question", color: "var(--brand)" });
     }
   }
   const pct = pctRow[0] ?? { total: 0, below: 0 };
   if (pct.total >= 5 && att.rawScore != null) {
-    const topPct = Math.max(1, 100 - Math.round((pct.below / pct.total) * 100));
-    metrics.push({ value: `Top ${topPct}%`, label: "vs other students", color: "var(--success-text)" });
+    // Percentile rank = share of attempts scored strictly below this one. Higher
+    // is better and intuitive ("you beat X%"), unlike "Top X%" where 100% is the
+    // WORST result. Green only once you're genuinely ahead of the field.
+    const ahead = Math.round((pct.below / pct.total) * 100);
+    metrics.push({ value: `Ahead of ${ahead}%`, label: "of other students", color: ahead >= 50 ? "var(--success-text)" : NEUTRAL });
   }
   const prev = prevRows[0];
   if (prev) {
     if (banded && prev.bandScore != null) {
       const d = Number(att.bandScore) - Number(prev.bandScore);
-      metrics.push({ value: `${d >= 0 ? "+" : ""}${d.toFixed(1)}`, label: "Band since last", color: d >= 0 ? "var(--success-text)" : "var(--error-text)" });
+      metrics.push({ value: `${d > 0 ? "+" : ""}${d.toFixed(1)}`, label: "Band since last", color: d > 0 ? "var(--success-text)" : d < 0 ? "var(--error-text)" : NEUTRAL });
     } else if (prev.rawScore != null && result.total > 0) {
       const dp = result.percent - Math.round((prev.rawScore / result.total) * 100);
-      metrics.push({ value: `${dp >= 0 ? "+" : ""}${dp}%`, label: "Since last test", color: dp >= 0 ? "var(--success-text)" : "var(--error-text)" });
+      metrics.push({ value: `${dp > 0 ? "+" : ""}${dp}%`, label: "Since last test", color: dp > 0 ? "var(--success-text)" : dp < 0 ? "var(--error-text)" : NEUTRAL });
     }
   }
 
