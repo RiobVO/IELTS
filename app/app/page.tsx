@@ -154,7 +154,7 @@ export default async function Dashboard() {
       <style>{DASH_CSS}</style>
       <div className="dash-wrap" style={S.wrap}>
         {/* Greeting */}
-        <div style={S.greet}>
+        <div className="dash-greet" style={S.greet}>
           <div>
             <div style={S.eyebrow}>Welcome back</div>
             <h1 className="dash-hi" style={S.hi}>Hi, {name}</h1>
@@ -192,9 +192,20 @@ export default async function Dashboard() {
                 " to a higher band."
               )}
             </p>
-            {weak.map((w, i) => (
+            {weak.slice(0, 3).map((w, i) => (
               <LossRow key={w.type} item={w} idx={i} />
             ))}
+            {weak.length > 3 && (
+              <details className="dash-more">
+                <summary style={S.moreSummary}>
+                  Show {weak.length - 3} more
+                  <Icon name="chevron-down" size={16} strokeWidth={2.4} />
+                </summary>
+                {weak.slice(3).map((w, i) => (
+                  <LossRow key={w.type} item={w} idx={i + 3} />
+                ))}
+              </details>
+            )}
           </div>
         )}
 
@@ -290,7 +301,7 @@ function WeekCard({
     off: { background: "var(--surface-inset)" },
   } as const;
   return (
-    <div style={{ ...S.card, ...S.week }}>
+    <div className="dash-week" style={{ ...S.card, ...S.week }}>
       <div style={S.label}>This week</div>
       <div style={S.flameBlk}>
         <span style={S.flameIc}>
@@ -349,7 +360,7 @@ function BandReadout({
   // Нет band → не рисуем фейковую шкалу: честный CTA в зависимости от истории.
   if (band == null) {
     return (
-      <div className="dash-band" style={{ ...S.card, ...S.bandCard }}>
+      <div className="dash-band dash-bandblk" style={{ ...S.card, ...S.bandCard }}>
         <div style={{ flex: "none" }}>
           <div style={S.bandLabel}>Your band</div>
           <div style={S.bandEmptyNum}>—</div>
@@ -378,7 +389,7 @@ function BandReadout({
         ? `${gap.toFixed(1)} band to go`
         : "Target reached 🎯";
   return (
-    <div style={{ ...S.card, ...S.bandCard }}>
+    <div className="dash-bandblk" style={{ ...S.card, ...S.bandCard }}>
       <div style={{ flex: "none" }}>
         <div style={S.bandLabel}>Your band</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
@@ -467,15 +478,26 @@ function TestRow({ a }: { a: AttemptRow }) {
 const DASH_CSS = `
 .dash-wrap{padding:20px 16px 48px}
 .dash-hi{font-size:24px;white-space:normal}
-.dash-hero{display:grid;grid-template-columns:1fr;gap:14px}
+/* Мобайл (база): .dash-hero растворяется (display:contents), его дети Focus/Week
+   становятся прямыми flex-элементами .dash-wrap, и порядок задаём через order —
+   сначала фокус и диагностика слабостей (ядро экрана), вовлечение (week) и история
+   уходят ниже, чтобы payload не был закопан под двумя hero-карточками на телефоне. */
+.dash-hero{display:contents}
+.dash-greet{order:0}
+.dash-focus{order:1;padding:24px}
+.dash-sect{order:2;padding:20px 16px}
+.dash-bandblk{order:3}
+.dash-week{order:4}
+.dash-sect-tight{order:5;padding:18px 16px 8px}
 .dash-band{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
-.dash-focus{padding:24px}
-.dash-sect{padding:20px 16px}
-.dash-sect-tight{padding:18px 16px 8px}
+.dash-more summary{list-style:none;cursor:pointer}
+.dash-more summary::-webkit-details-marker{display:none}
 @media (min-width:768px){
   .dash-wrap{padding:32px 28px 56px}
   .dash-hi{font-size:30px;white-space:nowrap}
-  .dash-hero{grid-template-columns:1.45fr 1fr;gap:18px}
+  /* Десктоп: восстанавливаем 2-колоночный hero и DOM-порядок секций. */
+  .dash-hero{display:grid;grid-template-columns:1.45fr 1fr;gap:18px}
+  .dash-greet,.dash-focus,.dash-sect,.dash-bandblk,.dash-week,.dash-sect-tight{order:0}
   .dash-band{flex-direction:row;align-items:center;gap:32px}
   .dash-focus{padding:34px}
   .dash-sect{padding:28px 30px}
@@ -530,7 +552,7 @@ const S: Record<string, React.CSSProperties> = {
     fontFamily: "var(--font-ui)",
     fontSize: "var(--text-xs)",
     fontWeight: 800,
-    color: "rgba(255,255,255,0.82)",
+    color: "rgba(255,255,255,0.92)",
   },
   focusTitle: { fontFamily: "var(--font-ui)", fontSize: 30, fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "#fff", margin: "14px 0 0" },
   focusText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", lineHeight: 1.55, color: "rgba(255,255,255,0.85)", margin: "11px 0 0", maxWidth: 420, textWrap: "pretty" },
@@ -565,7 +587,9 @@ const S: Record<string, React.CSSProperties> = {
   bandCard: { padding: "24px 28px" },
   bandNum: { fontFamily: "var(--font-mono)", fontSize: 56, lineHeight: 1, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em" },
   bandTarget: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-muted)" },
-  bandEmptyNum: { fontFamily: "var(--font-mono)", fontSize: 56, lineHeight: 1, fontWeight: 600, color: "var(--text-disabled)", letterSpacing: "-0.02em", marginTop: 8 },
+  // Пустое состояние band: absence намеренно тихая (34px, не 56px) — disabled-«—»
+  // не должно быть одним из крупнейших элементов экрана и читаться как «сломано».
+  bandEmptyNum: { fontFamily: "var(--font-mono)", fontSize: 34, lineHeight: 1, fontWeight: 600, color: "var(--text-disabled)", letterSpacing: "-0.02em", marginTop: 8 },
   bandEmptyText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", lineHeight: 1.5, color: "var(--text-muted)", margin: 0, maxWidth: 460 },
   bandScale: { position: "relative", height: 12, borderRadius: "var(--radius-full)", background: "var(--surface-inset)" },
   bandFill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: "var(--radius-full)", background: "linear-gradient(90deg, var(--brand-active), var(--brand))" },
@@ -593,7 +617,10 @@ const S: Record<string, React.CSSProperties> = {
   lossName: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   lossTrack: { height: 7, background: "var(--surface-inset)", borderRadius: "var(--radius-full)", overflow: "hidden", marginTop: 8 },
   lossScore: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", minWidth: 46, textAlign: "right" },
-  lossPts: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--error-text)", background: "var(--error-subtle)", borderRadius: "var(--radius-full)", padding: "4px 9px", minWidth: 58, textAlign: "center" },
+  // Нейтральная пилюля (не красно-залитая): единственный красный акцент в списке —
+  // ранг худшей строки (lossRankWorst), а не каскад из пяти красных пятен.
+  lossPts: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-muted)", background: "var(--surface-inset)", borderRadius: "var(--radius-full)", padding: "4px 9px", minWidth: 58, textAlign: "center" },
+  moreSummary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "13px 0 2px", borderTop: "1px solid var(--border-subtle)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--brand-active)" },
 
   /* Recent tests */
   trow: { display: "flex", alignItems: "center", gap: 14, padding: "15px 0", borderBottom: "1px solid var(--border-subtle)", textDecoration: "none", color: "inherit" },
