@@ -13,6 +13,7 @@ import { Badge } from "@/components/core/Badge";
 import { Icon } from "@/components/core/icons";
 import BadgeUnlock from "./BadgeUnlock";
 import { ShareResult } from "./ShareResult";
+import { AnimatedDonut, CountUp, RevealBars, FadeUp } from "./reveal";
 
 export const dynamic = "force-dynamic";
 
@@ -204,10 +205,16 @@ export default async function ResultPage({
         {/* Top metrics — donut + band + key metrics */}
         <div className="res-metrics" style={S.metricsCard}>
           <div style={S.donutBlock}>
-            <Donut pct={correctPct} />
+            <AnimatedDonut pct={correctPct} />
             <div>
               <div style={S.metricEyebrow}>{banded ? "Band score" : "Score"}</div>
-              <div style={S.bandBig}>{banded ? att.bandScore : `${result.percent}%`}</div>
+              <div style={S.bandBig}>
+                <CountUp
+                  value={banded ? Number(att.bandScore) : result.percent}
+                  decimals={banded ? 1 : 0}
+                  suffix={banded ? "" : "%"}
+                />
+              </div>
               <div style={S.rawLine}>
                 {result.rawScore}/{result.total} correct
               </div>
@@ -229,17 +236,17 @@ export default async function ResultPage({
         {perType.length > 0 && (
           <div className="res-card" style={S.card}>
             <div style={S.cardTitle}>Accuracy by question type</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+            <RevealBars style={{ display: "flex", flexDirection: "column", gap: 13 }}>
               {perType.map(([type, s], i) => {
                 const p = Math.round((s.correct / s.total) * 100);
                 return (
                   <div key={type} className="res-acc" style={S.accRow}>
                     <div className="res-accname" style={S.accName}>
                       <span style={S.accLabel}>{qtypeLabel(type)}</span>
-                      {i === 0 && <span className="res-weakest" style={S.weakest}>WEAKEST</span>}
+                      {i === 0 && <span data-weakest className="res-weakest" style={S.weakest}>WEAKEST</span>}
                     </div>
                     <div style={S.accTrack}>
-                      <div style={{ height: "100%", width: `${Math.max(p, 2)}%`, borderRadius: "var(--radius-full)", background: barColor(p) }} />
+                      <div data-grow style={{ height: "100%", width: `${Math.max(p, 2)}%`, borderRadius: "var(--radius-full)", background: barColor(p) }} />
                     </div>
                     <span style={{ ...S.accScore, color: barText(p) }}>
                       {s.correct}/{s.total}
@@ -250,24 +257,26 @@ export default async function ResultPage({
                   </div>
                 );
               })}
-            </div>
+            </RevealBars>
           </div>
         )}
 
         {/* Recommendation */}
         {weakest && (
-          <div style={S.recoCard}>
-            <span style={S.recoIcon}>
-              <Icon name="target" size={20} strokeWidth={2.3} />
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <b style={{ color: "var(--text-primary)" }}>Recommended:</b> start with{" "}
-              {qtypeLabel(weakest[0])} — your weakest type and the fastest band gain.
+          <FadeUp delayMs={620}>
+            <div style={S.recoCard}>
+              <span style={S.recoIcon}>
+                <Icon name="target" size={20} strokeWidth={2.3} />
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b style={{ color: "var(--text-primary)" }}>Recommended:</b> start with{" "}
+                {qtypeLabel(weakest[0])} — your weakest type and the fastest band gain.
+              </div>
+              <Button href={`/app/reading?q_type=${encodeURIComponent(weakest[0])}`} trailingIcon="arrow-right" style={{ flex: "none" }}>
+                Start
+              </Button>
             </div>
-            <Button href={`/app/reading?q_type=${encodeURIComponent(weakest[0])}`} trailingIcon="arrow-right" style={{ flex: "none" }}>
-              Start
-            </Button>
-          </div>
+          </FadeUp>
         )}
 
         {/* Answer key. Everyone sees right/wrong per question. The correct answer,
@@ -339,39 +348,6 @@ export default async function ResultPage({
         </div>
       </div>
     </AppShell>
-  );
-}
-
-/* Donut — % correct, server SVG. */
-function Donut({ pct }: { pct: number }) {
-  const size = 120;
-  const sw = 18;
-  const r = (size - sw) / 2;
-  const cx = size / 2;
-  const C = 2 * Math.PI * r;
-  const p = Math.max(0, Math.min(1, pct));
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flex: "none" }}>
-      <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--error-subtle)" strokeWidth={sw} />
-      <circle
-        cx={cx}
-        cy={cx}
-        r={r}
-        fill="none"
-        stroke="var(--success)"
-        strokeWidth={sw}
-        strokeLinecap="round"
-        strokeDasharray={C}
-        strokeDashoffset={C * (1 - p)}
-        transform={`rotate(-90 ${cx} ${cx})`}
-      />
-      <text x={cx} y={cx - 2} textAnchor="middle" fontFamily="var(--font-mono)" fontSize="26" fontWeight="600" fill="var(--text-primary)">
-        {Math.round(p * 100)}%
-      </text>
-      <text x={cx} y={cx + 16} textAnchor="middle" fontFamily="var(--font-ui)" fontSize="10" fontWeight="600" fill="var(--text-muted)">
-        correct
-      </text>
-    </svg>
   );
 }
 
