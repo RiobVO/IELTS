@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 14; // 13 from §5 + `payment` (2D, see SCHEMA_NOTES.md)
+const APP_TABLE_COUNT = 16; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014)
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);

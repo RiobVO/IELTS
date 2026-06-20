@@ -403,6 +403,36 @@ export const leaderboardEntry = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
+/* leaderboard_snapshot — periodic rank snapshot for movement (▲/▼)            */
+/* leaderboard_entry is fully rebuilt on every rated attempt, so it can't hold */
+/* a previous rank; a cron copies ranks here and the read computes the delta.  */
+/* Owner-path only (Drizzle); RLS on with no anon/authenticated grants.        */
+/* -------------------------------------------------------------------------- */
+export const leaderboardSnapshot = pgTable(
+  "leaderboard_snapshot",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profile.id, { onDelete: "cascade" }),
+    period: text("period").notNull(),
+    scope: text("scope").notNull().default("global"),
+    rank: integer("rank").notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("leaderboard_snapshot_user_period_scope_key").on(
+      t.userId,
+      t.period,
+      t.scope,
+    ),
+    index("leaderboard_snapshot_lookup_idx").on(t.period, t.scope, t.userId),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
 /* annotation — reader highlights & notes (W2-1 / REDESIGN S6)                 */
 /* offset-anchored within a passage's plain text; owner-path writes, own reads */
 /* -------------------------------------------------------------------------- */
