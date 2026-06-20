@@ -37,7 +37,19 @@ export function BadgesMotion() {
     if (!root) return;
     const anims: Animation[] = [];
 
-    if (!prefersReduced()) {
+    // Полную entrance-хореографию играем один раз за сессию: всё уже в финальном
+    // состоянии (server-render), так что на повторных заходах показываем сразу,
+    // не заставляя возвращающегося пользователя ждать ~1.3 с каждый раз.
+    let firstPlay = true;
+    try {
+      firstPlay = !sessionStorage.getItem("bdg-motion-played");
+      if (firstPlay) sessionStorage.setItem("bdg-motion-played", "1");
+    } catch {
+      // private mode / storage недоступен — деградируем к «играть как раньше».
+      firstPlay = true;
+    }
+
+    if (!prefersReduced() && firstPlay) {
       root.querySelectorAll<HTMLElement>("[data-countup]").forEach((el) =>
         countUp(el, Number(el.dataset.countup) || 0, 850),
       );
@@ -82,9 +94,14 @@ export function BadgesMotion() {
     // Tooltip — hover AND keyboard focus; positioned fixed so cards never clip it.
     const tip = tipRef.current;
     if (!tip) return () => anims.forEach((a) => a.cancel());
+    let described: HTMLElement | null = null;
     const show = (el: HTMLElement) => {
       if (!el.dataset.tip) return;
       tip.textContent = el.dataset.tip;
+      // Связь для скринридера: фокус на узле → tooltip озвучивается как описание.
+      if (described && described !== el) described.removeAttribute("aria-describedby");
+      described = el;
+      el.setAttribute("aria-describedby", "bdg-tip");
       tip.classList.add("show");
       const r = el.getBoundingClientRect();
       const t = tip.getBoundingClientRect();
@@ -100,7 +117,13 @@ export function BadgesMotion() {
       tip.style.left = `${x}px`;
       tip.style.top = `${y}px`;
     };
-    const hide = () => tip.classList.remove("show");
+    const hide = () => {
+      tip.classList.remove("show");
+      if (described) {
+        described.removeAttribute("aria-describedby");
+        described = null;
+      }
+    };
     const over = (e: Event) => {
       const t = (e.target as HTMLElement).closest<HTMLElement>("[data-tip]");
       if (t) show(t);
@@ -124,5 +147,5 @@ export function BadgesMotion() {
     };
   }, []);
 
-  return <div ref={tipRef} className="bdg-tip" role="tooltip" />;
+  return <div ref={tipRef} id="bdg-tip" className="bdg-tip" role="tooltip" />;
 }

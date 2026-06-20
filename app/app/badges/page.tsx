@@ -188,7 +188,7 @@ export default async function BadgesPage() {
             </div>
             <div style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 }}>
               <div style={S.heroEyebrow}>Closest to unlocking · {next.track}</div>
-              <div style={S.heroTitle}>{next.node.name}</div>
+              <h2 style={S.heroTitle}>{next.node.name}</h2>
               <div style={S.heroDesc}>
                 You&apos;re <b style={S.heroB}>{Math.round(next.node.prog.pct * 100)}%</b> there
                 {next.node.prog.hint ? (
@@ -215,7 +215,7 @@ export default async function BadgesPage() {
                   <span style={S.trackIc}>
                     <Icon name={t.icon} size={16} strokeWidth={2.2} />
                   </span>
-                  <span style={S.trackName}>{t.name}</span>
+                  <h2 style={{ ...S.trackName, margin: 0 }}>{t.name}</h2>
                   <span style={S.trackMeta}>
                     {t.done} / {t.nodes.length}
                   </span>
@@ -273,16 +273,28 @@ export default async function BadgesPage() {
             <div style={S.motCard}>
               <h2 style={S.heatTitle}>Momentum</h2>
               <p style={S.heatSub}>Last 6 weeks · your practice rhythm</p>
-              <div style={S.heatGrid}>
+              <div
+                style={S.heatGrid}
+                role="img"
+                aria-label={`Practice heatmap, last 6 weeks. ${activeDays} active ${activeDays === 1 ? "day" : "days"}.`}
+              >
                 {heat.map((h, i) => (
                   <span
                     key={i}
                     data-heat={i}
                     data-tip={h.label}
+                    aria-hidden="true"
                     className="bdg-heat-cell"
                     style={{ aspectRatio: "1", borderRadius: 4, background: heatColor(h.count) }}
                   />
                 ))}
+              </div>
+              <div style={S.heatLegend} aria-hidden="true">
+                <span>Less</span>
+                {heatLevel.map((_, i) => (
+                  <span key={i} style={{ width: 11, height: 11, borderRadius: 3, flex: "none", background: heatColor(i) }} />
+                ))}
+                <span>More</span>
               </div>
               <div style={S.heatFoot}>
                 <span style={{ color: "var(--streak)", flex: "none", display: "inline-flex" }}>
@@ -379,8 +391,8 @@ function Node({ n, current }: { n: TrackNode; current: boolean }) {
         )}
       </div>
       <span style={{ ...S.nodeName, ...(state === "locked" ? { color: "var(--text-muted)" } : null) }}>{n.name}</span>
-      <span style={{ ...S.nodeTag, color: earned ? "var(--text-link)" : current ? "var(--brand-hover)" : "var(--text-disabled)" }}>
-        {earned ? "Earned" : current ? n.prog?.hint : "Locked"}
+      <span style={{ ...S.nodeTag, color: earned ? "var(--text-link)" : current ? "var(--brand-active)" : "var(--text-muted)" }}>
+        {earned ? "Earned" : n.prog?.hint ?? "Locked"}
       </span>
     </div>
   );
@@ -392,7 +404,7 @@ const BDG_CSS = `
 .bdg-cols{display:grid;grid-template-columns:1fr;gap:14px}
 .bdg-hero{flex-wrap:wrap;padding:20px}
 .bdg-flame{animation:bdg-flicker 2.6s ease-in-out infinite}
-@keyframes bdg-flicker{0%,100%{box-shadow:0 0 24px -4px color-mix(in oklab,var(--orange-500) 90%,transparent);transform:scale(1)}50%{box-shadow:0 0 38px -2px color-mix(in oklab,var(--gold-500) 95%,transparent);transform:scale(1.05)}}
+@keyframes bdg-flicker{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 .bdg-heat-cell{cursor:default;transition:transform .12s}
 .bdg-heat-cell:hover{transform:scale(1.22)}
 .bdg-node{cursor:default}
@@ -450,10 +462,10 @@ const S: Record<string, React.CSSProperties> = {
 
   side: { display: "flex", flexDirection: "column", gap: 14 },
   motCard: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-sm)" },
-  streakCard: { position: "relative", overflow: "hidden", background: "linear-gradient(165deg, #2A2342, #14101F)", color: "#fff", border: 0 },
+  streakCard: { position: "relative", overflow: "hidden", background: "linear-gradient(165deg, var(--surface-premium), var(--surface-premium-deep))", color: "#fff", border: 0 },
   flameGlow: { position: "absolute", left: -40, top: -46, width: 170, height: 170, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--orange-500) 55%, transparent), transparent 70%)", pointerEvents: "none" },
   streakTop: { display: "flex", alignItems: "center", gap: 14, position: "relative", zIndex: 1 },
-  flame: { width: 54, height: 54, flex: "none", borderRadius: 14, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--orange-500), var(--streak))", color: "#fff" },
+  flame: { width: 54, height: 54, flex: "none", borderRadius: 14, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--orange-500), var(--streak))", color: "#fff", boxShadow: "0 0 30px -4px color-mix(in oklab, var(--orange-500) 85%, transparent)" },
   streakNum: { fontFamily: "var(--font-mono)", fontSize: 34, fontWeight: 700, lineHeight: 1 },
   streakLbl: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "rgba(255,255,255,0.72)", textTransform: "uppercase", letterSpacing: "var(--tracking-caps)", fontWeight: 700, marginTop: 3 },
   streakWeek: { display: "flex", gap: 6, margin: "16px 0 13px", position: "relative", zIndex: 1 },
@@ -468,6 +480,7 @@ const S: Record<string, React.CSSProperties> = {
   heatTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--text-primary)", margin: "0 0 3px" },
   heatSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "0 0 14px" },
   heatGrid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 },
+  heatLegend: { display: "flex", alignItems: "center", gap: 4, marginTop: 10, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)" },
   heatFoot: { display: "flex", alignItems: "center", gap: 8, marginTop: 13, fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.4 },
   heatB: { color: "var(--text-primary)", fontFamily: "var(--font-mono)" },
 
