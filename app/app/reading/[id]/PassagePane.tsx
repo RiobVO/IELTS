@@ -381,10 +381,11 @@ const PASSAGE_CSS = `
 const S = {
   pane: { minWidth: 0, flexDirection: "column", borderRight: "1px solid var(--border)", position: "relative" } as React.CSSProperties,
   progressTop: { height: 3, background: "color-mix(in oklab, var(--reading-rule) 70%, transparent)", flex: "none" } as React.CSSProperties,
-  masthead: { padding: "30px 48px 0", maxWidth: 900, margin: "0 auto" } as React.CSSProperties,
-  overline: { fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--reading-muted)", fontWeight: 600 } as React.CSSProperties,
-  ptitle: { fontFamily: "var(--font-reading)", fontWeight: 600, fontSize: 34, color: "var(--reading-text)", lineHeight: 1.18, letterSpacing: "-0.01em", margin: "12px 0 0" } as React.CSSProperties,
-  pmeta: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 14, marginTop: 14, color: "var(--reading-muted)", fontSize: 12.5, fontFamily: "var(--font-ui)" } as React.CSSProperties,
+  masthead: { padding: "30px 48px 0", maxWidth: 900, margin: "0 auto", textAlign: "center" } as React.CSSProperties,
+  overline: { fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--brand)", fontWeight: 700 } as React.CSSProperties,
+  ptitle: { fontFamily: "var(--font-reading)", fontWeight: 700, fontSize: 30, color: "var(--reading-text)", lineHeight: 1.18, letterSpacing: "-0.01em", margin: "10px 0 0" } as React.CSSProperties,
+  // Чипсы (words / min read / notes) скрыты под Cambridge-видом — референс их не показывает.
+  pmeta: { display: "none" } as React.CSSProperties,
   chip: { display: "inline-flex", alignItems: "center", gap: 6 } as React.CSSProperties,
   prule: { height: 1, background: "var(--reading-rule)", margin: "20px 0 0" } as React.CSSProperties,
 

@@ -648,13 +648,13 @@ export default function ExamRunner({
 const optBtn = (sel: boolean): React.CSSProperties => ({
   display: "flex",
   alignItems: "center",
-  gap: 11,
+  gap: 10,
   textAlign: "left",
-  padding: "13px 14px",
-  minHeight: 46, // touch-комфортная цель
+  padding: "9px 12px",
+  minHeight: 40,
   borderRadius: "var(--radius-md)",
-  border: `2px solid ${sel ? "var(--brand)" : "var(--border)"}`,
-  background: sel ? "var(--brand-subtle)" : "var(--surface-raised)",
+  border: `1px solid ${sel ? "var(--brand)" : "var(--border)"}`,
+  background: sel ? "var(--brand-subtle)" : "transparent",
   color: sel ? "var(--text-primary)" : "var(--text-secondary)",
   fontFamily: "var(--font-ui)",
   fontSize: "var(--text-sm)",
@@ -1013,6 +1013,9 @@ const READING_CSS = `
   --neutral-edge:#cbd5e1;--shadow-solid:0 1px 2px rgba(17,24,39,.06);--shadow-lg:0 10px 30px rgba(17,24,39,.13);
   --warn:#f59e0b;--warn-subtle:#fef3c7;--warn-text:#92400e;--error:#dc2626;
   --reading-text:#111827;--reading-surface:#ffffff;--reading-rule:#cfe0f0;--reading-muted:#6b7280;--reading-mark:rgb(253 224 71);
+  /* Плоская геометрия + sans-пассаж (наш Jakarta) — ближе к реальному computer-IELTS. */
+  --radius-lg:6px;--radius-md:6px;--radius-sm:5px;
+  --font-reading:var(--font-ui);
 }
 /* Пассаж под Cambridge: без буквицы; буквы абзацев — плоские (нужны для paragraph-matching), не кружки. */
 .exam-cambridge .bando-reading.editorial p.rp{padding-left:26px}
@@ -1041,14 +1044,14 @@ const S: Record<string, React.CSSProperties> = {
   sheetHint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
 
   // width/flex/display → .exam-pane-q (адаптив)
-  qPane: { flexDirection: "column", background: "var(--bg-base)" },
+  qPane: { flexDirection: "column", background: "var(--surface)" },
 
   clock: { display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", background: "var(--surface-raised)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "var(--text-lg)", fontWeight: 500, color: "var(--text-primary)" },
   ctrlBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface-raised)", color: "var(--text-secondary)", cursor: "pointer", transition: "var(--transition-colors)" },
   ctrlBtnText: { display: "inline-flex", alignItems: "center", height: 38, padding: "0 12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface-raised)", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, transition: "var(--transition-colors)" },
   transferBanner: { display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: "var(--radius-lg)", border: "2px solid var(--brand)", background: "var(--brand-subtle)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600 },
 
-  card: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "var(--space-4)", boxShadow: "var(--shadow-solid)" },
+  card: { background: "transparent", border: "none", borderBottom: "1px solid var(--border)", borderRadius: 0, padding: "16px 2px", boxShadow: "none" },
   qNum: { fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: "var(--text-sm)", width: 28, height: 28, borderRadius: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", marginTop: 1 },
   qPrompt: { flex: 1, minWidth: 0, fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", color: "var(--text-primary)", lineHeight: 1.5, paddingTop: 3 },
 };
