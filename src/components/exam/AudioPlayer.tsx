@@ -34,6 +34,8 @@ interface AudioPlayerProps {
   part?: number;
   totalParts?: number;
   onTogglePlay?: () => void;
+  /** Строгий single-pass: вместо кнопки play/pause — статус-индикатор (паузы нет). */
+  locked?: boolean;
   style?: CSSProperties;
 }
 
@@ -50,6 +52,7 @@ export function AudioPlayer({
   part,
   totalParts,
   onTogglePlay,
+  locked = false,
   style,
 }: AudioPlayerProps) {
   const pct = Math.max(0, Math.min(1, progress));
@@ -80,14 +83,23 @@ export function AudioPlayer({
       }}
     >
       <style>{WAVE_CSS}</style>
-      <button
-        type="button"
-        onClick={onTogglePlay}
-        aria-label={playing ? "Pause recording" : "Play recording"}
-        style={{ width: 48, height: 48, flex: "none", borderRadius: "50%", border: "none", background: "var(--brand)", color: "var(--text-on-brand)", cursor: "pointer", display: "grid", placeItems: "center", boxShadow: "0 4px 0 0 var(--brand-edge)" }}
-      >
-        <Icon name={playing ? "pause" : "play"} size={20} strokeWidth={2.5} />
-      </button>
+      {locked ? (
+        <span
+          aria-label="The recording plays once and cannot be paused or rewound"
+          style={{ width: 48, height: 48, flex: "none", borderRadius: "50%", background: playing ? "var(--brand)" : "var(--surface-hover)", color: playing ? "var(--text-on-brand)" : "var(--text-muted)", display: "grid", placeItems: "center" }}
+        >
+          <Icon name="headphones" size={20} strokeWidth={2.5} />
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={onTogglePlay}
+          aria-label={playing ? "Pause recording" : "Play recording"}
+          style={{ width: 48, height: 48, flex: "none", borderRadius: "50%", border: "none", background: "var(--brand)", color: "var(--text-on-brand)", cursor: "pointer", display: "grid", placeItems: "center", boxShadow: "0 4px 0 0 var(--brand-edge)" }}
+        >
+          <Icon name={playing ? "pause" : "play"} size={20} strokeWidth={2.5} />
+        </button>
+      )}
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
