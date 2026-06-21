@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
+import { captureQuestions } from "./capture-questions";
 import { extractData, extractFunctionTable } from "./extract-js";
 import { canonQuestionType } from "./question-types";
 import type {
@@ -52,7 +53,11 @@ export function parseFullReading(html: string): ParsedTest {
     sanitize($, $el);
     const bodyHtml = ($el.find(".passage-content").html() ?? $el.html() ?? "").trim();
     const pTitle = $el.find(".sectionRubric h2").first().text().trim() || `Passage ${order}`;
-    passages.push({ order, title: pTitle, bodyHtml, audioPath: null });
+    const questionsHtml =
+      captureQuestions(
+        $(`.questions-section[data-part='${order}'] .question`).toArray().map((b) => $.html(b)),
+      ) || null;
+    passages.push({ order, title: pTitle, bodyHtml, audioPath: null, questionsHtml });
   });
 
   const byNumber = new Map<number, ParsedQuestion>();

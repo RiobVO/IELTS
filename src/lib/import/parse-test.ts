@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
+import { captureQuestions } from "./capture-questions";
 import { extractData } from "./extract-js";
 import { parseFullReading } from "./parse-reading-full";
 import { parseListening } from "./parse-listening";
@@ -82,8 +83,10 @@ export function parseTest(html: string): ParsedTest {
   sanitizePassage($);
   const bodyHtml = ($("#passageContent").html() ?? "").trim();
   if (!bodyHtml) warnings.push("Passage body (#passageContent) not found.");
+  // Verbatim-HTML вопрос-панели (как реальный IELTS); "" → фоллбэк на атомизацию.
+  const questionsHtml = captureQuestions($(".question").toArray().map((b) => $.html(b))) || null;
   const passages = [
-    { order: 1, title: h1 || null, bodyHtml, audioPath: null },
+    { order: 1, title: h1 || null, bodyHtml, audioPath: null, questionsHtml },
   ];
 
   // --- questions ---

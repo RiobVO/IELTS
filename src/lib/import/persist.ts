@@ -96,6 +96,7 @@ export async function persistTest(
           title: p.title,
           bodyHtml: p.bodyHtml,
           audioPath: p.audioPath,
+          questionsHtml: p.questionsHtml ?? null,
         })
         .returning({ id: passageT.id });
       passageIdByOrder.set(p.order, row!.id);

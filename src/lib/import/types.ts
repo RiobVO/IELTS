@@ -38,6 +38,8 @@ export interface ParsedPassage {
   title: string | null;
   bodyHtml: string;
   audioPath: string | null;
+  /** Оригинальный HTML вопрос-панели (verbatim-рендер); null/undefined → фоллбэк. */
+  questionsHtml?: string | null;
 }
 
 export interface ParsedTest {

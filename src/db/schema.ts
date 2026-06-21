@@ -238,6 +238,10 @@ export const passage = pgTable(
     title: text("title"),
     bodyHtml: text("body_html").notNull(),
     audioPath: text("audio_path"),
+    // Оригинальный HTML вопрос-панели для verbatim-рендера (как реальный IELTS):
+    // инструкции/под-заголовки/таблицы + слоты <span.q-slot> вместо инпутов. NULL →
+    // раннер рисует атомизированный список (фоллбэк). Грейдинг от этого не зависит.
+    questionsHtml: text("questions_html"),
   },
   (t) => [index("passage_content_item_id_idx").on(t.contentItemId)],
 );
