@@ -645,6 +645,25 @@ export default function ExamRunner({
 
 // Общий стиль кнопки-варианта (radio/checkbox) — один источник, чтобы две ветки
 // не расходились визуально.
+// Инлайн-поле пропуска (sentence/note completion) — встроено в предложение, как в реальном IELTS.
+const inlineGapInput = (filled: boolean): React.CSSProperties => ({
+  display: "inline-block",
+  minWidth: 110,
+  maxWidth: 220,
+  height: 30,
+  margin: "0 5px",
+  padding: "0 9px",
+  verticalAlign: "baseline",
+  borderRadius: "var(--radius-sm)",
+  border: `1px solid ${filled ? "var(--brand)" : "var(--border-strong)"}`,
+  background: "var(--surface-raised)",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-sm)",
+  fontWeight: 600,
+  outline: "none",
+});
+
 const optBtn = (sel: boolean): React.CSSProperties => ({
   display: "flex",
   alignItems: "center",
@@ -735,6 +754,12 @@ const QuestionBlock = memo(function QuestionBlock({
   const single = Array.isArray(value) ? (value[0] ?? "") : value;
   const has = selected.length > 0;
 
+  // Note/sentence-completion: вставляем поле ПРЯМО в пропуск (≥3 подчёркивания) —
+  // «he left [поле] for financial reasons», как в реальном IELTS, а не поле снизу.
+  // Только при ровно одном пропуске; иначе — обычное поле снизу.
+  const gapParts = !hasOptions ? q.prompt_html.split(/_{3,}/) : null;
+  const inlineGap = gapParts != null && gapParts.length === 2;
+
   // Roving tabindex для radiogroup (ARIA APG radio): группа — единственный tab-stop,
   // стрелки двигают фокус И выбор по кругу. Рефы — чтобы фокусировать соседа программно.
   const radioRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -771,7 +796,23 @@ const QuestionBlock = memo(function QuestionBlock({
       <div style={S.card}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 11 }}>
           <span style={{ ...S.qNum, background: has ? "var(--brand)" : "var(--surface-hover)", color: has ? "var(--text-on-brand)" : "var(--text-secondary)" }}>{q.number}</span>
-          <div style={S.qPrompt}>{q.prompt_html}</div>
+          <div style={S.qPrompt}>
+            {inlineGap ? (
+              <>
+                {gapParts![0]}
+                <input
+                  value={single}
+                  onChange={(e) => onAnswer(q.number, e.target.value)}
+                  aria-label={`Answer for question ${q.number}`}
+                  autoComplete="off"
+                  style={inlineGapInput(!!single)}
+                />
+                {gapParts![1]}
+              </>
+            ) : (
+              q.prompt_html
+            )}
+          </div>
           <button
             className="exam-flag"
             onClick={() => onFlag(q.number)}
@@ -783,6 +824,7 @@ const QuestionBlock = memo(function QuestionBlock({
             <Icon name="flag" size={16} strokeWidth={2.4} />
           </button>
         </div>
+        {!inlineGap && (
         <div style={{ marginTop: 13, paddingLeft: 39 }}>
           {multi ? (
             <div role="group" aria-label={`Answer for question ${q.number} — choose one or more`} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -836,10 +878,11 @@ const QuestionBlock = memo(function QuestionBlock({
               placeholder="Type your answer"
               aria-label={`Answer for question ${q.number}`}
               autoComplete="off"
-              style={{ width: "100%", maxWidth: 300, height: 44, padding: "0 15px", borderRadius: "var(--radius-md)", border: `2px solid ${single ? "var(--brand)" : "var(--border)"}`, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", outline: "none" }}
+              style={{ width: "100%", maxWidth: 280, height: 40, padding: "0 12px", borderRadius: "var(--radius-md)", border: `1px solid ${single ? "var(--brand)" : "var(--border)"}`, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", outline: "none" }}
             />
           )}
         </div>
+        )}
       </div>
     </div>
   );
