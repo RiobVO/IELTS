@@ -4,17 +4,23 @@ import { type CSSProperties, useState } from "react";
 
 const RING = "0 0 0 2px var(--surface), 0 0 0 4px var(--brand)";
 
-interface NavQuestion {
+export interface NavQuestion {
   number: number;
   answered: boolean;
   flagged: boolean;
 }
+export interface NavPart {
+  label: string;
+  items: NavQuestion[];
+}
 
 interface QuestionNavigatorProps {
-  questions: NavQuestion[];
+  /** Вопросы, сгруппированные по Part (пассаж/секция) в порядке появления. */
+  parts: NavPart[];
   current: number;
+  answered: number;
+  total: number;
   onJump?: (n: number) => void;
-  style?: CSSProperties;
 }
 
 // Resting visual per state. Precedence: active > flagged > answered > unanswered.
@@ -37,8 +43,9 @@ function NavCell({ q, active, onJump }: { q: NavQuestion; active: boolean; onJum
       aria-label={`Question ${q.number}${q.answered ? ", answered" : ""}${q.flagged ? ", flagged for review" : ""}`}
       style={{
         position: "relative",
-        aspectRatio: "1 / 1",
-        minWidth: 36,
+        flex: "none",
+        width: 32,
+        height: 32,
         border: "none",
         borderRadius: "var(--radius-sm)",
         background: c.bg,
@@ -59,38 +66,61 @@ function NavCell({ q, active, onJump }: { q: NavQuestion; active: boolean; onJum
   );
 }
 
-function Swatch({ bg, ring, dot, label }: { bg: string; ring?: string; dot?: boolean; label: string }) {
+/**
+ * QuestionNavigator — нижняя полоса на всю ширину, как в реальном computer-IELTS:
+ * вопросы 1–40 сгруппированы по Part (пассаж/секция), горизонтальный скролл при
+ * нехватке ширины. Состояние ячейки: active > flagged > answered > unanswered;
+ * клавиатурный фокус показывает брендовый RING, flagged несёт точку в углу.
+ * Справа — счётчик отвеченных. Метки Part показываем только при >1 секции.
+ */
+export function QuestionNavigator({ parts, current, answered, total, onJump }: QuestionNavigatorProps) {
+  const multi = parts.length > 1;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
-      <span style={{ position: "relative", width: 14, height: 14, borderRadius: 4, background: bg, boxShadow: ring }}>
-        {dot && <span style={{ position: "absolute", top: 1, right: 1, width: 4, height: 4, borderRadius: "50%", background: "var(--warn)" }} />}
+    <nav aria-label="Question navigator" style={S.bar}>
+      <div style={S.scroller}>
+        {parts.map((p, i) => (
+          <div key={i} style={S.group}>
+            {i > 0 && <span aria-hidden="true" style={S.divider} />}
+            {multi && <span style={S.partLabel}>{p.label}</span>}
+            <div style={S.cells}>
+              {p.items.map((q) => (
+                <NavCell key={q.number} q={q} active={q.number === current} onJump={onJump} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <span style={S.counter} aria-live="polite" aria-label={`${answered} of ${total} answered`}>
+        <b style={{ color: "var(--text-secondary)", fontWeight: 700 }}>{answered}</b>/{total}
       </span>
-      {label}
-    </span>
+    </nav>
   );
 }
 
-/**
- * QuestionNavigator — сетка ячеек-вопросов + легенда. Состояние ячейки:
- * active > flagged > answered > unanswered. Клавиатурный фокус показывает
- * брендовый RING вместо resting-кольца. flagged несёт точку в углу.
- */
-export function QuestionNavigator({ questions, current, onJump, style }: QuestionNavigatorProps) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)", ...style }}>
-      {/* auto-fill: сетка сама выбирает число колонок под ширину пэйна (десктоп ~10,
-          узкий мобильный ~8) — без переполнения и без брейкпоинт-проп. */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(36px, 1fr))", gap: 6 }}>
-        {questions.map((q) => (
-          <NavCell key={q.number} q={q} active={q.number === current} onJump={onJump} />
-        ))}
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)" }}>
-        <Swatch bg="var(--brand)" label="Current" />
-        <Swatch bg="var(--surface-hover)" ring="inset 0 0 0 1px var(--border-strong)" label="Answered" />
-        <Swatch bg="transparent" ring="inset 0 0 0 1px var(--border)" label="Unanswered" />
-        <Swatch bg="var(--warn-subtle)" ring="inset 0 0 0 1px var(--warn)" dot label="Flagged" />
-      </div>
-    </div>
-  );
-}
+const S: Record<string, CSSProperties> = {
+  bar: {
+    flex: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    padding: "9px 16px",
+    borderTop: "1px solid var(--border)",
+    background: "var(--bg-raised)",
+  },
+  // Горизонтальный скролл: 40 ячеек + метки умещаются на широком экране, иначе скроллятся.
+  scroller: { flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 10, overflowX: "auto", paddingBottom: 2 },
+  group: { display: "flex", alignItems: "center", gap: 9, flex: "none" },
+  divider: { flex: "none", width: 1, height: 24, background: "var(--border)", marginRight: 2 },
+  partLabel: {
+    flex: "none",
+    fontFamily: "var(--font-ui)",
+    fontSize: "var(--text-2xs)",
+    fontWeight: 700,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
+    whiteSpace: "nowrap",
+  },
+  cells: { display: "flex", alignItems: "center", gap: 5 },
+  counter: { flex: "none", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)", whiteSpace: "nowrap" },
+};

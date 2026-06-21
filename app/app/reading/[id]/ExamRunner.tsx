@@ -7,7 +7,7 @@ import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
 import { AudioPlayer } from "@/components/exam/AudioPlayer";
 import { ExamTimer } from "@/components/exam/ExamTimer";
-import { QuestionNavigator } from "@/components/exam/QuestionNavigator";
+import { QuestionNavigator, type NavPart } from "@/components/exam/QuestionNavigator";
 import { PassagePane, type AnnotationRow } from "./PassagePane";
 import { saveProgress, submitAttempt } from "./actions";
 
@@ -17,6 +17,7 @@ interface Question {
   qtype: string;
   prompt_html: string;
   options: { value: string; label: string }[] | null;
+  passage_id: string | null;
 }
 interface Passage {
   title: string | null;
@@ -33,6 +34,32 @@ function fmt(sec: number): string {
 /** Вопрос отвечен: непустая строка ИЛИ непустой набор букв (mcq_multi). */
 function isAnswered(v: string | string[] | undefined): boolean {
   return Array.isArray(v) ? v.length > 0 : !!(v && v.trim());
+}
+
+/** Группировка вопросов по passage_id → «Part N» в нижнем навигаторе (порядок появления).
+ *  passage_id может отсутствовать (одиночный пассаж / старые данные) → один блок. */
+function buildParts(
+  questions: Question[],
+  answers: Record<string, string | string[]>,
+  flags: Record<string, boolean>,
+): NavPart[] {
+  const order: string[] = [];
+  const groups = new Map<string, NavPart["items"]>();
+  for (const q of questions) {
+    const key = q.passage_id ?? "_single";
+    let bucket = groups.get(key);
+    if (!bucket) {
+      bucket = [];
+      groups.set(key, bucket);
+      order.push(key);
+    }
+    bucket.push({
+      number: q.number,
+      answered: isAnswered(answers[String(q.number)]),
+      flagged: !!flags[String(q.number)],
+    });
+  }
+  return order.map((key, i) => ({ label: `Part ${i + 1}`, items: groups.get(key)! }));
 }
 
 export default function ExamRunner({
@@ -141,19 +168,7 @@ export default function ExamRunner({
   const isListening = !!audioSrc;
   const meta = `${categoryLabel(category)} · ${questions.length} questions`;
 
-  const navQuestions = questions.map((q) => ({
-    number: q.number,
-    answered: isAnswered(answers[String(q.number)]),
-    flagged: !!flags[String(q.number)],
-  }));
-  const nav = (
-    <QuestionNavigator questions={navQuestions} current={current} onJump={jump} />
-  );
-  const answeredCounter = (
-    <span style={S.counter}>
-      <b style={{ color: "var(--text-secondary)" }}>{answered}</b>/{questions.length} answered
-    </span>
-  );
+  const partGroups = buildParts(questions, answers, flags);
 
   return (
     <div style={S.shell}>
@@ -218,9 +233,7 @@ export default function ExamRunner({
             <div style={{ maxWidth: 720, margin: "0 auto", padding: "18px 24px 48px" }}>
               <div style={S.sheetHead}>
                 <span style={S.sheetHint}>Answer as you listen — the recording plays once.</span>
-                {answeredCounter}
               </div>
-              <div style={{ marginBottom: 16 }}>{nav}</div>
               {questions.map((q) => (
                 <QuestionBlock
                   key={q.id}
@@ -259,16 +272,9 @@ export default function ExamRunner({
               initialAnnotations={initialAnnotations ?? []}
             />
 
-            {/* Questions + navigator pane */}
+            {/* Questions pane (навигатор вынесен в нижнюю полосу) */}
             <div className="exam-pane exam-pane-q" style={S.qPane}>
-              <div style={S.navHead}>
-              <div style={{ display: "flex", alignItems: "center", marginBottom: 11 }}>
-                <span style={S.navTitle}>Question navigator</span>
-                {answeredCounter}
-              </div>
-              {nav}
-            </div>
-            <div ref={qScrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 20px 28px" }}>
+              <div ref={qScrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 20px 28px" }}>
               {questions.map((q) => (
                 <QuestionBlock
                   key={q.id}
@@ -285,6 +291,16 @@ export default function ExamRunner({
         </div>
         </>
       )}
+
+      {/* Нижний навигатор 1–40 на всю ширину (как в реальном computer-IELTS):
+          группы по Part, review-флаги, click-to-jump. Общий для Reading и Listening. */}
+      <QuestionNavigator
+        parts={partGroups}
+        current={current}
+        answered={answered}
+        total={questions.length}
+        onJump={jump}
+      />
     </div>
   );
 }
@@ -510,12 +526,9 @@ const S: Record<string, React.CSSProperties> = {
 
   sheetHead: { display: "flex", alignItems: "center", marginBottom: 14 },
   sheetHint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
-  counter: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
 
   // width/flex/display → .exam-pane-q (адаптив)
   qPane: { flexDirection: "column", background: "var(--bg-base)" },
-  navHead: { padding: "14px 20px", borderBottom: "1px solid var(--border)", flex: "none" },
-  navTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--text-primary)", whiteSpace: "nowrap" },
 
   card: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "var(--space-4)", boxShadow: "var(--shadow-solid)" },
   qNum: { fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: "var(--text-sm)", width: 28, height: 28, borderRadius: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", marginTop: 1 },
