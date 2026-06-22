@@ -205,6 +205,8 @@ export const contentItem = pgTable(
       .notNull()
       .default(sql`'{}'::text[]`),
     bandScale: jsonb("band_scale"),
+    // Sanitized interactive runner HTML (iframe-wrapper track). NULL = legacy.
+    runnerHtml: text("runner_html"),
     status: contentStatus("status").notNull().default("draft"),
     version: integer("version").notNull().default(1),
     // Elo difficulty rating of the test itself (BRIEF §4.6 anti-cheat / Elo).
