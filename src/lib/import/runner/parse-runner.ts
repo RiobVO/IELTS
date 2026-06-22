@@ -59,12 +59,16 @@ function parseReadingRunner(html: string): RunnerParseResult {
     return mkQuestion(n, qtype, answer);
   });
 
+  // Full Reading (40Q) несёт getBandFor40 → bandScale; одиночный пассаж — нет.
+  // По этому признаку разводим категорию/длительность (иначе 13Q-пассаж покажется
+  // в каталоге как «Full Reading · 60m»). Номер пассажа из файла не известен → passage_1.
+  const isFull = bandScale != null;
   const parsed: ParsedTest = {
     title: extractTitle(html, "Reading"),
     section: "reading",
-    category: "full_reading",
+    category: isFull ? "full_reading" : "passage_1",
     bandType: "reading_academic",
-    durationSeconds: 60 * 60,
+    durationSeconds: isFull ? 60 * 60 : 20 * 60,
     questionTypes: [...new Set(questions.map((q) => q.qtype))],
     bandScale: bandScale ? toStringKeys(bandScale) : null,
     passages: [{ order: 1, title: null, bodyHtml: "", audioPath: null, questionsHtml: null }],
@@ -96,12 +100,14 @@ function parseListeningRunner(html: string): RunnerParseResult {
   const $ = cheerio.load(html);
   const externalAudioSrc = $("audio").attr("src") ?? null;
 
+  // Full Listening (40Q) несёт band() → bandScale; одиночная часть — нет.
+  const isFull = bandScale != null;
   const parsed: ParsedTest = {
     title: extractTitle(html, "Listening"),
     section: "listening",
-    category: "full_listening",
+    category: isFull ? "full_listening" : "part_1",
     bandType: "listening",
-    durationSeconds: 30 * 60,
+    durationSeconds: isFull ? 30 * 60 : 10 * 60,
     questionTypes: [...new Set(questions.map((q) => q.qtype))],
     bandScale: bandScale ? toStringKeys(bandScale) : null,
     passages: [{ order: 1, title: null, bodyHtml: "", audioPath: null, questionsHtml: null }],
