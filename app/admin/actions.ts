@@ -6,8 +6,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { contentItem } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
-import { parseTest } from "@/lib/import/parse-test";
-import { persistTest, RegradeRequiredError } from "@/lib/import/persist";
+import { RegradeRequiredError } from "@/lib/import/persist";
+import { importRunner } from "@/lib/import/runner/import-runner";
 
 function fail(message: string): never {
   redirect(`/admin?error=${encodeURIComponent(message)}`);
@@ -29,16 +29,11 @@ export async function uploadTest(formData: FormData) {
 
   let summary: { title: string; questions: number; warnings: number };
   try {
-    const parsed = parseTest(html);
-    await persistTest(parsed, {
+    const r = await importRunner(html, {
       sourceFilePath: file.name,
       createdBy: profile.id,
     });
-    summary = {
-      title: parsed.title,
-      questions: parsed.questions.length,
-      warnings: parsed.warnings.length,
-    };
+    summary = { title: r.title, questions: r.questions, warnings: r.warnings };
   } catch (e) {
     if (e instanceof RegradeRequiredError) {
       console.error("admin uploadTest refused — test has attempts", e);
