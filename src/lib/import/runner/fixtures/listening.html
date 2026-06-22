@@ -1,0 +1,2328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IELTS Listening — Cambridge 21 Test 1</title>
+<style>
+  /* =====================================================================
+     IELTS LISTENING TEST — STYLES
+     1) Base + theme variables   2) Header   3) Content / question types
+     4) Footer nav   5) Overlays (play, options, submission, results)
+     6) Highlighter   7) Drag & drop
+     ===================================================================== */
+
+  /* ---------- 1) Base + themes ---------- */
+  :root{
+    --bg:#ffffff; --fg:#1a1a1a; --muted:#777; --line:#d9d9d9;
+    --banner:#eceee8; --accent:#1a73e8; --red:#e2231a; --ok:#1a7f37;
+    --inp-bg:#ffffff; --inp-border:#767676; --chip-bg:#fff;
+  }
+  /* Contrast: white on black */
+  body.contrast-wb{
+    --bg:#000; --fg:#fff; --muted:#bbb; --line:#444; --banner:#111;
+    --inp-bg:#000; --inp-border:#888; --chip-bg:#000;
+  }
+  /* Contrast: yellow on black */
+  body.contrast-yb{
+    --bg:#000; --fg:#ff0; --muted:#cc0; --line:#665; --banner:#111;
+    --inp-bg:#000; --inp-border:#990; --chip-bg:#000;
+  }
+  /* Text-size setting (Normal/Large/Extra-large): JS scales the root html font-size,
+     so every rem/em across the whole UI — content, footer menu, options sheet — resizes
+     together. (size-1/2/3 classes are kept for the menu's check-mark state.) */
+
+  /* scrollbars follow the contrast theme (otherwise they stay light on black) */
+  body.contrast-wb, body.contrast-yb{ color-scheme:dark; }
+  body.contrast-wb *{ scrollbar-color:#777 #1a1a1a; }
+  body.contrast-yb *{ scrollbar-color:#aa0 #1a1a1a; }
+  body.contrast-wb ::-webkit-scrollbar,
+  body.contrast-yb ::-webkit-scrollbar{ width:12px; height:12px; }
+  body.contrast-wb ::-webkit-scrollbar-track,
+  body.contrast-yb ::-webkit-scrollbar-track{ background:#1a1a1a; }
+  body.contrast-wb ::-webkit-scrollbar-thumb{ background:#666; border-radius:6px; border:2px solid #1a1a1a; }
+  body.contrast-yb ::-webkit-scrollbar-thumb{ background:#990; border-radius:6px; border:2px solid #1a1a1a; }
+  body.contrast-wb ::-webkit-scrollbar-thumb:hover{ background:#888; }
+  body.contrast-yb ::-webkit-scrollbar-thumb:hover{ background:#cc0; }
+
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    font-family:Arial,Helvetica,sans-serif;
+    font-size:1rem;   /* scales with the root font-size that the text-size setting changes */
+    color:var(--fg); background:var(--bg);
+    display:flex; flex-direction:column;
+    height:100vh; height:100dvh;   /* dvh keeps the footer on-screen on mobile */
+    overflow:hidden;
+  }
+
+  /* ---------- 2) Header ---------- */
+  .header{
+    display:flex; align-items:center; gap:16px; position:relative;
+    padding:12px 22px; border-bottom:1px solid var(--line); flex-shrink:0;
+  }
+  .header .brand{ display:flex; align-items:center; gap:9px; }
+  .header .brand-logo{ height:40px; width:auto; display:block; }
+  .header .logo{ font-size:26px; font-weight:800; color:var(--red); letter-spacing:-1px; }
+  .header .logo sup{ font-size:9px; }
+  /* Telegram channel link in the header (self-contained SVG, themed for contrast) */
+  .header .brand-telegram{ display:inline-flex; align-items:center; justify-content:center;
+    width:34px; height:34px; border-radius:8px; background:#eff6ff; color:#0088cc;
+    text-decoration:none; border:1px solid #dbeafe; flex-shrink:0;
+    transition:background .15s ease, transform .15s ease, box-shadow .15s ease; }
+  .header .brand-telegram:hover{ background:#dbeafe; color:#0077b5; transform:translateY(-1px);
+    box-shadow:0 3px 8px rgba(0,136,204,.2); }
+  .header .brand-telegram:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .header .brand-telegram svg{ display:block; }
+  body.contrast-wb .header .brand-telegram, body.contrast-yb .header .brand-telegram{
+    background:rgba(0,136,204,.18); border-color:#0088cc; color:#33aadd; }
+  .header .taker{ font-size:.82rem; line-height:1.35; }
+  .header .taker strong{ display:block; }
+  .header .spacer{ margin-left:auto; }
+  .header .timer{ font-weight:700; font-size:1rem; padding:5px 12px; border-radius:8px;
+                  background:rgba(127,127,127,.13); font-variant-numeric:tabular-nums;
+                  letter-spacing:.5px; min-width:74px; text-align:center;
+                  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); }
+  .header .timer.low{ color:#fff; background:var(--red,#e2231a);
+                      animation:timerPulse 1s steps(2,start) infinite; }
+  @keyframes timerPulse{ 50%{ opacity:.55; } }
+  /* volume: header shows only the icon; a vertical slider flyout appears on hover */
+  .header .volume{ position:relative; display:inline-flex; align-items:center; }
+  .header .vol-icon{ background:none; border:none; color:var(--fg); cursor:pointer; padding:5px;
+                     border-radius:8px; display:inline-flex; transition:background .12s; }
+  .header .vol-icon:hover{ background:rgba(127,127,127,.13); }
+  .header .vol-icon svg{ display:block; }
+  /* the flyout (sits flush under the icon so the hover never breaks) */
+  .vol-pop{ position:absolute; top:100%; left:50%; transform:translateX(-50%);
+            display:none; flex-direction:column; align-items:center; gap:8px;
+            padding:14px 10px 12px; background:var(--bg); border:1px solid var(--line);
+            border-radius:10px; box-shadow:0 8px 20px rgba(0,0,0,.18); z-index:50; }
+  .header .volume:hover .vol-pop{ display:flex; }
+  .vol-val{ font-size:.78rem; font-weight:700; min-width:36px; text-align:center; }
+  /* vertical slider: a horizontal range rotated inside a fixed-size slot */
+  .vol-slot{ width:34px; height:118px; display:flex; align-items:center; justify-content:center; }
+  .vol-range{ -webkit-appearance:none; appearance:none; width:112px; height:6px; border-radius:3px;
+              transform:rotate(-90deg);
+              background:linear-gradient(var(--accent),var(--accent)) no-repeat, var(--line);
+              background-size:100% 100%; cursor:pointer; outline:none; }
+  .vol-range::-webkit-slider-thumb{ -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+              background:var(--accent); border:2px solid #fff; box-shadow:0 0 2px rgba(0,0,0,.4); cursor:pointer; }
+  .vol-range::-moz-range-thumb{ width:16px; height:16px; border-radius:50%; background:var(--accent);
+              border:2px solid #fff; cursor:pointer; }
+  .header .volume.muted .vol-icon{ color:var(--muted); }
+
+  .header .icons{ display:flex; align-items:center; gap:18px; color:var(--fg); }
+  .header .icons .hicon{ display:inline-flex; align-items:center; }
+  .header .icons .menu-btn{ cursor:pointer; background:none; border:none; color:inherit; padding:0; }
+  .header .icons svg{ display:block; }
+
+  /* ---------- 3) Content ---------- */
+  .content{ flex:1; overflow-y:auto; padding:22px 30px 160px; position:relative; scroll-padding-bottom:140px; }
+  .part{ display:none; }
+  .part.active{ display:block; }
+
+  .part-banner{
+    background:var(--banner); border:1px solid var(--line);
+    border-radius:3px; padding:11px 15px; margin-bottom:20px;
+  }
+  .part-banner h2{ font-size:.95em; }
+  .part-banner p{ font-size:.9em; margin-top:2px; }
+
+  .q-range{ font-weight:700; font-size:.9em; margin:.9em 0 .25em; }
+  /* instruction lines ("Write ONE WORD ONLY…"): 1em / 1.5 line-height, regular, the
+     emphasised part bold. em units scale with the text-size setting automatically. */
+  .q-instruction{ font-size:1em; line-height:1.5; margin-bottom:.875em; }
+  .q-instruction strong{ font-weight:700; }
+  .section-title{ font-weight:700; font-size:1em; text-align:left; margin:.875em 0; }
+  .sub-head{ font-weight:700; margin:1em 0 .5em; }
+
+  /* form / notes layout */
+  .form-box{ border:1px solid var(--fg); border-radius:4px; padding:1em 1.125em; max-width:42.5em; }
+  /* Parts 1 & 2 forms are borderless (rows/bullets keep their own spacing) */
+  section[data-part="1"] .form-box, section[data-part="2"] .form-box{ border:none; border-radius:0; padding:0; }
+  .form-title{ text-align:left; font-weight:700; font-size:1.05em; margin-bottom:.75em; }
+  .form-row{ display:flex; align-items:center; gap:.625em; padding:.69em 0; flex-wrap:wrap; }
+  .form-row:last-child{ border-bottom:none; }
+  .form-row .label{ width:11.9em; font-weight:700; flex-shrink:0; }
+  .form-row .value{ display:flex; align-items:center; gap:.4em; flex-wrap:wrap; }
+  .eg{ color:var(--muted); }
+
+  .note-group{ display:flex; margin-bottom:1em; }
+  .note-label{ width:9.4em; flex-shrink:0; padding-top:.3em; }
+  .note-items{ flex:1; }
+  .note-line{ display:flex; align-items:center; gap:.4em; margin-bottom:.94em; flex-wrap:wrap; }
+  .note-line .dash{ color:var(--muted); }
+  .bullet{ list-style:none; }
+  .bullet li{ position:relative; padding-left:1.125em; margin-bottom:.94em; }
+  .bullet li::before{ content:"•"; position:absolute; left:2px; }
+
+  /* table */
+  table.qtable{ border-collapse:collapse; width:100%; max-width:65em; }
+  table.qtable th, table.qtable td{ border:1px solid var(--fg); padding:.76em .88em; vertical-align:top; font-size:1.0625em; line-height:1.55; }
+  table.qtable td:first-child{ white-space:nowrap; }   /* keep "Free-form" on one line */
+  table.qtable th{ background:var(--banner); text-align:center; }
+
+  /* inputs */
+  /* the box is sized in em (and JS autosizes the width in ch), so it grows with the
+     text-size setting just like the surrounding text */
+  .gap{
+    width:8.25em; height:1.55em; padding:0 .5em; margin:0.8px 4px -1.6px; display:inline-block;
+    border:0.8px solid var(--inp-border); border-radius:3px;
+    background:var(--inp-bg); color:var(--fg);
+    text-align:center; font-weight:700; font-size:.9em; font-family:inherit;
+  }
+  .gap.sm{ width:5.6em; }
+  .gap:focus{ outline:none; border-color:#418ec8; box-shadow:0 0 0 1px #418ec8; }
+  .gap::placeholder{ color:var(--muted); opacity:1; font-weight:700; }
+  .qnum{ font-weight:700; }
+
+  /* multiple choice */
+  .mcq{ margin-bottom:1.375em; }
+  /* question stem: regular 1em / 1.5 line-height; only the number is bold. All em,
+     so it scales with the text-size setting via the .content base. */
+  .mcq .stem{ font-weight:400; margin-bottom:.5em; display:flex; align-items:baseline; gap:0;
+              font-size:1em; line-height:1.5; }
+  .mcq .stem > .hl-safe{ flex:1 1 0; }   /* the text fills the row (flex-basis:0) */
+  /* question number: a box with a transparent border normally (so the width never
+     shifts), lighting up blue when this MCQ is the current/active question */
+  .mcq .stem .qnum{ display:inline-block; box-sizing:border-box; min-width:1.75em;
+                    border:1.6px solid transparent; border-radius:3px; padding:.25em .12em .19em;
+                    margin-right:.25em; font-weight:700; line-height:1; text-align:center;
+                    transition:border-color .15s, box-shadow .15s; }
+  .mcq.current .stem .qnum{ border-color:#418ec8; box-shadow:0 0 0 3px rgba(65,142,200,.18); }
+  /* each option row: 1em / 1.5 line-height, ~0.6em vertical padding */
+  .mcq label{ display:flex; align-items:baseline; gap:.625em; padding:.6em .5em; border-radius:4px;
+              cursor:pointer; font-size:1em; line-height:1.5; }
+  .mcq label:hover{ background:rgba(127,127,127,.12); }
+  /* a chosen option is tinted light blue until the test is submitted, when the
+     green/red result marking takes over instead */
+  body:not(.submitted) .mcq label:has(input:checked){ background:#bbd8f0; }
+  body:not(.submitted).contrast-wb .mcq label:has(input:checked),
+  body:not(.submitted).contrast-yb .mcq label:has(input:checked){ background:#2a4d6e; }
+  .mcq .opt-letter{ display:none; }   /* CDI: options show no A/B/C letters */
+  /* option text lives in one inline wrapper, so highlight spans stay inline
+     (without it, a highlight would split the text into separate flex items) */
+  .mcq .opt-text{ flex:1 1 auto; }
+
+  .help-btn{ float:right; display:inline-flex; align-items:center; gap:6px;
+             background:none; border:none; color:var(--accent); font-size:.85em; font-family:inherit;
+             cursor:pointer; padding:4px 8px; border-radius:4px; }
+  .help-btn svg{ display:block; }
+  .help-btn.active{ background:#1f3a52; color:#fff; }
+  .help-text{ display:none; clear:both; font-size:.85em; line-height:1.5; margin:6px 0 14px; }
+  .help-text.show{ display:block; }
+
+  /* ---------- 4) Footer ---------- */
+  .footer{
+    display:flex; align-items:center; border-top:1px solid var(--line);
+    padding:0 18px; gap:22px; flex-shrink:0; font-size:.85rem; background:var(--bg);
+    overflow-x:auto;
+  }
+  /* inactive part = a grey button ("Part N · X of 10"); 16px 20px padding ≈ 50px tall */
+  .fpart{ display:flex; align-items:center; justify-content:center; gap:.375rem; cursor:pointer;
+          white-space:nowrap; flex:1 1 0; min-width:0; text-align:center;
+          padding:1rem 1.25rem; border:2px solid transparent; border-radius:6px;
+          background:transparent; color:var(--fg); transition:background .12s, border-color .15s; }
+  .fpart:hover{ background:rgba(127,127,127,.13); }
+  /* the active part expands to show its question-number strip */
+  .fpart.active{ flex:0 0 auto; padding:.375rem .875rem; }
+  /* a click briefly flashes a blue border, like the MCQ navigation highlight */
+  .fpart.flash{ border-color:#418ec8; }
+  .fpart .plabel{ font-weight:700; color:inherit; line-height:1.25rem; }
+  .fpart .pcount{ color:var(--muted); line-height:1.25rem; }
+  /* each column = a small dash on top + its number below, so the colour-change
+     dash always stays directly above its own number. The Part label gets a wider
+     dash too, so the strip reads as one continuous dashed line across the row. */
+  .fdots{ display:flex; gap:.25rem; align-items:flex-start; }
+  .fitem{ display:flex; flex-direction:column; align-items:center; gap:.3125rem; cursor:pointer; }
+  .fitem.flabel{ padding:0 .625rem; }
+  .fseg{ align-self:stretch; height:3px; border-radius:2px; background:var(--line); }
+  .fseg.answered{ background:var(--accent); }
+  .fseg.current{ background:var(--fg); }
+  .fdot{ width:1.375rem; text-align:center; border:1px solid transparent; border-radius:3px; line-height:1.25rem; }
+  .fdot.current{ border-color:var(--accent); color:var(--fg); font-weight:700; }
+  .fdot.answered{ font-weight:700; color:var(--accent); text-decoration:underline; }
+  .fdot.pair{ width:auto; min-width:1.375rem; padding:0 .4375rem; }   /* "27–28" needs room */
+  .fpart:not(.active) .fdots{ display:none; }
+  .fpart:not(.active) .flabel .fseg{ display:none; }
+  .fpart.active .pcount{ display:none; }
+  .footer .submit-btn{
+    margin-left:auto; min-width:3.125rem; height:2.25rem; background:#111; color:#fff;
+    border:none; border-radius:4px; font-size:.85rem; font-weight:700; cursor:pointer; padding:0 .75rem;
+    transition:background .12s; display:inline-flex; flex-direction:column; align-items:center;
+    justify-content:center; line-height:1.1;
+  }
+  .footer .submit-btn .fs-hint{ font-size:.62rem; font-weight:600; opacity:.75; margin-top:1px; white-space:nowrap; }
+  .footer .submit-btn .fs-hint.complete{ color:#7ee2a8; opacity:1; }
+  .footer .submit-btn:hover{ background:#000; }
+  /* keep the dark button visible on black backgrounds */
+  body.contrast-wb .footer .submit-btn, body.contrast-yb .footer .submit-btn{ background:#333; border:1px solid #888; }
+
+  /* arrow nav (floating) — same button style as Submit */
+  .arrows{ position:fixed; right:26px; bottom:120px; display:flex; gap:8px; z-index:20; }
+  .arrows button{ width:54px; height:48px; border:none; border-radius:4px; font-size:20px; font-weight:700;
+                  color:#fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:background .12s; }
+  .arrows .prev{ background:#7a7a7a; }
+  .arrows .prev:hover{ background:#6a6a6a; }
+  .arrows .next{ background:#111; }
+  .arrows .next:hover{ background:#000; }
+  body.contrast-wb .arrows button, body.contrast-yb .arrows button{ border:1px solid #888; }
+
+  /* ---------- 5) Overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:60; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; text-align:center; padding:0 30px; }
+  .overlay.hidden{ display:none; }
+  .play-ov{ background:rgba(40,40,40,.9); color:#fff; }
+  .play-ov .hp{ font-size:84px; margin-bottom:24px; }
+  .play-ov .warn{ max-width:740px; font-size:.95rem; line-height:1.5; margin-bottom:18px; }
+  .play-ov .cta{ font-size:.9rem; margin-bottom:18px; }
+  .play-ov .dl-wrap{ width:min(420px,80vw); margin:4px 0 16px; }
+  .play-ov .dl-bar{ height:8px; background:rgba(255,255,255,.25); border-radius:5px; overflow:hidden; }
+  .play-ov .dl-fill{ height:100%; width:0; background:#1a73e8; transition:width .25s ease; }
+  .play-ov .dl-row{ display:flex; justify-content:space-between; font-size:.82rem; margin-top:7px; }
+  .play-btn[disabled]{ opacity:.5; cursor:not-allowed; }
+  .play-btn{ background:#000; color:#fff; border:none; border-radius:4px; padding:10px 22px;
+             font-size:.9rem; font-weight:600; display:inline-flex; align-items:center; gap:10px; cursor:pointer; }
+  .play-btn .tri{ width:0;height:0;border-left:11px solid #fff;border-top:7px solid transparent;border-bottom:7px solid transparent; }
+
+  /* options / panels — full white sheet like screenshots */
+  .sheet{ position:fixed; inset:0; z-index:70; background:var(--bg); color:var(--fg);
+          padding:18px 24px; display:none; }
+  .sheet.show{ display:block; }
+  .sheet .top{ display:flex; align-items:center; justify-content:space-between; font-size:1.4rem; }
+  .sheet .top .back{ cursor:pointer; }
+  .sheet .top .title{ position:absolute; left:50%; transform:translateX(-50%); }
+  .sheet .top .close{ cursor:pointer; font-weight:700; }
+  .opt-list{ max-width:700px; margin:30px auto 0; }
+  .opt-row{ display:flex; align-items:center; gap:14px; border:1px solid #ccc; border-radius:4px;
+            padding:16px 18px; cursor:pointer; font-size:1.05rem; }
+  .opt-row + .opt-row{ border-top:none; }
+  .opt-row .chev{ margin-left:auto; }
+  .opt-row.primary{ background:var(--red); color:#fff; border-color:var(--red); margin-bottom:18px; }
+  .opt-row .check{ width:20px; }
+  .swatch{ margin-left:auto; width:54px; height:34px; border:1px solid #999; display:flex; flex-direction:column;
+           justify-content:center; gap:3px; padding:4px; }
+  .swatch i{ height:2px; display:block; }
+  .sw-bw{ background:#fff; } .sw-bw i{ background:#000; }
+  .sw-wb{ background:#000; } .sw-wb i{ background:#fff; }
+  .sw-yb{ background:#000; } .sw-yb i{ background:#ff0; }
+
+  /* submission / results */
+  .panel{ position:fixed; inset:0; z-index:75; background:var(--bg); color:var(--fg); display:none; overflow-y:auto; }
+  .panel.show{ display:block; }
+  .panel .wrap{ max-width:900px; margin:0 auto; padding:28px 22px 60px; }
+  .panel h1{ font-size:1.5rem; margin-bottom:6px; }
+  .panel .lead{ color:var(--muted); margin-bottom:20px; }
+  .completion-stats{ display:flex; gap:26px; align-items:center; flex-wrap:wrap; margin-bottom:24px; }
+  .ring-wrap{ position:relative; width:120px; height:120px; flex-shrink:0; }
+  .prog-ring{ width:120px; height:120px; transform:rotate(-90deg); }
+  .prog-ring .ring-track{ fill:none; stroke:rgba(127,127,127,.18); stroke-width:11; }
+  .prog-ring .ring-fill{ fill:none; stroke:#1a7f37; stroke-width:11; stroke-linecap:round;
+    stroke-dasharray:326.73; stroke-dashoffset:326.73; transition:stroke-dashoffset .6s ease; }
+  .ring-center{ position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; line-height:1.1; }
+  .ring-center b{ font-size:1.7rem; font-weight:800; }
+  .ring-center span{ font-size:.78rem; color:var(--muted); }
+  .cstat-legend{ display:flex; flex-direction:column; gap:9px; align-items:flex-start; }
+  .completion-stats .cstat{ display:inline-flex; align-items:center; gap:7px;
+    padding:7px 15px; border-radius:8px; font-size:.95rem; font-weight:600; border:1px solid; }
+  .completion-stats .cstat b{ font-size:1.05rem; }
+  .completion-stats .cstat .ic{ font-size:1.05rem; line-height:1; }
+  .completion-stats .answered{ color:#1a7f37; background:rgba(26,127,55,.10); border-color:rgba(26,127,55,.35); }
+  .completion-stats .unanswered{ color:#b4690e; background:rgba(180,105,14,.10); border-color:rgba(180,105,14,.35); }
+  .jump-btn{ margin-top:2px; background:none; border:1px solid var(--accent); color:var(--accent);
+    padding:7px 14px; border-radius:8px; font-size:.88rem; font-weight:600; cursor:pointer;
+    transition:background .12s,color .12s; }
+  .jump-btn:hover{ background:var(--accent); color:#fff; }
+  .jump-btn:disabled{ opacity:.4; cursor:default; border-color:var(--line); color:var(--muted); background:none; }
+  .sub-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; margin-bottom:24px; }
+  .sub-cell{ border:1px solid var(--line); border-radius:4px; padding:8px 10px; font-size:.85rem; }
+  .sub-cell .qn{ font-weight:700; margin-right:6px; }
+  .sub-cell.empty{ background:rgba(226,35,26,.08); border-color:var(--red); }
+  .big-submit{ background:var(--red); color:#fff; border:none; border-radius:6px; padding:14px 30px;
+               font-size:1.05rem; font-weight:700; cursor:pointer; }
+  .ghost{ background:none; border:1px solid var(--line); color:var(--fg); border-radius:6px; padding:13px 24px;
+          font-size:1rem; cursor:pointer; margin-left:10px; }
+
+  /* results action dock — one rounded, glassy segmented bar (buttons joined by
+     dividers) instead of separate buttons */
+  .result-dock{ display:inline-flex; flex-wrap:wrap; margin-top:22px; max-width:100%;
+                border-radius:12px; overflow:hidden; border:1px solid var(--line);
+                background:rgba(127,127,127,.08);
+                -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+                box-shadow:0 10px 28px rgba(0,0,0,.14); }
+  .result-dock .dock-btn{ display:inline-flex; align-items:center; gap:.55em;
+                font:inherit; font-size:1rem; font-weight:600; color:var(--fg);
+                background:transparent; border:none; border-right:1px solid var(--line);
+                padding:13px 22px; cursor:pointer; white-space:nowrap;
+                transition:background .2s ease, color .2s ease; }
+  .result-dock .dock-btn:last-child{ border-right:none; }
+  .result-dock .dock-btn:hover{ background:rgba(127,127,127,.18); }
+  .result-dock .dock-btn:focus-visible{ outline:3px solid var(--accent); outline-offset:-3px; }
+  .result-dock .dock-btn svg{ width:18px; height:18px; flex:0 0 auto; }
+  .result-dock .dock-btn.primary{ color:var(--red); font-weight:700; }
+  body.contrast-wb .result-dock, body.contrast-yb .result-dock{ box-shadow:0 10px 28px rgba(0,0,0,.5); }
+  @media (max-width:560px){
+    .result-dock{ display:flex; flex-direction:column; width:100%; }
+    .result-dock .dock-btn{ border-right:none; border-bottom:1px solid var(--line); justify-content:center; }
+    .result-dock .dock-btn:last-child{ border-bottom:none; }
+  }
+
+  .score-head{ display:flex; gap:30px; flex-wrap:wrap; align-items:center; margin-bottom:26px; }
+  .score-card{ border:1px solid var(--line); border-radius:10px; padding:18px 26px; text-align:center; }
+  .score-card .num{ font-size:2.4rem; font-weight:800; }
+  .score-card .cap{ color:var(--muted); font-size:.85rem; }
+  .score-card.band{ background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  /* auto-generated weakest-area feedback line */
+  .weak-feedback{ display:flex; gap:12px; align-items:flex-start; margin:0 0 24px;
+    padding:14px 18px; border-radius:10px; font-size:.95rem; line-height:1.5;
+    background:rgba(226,35,26,.07); border:1px solid rgba(226,35,26,.25); }
+  .weak-feedback.good{ background:rgba(26,127,55,.08); border-color:rgba(26,127,55,.3); }
+  .weak-feedback .wf-icon{ font-size:1.3rem; line-height:1; flex-shrink:0; }
+  .weak-feedback b{ font-weight:700; }
+
+  /* radar chart — accuracy by question type */
+  .radar-wrap{ margin:4px 0 26px; }
+  .radar-wrap h3{ font-size:1rem; margin-bottom:6px; }
+  .radar-wrap svg{ display:block; max-width:480px; width:100%; height:auto; margin:0 auto; }
+  .radar-wrap .rd-grid{ fill:none; stroke:var(--line); stroke-width:1; }
+  .radar-wrap .rd-axis{ stroke:var(--line); stroke-width:1; }
+  .radar-wrap .rd-area{ fill:rgba(226,35,26,.22); stroke:var(--red); stroke-width:2; stroke-linejoin:round; }
+  .radar-wrap .rd-dot{ fill:var(--red); }
+  .radar-wrap .rd-label{ font-size:11px; fill:var(--fg); }
+  .radar-wrap .rd-pct{ font-size:10px; font-weight:700; fill:var(--muted); }
+
+  /* shareable result card (Telegram) */
+  .share-card{ width:540px; box-sizing:border-box; padding:34px 38px; border-radius:18px; color:#fff;
+    background:linear-gradient(135deg,#1a73e8,#0b3d91); font-family:Arial,Helvetica,sans-serif;
+    position:relative; overflow:hidden; }
+  .share-card .sc-top{ display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+  .share-card .sc-top img{ height:46px; width:auto; background:#fff; border-radius:8px; padding:4px; }
+  .share-card .sc-top .sc-ch{ font-size:.95rem; font-weight:700; letter-spacing:.3px; }
+  .share-card .sc-title{ font-size:1.05rem; opacity:.9; margin-bottom:18px; }
+  .share-card .sc-scores{ display:flex; gap:28px; align-items:flex-end; margin-bottom:18px; }
+  .share-card .sc-big{ font-size:3.4rem; font-weight:800; line-height:1; }
+  .share-card .sc-big small{ font-size:1.3rem; font-weight:600; opacity:.8; }
+  .share-card .sc-band{ background:rgba(255,255,255,.18); border-radius:12px; padding:10px 18px; text-align:center; }
+  .share-card .sc-band .b{ font-size:2rem; font-weight:800; line-height:1; }
+  .share-card .sc-band .l{ font-size:.7rem; opacity:.85; text-transform:uppercase; letter-spacing:.5px; }
+  .share-card .sc-meta{ font-size:.85rem; opacity:.85; }
+  .share-card .sc-foot{ margin-top:18px; font-size:.8rem; opacity:.8; border-top:1px solid rgba(255,255,255,.2); padding-top:12px; }
+  /* off-screen staging area used only while rendering the card to an image */
+  #shareStage{ position:fixed; left:-9999px; top:0; }
+  .share-modal{ position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,.7); display:none;
+    align-items:center; justify-content:center; padding:20px; }
+  .share-modal.show{ display:flex; }
+  .share-modal .sm-box{ background:var(--bg); color:var(--fg); border-radius:14px; padding:22px;
+    max-width:600px; width:100%; max-height:90vh; overflow:auto; text-align:center; }
+  .share-modal .sm-box img{ max-width:100%; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.3); }
+  .share-modal .sm-actions{ margin-top:16px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+
+  /* results breakdowns (by question type / by part) */
+  .analysis{ display:flex; gap:34px; flex-wrap:wrap; margin:4px 0 26px; }
+  .analysis-col{ flex:1 1 300px; min-width:0; }
+  .analysis-col h3{ font-size:1rem; margin-bottom:12px; }
+  .bd-row{ display:flex; align-items:center; gap:10px; margin-bottom:9px; }
+  .bd-label{ flex:0 0 130px; font-size:.86rem; }
+  .bd-num{ flex:0 0 54px; font-weight:700; font-size:.85rem; text-align:right; }
+  .bd-bar{ flex:1 1 auto; height:8px; background:var(--line); border-radius:5px; overflow:hidden; }
+  .bd-fill{ display:block; height:100%; background:var(--ok); border-radius:5px; }
+
+  .review{ width:100%; border-collapse:collapse; }
+  .review th, .review td{ border:1px solid var(--line); padding:8px 10px; text-align:left; font-size:.88rem; vertical-align:top; }
+  .review th{ background:var(--banner); }
+  .review .ok{ color:#1a7f37; font-weight:700; }
+  .review .no{ color:var(--red); font-weight:700; }
+  .review tr.wrong td{ background:rgba(226,35,26,.06); }
+
+  /* ---------- 6) Highlighter (same logic as the reading tests) ----------
+     Selection is wrapped in <span data-highlight-id> nodes; click a highlight
+     to remove it. */
+  span[data-highlight-id], .saved-highlight{ background-color:#FF99D6; color:inherit; cursor:pointer;
+                    padding:0; margin:0; border:0; border-radius:0; display:inline; }
+  body.contrast-wb span[data-highlight-id], body.contrast-wb .saved-highlight{ background-color:#FF99D6 !important; color:#111 !important; }
+  body.contrast-yb span[data-highlight-id], body.contrast-yb .saved-highlight{ background-color:#FF99D6 !important; color:#111 !important; }
+  #highlight-button,#clear-highlight-button{ position:fixed; z-index:4999; background:#fff; color:#1f2937;
+    border:1px solid #d1d5db; padding:.4rem .8rem; border-radius:.4rem; box-shadow:0 4px 12px rgba(0,0,0,.18);
+    cursor:pointer; font-size:.85rem; font-weight:800; font-family:inherit; }
+  #highlight-button.hidden,#clear-highlight-button.hidden{ display:none; }
+
+  /* ---------- 7) Drag & drop ---------- */
+  /* drag & drop: questions on the left, draggable options on the right */
+  .dd-wrap{ display:flex; align-items:flex-start; gap:28px; margin:14px 0 20px; }
+  .dd-col-q{ flex:1 1 auto; min-width:0; }   /* grow so the boxes can stretch to fill the row */
+  .dd-col-o{ flex:0 0 auto; align-self:flex-start; position:sticky; top:10px; }
+  .dd-head{ font-weight:700; font-size:1em; margin-bottom:1em; }
+  .chip-bank{ display:flex; flex-direction:column; gap:9px; align-items:stretch; width:22em; max-width:100%; }
+  .chip{ display:flex; align-items:center; justify-content:flex-start;
+         border:0.8px solid #919191; background:var(--chip-bg); color:var(--fg);
+         border-radius:4px; padding:4px .875em; cursor:grab; user-select:none;
+         font-size:1em; line-height:1.4; white-space:normal; }
+  .chip:active{ cursor:grabbing; }
+  .chip.dragging{ opacity:.35; }
+  /* each option keeps a permanent slot, so removing a chip leaves its place empty
+     and the other options never move up to fill the gap */
+  .option-slot{ min-height:1.75em; display:flex; align-items:stretch; border-radius:4px; }
+  .option-slot .chip{ width:100%; }
+  .option-slot:empty{ border:1px dashed var(--line);
+        background:repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(127,127,127,.10) 6px, rgba(127,127,127,.10) 7px); }
+  /* a grid gives every row a fixed label column + a shared box column, so all the
+     boxes line up in one straight vertical line. The box column STRETCHES to fill
+     the row (1fr) and wraps long text (no clipping), while staying adjustable. */
+  .match-row{ display:grid; grid-template-columns:16em minmax(0,1fr); align-items:center;
+              column-gap:1.25em; margin-bottom:.7em; }
+  .match-row .mtext{ min-width:0; }
+  .dropzone{ width:100%; max-width:100%; min-height:1.9em;
+             border:0.8px dashed #333; border-radius:5px; white-space:normal; background:var(--bg);
+             display:inline-flex; align-items:center; justify-content:center; line-height:1.4;
+             cursor:pointer; font-weight:700; padding:.2em .35em; box-sizing:border-box; }
+  /* compact matching task (short options, e.g. the abilities): narrower columns,
+     and shrink the question column to its content so the options sit right next
+     to the boxes instead of being pushed to the far right */
+  .dd-compact .dd-col-q{ flex:0 1 auto; }
+  .dd-compact .match-row{ grid-template-columns:11em 14em; }
+  body.contrast-wb .dropzone, body.contrast-yb .dropzone{ border-color:#888; }
+  .dropzone .dz-num{ color:var(--fg); font-weight:700; }
+  .dropzone.filled .dz-num{ color:var(--fg); }
+  .dropzone.filled{ border-style:solid; background:rgba(26,115,232,.10); }
+  /* a chip sitting in a box is flush — no inner border/box, just the moved label;
+     it wraps and the box grows so the whole answer stays visible */
+  .dropzone .chip{ border:none; background:transparent; padding:0 .4em; cursor:grab; width:auto;
+                   white-space:normal; line-height:1.4; }
+  .dropzone.correct .chip, .dropzone.incorrect .chip{ background:transparent; }
+  .dropzone.current{ border-color:var(--accent); }
+  .dropzone.over{ border-color:var(--accent); background:rgba(26,115,232,.18); }
+  .chip:focus{ outline:3px solid var(--accent); outline-offset:1px; }
+
+  /* wide tables scroll sideways instead of overflowing on small screens */
+  .table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+  /* ---------- 8) Post-submission marking (green = correct, red = wrong) ---------- */
+  .gap.correct{ border-color:var(--ok); background:rgba(26,127,55,.13); }
+  .gap.incorrect{ border-color:var(--red); background:rgba(226,35,26,.10); }
+  .mcq label.correct, .mcq label.answer-key{ background:rgba(26,127,55,.14); }
+  .mcq label.incorrect{ background:rgba(226,35,26,.12); }
+  .mcq label.answer-key .opt-letter{ color:var(--ok); }
+  .mcq label.incorrect .opt-letter{ color:var(--red); }
+  .dropzone.correct{ border-style:solid; border-color:var(--ok); background:rgba(26,127,55,.14); }
+  .dropzone.incorrect{ border-style:solid; border-color:var(--red); background:rgba(226,35,26,.12); }
+  /* footer dots / dashes reflect the score after submit */
+  .fdot.result-ok{ color:var(--ok); border-color:var(--ok); font-weight:700; text-decoration:none; }
+  .fdot.result-no{ color:var(--red); border-color:var(--red); font-weight:700; text-decoration:none; }
+  .fseg.result-ok{ background:var(--ok); }
+  .fseg.result-no{ background:var(--red); }
+
+  /* ---------- 9) Transcript (Script) panel ---------- */
+  .main-row{ flex:1; display:flex; min-height:0; }
+  .script-panel{ flex:0 0 380px; min-width:0; overflow-y:auto; border-left:1px solid var(--line);
+                 background:var(--bg); display:none; }
+  body.show-script .script-panel{ display:block; }
+  .script-top{ position:sticky; top:0; z-index:2; background:var(--banner);
+               display:flex; align-items:center; justify-content:space-between;
+               padding:11px 16px; border-bottom:1px solid var(--line); }
+  .script-title{ font-weight:800; font-size:.95rem; }
+  .script-close{ background:none; border:none; color:var(--fg); font-size:1.1rem; cursor:pointer; line-height:1; padding:2px 6px; }
+  .script-text{ padding:14px 18px 70px; font-size:.92rem; line-height:1.62; }
+  .script-text h3{ margin:18px 0 8px; font-size:1rem; }
+  .script-text h3:first-child{ margin-top:2px; }
+  .script-text p{ margin-bottom:9px; }
+  .script-text p b{ font-weight:700; }
+  .script-text .nar{ color:var(--muted); font-style:italic; }
+  /* Script button in the header: only after the test is submitted */
+  #scriptBtn{ display:none; }
+  body.submitted #scriptBtn{ display:inline-flex; }
+
+  /* evidence highlight inside the transcript */
+  .evidence-highlight{ background-color:#86efac; color:#064e3b; border-radius:2px; padding:0;
+                       transition:box-shadow .25s, background-color .25s; }
+  .evidence-highlight.evidence-current{ box-shadow:0 0 0 3px rgba(22,163,74,.4); animation:evpulse 1.4s ease-out 2; }
+  @keyframes evpulse{ 0%{ box-shadow:0 0 0 0 rgba(22,163,74,.55) } 100%{ box-shadow:0 0 0 10px rgba(22,163,74,0) } }
+  .evidence-qbadge{ display:inline-flex; align-items:center; justify-content:center; background:#065f46;
+                    color:#fff; font-weight:800; font-size:.72rem; padding:1px 6px; border-radius:4px;
+                    margin-right:5px; vertical-align:baseline; line-height:1.3; }
+  .show-evidence-inline{ display:inline-flex; align-items:center; gap:5px; margin-left:8px; padding:2px 10px;
+                         font-size:.78rem; font-weight:700; font-family:inherit; color:#065f46;
+                         background:rgba(16,185,129,.12); border:1px solid rgba(6,95,70,.4);
+                         border-radius:999px; cursor:pointer; vertical-align:middle; }
+  .show-evidence-inline:hover{ background:rgba(16,185,129,.22); }
+  body.contrast-wb .show-evidence-inline, body.contrast-yb .show-evidence-inline{
+    color:#86efac; background:rgba(16,185,129,.15); border-color:#10b981; }
+
+  /* inline per-question feedback after submit: tick / cross (+ correct answer) */
+  .qfb{ display:inline-flex; align-items:center; gap:7px; margin-left:9px; vertical-align:middle; }
+  .qfb-mark{ font-weight:800; font-size:1.05rem; line-height:1; }
+  .qfb-mark.ok{ color:var(--ok); }
+  .qfb-mark.no{ color:var(--red); }
+  .qfb-ans{ font-size:.85rem; color:var(--fg); }
+  .qfb-ans b{ color:var(--ok); font-weight:700; }
+
+  /* ---------- 10) Mobile / responsive ---------- */
+  @media (max-width:760px){
+    .header{ gap:9px; padding:8px 12px; }
+    .header .brand-logo{ height:30px; }
+    .header .logo{ font-size:20px; }
+    .header .taker{ font-size:.72rem; }
+    .header .icons{ gap:13px; }
+
+    .content{ padding:16px 14px 150px; scroll-padding-bottom:150px; }
+    .part-banner{ padding:9px 12px; margin-bottom:16px; }
+    .gap{ max-width:100%; }   /* never let an autosized box overflow the screen */
+
+    /* form / notes: label sits on its own line above the answer */
+    .form-box{ padding:13px 13px; max-width:100%; }
+    .form-row{ gap:5px 8px; }
+    .form-row .label{ flex-basis:100%; width:auto; }
+    .note-group{ flex-direction:column; }
+    .note-label{ width:auto; padding-top:0; margin-bottom:4px; }
+    .note-line{ gap:5px; }
+    .note-line .note-label{ flex-basis:100%; }
+    ul.bullet{ margin-left:0 !important; }
+
+    table.qtable{ min-width:560px; }   /* keep columns usable; container scrolls */
+
+    /* drag & drop: stack the two columns, options become a wrapping row */
+    .dd-wrap{ flex-direction:column; gap:16px; }
+    .dd-col-q, .dd-col-o{ flex:1 1 auto; width:100%; }
+    .dd-col-o{ position:static; top:auto; }
+    .dd-head{ margin-bottom:10px; }
+    /* full-sentence option chips: keep them stacked and full width on phones */
+    .chip-bank{ flex-direction:column; flex-wrap:nowrap; width:100%; }
+    /* stack label over a full-width box on phones */
+    .match-row, .dd-compact .match-row{ grid-template-columns:1fr; row-gap:4px; }
+    .dropzone{ width:100%; }
+
+    .arrows{ right:12px; bottom:104px; }
+    .arrows button{ width:46px; height:42px; font-size:18px; }
+
+    .footer{ padding:7px 10px; gap:16px; font-size:.8rem;
+             scroll-behavior:smooth; -webkit-overflow-scrolling:touch; }
+    .footer .submit-btn{ height:34px; min-width:44px; }
+    .fpart{ flex:0 0 auto; padding:6px 8px; }     /* natural width so the row scrolls cleanly */
+    .fdot{ width:26px; line-height:26px; }         /* bigger tap target for fingers */
+    .fitem{ gap:4px; }
+    .fseg{ height:3px; }
+
+    /* transcript becomes a full-screen overlay so it doesn't crush the test */
+    .script-panel{ position:fixed; inset:0; z-index:80; flex:none; width:auto; border-left:none; }
+  }
+
+  @media (max-width:480px){
+    .header{ gap:7px; padding:7px 10px; }
+    .header .taker .audio-label, .header .taker strong{ font-size:.7rem; }
+    .vol-pop{ display:none !important; }            /* phones: icon = mute toggle only */
+    .header .icons .hide-sm{ display:none; }        /* drop decorative wifi/bell */
+    .content{ padding:14px 11px 150px; }
+    .mcq label{ gap:8px; }
+    .arrows{ bottom:96px; }
+  }
+</style>
+</head>
+<body class="contrast-bw size-1">
+
+<!-- ============ HEADER ============ -->
+<header class="header">
+  <div class="brand">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6AAAABmJLR0QA/wD/AP+gvaeTAAAgAElEQVR4nOzddXgUV9vA4d/sxj0hCSFC8ECQ4O5WwaFOoW+pe9+6vnV3o660VKjgpTgUgheHQICgIcSJ2+Z8f2yWb0mRzO7s7G5y7uvKRXbYOeeBbGaemTnnOSBJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkntQnB2AJEkXJ4SIBCJqvsKBkFpfwUAg4A/4Ad412zxq/rQWDBhqbasGTtfadhqoqvmzHCgBioFCIL/m67TV99lAFpCpKEqWPf9eSZIcTyYAkuREQghfIB6IrfmKB+KA6Jovy4nfw1kx2qgKyMScEKQDJ4DjwJGaP48BRxVFKXVahJLUwMkEQJIcTAgRDLQBWgKtan01dmJoriADOFDzddDq+/2KohQ4MzBJqu9kAiBJGqk50bev+Wpn9WecvW3nlxWRVXKa7JLT5JYUcLq8hILyYk6XFZv/LC+mqKKU4ooyyqoqKK+qpLCihKpqEwXlJWe1VVBeTLUQZ20zKApB3v5nbQvy9sPT4EGAly/eHp74eHgR4OVLgJcvwd7+BHr7EezjT5C3P8HefjTyC6aRXxCR/iEE12rLRseAvcCumj93A7tlYiBJ2pAJgCTZQAgRivkE383qqy3/frZ+QRWmStILc0gvzOFEQTbphdnm7wtzyCrOI7M4n+ySAipMldr/IxzIy+hJeE0yEOEfSmxQOE0CGhEd2IjY4AiiAxrRJDAML6OnLc2fBLZYfW1WFOWklvFLUkMgEwBJugghRADmE3zvmq+emJ/P10mFqZKDuemk5WeQlpdBWv5J0vIyOJyfQXph9r+uxhsKg6IQHRhO89Aomoc0oXloFM1ComgR2oSWodF4GlUNe0gHNgDra/7crChKsSPilqT6QiYAklSLECIWGAT0B/oAHQDjxfarNFWxL+cYqTkn2Jt9lNSc4+zLPsaR06eoqjY5OOr6xcNgJD64MW0jmtIqLIZ24U1p3SiGhEZxdU0MqjA/OlgHrAFWKYpywpExS5K7kQmA1OAJIVpgPuEPAgYALS62T3FFGQfyTrAv+xg7Mg6x/dRBtp86SHmVe92qdzceBiMtQpuQFNWSpMYtSQiPo1PjFoT4BNRl94PA38BKYLWiKGmOjFWSXJ1MAKQGp+aWfm9gODAGSLzQ+02imgM5J9h+6iA7Mg6x8UQKOzMPNdhb964oPqQxPWPaktS4JZ0at6Brk9Z1uVNwCFhq+VIUJc/hgUqSC5EJgFTvCSEMQHdgNDCy5vvz3tIvqSxnc/o+1h3bw/rje9h+6iDFFWU6RStpwd/Lh85Rregd244+se3pHt0GX0/vC+1iAjYBi4H5wBZFUar1iFWSnEUmAFK9JITwA4ZhPumP5gKD9koqy1l3fDfrju1h3bE9bM84QKV8Zl+veBqMdG7Sij6xifSJa0+f2MSLJQTZwJ/APOAvOfVQqo9kAiDVG0KICGA8MAkYjLkc7jkdyT/F6iM7+OvgZlYf2S6f3TcwHgYjXZu0ZmTL7gxs1omkxi0v9PZyYDnwOzBHljmW6guZAEhureakfxlwJXAJcM6J5aWV5WxK38fiA5tZdHATx05n6hmm5OLigiMZ3CyJgfGdGNysM0Hefud7azXmmQWzgF/lzALJnckEQHI7NSf9q4Brgb6c53NsfZW/6vB2tyumIzlH7bsDnRq3QDn3R6waSAZmAr8oipKja6CSZCeZAEhuoWbRnNHAVC5wpb8t4wBzUpKZuy+Z4wXyTq1kv9igCMYm9GVc2750jmp1vreZgBXADOAPRVEKdQtQkmwkEwDJZdWM3h8E3AhMxLzU7b/szExjTspa5qSs5Wg9vbXvafQg3DeIcL9gGgeEEuwTQLC3P0E19fjN3/sT7OOPh8GIv5cPvh7eeBs9CfDyxWj4/wrF/l6+eBrOngRRWW2iuOL/F+YzVVdTVFFKuamS0qpyiivKqKo2nbX2gPn7Ek6XF5NfWkRmcR7ZNesV1NdBlPEhjRmX0JexbfvRMbL5+d5WDPwGfI25AJGcLyq5JJkASC6nphLfZOAWzCvo/cuerCPMSVnL3H3JHMpz7zLw/l4+xAZFEBcUQZPAmnr5QRFEBzaisX8oEf4hdS104zLySgvJLjnNqeI8ThTkcKIwixMFOZwszOF4YRbHTmdSUlnu7DDt0jI0mrFt+zIuoS/tIuLP97ZjmB8RfKYoyiH9opOki5MJgOQShBCemEfw3wYM4RyL6uzPOc7slDXMTUkmNde9xl55e3jSOiyWlmHRNA+JonlokzN/RvqHODs8pzhVnGdeGyHvJGn55rURDuSeIDXnhNuN12jdKJbxbfsxLqEvrRvFnust1cAy4DPMMwnc6x8o1UsyAZCcSggRDUwB7uIcy+YWVZTyx941fL9jCdsyDuoen1oeBiMtw6LpENmchEZxtGkUS9vwpjQNicSoqFoosMEyiWqO5J8ipWY9hb3ZR9mdeZiDuemYhOvX5unSpDXXdxrG+Lb9CfDyPddbMoBvgU8URTmsa3CSZEUmAJLuhBAKMAK4E/PAvn9V5fvnZCozti9hzr61LluFz9NgJDGiGZ2iWtAxsjkdG7cgMSIeHw8vZ4dWL5VWlrMn6wi7MtPYmZnGjoxD7Mk67LLjDfy9fBjftj9TOg2nS5PW53qLCXPVwenAEjlWQNKbTAAk3QghvIGrgYcxr7B3loLyEuakrOWbbX+xK9P11mlp7B9Kp6iWJDVuQa/YdvSITrhYNTnJwSqrTezJOszG4ynmBZkyDrI/57izw/qX1o1iubr9YCZ3GkaYb9C53pIKfAR8IZcxlvQiEwDJ4YQQTTA/278baFT777efOsiM7Uv4bc9qlxoYZllgpldMOwY3SyIuONLZIUl1cKo4jw3H97LxeAobT6Sw49QhBK5xce1l9OTSVj2YkjSCAfEdz1Vf4DTmxwNvKYpyVP8IpYZEJgCSwwghOgGPYL7qP2tptuKKMmbuXMY32xZxIDfdKfHVFh0YztDmXRjcLIk+cYmE+wU7OyRJA1nF+aw7voeVh7ezIm0r6YWuUa+ndVgMN3S5hOs6DMPfy6f2X1cCPwOvK4qyU//opIZAJgCS5oQQ/YFHgVHU+oxlFefzzba/+OKfheSXFTklPgsVFd+keuRI/ikWH9zM4oObWX98r9NnHAR6+XJNh6Hc2XMc0YH/ukEGsBZ4TVGUeTqHJtVz8mgnaaJmYN9o4HGgT+2/35N1hK+2/skvu1c6deGdSP8QBjVLYmTL7her+S41ANZrRPx5YKNTq0d6Gj0Y37Yfd/UYd766AmuBVxRFWaBzaFI9JRMAyW5CiOHAy0CPs7YjWH14B9M3zWHV4R1OeQ5rUBR6xrTlsta9GNa8y/nmaEsSAPuyj7E8bSsLUzew6cQ+p3xmFRQGN0/izh7jGBjf6Vxv2QC8JO8ISPaSCYBks5pb/c9jLtxzRqWpij8PbOSjjXPYlnHAKbG1aRTL2IS+XNV+MPEhjZ0Sg+Te0gtzWLB/PXP3JTstGUiMiGdal8u4qv1gvD3+tfxFMvA/RVGW6R6YVC/IBEBSTQjRB/OJf7j19rKqCr7d9hfTN80loyhX97i6NGltrtOe0JeYoHDd+5fqr+MFWTWLTK11SkGq6MBG3NljHFOTRp4rEVgLPKkoyirdA5PcmkwApDqrGdX/FHCl9fbKahM/7VzOW8m/cFLnE7/lSn9S4kBahDbRtW+pYTpekMWfqRudcmcg3C+Y27uP4dZuo8+VCCwFnlAUZZNuAUluTSYA0kUJIToA/wOuwOozU1lt4pddK3hr3SxOFGTrFk9UQBjXdBjC1R2GyJO+5FQH89L5edcKftq5glPFebr1GxccyQN9ruSq9oPwMPyrkOZS4FFFUf7RLSDJLckEQDovIUQc8CpwLVaflWohmL9/Ha/8PVO3lfgMikL/ph2ZkjSCy1r3+tdytpLkTCZRzdqju5ixfQkLUzdQpVN54rjgSO7rNZFrOw6tnQhUY16F8DFFUdxr5SxJNzIBkP5FCOEL3Iv5dv+ZdWgtJ/7X1vyoW/GeJgFhXNF+EDckjZSV+CS3kFGUy6zdq/hu+2KOns7Upc/WYTHc23sikxIH1l50qgT4AHhRURTnFt6QXI5MAKSzCCHGAO8Dzay3L0zdwGtrfiIl2/HVST0NRka26sHkTsMY0qwLBkV+TCX3YxLVrEjbxg87lrLk4GZdFi1KjIjn0f7XcGmrnrX/6jjwJDBDLjokWcgjqwSAEKIb8C7Q33r7jlOHeHr5V6w/vtfhMUQFhDGty6Vc23EYkf4hDu9PkvRyqjiPn3Yu58t//tRlrEDfuPa8MPRGOkQ2r/1XG4H7FUVZ5/AgJJcnE4AGrmahnmeBm4Ez9w7zSgt5K3kWX2390+FrsLeLiOem8891lqR6o9JUxR8pa/ho4xyH300zKAqTEgfyzKCpRJydUAvge+ARRVEyHBqE5NJkAtBACSG8gDswz+c/sz5pZbWJb7Yu4vW1P1FQXuLQGHrGtOWeXhMY0bKbrMEvNTgbju/lg42zWXpwi0OnEvp5enNnj3Hc13siXsazEuxi4E3gVUVRyhwWgOSy5FG3ARJCjAQ+BlpYb198cDNPL/+aw/mOuyjwNBi5rHUv7uo5js5RrRzWjyS5i92Zh/l62yKHr5PRPDSKJwZMZmxC39p/dQC4XVYUbHhkAtCACCFCgNeAW7D62afmnuCZ5d+wLM1x04YDvHy5tsNQ7ug5lphAWaVPkmrLLM7nWx1WyuzftCMvDL2RxH8vODQLuFNRFP2KekhOJROABqJmdP8nQLRlW15pIa+u+ZEZ25c47Dl/iE8Ad/YYy01dLyfAy9chfUhSfVJYUcIXWxbyyeZ5DksEPAxGpiaN5NH+1xDiE2D9V6cwjw34ziEdSy5FJgD1XM0gvw+BidbbFx/czMOLP3VYzX5/Lx+mdbmMe3pNINjb3yF9SFJ9VlRRytdbF/HBhj84XV7skD4i/EP436ApXNV+cO2/WgDcoSjKMYd0LLkEmQDUU0IIBfOt/jewGuR3qjiPx5d+wYL96x3Sr5+nN5M7Duf+PpMI9wt2SB+S1JDklxXx+ZYFfLp5HoUVpQ7pY0SLbrw28tbaj+cKMJcA/0BRFMdOBZKcQiYA9ZAQohXwGVbL9AoE329fynMrv3XIQcTL6MnVHQbzSL9r5Bx+SXKA3NICpm+ay+dbFlBWVaF5+4Fevjza/1pu6np57eJba4FbFEVxfDEQSVcyAahHhBAewOOYK355W7an5WXw4OKPWXt0l+Z9eho9uKbDEB7qexVRAWGaty9J0tmyS07zyeZ5fLZlvkNmDfSISeDtS+6kTaNY683lwAvAa4qiVGneqeQUMgGoJ4QQzTAX9+hn2VZpquL9DX/w7vrfqDBpe6AwKApXth/Eo/2vlaP6JckJThRk88qamfy6e7XmdQS8jJ78t88k7uk1sfbCWxuByYqiHNC0Q8kpZAJQDwghpmIe6Bdo2bYzM40HFk1nx6lDmvfXOaoVLw6dRo+YBM3bliRJnW0ZB3l6+VdsPJGiedttw5vy9iV30C26jfXmQuAhRVE+07xDSVcyAXBjQohgYDpwnWVbpamKV9bM5ONNc6kW2l4VRAeG879BUxjfrp+s3CdJLkQg+G3P37y0+nvSC3M0bduoGLijx1ge638tnkYP67/6DbhVURTHTCWSHE4exd2UEGII8B1w5kFdau4J7pz/ruZX/T4eXtzSbRT/7X0F/l4+mrYtSZJ2SivL+eKfhbyz/leKK7St7ts2vCmfjL6fdmcXEDoGTFUUZaWmnUm6kAmAm6kZ6PdUzdeZh3O/7F7Jo0s+o6SyXNP+RrTszivDbiIuOFLTdiVJcpyTRbm8tPp7zccH+Hh48dTA67m52+XWdwEF8AHwsKIo2k9PkBxGJgBuRAjRFvgB6GrZllNSwH//ms5fBzZp2ldS45a8MPRGesW207RdSZL0s/VkKk8t/5rN6fs0bXdI8868f9k9taf8bsY8QHC/pp1JDiMTADchhLgVeAfws2xbfWQH9yz8QNNqfr6e3jzY50ru7DkOo2K4+A6SJLk0Sw2QZ1d+S5GGNUDC/YJ597K7GNGim/XmYuBeRVG+0qwjyWFkAuDihBA+mEf432TZVl5VyRvJP/PRxtmaDvQb3qIrr4+4jZggOa1PkuqbjKJcHl/6BQtTN2jWpoLC9UnDeWHIjfh6elv/1QzgNkVRHFO6UNKETABcmBAiDvNI2x6WbftzjnP7/HfYnXlYs37C/YJ5ZvDUc9UDlySpnpm7L5nHl35BdslpzdpMCI/j41H30z6ymfXmrcAkRVHSNOtI0pRMAFxUzSj/n4Azo+9m7lzOY0s/06z6l4LCVR0G8fyQG2uvCCZJUj2WV1rI0yu+ZtbuVZq16ePhxesjbuPqDoOtN+cA1ymKslizjiTNyATAxdQs4vMI8BI1o/wrTJU8v3IGn/+zQLN+mgZH8sbI2xncLEmzNiVJci/Jx3bz4F8fcyjvpGZtTkkawSvDbrauGWACXgSel4sKuRaZALgQIUQg8DUwybLtZFEuN815gy3p2gysNSgKkzsN57nB/5Fz+iVJoqyqgjeTf2H6xjmYhDbn56TGLflq/MPEBkVYb56HuWZAviadSHaTCYCLEEIkAL8DiZZta4/u4tZ5b2v2rK5ZSBTTR91Xu6ynJEkSm9P3ceeC9ziSf0qT9iL8Q/hszAP0jWtvvXk/5nEB2q9MJqkmEwAXIIQYh7mqX5Bl24ztS3h86edUVps06WNsQl/evOR2gr39NWlPkqT6p6iilGdXfsuM7Us0ac/DYOSx/tdyd6/x1oWDioBpiqLM0qQTyWYyAXCimuf9z2Gu6qcAFFeU8d9FHzFnX7ImfQR5+/HaiFuZ2G6AJu1JklT/zd+/ngf/+pj8siJN2ru0VU8+HHUPgV5nypgIzMe+5xVF0XbREqnOZALgJEIIL+BL4HrLtkN5J7lx9uukZB/VpI9+TTvw4eX3Eh3YSJP2JElqOE4UZnP3gvdJPrZbk/ZahUXzzfhHad0o1nrzz8B/FEXRduECqU5kAuAEQohQzM/7B1u2LTm0hTvmvUOhBpW6PI0ePNb/Wu7sMQ6DIn/EkiTZploIPtw4m9fX/KjJ48ggbz8+GfNfhjXvar15LTBeUZRsuzuQVJFnB50JIZoDC4AzRfZ/2LGUR5Z8RpUGv2Ctw2KYPvp+OjVuYXdbkiRJANsyDnLXgnc5kJtud1tGxcCLw6Yxrctl1ptTgVGKoqTa3YFUZzIB0JEQoicwF2gM5uz6+VXf8fGmuZq0PyVpxLlKckqSJNmtpLKcJ5d9ycydyzRp7+6e43lq0PXWgwOzMd8JWKtJB9JFyQRAJ0KICcD31CzmU2Gq5J6FHzI7ZY3dbXt7ePLq8Fu4ruMwu9uSJEm6kF/3rOahxZ9QqsHS46Pb9OajUffh4+Fl2VQG3KAoyi92Ny5dlEwAdCCEuA94GzCAuQznDbNfY8PxvXa3HR0YztfjH6ZzVCu725IkSaqLnZlpTJv9OkdPZ9rdVrfoNnw34THC/YItmwTm2QHP2t24dEEyAXAgIYQReA+4y7ItLS+Dyb+9xME8+5+l9Wvagc/GPGD9iyNJkqSLvNJCbp//DisPb7e7rfiQxsyc9BStwqKtN78HPKgoijbFUKR/kQmAgwghPIEfgCst2zan72PqH6+SU1JgV9sKCnf3Gs/jA67DqBjsjFSSJMk2JlHN28mzeHvdLLuXJg/xCeCbCY/SJzbRevPPwBRFUbRZAU06i0wAHEAI4Y15Jb/xlm1z9yVz98L37V7JL8DLl/cuu5vRbXrbGaUkSZI2Fh/czN0L3ud0ebFd7XgZPXnvsrtqFy5bAFwhawVoTyYAGhNC+AGzgRGWbZ9unsczK75FYF+GnBAex9fjH6FlaPTF3yxJkqSj1NwT3Dj7dVJzjtvVjoLCC8Nu5Jauo6w3rwTGKIqiTWlCCZAJgKaEEMGYs9V+lm1vr5vFa2t+srvtMQl9eO/Su+UKfpIkuayiilLu/fNDFuxfb3dbTwyYzH29J1pvWgOMVhRFm9XRJJkAaKWmut+fQC/LttfX/sRbyfavd3FL11E8P/RGWdVPkiSXJxC8ufYX3ky2fybfPb0m8NTA6603/QNcIqsGakOeUTQghGgMLAE6gvkX4H/Lv+GzLfPtateoGHhp2E3c2OVSDaKUJEnSz8ydy3hk8ad2lxD+T+dLeGX4LdYXQHuB4Yqi2D+VqoGTCYCdhBBNgaVAazCPin3or4+ZuXO5Xe36e/nw6ZgHGNGimwZRSpIk6W/l4e3cPOcNu9c4uSJxIO9ddjceBqNlUxowTFGUNHtjbMhkAmCHmrr+S4EWAFXVJu5f9BGzdq+yq92ogDBmTHxc1vOXJMnt7c06wnW/vUx6oX137ce17cdHo+7D8/+TgKOY7wTI9QNsJBMAGwkhWgGrgGiASlMVt857m4WpG+xqt11EPD9MeoKYwHANopQkSXK+jKJcrv/tZXZm2nfBPqJFN74c9zDeHp6WTenAQEVRDtobY0MkEwAbCCFigdVAc4DSynL+M/s1uytiDWqWxJfjHiLQy0+DKCVJklxHcUUZt817myWHttjVTt+49nw/8QnrGVHHMCcBh+0MscGRCYBKQohIzFf+bcG8QtZ1v77IuuN77Gp3atJIXhl+s/UzLkmSpHqlstrEo0s+44cdS+1qp09sIj9e8ZT1yqcHMCcBJ+2NsSGRCYAKQohwYAXQAaC8qpIpf7zCKjuv/B/seyWP9LtGgwglSZJc38t/z+S99b/Z1cbgZknMmPg4XsYzjwN2AkMURcmxN76GQhaSryMhRBDmef4dwJzJ3jLvLbtP/o/2v0ae/CVJalCeGHBd7fn9qq08vJ2b575lPc2wI7C0piaLVAfyDkAd1JT3/RMYCOapfncteI8/9q6xuU0FhReG3sgt3UZd/M2SJEn10Lfb/uKxpZ/btZDQ6Da9+Wzsg9YLo60DRsqywRcn7wBchBDCC/iNmpO/QPDI4s/sOvkbFQNvX3qnPPlLktSg3dD5Ej64/F67xj7N37+e/y76yDqJ6AP8IYSQddMvQiYAF1CzpO9vwJlSfM+u+JbvdyyxuU1Pg5FPxvyX6zoO1SBCSZIk93ZF4kCmj77fen6/aj/vWslTy7+03jQc+LnmGC6dh0wAzkMIYQR+AEZbtr20+ns+2TzP5ja9jJ58PvYhxib01SBCSZKk+mFcQl++nvCo9fx+1b78509e+Xum9aaxwHdCCHmeOw/5H3N+7wBXWl68lTyL9zf8YXNjvp7efD/xcS5r3VOL2CRJkuqVES268dMVTxPg5WtzG++u/4331v9uveka4C17Y6uv5CDAcxBCPAi8aXn96eZ5/G/FNza3F+Ttxw+TnqRnTFsNopNsVVBeQlZJPnmlheSVFpJbWkSFqZKiilKqai1Y4mn0wN/TBy+jJ2G+AYT6BhLqG0ikf4gs1CRJDrTh+F4m//aSXesHvDhsGrd0PWuM1X2Korxvd3D1jEwAahFCjAZmA0aAOfuSuW3u2whsG6Xq6+nNj1c8RZ/YRA2jlM6n0lRFSs4x9mQeISX7KIfzMzh2OpOjpzM5XV6sSR8hPgHEBUUQFxxJs5Ao2kU0pV1EPAmNYq3nJEuSZKPN6fu4atbzFFeU2bS/gsJHo+5lUuJAy6ZqYJKiKLO1irE+kAmAFSFEd2Al4A+w/vhervzlOSpMlTa152n04LsJjzG0eRftgpTOcijvJJvT97HxRAqb0/eTmnP8X1fzevEwGGndKJbu0W3oGdOWHtFtaR4a5ZRYJMnd/X1kJ5N/f4nyKtuOv94envx61bPWd15LgaGKoqzXKkZ3JxOAGjUr+60DGgMczs/g8h8eJ6ekwKb2PA1Gvhr/CCNbdtcwSim/rIhVR3awIm0ryw9t5VRxnrNDuqDG/qEMbdGFoc27MKhZEsHe/s4OSZLcxvK0rUz941UqTVU27R/qG8iCyS/TMjTasikL6CMXDzKTCQAghAgG1lBT5S+3tIBRPzzBoTzbykobFQPTR9/H+Lb9NYyy4coqzmf+/vXM3ZfMhuN7MYlqZ4dkEw+DkV6x7Rib0JfRbXoT7hfs7JAkyeXN37+e2+a9bfOdvfiQxiyc/Ir179teoJ+iKK599aCDBp8A1MwT/RMYBlBWVcEVvzzLphP7bGpPQeGtS25ncqfhGkbZ8JRWljNnXzKzdq9i3bHdbnvSPx+jYqBf0w5c2X4QYxP64uPh5eyQJMll/bxrJfcv+tDmioG9Ytsx68pnrKcZrgIuURSlXKsY3VGDTgCEEArwLTAFzFX+7pj/rl1V/p4b8h9u7z5Gowgbnt2Zh5mxYwm/7VlNQXmJs8PRRbC3P5MSBzIlaQSJEfHODkeSXNKX//zJE8u+sHn/sQl9+XTMAxiUM6e9H4HJiqLYXofYzTX0BOAF4CnL62dXfsvHm+ba3N5TA6/nnl4TtAitQREI/j6yk8+2LGDJwc3ODsepesa05Z5eExjRshtKw/71lKR/sXdK9n29J/LEgMnWm55RFOV5e+NyVw32CCOEmIC5zK8C8P2OJTz41yc2t/dQ36t4uN/VGkXXMFRVm/hl9yqmb5xNau4JZ4fjUto0iuXunhOYlDjArjrpklTf2LuU8KvDb+HGLmequwvgakVRZmkRm7tpkAmAEKItsAEIAlhyaAs3/P6qzc+ZpyaN5I2Rt2kYYf1WLQTz96/j1b9/5GBeurPDcWlxwZHc12si13UaZr3amSQ1aP9dNJ2ZO5fZtK+Hwcj3E59gSPPOlk1FQG9FUXZrFZ+7aHAJgBAiEPPJvx3Awbx0Lp3xqM3Pm4c278KMiY/Lq7Q6WnJwM8+tmkFqznFnh+JWEsLj+N+gqQxv0dXZoUiS01VWm7j+t5dYeXi7TfsHePmyaMprtA6LsWzaD/RUFOW0VjG6gwaVANQM+nSBBcwAACAASURBVJsFTAIorijjsh8eY1/2MZvaaxvelHnXvUSQtywNezEHctN5dsU3LDm0xdmhuLWB8Z14YeiNtA1v6uxQJMmpiipKGfvjU+zOPGzT/u0i4lk4+RX8PL0tm+YAExrSoMCGlgA8BbwA5oFnt819mzn7km1qKyogjIXXv0JMYLiWIdY7JZXlvLrmR778Z6HTKvTVN54GIzd3G8Wj/a7B9/8PXpLU4GQU5XLZ94+RXphj0/7j2/bn0zH/td70qKIor2sSnBtoMAmAEGI4sIiaGv8fbZzD86u+s6mtAC9f5lz7Ah0im2sYYf2TfGw3D/71sc0FlaQLaxocyRsjb2dwsyRnhyJJTrMzM41xPz5l87oBLw6dxi3dziwcVA1crijKX1rF58oaRAIghIgHNgPhAGuP7uKqWc/bdEVqVAx8M+FRWeL3AgorSnhq2Vf8tGuFs0Op9xQUru04hBeGTrNrGVVJcmfL0v5h6u+v2nRM9zAYmXXVM/SNa2/ZlAt0VxQlTcsYXVG9TwCEED6Yy/x2AzhRmM3I7x4hu8S2sR61ppBItfxzMpU7F7xLWl6Gs0NpUOKCI/no8nvpFdvO2aFIklPYM5U7wj+EJVPfoElAmGXTNqCvoii2r0nsBhrCvKLp1Jz8K6tN3D7vHZtP/vf2miBP/udhEtW8tuYnRv/whDz5O8Gx05lM/PkZ3kqeZXO5VElyZ9d3GsGdPcbZtG9WcT43zXnDetGhzsCnWsXmqur1HQAhxK1Y/RAfWvwJM7YvsamtMQl9+Hzsg7I62znklRZy+/x3bJ6SI2mrX9MOfDbmAbnYkNTgVAvBTXPeYGHqBpv2n9blMl4ZfvNZmxRF+VqT4FxQvT2bCSFaAVuBAIBZu1dx98L3bWqrdVgMf055lUAvOd2vtp2ZaUyb/TpHT2c6OxTJSnRgOF+Ne4guTVo7OxRJ0lVxRRmXfv8o+22sNfLupXdxbcehZ5oDuimKYtvqcC6uXj4CqFnhbyY1J/+9WUd4cPHHNrUV5O3HtxMfkyf/c5izL5lRPzwuT/4uKL0wm/E//Y95+9Y5OxRJ0pW/lw9fjX/E5kGxjy393Dp58Ad+EELUy+U662UCALwE9ACoMFVy54L3KK+qVN2IgsI7l95Fy9BoreNze59vWcDt89626f9V0kdZVQW3zH2LN9b+7OxQJElXrcNi+GjUvTY9srX83lgd27oB/9MyPldR7xIAIcRA4AHL6+dXzmBP1hGb2rq/zyRGt+mtVWj1gklU89DiT3hq+VdysJkbEAjeTP6Fx5Z+bvNaF5Lkji5t1ZO7e423ad+U7KO8smam9abHhRBDNAnMhdSrBEAIEQLMoKbYz8rD2/nin4U2tTUwvpNc3a+WqmoT9y78wOaBlJLzfL11EXfMf5dKWY1RakCeGDDZetEfVT7ZNI9laf9YXhqA74QQYRfYxe3UqwQA+ARoCpBTUsC9Cz9AoP4qNTYogk/H/Feuvmal0lTFLXPf4tc9q50dimSjOSlruXH26/KxjdRgGBSFT0b/l6bBkar3FQgeWPQxuaUFlk2x1LOpgfXmDCeEmAacuWT/71/TOVWcp7odbw9Pvhr/MGG+QVqG59YqTJVM+eMVm6fWSK5jycHN3DD7VSpMMgmQGoYQnwC+Hv8IPh7qx/FlFOXywF9nDSC/QggxRbPgnKxeTAMUQrTAXLkpEOCbbX/x6JLPbGqr1hSQBq+y2sRNc97grwObnB2KJjwMRqICwogJCifUJ5Aw3wCCfQL+tZxzVbWJ02VF5JYWkVtaQHphDicLc+rNc/RLW/Xki3EP4SmXsZYaCHumgr91ye1c32mE5WUR0FVRlFStYnMWt08AhBAewN9Ab4DU3BOM+O5hSivLVbc1JWkEb468XeMI3ZdJVHPHvHdsXjHR2ZoEhNE9JoGOkc1pFxFPQqM4ooPCbT7pVVabSC/IJiX7KHuyjrArM43N6fvJKMrVOHJ9jG/bn+mj75OPuqQG4/5FH/HjzuWq9/Pz9GbJ1DdpFXZmRlgyMEhRlKoL7Oby6kMC8DTwPJgP0KN/eIJtGQdUt9M8NIplU9/C38tH6xDdlj2VE50hxCeAwc06M6xFF/rFdSAmSJ+lmo8XZLHm6C6Wp21l1eHt5JcV6dKvFv7T+RJeG3Grs8OQJF2UVJYz/NuHOJiXrnrfTo1bsHDyK3gaPSybnlAU5RVNA9SZWycAQogEzLf+fQCeX/UdH22co7odT6MHCye/QqfGLTSO0H19sOEPXlz9vbPDuKgw3yBGt+nNuLZ96RPX3ulXsyZRzdqju5iTksyC1PXklRY6NZ66eGbwVJtrqEuSu9l6MpUxM5+0aUbMvb0m8OTA6y0vy4EuiqLs1TI+PbltAiCEMACrgP5g/qGO+uEJm57RPj1oCnf3tG2+aH00Z18yt81926YZFHpQUBgQ35Hrk0Zweaue1hm5S6kwVbIwdQPf71jKmiO7XPb/06AofDbmQcYk9HF2KJKki3fW/cqra35UvZ9BUZh33Ut0j06wbFoNDFYUxTV/uS/CnROAu4EPwDxFbfh3D5OSfVR1O31iE/ntmuecfuXoKrafOsiYmU+65FQxbw9PrkgcxO3dx9CmUayzw1Flf85xPt40l1/3rHbJEfg+Hl7Mn/wyHSObOzsUSXK4aiG44pdnWXt0l+p920XEs2TqG9ZjiW5TFMW2UedO5pYJgBAiGtgDBAO8lTyL19f+pLqdYG9/Vvznbd2eFbu63NICRnz3CMcLspwdylm8jJ7ckDSSe3tPJNI/xNnh2CWjKJf3N/zOjO1LXS4RaBocyZKpbxDiE+DsUCTJ4dILcxjyzQM2jdl5fMB13N97kuVlAZCoKMoJLePTg7te9k6n5uR/IDed9zb8ZlMjb4y8TZ78a5hENbfPf9elTv4KCle1H8yGWz7ixWHT3P7kDxAVEMbLw25m/c0fckXiQJdaXvro6UzumP+uLPEsNQjRgY1snvX1VvIsUv9/waAgzEXo3I7bJQBCiGuBcWC+jfPAX9Ntul19bcehjGvbT+vw3NZbyb+w6vB2Z4dxRtcmrfnz+lf44PJ7iA5s5OxwNBcTFM5Ho+5jweSX6RzV0tnhnLE8bSvvrbctoZYkdzMmoQ9Xth+ker8KUyUPL/7UelzPaCHEpAvt44pc5/KjDmrqMO8BGgN8tfVPHl/6hep24kMas+yGN+USvzU2nkhh/I9Pu0SRG19Pbx7scyV39hzXYMZlVAvBDzuW8szKbyiuKHN2OHgYjMy59gXrgU6SVG8VV5Qx/LuHOJR3UvW+b4y8jalJIy0vMzA/ClBfgtZJ3O0I+w41J/8Thdm8tPoH1Q0YFQMfj7pfnvxrFFaUcNeC91zi5N8jJoHVN77LPb0mNJiTP5hHFk9JGsHyG95yiZNuVbWJuxa8T1FFqbNDkSSH8/fy4b3L7rbpmPPCqhnWhcCigNe0jM3R3OYoK4QYCpypwfzE0i9tOkDd2n003aLbaBmaW3ty2ZccPZ3p1BiMioFH+l3DnGtftGnRjvqiWUgUc659gYf6XuX0BOhwfgZPL//KqTFIkl56xrRlWtfLVO9XUF7CQ4vPWh/oZiHEMM0CczC3SACEED7A59Q8spidsoZFBzaqbicuOJKH+8olfi3WHN3JL7tWOTWGUN9AZl7xFA/2vdLpJz1X4GEw8nC/q/n16mcJ9wt2aiwzdy53qXEhkuRITw6YTHxIY9X7LTm4mfn711teKsB0IYT6lYecwF2OuA8CLQDySgt5cpn6KxMFhbcvuUOW+q1RUlnO/YumO7U4TWJEPEunvsHgZklOi8FV9Y1rz6LrX6VteFOnxvHIks9sWldDktyNr6c3rw6/xaZ9n1j6BafLiy0v2wD3ahWXI7l8AiCEaAw8Ynn9ypofyS45rbqdqzsMZmB8Jy1Dc2uv/D2TY0689T+4WRJzr3uR2KAIp8Xg6uKCI5l33UtO/dwezs/gjeSfnda/JOlpaPMuTEocqHq/U8V5vLHmrN+T/wkhojQLzEFcPgEAXsc8z5L9Ocf5YcdS1Q2E+QbxzOCpWsfltvbnHOerrX86rf9JiQP5YdKTciBmHQR5+zHziqcY37a/02L4bPN8DuSqXzxFktzRS0On2fT47etti6yr0QZSs0idK3PpBEAI0RU4s/LC08u/osqGBRxeHX4zYb5BWobm1v634mub/h+1cH2nEXx4+b14yHXo68zTYGT66Pu4rqNzxhZVVpt4dsU3TulbkvQW6hvIc0P+o3q/qmoTTy//2nrTTUKIblrF5QgumwAIIRTgPWpiXJi6gZU2DEga3qKrLPhjZcnBzaxI2+aUvid3Gs6bl9yGQXGr8hMuwagYePvSO7iu41Cn9L/k0BaWp211St+SpLcrEgcysmV31futPrKDJYe2WF4agPdqzmUuyWUTAOBaalb6qzRV8cKqGaobCPTy5fWRt2kdl9syiWqes+H/UQuTEgfy5sjbXar0rbtRUHjzkjuc9jjguZXfyTLBUoPx6vBbbBo0/vTyr6zX+egHuGyFQJdMAIQQvsDLltefbJ5nU5WmJwdeT0ygrPVv8fuev63rV+umX9MOvHfpXfLKXwNGxcCHo+5lkBNmTqRkH2XuvrW69ytJzhATFM5j/a9VvV9aXgZfb11kveltIYRLDnhyyQQAeBSIB8gqzrepNnnnqFbc0PkSreNyWyZRzbvrf9W934TwOL4e/wieRg/d+66vPA1Gvhz3EIkR8br3/dqan5w2fkSS9HZT18ttWiL7reRZ5JQUWF7GAfdrGZdWXC4BEELEAg9ZXr/89w8Uqqz4p6Dw/JD/yCtOKz/vWqn7SO4w3yBmTnqSYG9/XfttCAK9/Ph2wmO6L917KO8kv+/9W9c+JclZjIqBl4ffrPrR5enyYl5d86P1psdrlrF3KS6XAGCupewPsDMzjZ92rVDdwIR2/ekV207ruNyWQDB90xxd+zQoCtNH3Sfn+TtQ0+BIPh/7oO4VFN9f/7tTC0hJkp56xrRlTEIf1ft9v2MJ208dtLwMwOqxtqtwqQRACNERuMby+ullX6kedOTj4cWTAydrHZpbW3pwi+7P/h/udzVDmnfWtc+GaGB8J+7rre8Yo9TcE3JGgNSgPDvkBnw9vVXtUy0Ez638znrTFCGES1Wjc6kEAHgRq2l/647vUd3A3T3Hy6vOWqZvmqtrfz1iEnQ/KTVkD/a9UvdVBD/W+TMlSc4UExjObd1Gq95v7dFdLD642fLSADytZVz2cpkEoKZgwhgwZ05vJv+iuo3owEbc1XO81qG5tV2ZaSQf261bf36e3nx0+X1yYR8deRiMfDTqXtVXKPb4+8hO9mYd0a0/SXK2+3tPItqGWWUv/z3T+k72JCFEF00Ds4MrHaVfoma1vzkpa9mdeVh1A88MnoqfjgdBdzBj+xJd+3t8wHU2railP0F5VQHHCo+yJSeFVZk7WHxyG0tO7WFNzgG2FmRxqqrKbZ50NwuJ4pF++q50+cOOZbr2J0nO5OvpzeMD1E8L3Jt1hIWpGywvFeA5LeOyh0sMkxdC9AXWgnm62qCv7ic194SqNrpHJzB/8kuy0IyV0spyOn18MwXlJbr016VJaxZMftlFr/5NFBQfJjl7L8k5h9lVcJIj5eVceEKbAR+vcNqFtqBbaGsGNE6kk4+ny37CqqpNXP7949YDjxwqxCeAHXd8gbeHpy79SZKzCQSXf/84/5xMVbVfQngcK//zjvXMtN6Komy40D56cJUj9YuWb37dvVr1yd+gKLw49EZ58q9lzr5k3U7+CgqvDLvJ9U7+1QXsSF/E4+tfYsSaj3ksZSVzsw5z6KInf4Bqyioy2XpqPV+kzOA/q59j3OZf+S47B3UTU/XhYTDy0rCbdPs9yC8rYv7+dbr0JUmuQEHhxaHTVP+O7cs+xpyUs4poucRdAKcfrYUQA4AhYF505O11s1S3cVX7wXRp0lrr0NzeL7tX6tbXVR0GudjPoIK0U39y79rXuGHnUv48XYC9q9oLUcbRnPW8veUNxm78nTmFZS73iKBHTAIT2ulXKnjWnlW69SVJrqBbdBsmJg5Qvd/ra88qonWJEEL9usMac3oCgNXV/8+7lnM4P0PVzp5GDx7qe5XmQbm7rOJ81h9TP4vCFt4enjxqQ8lMRxGVR5m5/V2u27aM1SXlDjhJV5GVl8yz69/m/kMHyXWxLODJgZN1q7z495Gd5JYWXPyNklSPPDHgOtW/Y4fyTvLrntXWm14833v14tQEQAhxKTAQzAv+vLf+d9Vt3JA0krjgSK1Dc3vz9q/DJKp16Wtqp5Eus+ZCefEWntnwMW9kZDr8Nr2ozmVV6ufcuGszh/X5r66T2KAIJuu0dHBVtYkF+53+KFOSdBUbFGHT8txvrP2ZSlOV5eUAIYRzlves4ew7AM9avpmxYwlHT2eq2tnbw5O7e03QOqZ6Yd4+fZ7Nent4ck9v1/gZlBcl89Cmn5lXXKnjrfkqjqT/ws3b1pHmQknA/X2uwMuoz+C8OXKBIKkBeqDPFfh4eKna53hBVu3qti9oGpRKTksAhBBjgF4A5VWVfLDhD9VtTOtyGU0CwrQOze3llxWx8USKLn1dmTiYxv6huvR1IdVl23nun9msKa92wnP5arKzZnPvnl1kucjjgCYBYUyy4TmlLdYd26PbYFNJchVRAWFM6TRC9X5vr/vVerngvjV3wp3CmXcAHrN88822RaQX5qja2d/Lh3t6usaVp6tZdWSHLiu2KSjc1l19dSzNiVP8uPNXFpU64+RvYeJY+s88cfQUlRd/sy5u7z5GlxkBVdUm/j6yw+H9SJKrubf3RNUFuNILs5mxfan1psc1DUoFpyQAQohBQF8wj/z/ZPM81W3c3PVyGvkFaR1avbDs0BZd+hkQ35E2jWJ16ev8qjl89Hem55Ziyx14xRBAy7BOjG86mJtbDmdafB8uC48jymjDqVOUsjl1Ft8XusZyuW3Dm9InLlGXvpanbdOlH0lyJZH+IUzrov4C/sONf1D5/xdpA2tq4ejOWYu0P2r55rc9q1Vf/Qd6+XJnj3GaB1UfCAQr07br0tf1Sepvf2lNVGzno0OHKFa7o+JLYuxoHmvVnU5exn/9dXVVJqsOz+W1tH1kVNf9voIwHeGLfesZ3q0fcS5QlmJK0ghdSkHLxYGkhuqenhP4dttiilQsW59emMO8fclMbHfmMd0jgO517HW/A1CzGtKZlOmzLfNVt3Fb9zG6r4PuLtLyMjhVnOfwfsJ8g7i8VU+H93Nh1aQeW8GKCpU3/hV/erW5gy8Te53z5A9g8IhkSKtpfNOpO3EGNWdyQXHuMj7LKnWJGgGjWvfW5XclvTCbYyoH8UpSfRDqG8jNXS9Xvd+HG2dbL6s9VgjRXtPA6sAZjwAepaYE8Yq0bapr/gd7+3OrKzx3dlF6Df4bk9BHt7nm51Wdxh8nMqi6+DutKIRGjuWF+Gh8L/peA1GNJ/BC00h1t8pEIYvTNnDUBTIAbw9PLm+tT6Km12dPklzNnT3HqU60d2ceZu3RXZaXCvCQ1nFdjK4JgBCiKXCmas/Hm9UvKXpXz/EEe/trGVa9sunEPl36GZfglEdWZ6nI38GKMnVP/hUliqtbdiGyzhf1XiQ1H0J/D3V3AcpPr2fWaXWpiaOMTeinSz8yAZAaqmBvf261YbngWstqXyeEiNYsqDrQ+w7AXdSMO9iTdYTVh9WNHA729uemrpc5Iq56Y8vJ/Q7vI8QngN46DS47v2pSs1NVT7szBnbhkgB1H3vFqz2Xh/uoGxQoclh04oBLrBnQP74jQd5+Du9nU7o+yackuaJbuo0i0Ovi9xWtLTu0lX3ZxywvvYA7tY7rQnRLAIQQfsBNltcfb5pr/fyjTqZ2HkmAyv/ghqTCVElqznGH9zO4WWfnL/ojCtl9OqcOC/pYM9A4tLkNg/N8SAqNUTliVpCbuZ1NLjAhwNNgZGB8J4f3sz/7mHWVM0lqUIK8/VQPjBYIPjn7TvgdNedKXeh5FL8BaASQUZTLHylrVO3saTByow3TLRqSfTnHdZn/P6xFF4f3cVEiiwPFaif+GWgWEMG5h/1diEJYQCShKhOH6sp9rM53jRPisBZdHd5HZbVJ9UqeklSf3NptNJ4GdUeYX/f8bT1wOwyYrHVc56NLAiCEUIB7LK+/+Geh6iuFiYkDXKbevKtSO6DSVv3iOujSz4UIUx4nK9WOsvOikbfKW/k1jF5B5uxVDVHE5px0lXcpHKNvnD4DjPdkHdGlH0lyRdGBjRjbVt2YmwpTJV/+86f1pvtqzpkOp9cdgBFAO4CiilK+27ZYdQO2DLBoaKyeJTlMk4AwYoKcn4iJymJOqz3/K574Gm38vTJ646t612pO5B8h0wVmAzQLiSLSP8Th/aRkH3V4H5Lkyu7uOV51Bc5vt/1FcUWZ5WV7QJfVvPRKAO62fPPjzuWcLldXtmVQsyQ6RDbXPKj6Ru1SyrboHpPg8D7qxFRJubNjqIOqwuPsc5FFgnrEtHV4H3p8BiXJlSVGxNOvqbq7pPllRfy4a7n1Jl0GAzo8ARBCxAFnqiR8u1391b+s+lc3aldTtIXLJGKKov7DKyoptfV+vKmcUhuu5IUpg9RS18gAOkQ2c3gfshiQJMEdPcaq3uebrYusB8aPEULEaBrUOehxB+A2MI+7Sj62W/Uo9bbhTRnUzPEjmOsDPQ6+iRHxDu+jToxe+Ki+JV9BTnmZTRX6TBUFqCtYXUPkcsRFEoB24Y7/2R2RCYAkMaxFFxLC41Ttk5p7wrqOiwdws9Zx1ebQBEAI4QncaHn9/Y6lF3j3ud3ZY5wuK5q5u4LyEtWPVmyR0Ejdh9pRDJ6BhCpqPxfVHCnOsmFQniC/OJM8m57lV3CytMimhYq0pvaAZIu80kJVNdElqT5SULi9u/q7AN/vWGL98raac6jDOPoOwAQgGuB0eTELUzeo2jkqIIyJ7fo7Iq56J6sk3+F9eBiMRLvAAEAAjKFEe6lPADLy0jih+kRezra8EypLDlsIcsoKXWJdgLigCAyqkyb1sktOO7wPSXJ1VyQOoLF/qKp95qQkW1/INQFGaR2XNUcnALdavpm1exWlleqGbU3rcqnz6827idySQof30SSwkeo5rg6jNCYx0EP1vSFTwTYWq6wfICr28le2bY8OQHC6stgl7gB4Gj2ICghzeD+5pY7/LEqSq/MyeqquXVNWVcHve/623nSbpkHV4rAEQAgRDwyxvJ65c5mq/T0MRq7pOFTrsOqt/DIdEgAdTh5150PH0GjV61kLkc7PB3eoeJ5fya4jy1mluubA/yupLHeJWgCALlM4ZQIgSWaTOw1XfdH03dkD5UfWDKR3CEfeAbjR0v6W9P2qi9Rc0qqH6tsnDVluaZHD+wjzDXJ4H3WnEBPRnraqluoFEGSfms0zRzPqMI2wmuysOfzvcAaVtgUJCER1hctMWQz1CXR4H3kyAZAkACL9QxiqsgrnnqwjbD910PLSAEzROi7rxjVXU8XoTNC1BjbUyfWdhmsZUr1XXOn4gVeN/FwpAQCDX2fGhHqqHyIqilibMp2b925iT8W5r82FKYtVB79h6rYNpFXb+QS/2mRHAqEtPX6GpVWuku5IkvNNseFc9v32swbM/8dRlQEd9YB9CNACoLiijLn71qnaOTownEHNkhwRV72lxxoA/p4+Du9DFSWUUfGd+SJ3o+pqe0KUsPPoz0w+vpBWoS3oGBBGIw8PhKmYjOLj/JN3nJNV1RoN3lO77JXj6LGYVrnJVdIdSXK+oS26EhMUzomC7Drv89ve1Tw7+Ab8vXwAWgP9AHUL6NSBox4BnJn699ve1aqnBV3fabjzV5tzM+VVjj/oens4dEaKTfzDR3B7I1+bP8iiupDUnO38fmQFnx9cwheHk5mfdZR0zU7+AAYbFiByDC8dBtVWVLnGAkiS5AqMioGr2w+5+ButmC+ck6033Xi+99pD87OsECIA8/Q/4F+3Mi7KqBi4poO6/ywJKqsdf9D1NLjgjAwllHHtLqev6imB+lGMHng5O4gaXkbHJ3EV8g6AJJ3l+iT1F7W16uZcKYTQ/PadIy6zxwP+APtzjlsPZqiToc27uMRiM5L7MPr15tn23YlTPSBQDwpGo7fLJACSJOkvJjCcgSor2m5O38fBvHTLy0BgjNZxOSIBuM7yzewU9Y8spiSN0DSYhkKPq3M97jLYRiE88go+TOxAlA6FbtRRCPK0/RGF1vS4OtfjLoMkuZvJHdUPBpybctZjgGs1C6aGpsclIUQEcOZfqXbwny1TJiQzPZ7P6zHOwHZG4mOu56uk3rSxdclfh1AI8w5wnQRAh+fzeowzkCR3c2nrnqqX5J6dstb65eVCCE2LsWh9XLoK8ATYnXlY9cI/13Uc5jqV5tyMhw7/b65f491IdOOJfNP7Gq4M8tP2w61407LJaB6MCVc5oM9ApG+wyyQAhRUlDu9DJgCS9G+eBiNXth+kap+U7KPs///zqBcwUcuYtD4unblFUWsEY51cLQf/2czf0/HTu9yjwpuCX0A3nuz9MN+070cPHxvqBJzFSGhQZ+7u+iA/dupPXLXKhX2UYOJ9XeeWuB4/Qz9Xmy4qSS7i2g7qq9vOOfsuwHXne58tNEvVa9Yu7mt5rTYBSGrckhahTbQKp8EJ8w1weB+5pQUO70MzSiCdYifwecxI9mduZk7GTlZm13V6n4LRI4T2EV2ZFNeHS0ND8AYQmRwqqVQ1PVAxRNDS31Wu//VJAEJ9HV9tUJLcUetGsbSLiGdv1pE67zM7ZQ0P97va8nKQEKKJoigntYhHy3t1k8B8sbX91EEO5amLb2zbvhd/k3Reehx00wvrXkHfZSj+tGk8iIcbD+JhUUZG0Qn2FJ7iWGkemeUlFJuqKBfgafQi0DOIxr4RtAyMpUNQOMG1z9umk6SoXEjI4BtLGw/XGZOQkBFrbwAAIABJREFUXlj3YiS2aiQTAEk6r3EJfVUlAAdy09mTdYTEiHgw37UfC3yqRSxaJgBnnk3UGrlYJ6Pb9NYwlIZHjzr9JwtzqKw2ue84DcWHqMCWRAW2tGn3yoJD7DCpuv4nJCSe5i5y/q80VZFRlOvwflxrzQhJci0T2vXn1TU/qtpnTspaSwIA5ottTRIATe5NCiHCMZcqBGD+/vWq9u/SpDXNQqK0CKXBCvcLdngfJlHNiYIsh/fjmkzszkpRWXLYm85h8S5TA+BoQSbVwvFFiV1tzQhJciXNQqLoGNlc1T61ZgMMqTnn2k2rh5MTqbmbsPVkKofzM1TtPC5B3v63V5C3H8He/g7vZ1/2MYf34ZJMh1h4Kk/VAEDF2Iz+YT52DkLUjh4/u1DfQF3WG5Akdza2bb+Lv8nK4fwMdpw6ZHnpgUZFgbRKAM6U/q2VqVyUgsKYhD4ahdGwxQVHOryPPSqeXdUfguxTa1hUpur0j29YJwZ4u8rpX5+fXbwOn0FJcnfj2/ZDUXlpUGs2gCbTAe1OAGpq/5+Zv6f29n+36DbEBkXYG4YENNXh4LsrM83hfbicqoN8eXAvBaoe//vQr0kHGjksKPX0SAD0SEIlyd01DY4kKUrdWKR5+88qrDdMCOFnbxxa3AG4BMyzpFKyj3Jc5TPi8SpvhUjnp8c4is3p+x3eh2spZUPq78wqUTn636cLV0T6ucztf4BNJ1Ic3occyyNJdTNO5cy3I/mnSM09YXnpCwyzNwYtEoBRlm+WHdqqrnNFYbS8/a+ZtuFNHd5HRlEux05nOrwf11BF2rGZPHEsE3UFdD3p2HQAPVxossShvJNkFuc7vB+rkcqSJF3AOBseAyw/9I/1y1Hne19d2ZUACCEMwGWW18vS/rnAu/+tZ0xbmgRoWtq4QUuM1Ofgu/bYbl36qTsTWw58yWOpm9lRrlGte1HMtrSvuWVvCjkqB84bfLtze2yEy5T/BVin089MjyRUkuqDmMBwukW3UbXP8rSzLrLHCCHsuslo7zGqJxAF5jrxG1XeYrysdS87u5esJTSK1WWOfq0PoUuoqjjB4kM/ccPql5m6YxG/ZZ0kV91d+xqCwsJtvLvlHW7dv49stdPmlACGtB5BLxcrh79Mh5+Zp9GD1mExDu9HkuqLy1WeA9cd30NJZbnlZTTQ2Z7+7T1MXW75Zs3RnVSa1F19DWvexc7uJWteRk9aNYpVVWXKFqsOb6eq2qTLAkRqieoCdpxcyo6Ty3jFM5wuEe3pF9qUxKBY2gWGEXjOfLmaotKTbM/dy/KTW1iUm02xTfPlFULDR/FwVJBLXf1XVpv4+8gOh/eT0CgOT7kQkCTV2dDmnXl+1Xd1fn95VSVrj+1iRItulk2jAJuze3t/Wy+xfKP2+X90YDitG8Xa2b1UW/foNg5PAPLLikg+tpuB8Z0c2o99BFWVWWxKX8mmdAAFg8GbEC9/gj39CPT0xktUUVZVRGZZPtmVVeoW+fkXBYNPZ55o350oVxr5B6w+sp2CcsevAtgzpq3D+5Ck+qRdRDwxQeGcKKh7ie4VaVutE4CRwIu29m/zhYoQIgQ4E4Xa28IjWna7+Jsk1XpE63MQnmNDuWfnElRXl5FblkNa4TF25B5gc95hdhVmk2n3yR8UYyzTkiYx3IXm/VvMUVmbw1YyAZAk9QY3U3cXf8nBLdYv+wghbC69ac+dymFgXhp9f85x1dP/5O1/x9DrILwgdT0Vpkpd+nJ1ijGKK5OmcWeI61T9syirqmBR6iZd+uoRk6BLP5JUnwxVeS48ejrTerE9D2CQrX3bkwCMsHyj9urf0+hBv6Yd7OhaOp/moVE09g91eD95pYX8mbrR4f24OsWjCVd2uoXHIgJd6rm/xYL96zldXuzwfmKCwmVBL0mywaBmnVQP3q51zh1xvvddjCYJwLJD6qb/9YppJ+uFO9CQ5nYNDK2zGTuW6NKPa1Lw9G3PQz3u4vHIYJc8+QN8v2OpLv2ovYqRJMks0MuP7tHq7p4tP3vM3Uhb+7bpuCWEaAG0ACipLGf98b2q9h/WQh4sHGloi6669LPmyK6GuTaA4k3LJmP5vPcNTA5yvdv+FinZR1l3bI8ufQ1rrs9nTpLqI7XH7LXHdlFWVWF5mSCEiLOlX1svXAZbvll3fLfqZ8HyasGxBsV30mWKnkDw+Zb5Du/HdRgIDuzM3V0eZGanAXT2ctXrfrOPNs5B4Pjlfz0NRvlIT5LsoHZMXFlVRe26OzaNA7D1CDbQ8o3aK4zowEayWpiDhfgE6DYY8Nc9f5NRlKtLX+dnoG3sOO6L70w3fz+757bWpii+NGvUi/u6PMjCPtdzc0SYefELF3aiMJs/Utbo0lefuPYEedu9LokkNViJkfFEqayKu+HsO+8Dz/e+C7H1WHmms2SVJUaH6XR7uqEb17af6p+NLSpMlby/4XdeHnazw/s6P4XgoCRuCEriBqopKDnKP3lH2F1wjF2nj7G3KI/TpmoV18IKPt6NaR/SnG5hbRjUuB2J3h4ue6v/XN5d95vqwly2kgt6SZJ9FBSGNO/MjzuX13mfWncA9EkAhBCxQHMwP//fkXFQ1f6D4pPUdinZYHSb3jy57Euqqk0O72vG9qXc1WM8MUHhDu/r4gwE+TVjsF8zBp+pSmuiuCKfk6X5ZJQVkFdZTml1JWWmSsqrqzEavPAxeuHvGUiUbxgxfo1o4uWF69U5rJujpzP5cVfdDyT28DQYVZczlSTp3wbF/x979x0dVdU1cPh3MplUCCQkoSQQeotUlaqgIKIgXcDeywvYPruvIhbsFctrQUEFCyq9WOggUqRJ7zWE3hKSkHq/P5KJk0iSOTN3WrKftVxr5nLPuRuBnH1PbaWVAKw9vJNcIw+LCoD8eQA1lVKHyypnz5kegMKxhr8ObSNbo4FRKDrWbu7EI4Wu6LAqdKqdyBIPbAGblZvNq0u/5ePeD7v9Wc6xEB5UjYZB1WhYxduxuN/oJRM99vbfJaEVkaGVPfIsIcqzDppt47msDLYc30+L2Hq2S5cBP+nU4cwcgMttH5Yn6Y3/N6wWR3RYBfgJ7CMGJzq9P4S2yVuWFh+TEl7w16HtzPDgLo2e/DsmRHlWs1IUtSrr9aKuSnJtGMCZBKCj7YPuD/yO8fL270l9m3SiSnC4R55lYPD8wq/INVzdVFc4Kycvl2fmjfXIzH/In2wq3f9CmEd38naxeQAddJ+nlQAYhhEONAfINfL4+6je+L90/3tWSGAQg5o7NTfEKeuP7OKLNbM99jxR1GerZ7Hx2F6PPW9wYleCA60ee54Q5Z1uArCyaC98K8MwtJbj6PYAtKNg3sD2EwdJyzqvVbiD9AB43C0tr/Lo817/43v2nTni0WcK2Hv6CG/9Ocmjz7y5RXePPk+I8q5dvF4CcPjcKfuTBK2A1jI73QSgsL9vdfJ2rYLxETHUqlxN83HCVYmxdT26SUt6dib3z3xPa3KocE1OXi4j5owhIzvTY8/sktCSZjEJHnueEBVB85gE7T01XBkGcDoBWHt4p1bBi2s11nyUMMuwS/t69Hnrj+ziveVak1GFC95cNok1yTs8+kxP/50SoiKwqADa1GykVcaTCUA72wfdHzgXa/6mhHmuqt+WJtFObRXttPeW/8z8vXqHRAl9i/f9zUcrp3r0mc1iEjx24JQQFY2LEwG1ZuU6nAAYhlETqAWQlnWeXacO6TxHO6sR5lEohl/az6PPzDMMRsz+gINnj3n0uRXJ/jNHuW/mux5fefFgu/4ov9oXUQj/oZsAbD2+n/R/hv/iDcOo7mhZnR6AwtMKNh3bS57h+FIja4CFltXrazxKmG1wYlcaRtXy6DNPZ6Ry0+RXPHIefUWTmpXO7VNf58z5cx59boPIWvRvdplHnylERXJxzcZah7nlGnlsOb7P/pLD3XNOJQC6S40SY+sSEhikVUaYy6ICeLTjYI8/d8fJJO6Y+obHdqarCNKzM+n5zVNsPXHA489+6vIbbVuPCiHcIDwohGaaB+ZtOrbP/qvDRws6lwAc3aNRDFpWb6B1v3CPAc0u9/hcAMg/MOqBOR/KJkEm2H4yidaf3Mvu08kef3bzmAT6NO5Y9o1CCJe00Owx33i0yEu5W3oACtcX6vYAtKher+ybhNsFKMXzXW/zyrOnbfuDx3/7xGO71JVHaw/v4KqvH/PakMqoK24nQMnYvxDupttmbjpW5KXc3B4AwzCqAHUBsnNz2HEySSc2+8MKhJddVb8t3et550jm7zYu4IHZH3jkhMLyZu+ZI/T/fhRZXhpK6dnwUq6oKyd5CuEJF2m2mVuOH7Dfe6WhYRiVHCnnaA/ARZA/7Xf7yYNa47kWFUBTzfEM4V4vXnk7Vo1JJmb6ecsSRsz+QDYK0pCenUnPCU+SmZvlledbLYG8cMXtXnm2EBVRYkxdrd62rNxs9pwqHBYMoGDL/rI4mgAUVrb9xEGHgwJoVC2eUGuwVhnhXo2qxXPPxb299vxp2/7gpp9Hk5KZ7rUY/MXZzDS6ff0YZ897byXFsEv6UD+ypteeL0RFEx4UQr2qev/mtp0s0ja7KQHQ7P5PjK2rdb/wjKc630BCVYeXi5puyf4N9PnuWQ7IPgEl2n/mKL0n/pe9pw97LYb6kTV5rNMQrz1fiIrqIs22c8cJDyQAO07q9QA0qeb5WeeibKHWYN7rOdyrG7psO3GAHt88wYK967wWg6+at2ctV094kp2n9BJuMykUb/S4T5bwCuEFjTVXbBWbm5foSBn9BOCE3g+kJtHxWvcLz+lc5yJubHGlV2M4c/4cN09+hdf/+F4mBwLZebm8uvQ7bp3yqsc3+Snuppbd6ZLQ0qsxCFFR6b48byu6L4g5PQAFKwDiIH+iwf6zR7WCaiw9AD7t5W53eXUoAPK3DX5v+c/0/f65Cn2U8N7TR+jz3bOMWTFZa6dNd6gXWYOXr7zTqzEIUZE11ewB2Hv6sP0E/QRHVgI40gPQmIIVALtPJWu9pQUHWr3euIjSVQoK5fM+j3ptVYC9Nck76Dr+//hw5dQKtWlQTl4uY9fMpvs3j7FO85RNd7AEBPBxr4cJDwrxdihCVFh1I2titQQ6fH92Xi57/3mBUkCZB/A4kgA0tH3YozkZqVFUvGwb6gda12jIIx2v93YYAJzPyWL0kolcO+Fp/jq03dvhuN3KpK1cM+EpnlswjrSs894OB8jfMOp8jneWHAoh8lkDLNqrb4r1oDYs6T4brQRg3xm97v+GUXFa9wvvebTjYJ864vXvo7vp892zDJv1Pkkpx70djukOnD3GfTPfpd/3I7V31nS37Nxcbp7yKkv3b/R2KEJUaI2r6c2hK7ZiyJQEoHAj/71n9HoA6kXW0LpfeE+AUnzS+xFqV4n1diiFDAymbF1Khy8e4Ol5Yzl87pS3Q3LZodQTPPH7Z3T64gGmb1vms1sjZ2RncuvU1/jjgCQBQnhLvap6bWixl/QyD+HR6gHYe1pvglZdzeCFd0WGVmZcvyd8btlXdm4O49f9yqWfD+ORXz8uPtvVL2w9vp+HfvmQ9mNH8M3fv/vFTogZ2ZncMuU16QkQwkt029BiL+kmJwC6PQCSAPidltXr81Gvh3zy0Jfs3By+37iAK8Y/ysBJo5iydSmZOdneDqtEmTnZTN6yhAE/PM+VXz3GpE2L/O5Y5Pwk4FWW7N/g7VCEqHC0E4DTenMASp1iaBhGGFAd8pcAHk49qRVMPdk+1C/1adKRkSm38uKib7wdygUZGCw7sIllBzZRNaQSvRq1o2+Tzlye0IJAL69myM7LZen+DUzftoxfdq7y2sl9Zjqfk8WtU17jmwFP01UOBBLCY+pqDqMnpRwnJy/X9nMwzjCMYKVUZkn3l7XGoPAUn+TUk1prk8ODQogJr+Lw/cK3DL+0H/vPHOWr9b95O5RSnTl/ju82LuC7jQuICA6ja91WdKvXhk61Ez02BLX39BH+PLiJBXvXsWT/hnJ5xsH5nCxum/q6JAFCeFDNStUICQxyeFVOTl4uR8+dJi4iGvKXAsYDu0u6v6wEoHAngmTNt/86Vap7dZtZ4bpXr7qHs5lpTN36h7dDcUhKZjozty9n5vblAMSGV+XSuKZcFFuXZtEJNI2uQ3xEtNbaWnvZuTkcTDnOthMH2Hr8AJuO7WV18naOpZ0x87fhs2xJwNcDnpajgYXwgACliI+IZtc/J/2VKSnluC0BgPyXeNcTgEMpJxwOACCucjWt+4XvsagAPuz1EBnZWfy6a5W3w9F2LO0Ms3esYPaOFYXXApSiRqVqxEVUIzKkMlGhlakcHPaviY+ZOdmkZKZxKiOV0+dTOZRygiPnTnl9hz5vsw0HjOv3OD0aXOLtcIQo9+IiYrQSgGIv66VuJ6jRA6CXANSqHF32TcLnWQMsjO37KLdNfZ2Fe9d7OxyX5RkGyakntP8++w4DvNyzlpWbzd0z3uar/k/RrV4br8YiRHmn+zJ9qOjPtjol3QdlrwL4pwdAcwjArgtC+Lkgi5UJA56hd+MO3g5FoMAH9g7IzMnmtqmv8/vu1d4ORYhyTfdlutjLTak9AGUlAIVb+enOAahZSYYAyhOrJZCxfR9jSOIV3g5F+MjcmuzcHO6a/pYkAUK4UVxEjNb9SUWH60vdSrCsBKBwHd/xtNNaQcRFSAJQ3lhUAO9fO4I7Wvf0dijCR9iSgN92/eXtUIQol+I1e9OLTUou9TS+shKAwsJHz+klADWkB6BcsqgA3uhxH6O73eWTmwUJz8vOzeHuGW9LEiCEG9SoFKV1/3EzEgDDMAKAaMjfeOVERopWELIHQPl278W9+bzPYz63bbDwDlsS4I+rRYTwZdFhEVr3H08vkgDEGoZR4ptaaT0A1ShYJXD2fJrWFqZWSyARwWEO3y/8U58mHZl986skVC01yRQVRHZuDvfMeEeSACFMFBlaGavGDqeZOdmkZhVuRhYEVC3p3tISgMKf6sfTzzr8cICYsCqyCVAFcVFsPebf/jbXNGzn7VCED7AlAb/slCRACDMoFFGhmr0AaUXa7BKPeC0tASgsdFxzp7OYsBITDlEOVQ4KY3z/J3nqshu8vhd/RRYYYPGJIZns3BzunSlJgBBmidYcUj9R9KW9xC7asoYAADidkar18GqaYxbC/wUoxaMdBzP75lepL4dAeVztKrFMveElZt38KpGhlb0dTn4SMONtSQKEMEF0mF4CcKronL0SZxGWlgAUvsbrnmgmCUDF1bpGQ+be9hY3teguw0AeoFDc3PIqFt/xHu3imtIith4/DRnlG0lAXi73znibOTtXejsUIfxalOa/57PnixxI5tQcgH8SgPN6CUCV4HCt+0X5UikolPeuGc7UG1+iYVQtb4dTbiVUrc6kwSN5t+cwwoNCCq+3iK3Hzz6UBNw34x1JAoRwgW6bejbznP3XyJLuKy0BKOxz0D3eNEISAAF0jG/OvNve5oF2/bVmsYrSWS2BPNR+AEvufL/Eo3kv8sEkwP5QJiGE46qEaCYARV/aSxw/cKgHIEVzCECWAAqbUGswI7veypK7xtC3SSdvh+P3uiS0ZMHt7/Bsl1vKnPDna0nAvTPe8ZujpYXwJbov1cVe2p3qAXB6DkCVkEpa94vyr35kTcb2fYzvr3+OptGlHlAlLqB5TAKTBj/PT0NG0bhaqdt7F2FLAnSXEblDrpHHiNljJAkQQpPuEECxl3an5gAUvjakZmZoPVx6AERJutVrw8I73mVs38dkfoADGkXF8WGvB5l3+9tcUUJ3f1l8MQmYsnWpt0MRwm/oDgEU6wEo8R9+YCl1FLbiGTmZWg+vFBSqdb+oWAKUom+TTvRu3IHJW5bw0appbD9x0Nth+ZRmMQk80K4/A5pdhkWVdWRH2RJj6/LzkFFc/+OLxZcIeVyukccDsz8AYGCzy70aixD+IMwaUvZNds7nZNl/LbFBdiwByNZLAHxhMxLh+ywqgCGJVzAk8QpWJm3lw1XTmLd7DYYPnHfvLe3imvJg+wH0aHCx6csoE2PrMnnoCwya9ILPJAGGYTCoeRevxiKErwuzBmvdX6zNLrFL3i0JQKhVEgChp318M9rHN2Pr8f1M3DCPn7cs4cz5c2UXLAeqhlRicPOu3NyyO81iEtz6rOYxCcy48WUGThpV/NhQj8s18nhwzocAkgQIUYpQzZfqYr32LiYAmkMAoYF62YoQNs1iEnil+9083/U2Zu1Yzk9bFrN0/0Zy8nK9HZqprAEWuiS04vrELvRu1IHgQKvHnt2oWjxThr7oU0mAAVwvSYAQFxSq2wNQdAjAqQSgcNwgPTurlNsuUFCGAISLggOtDGrehUHNu3AqI4XZO1YyffsyVhzcQrafJgPWAAsdayfSv2lnejVq79XleY2qxTPlhpcY+MPzPpEEPFTQE1CekoCM7EymbVvG3D1r2Hh0D8mpJwGoVbkaLarXp0f9i+nftLP2D3dR8ei+VBfrtS9xDkCJg4yGYRwHogGaf3wnJ9MdHzPcNPxLYsLlQCBhvtSsdJbs28CCvetZsHcdyaknvB1SqeIioulWrw3d6rWhS0JLn5sgu/PUIQb9MIqjaae9HQoWFcAHvR70+yQgzzD4ev1vvLHshzLPUYkMrcxTnW/g9tY9CVCydba4sGNpZ2jxv7sdvj8mvCqbhn9ZWFwpdcEDgUrrASjsk8zOzXH4wQBBHuzOFBVL5aAwejfuQO/GHQA4ePYYKw9t469D2/greTs7Thz0Wg+BNcBC4+jatItryqW1mtA+vhnxETFeicVRjaLimHzDiz6RBNh6AgzDYHBiV6/G4qzUrHSGzXyfuXvWOHT/6YxUnp43lvl71vJJn0eoHCRLqMW/BVlKa6r/rdiQaYmFS6u1cO/WXCNP6+FmLFsSwhG1q8RSu0ps4Vtjdm4OO04mse3EAbaeOMC+M0c4cOYYB1KOaZ9qWZLI0MokFDy3btUaNIuuQ7OYBBpFxWHV/IfqC3wtCXj4l48wMBiSeIVXY9F1NjONoT+9zLrDO7XLzt2zhlsnv8YPg0fKKirxLwGabWpeXpE2u8R92B1LAPIkARD+wWoJJDG2Lomxdf/1a2lZ5zmWdobT51M5lZHK6YxUzudkFf5nL8QaRIgliJDAICJDKxMVWpnIkMrEhlctcvBOedEoKq5wToAvJAGP/PIxgN8kASmZ6dzgZONvszxpCy8s+prXr7rXxMhEeaDbpuYYRXoAXEwAdHsAAiQBEL4nPCiEekE1qEcNb4fikxpG1WLKDS8xaNIojpw75dVYbEmAYcDQi67waixlOZuZxpAfX2L9kV0u1/XVut8YmngFbWo2MiEyUV4Eah6mVuylvcR2vrSWuvCJeZo9ALrdFUII39AwqhaTh75IjUpR3g4lPwn49SMmbVrk7VBKZGbjD2BgMGblFFPqEuVHgOZLdW6eYz0ApdVa+Gt5ht7ObNIDIIT/8qUkIM8wfDYJMLvxt5m3Z22F2QRLOEZ3CKBYr71TCYAQooLKHw7wrSTgh00LvR1KIduYv9mNP+RPZF3rwlwCIRxVWgJQmELork/VnTQohPA9DSJ9LAn45WO+Xv+bt0PhbGYag3980a2N9O7TyW6rW/gfF1filbguurQEoLCQ7vhDnmawQgjfZEsCavpAEmBg8NTcsV5NAtzV7V9cWtZ5t9Yv/Euu5t4mxdps1xIA7fEH6QEQotzITwJe8qkk4CsvJAGeavyBcrnUVDhPt00ttmqgxJ38HEsAdGcgSg+AEOVK/ciaPpUEPO3hJMCdY/4X0jAyziPPEf6h2Lr+Mpk6BODiDEQhRDngi0nA+HW/uv1Znhjzt2e1BNKmZkOPPEv4BxeX4juVAGTbPuhub5qVk132TUIIv1M/siYzb3qF2lVivR0KBgbPzPvCrUmAJ7v9ba6q35aqIZU89jzh+7Ly9M7jKdZmOzUEkGH7oLs3dfFtVYUQ5UftKrFMHfpiuU8CvNH4KxQPtx/osecJ/1DseN8yhRZts9NLuq+0BKCwUKhmApAhCYAQ5VrtKrFMu+Eln0oCxq37xbQ6PT3mb3NHm56yDbD4F90EIMSEBKCwByA0MFjr4Rk5esEKIfxPfEQM0254iTo+kgT8d96XpiQBnh7zt+kY35wXrrjdo88U/kG3Vz3MWqTNzijpPsd6AKyaCUC29AAIURHER8Qw1ceSgC/XOp8EeKPbH6B1jYZ8M/AZOQpYXJBur3qxl3YXhwC0EwDpARCiovC1JODZ+c4lAd7q9m9ZvT6TBo8kIjjMo88V/iNddw6A1cwEQHMIIC1bdrESoiLJHw542aeSgC/WznG4TEpmOkN/esnj3f4tq9fnpyGjZNa/KFW6ZptarCfJqSGAFNsH3cz0rJxkJUSFExcRzbQbXiahanVvh4KBwXPzxzF27ewy75XGX/g63dMhq4SE2389W9J9pSUAZworCw4v5bZ/O5uZpnW/EKJ8iIuIZurQl3wmCRg5f3ypSYA0/sIfnD2v16ZGFG2zT5d0n0MJQESIXg9ASmaJQw5CiHLOJ5OANf9OAqTxF/4iRfOlulivvVM9AIWFInR7ADSzFSFE+WJLAupWreHtUPKTgAVFkwBp/IU/Oav5Ul1sCMDFHgAZAhBCaIqLiGbKDS/6TBLw3IJxfLByqjT+wu9ozwEo2mafKek+B+cA6A0BnM5I1bpfCFE+xVX2nSQA4JUlE+k6/v+k8Rd+RTcBKDYEUGICUNopPydtH6LCIrQefjytxOcJISoYWxIw8IdR7DtzxNvhkJx6wqPP88XGf+vx/Ww8tpej5/J7h6tXiqRFbD2axSR4OTJxIbptarXQKvZfT5V0X2kJwFHbh5iwqloPP5Fe4pwDIUQFZEsCBk0axd7T3k8CPMWXGv+M7Ey+WDuHr9b/RlLK8QveEx8Rwx2te3JP217aG8AJ9zmu2abGhBdJAI6WdF9pQwD/JABFKyvTifSzGBh6sMAiAAAgAElEQVRaZYQQ5Vtc5WimDH2JepG+MRzgbr7U+K9I2spl4x5m9JKJJTb+AEkpxxm9ZCKXjXuYFUlbPRihKEmeYWgPq0eHuZ4AnAKyIX9CQZDF6vDDs/NyZSWAEOJfalWuViGSAF9q/CdvWcL1P75QasNfXFLKca7/8QVmbP/TjZEJR5zOSCUnL9fh+0MCg6gUFGr7mondpn7FlZgAKKUMoHCwrFhGUSaZByCEuJBalasx48ZXaFQt3tuhuIUvNf4/b1nCg3M+JDs3R7tsdm4Ow2ePkZ4ALzuerteWxoQXGbI/VtCWX1BpPQBg13UQqzkMcDStxKWHQogKLja8KlOGvljukgBfa/wfmvMhuUae03Vk5+YwYvYY7cNohHmOnNNrS2Mc7P6HshOAwtk6MeGRWkEkpXh2pq0Qwr/YkoDG5SQJKG+Nv01SynHGrXP+iGXhmuTUk2XfZKd4D0Bp95aVACTZPsRVrqYVhKeX2ggh/E95SQJa12jIz0Nf8InGf/q2ZTz8y0emNP4249f9KhO7veSQxtwNgNoRMfZfD5R2b1kJwEHbh1qVo7WCOJSil7UIISqmGD9PAlrXaMiPQ57XPjTNHX7esoRhs97XmjTmiKSU42w7XmpbItzkkObLdLG2+mBJ94FGAhAXoZcASA+AEMJRtiSgSXRtb4eipWX1+kwaPNJnGn+zuv0v5O+je9xSryidzuoNgLiIIr315iQAtTSHAHSzFiFExRYTXpXJQ17wmySgvHf7Fycru7zjsOYcgGI9AC4NARQWjtMcAjh49piMGQkhtPhLT4AvdftP37aM4bPHmN7tX5xSyq31i3/LMwwOavYAxBedA+BSD0DhJMCalaMI0PgLkJ6dyTHJGIUQmqLDqjBl6Is0ja7j7VAuyJcaf3eN+V+I7l4wwnWHz50kMyfb4futARZi/1kFYACHSru/1ARAKZVOwTrCIItVeyJgRdrzWwhhnuiwKkwe+oLPJQEVacy/uFbV63vkOeIf+zTb0PgqMQQGWGxfDymlSt3AoaweAIBdtg+623f6wslfQgj/5ItJQIfazSvMmL+9+IgYmsb4zp9DRbH3zGGt++tVrWn/dVdJ99noJQBFKy+TJABCCFfYkgBfOab289WzGL1koldj8GS3v82dba5BIXMAPG3fmVI38vuXYi/ppiQAu0uovEx7TutlL0IIUVx0WBUmD/GdJODDlVN5efEErzzb093+kP/2f1ebaz32PPEP3ZfoulWLtNG7S7rPRqsHoFjlZRc8Ver8AyGEcEi1sAifSgI+WjXN40mANxp/qyWQj3s/TJg12GPPFP/YcTKp7JvsFGujzR0CqB+pNwSw69Qhj/5lFUKUX76YBLy0+BuPPMsbjb9FBfBxr4foEN/MY88U/8jOy9XuRa/nhh6A7eQvJ6B+ZE37GYZlyszJZr/mGIYQQpTElgQ095Ek4ONV092eBHh6wh/kN/7vXzuCfk07e+yZoqi9pw9rHeNsDbDY9wAYwM6yypSZACilUihYSxhksVK3anWHAwLYcbLUfQiEEEJLtbAIpt7wEq2qN/B2KEB+EvDiIvckAZ7a5MeerfEfkniFx54p/m37Cb22s35ULayWQNvX/Uqpc2WVcaQHAGCz7UPjano7dOn+JoQQoixVQyrx45DnfSYJ+N9f5icB0vhXbNs1X56bFm2bN5d0nz1HE4Attg+6J3ZtkwRACOEGtiSgdQ3fSQJeWPS1KXVJ4y92aLadjYtun72lpPvsaScAunt0bzq2V+t+IYRwVNWQSkwabJ8EuHL+iOtnl3zy1wyXkwBp/AXARs22s4knegCaaA4B7D6VTEZ2qbsRCiGE0/J7AkYVJAGubFZjzkY3n/w1g1ELv3KqrDT+AiAt67z2HgBN3NgDsImC9LhxtXiCLFaHg8o18thyfL/D9wshhK4qweEFSUBDb4cCwKerZ2onAdL4C5tNx/aSZzjeIxUSGGS/TD8PMxOAgpUAeyB/Y4gmmvMAdLsyhBBCV34S8LxPJQHPO5gESOMv7Om2mc1iEuyX6O9QSqU5Us7RHgCAdbYPLarX0ygGG49KAiCEcD9bEtCmZiNvhwLAZw4kAdL4i+I2ayYALWKLtMnrSrqvOKcSgIti9Y6F3Hh0j9b9QgjhrCrB4UwaPNKnkoCRC8Zf8Nek8RcXskHzpTkxtq791/WOlvNID8CW4/tkIqAQwmOqBIfz42Df6Qn4fM0sRi4Yj2G30kAaf3EhqVnpbNWcN+eJHoC1tg+JMXUJUI7PmM3Oy5V5AEIIj4oIDuPHwc/T1oeSgKfmjsXAkMZflGht8k6tbZ8tKqD4+Rh/O1rW4QRAKXUUSAYIDwqhkeZEwDXJO7TuF0IIV0UEhzHJh5KAr9f/xpAfX5LGX5Ro5aGtWvc3j0mwP60xSSl1zNGyOj0AACttHy6u2Vir4NrDZZ5LIIQQpvO1JGDJ/g3S+IsSrTq0Tev+dvFN7b8u1ynrfAJQS+8f05rD0gMghPAOWxJwcS29Fxd/J42/f8k18lh3eJdWmXZxRRKAlSXddyG6CcAK2wfdHoBDKSdITj2p+TghhDBHRHAYP1w/ssIkAdL4+5/Nx/ZxLitDq8yltYokACtKuu9CdBOAv4AcgCbRdagcFKpVeEWSQ5sTCSGEW+T3BJT/JEAaf/+kO/4fFxFNXES07Ws2dpP1HaGVACil0snfFpgApWiluePWnwcdOp9ACCHcpnJQGD8PeYGO8c29HYpbSOPvv/46tF3r/mJv/+uUUlrdB7o9AGDXxdC+6OSDsgselB4AIYT3hVmD+e765+hUO9HboZhKGn//9pfmBMBibbDW+D84lwAstX3oGK/3j2fXqWSOp51x4pFCCGGuMGsw3w56ttwkAdL4+7eklOPa8+SKTQBcovtMZxKAxbYPl9RqjNUS6HBBA4PlMg9ACOEjyksSII2//9Nd/lcpKNR+AyADu5dzR2knAEqpQxScDBhqDaZV9QZa5Rfv26D7SCGEcBt/TwIsKoAPej0ojb+fW7zP4Q38gPwXcIsqbMK3F2zWp8WZHgCw6wXoVFtvIs2CvWuL7IcthBDe5q9JgK3xv755F2+HIlxgYLBIMwFoF9fM/uviku4rjbMJwD/zADT/wSSnnmTb8QNOPlYIIdzDlgR0rnORt0NxiDT+5cfmY/s4cu6UVpli4//a3f/gfAKwyPahU+1EQgKDtAov2OvwaYVCCOExYdZgvh34X59PAqTxL1/m73H4AD8AQgKDuDSuif0lz/UAKKX2ArttgXSIb1ZGiaIW7NX7zQohhKeEFiQBl9Vp4e1QLsg24U8a//JjwV6t/Xu4vE4L+xfvrUqpJGee62wPAMBc24du9dpoFVx5aKv2dodCCOEpodZgJg58xueSAJnwV/6kZqVrn5Z7ZdE2d25J95XFnASgflutgtm5OfxxYKMLjxZCCPfyxSSgTc1GDGh2mbfDECZavG8D2ZqnQ3bzgQRgAZAL0CgqjoSq1fUKyzwAIYSPsyUBlyf4RhKwOnk7w2eNIdfI83YowiTz9+h1/9ePrEm9yBq2r9k4sQGQjdMJgFLqDPmHAwFwZd3WWuXn7l7j7KOFEMJjQq3BTBjgO0nAtG1/MHzWGHI03xqFb9Jd/lfs7f9PpVSKs892pQcA4DfbB915AMmpJ9h50ql5C0II4VG2JKBLQktvhwLkJwEjZn8gSYCf23p8P8mpJ7TKdKtvTvc/uJ4AzLZ9uKxOC4IsVq3C82U1gBDCT4Rag5kw0LeSgOGzpSfAn+kOhQcHWulU9AyeWa4839UEYDWQDBAeFKJ9OuCcndqHFwkhhNeEBAb5VBIwfdsyhs96X5IAPzVrx3Kt+zvVTiTUGmz7ehBwaW99lxIApZQB/GL7rjsMsCppG4dS9Lo/hBDCm2xJQNe6rbwdCgDTt/8pSYAfOpR6gnWHd2mVKdbGzipog53mag8A2A0DdK+ntxzQwNDOgIQQwttCAoOYOPAZetS/2NuhAJIE+KNpW5dpn4vTrWgbO7uk+xxlRgLwO3AeoEl0bWpXidUqPH37nyaEIIQQnhVksTKu/xP0aHCJt0MB8n+WDpMkwG/M2L5M6/66VWvQMKqW7WsGsNDVGFxOAJRSafaB9G3SUav82uSdHDx7zNUwhBDC44IsVsb1e9xnkoAZkgT4hf1njvL3kT1aZfo17WT/dZ5SKt3VOMzoAQCYYvvQt0lnrYIGBjO2yzCAEMI/BVmsjO/nOz0BM7b/yX9mvSdJgA+btu0P7e7/vk2KJACTzYjDrARgGpAD0LpGA/tdihyi2xUihBC+xGoJ5Mu+j2tPhHaXmduX89AvH2k3MsIzdIe+G0TW4qLYerav2cBMM+IwJQFQSp3A7jziYplKmdYf2c3e00fMCEUIIbwiONDKV/2f0p4M7S6TtyzhgxVTvR2GKGbXqWQ2H9unVaZf0yI96wuUUqfMiMWsHgCw65LQTQAAZspqACGEnwsOtPL1gKfo2fBSb4cCwJvLftBubIR7Td+m3+NdbPzflO5/MD8ByAO4KLYejaLitArPcOJ/ihBC+BrbcIAvJAE5ebm8/sf33g5D2JmuOeTdKCqOptF1bF9zgelmxWJaAqCUOgIU/s6u01wNsPHYXnafTjYrHCGE8BqrJZAv+j7mE/sEzN29Rn62+ojtJw6y/cRBrTL9ix7/vEgpZdqyOTN7AAAKU81+TgwDTNq0yMxYhBDCa3xlnwADg1my0sonfL9pgXaZYm2pqd05ZicAk4AsgGYxCTSuFq9V+PuN88mWpStCiHLCtkTw2kbtvBrH8qQtXn2+gOzcHH7avFirTPOYBBr9045mAabO6jQ1ASiYmVh4PGGxmYtlOpZ2hvl71pgZkhBCeJXVEsjYPo95dU7AtuMHvPZske+XXas4kX5Wq0z/om3oLLNm/9uY3QMA8J3tgzPDABP+dul4YyGE8DlWSyBferEn4GRGqleeK/7x7YZ52mX6uLH7H9yTAEwH0gAaVYundY2GWoUX7F0nJwQKIcoda4CFsX0fp1ej9h5/doBSHn+m+MeBs8dYsl/v5N5L45pQP7Km7WsKJhz+U5zpCUDB2QCF6xRvbXWVVvk8w+CHTS6fcSCEED7HGmDh8z6PerwnIDKkkkefJ4r6buN88gy9XRlvadnD/uuPSqkMU4PCPT0AAONtHwY0vZxKQaFahSdumEeukWd6UEII4W1WSyBj+z5O78YdPPbMZjEJHnuWKCrXyNNe4VY5KLT4hnrjS7rXFe5KABYDuwHCg0K0JwMmp55g0b717ohLCCG8zhpg4bM+j3osCegQ38wjzxH/Nn/PWpJT9Ya1BzbvQpg12PZ1B+CWdZxuSQCUUgbwje37rS31hgEAJv6tP2FCCCH8hS0JuM7NSYBCaW/MJswz0YnJf7cUbTPHF7SppnNXDwDAOPK3LaRNzUb2Jxk55PfdqzlyztQVD0II4VOsARY+7/sYA5td7rZn9GhwMQ0ia7mtflGyY2lnWLBnrVaZxNi6tKxe3/Y1D/jW7Lhs3JYAKKWSgMJtj25q0V2rfE5eLpNkMqAQopyzqAA+6v2QW5KAwAALT192o+n1CsdM3DBXe3O721pdbf/1V6WU3t7BGtzZAwDwue3D4MSuhP4zpuGQsWvnkJmTbXpQQgjhSywqgA97PejUSaqlebLzDSTG1jW1TuGYrNxsxq/7VatMSGAQA4ru/f95Sfeawd0JwDTgEEBEcJj2WNfxtDNM2brUHXEJIYRPCQyw8Ml1j9C/6WVl3+yAwYldeajDAFPqEvp+2ryYY2lntMr0b9qZKsHhtq9JuGHtvz23JgBKqRzy5wIA/1rX6JBPV8/EwC3zH4QQwqfYkoC72lzrUj13tbmWD659EIVsAOQNBgafrp6pXa5YGzm2oA11G3f3AEB+F0Yu5C9F0T0gaNuJAyzcK0sChRAVQ4BSvHbVPYzt+xg1KkVpla1RKYqxfR/jtavukd3/vGje7jXsOJmkVaZRVByXxDW2fc0BvjQ7ruLcngAUTAYs7Ma4vXVP7To++WuGmSEJIYTP69ukEyvu+YjR3e8qcyOfZjEJjO5+Fyvu+cj0eQRC3/+caLPubHOtfY/NDKXUIVODugCPpIiGYVwN/AaQkZ1Jm8/u57Tm4RTzbn+bFppLCYUQorw4fO4Ua5N3kJRynKzcHIIsgcRHxNC2VmNqavYUCPf5++hurv7mSa0yVUMqse4/n9tv/tNDKeX2zXAC3f0AAKXU74ZhbARahFqDua1VD8asmKJVx6d/zeDj3g+7J0AhhPBxNStFeXT7YOGc/61y5u3/GvvGfxMw38yYSuKJOQA2H9s+3Nu2N8GBVq3C07ctk1MChRBC+KyklOPM2qG3a2+Qxcqdba6xv/S+u3b+K86TCcA3wEmAmPCq2pteZOfl8uW6Oe6ISwghhHDZZ6tnkaO58c/gxK5UD4+0fT0OfGd2XCXxWAJQcJThWNv3/1zSR3uJyoS/55KalW52aEIIIYRLzmam8d1GvZ57heI/l/Sxv/SpO479LYknewAgfxggG6BpdB2urNdaq3BKZjpfrv3FHXEJIYQQTvt89SzOZem13Vc1uNh+aXwW8InZcZXGowlAwZLASbbvwy7tq13H/1ZN58z5c2aGJYQQQjjtbGYaY9fob9o3vGgbOFEpddi0oBzg6R4AgFfJP+GILgkttZf2nc1M47PVs9wRlxBCCKHto5VTOZuZplWmVfUGdKqdaPtqAO+YHVdZPJ4AKKW2AoWz+e4vOv7hkM/WzORkeoqZYQkhhBDaTmWkME7z0B+A4e2KvP1PVUptMS0oB3mjBwDgDduH/s0uIy4iWqtwWtZ5PlktuwMKIYTwrjErpmiP/cdHxHBd4472l942NSgHeSUBUEr9ASwDsAZYGHaJ/lyAL9fO4bjmSUtCCCGEWY6mnear9b9plxvRrh+BARbb14VKKb3NA0zirR4AgNdsH25rdTW1KlfTKpyencmHq6aZHpQQQgjhiDErJnM+J0urTFxENLe0vMr+0uumBqXBawmAUmo2sAIgONDKwx0Gadfx1fpfSU49aXZoQgghRKmOnDvFtxv0d+x9rONggiyFO+EuU0r9bmpgGrzZAwAwyvbh5pZXUadKrFbhzJxsPlw51fSghBBCiNK8/eeP2m//tavEMiTxCvtLI82MSZdXE4CCzGcx5M8F+L+O12vXMWHDXA6cPWZ2aEIIIcQFJaUc54dNC7XLPdl5KFZL4Rl885VS+pWYyNs9AADP2T4MvehKGkbV0iqcnZvDm8t+MD0oIYQQ4kJeXjyR7NwcrTL1I2sWPwPnRVODcoLXE4CCFQHzASwqgEc66PcC/Lx5CSuTtpodmhBCCFHE6uTtTN+2TLvcU5fdYD/z/xel1FJTA3OC1xOAAoXjIAObX06jf/ZGdoiBwQuLvsbAIycoCiGEqIDyDINn54/TbmuaRNemb5PO9pdeMDMuZ/lEAlCwBvIXyO8FeKLzUO061h7eyeQtXk+ohBBClFOTNi1k/ZFd2uWevuxGAlTh6bfTlVKrTA3MST6RABQYSf5+yPRt0pHE2LraFYxePIH07EyTwxJCCFHRpWWd57Wl32mXa1m9Ptc2amf7auAjb//gQwmAUmoNMB3yz0h+0olegMPnTsmyQCGEEKYbs3IyR9NOa5d78rIbUBS+/f+klFpvamAu8JkEoMBICk4KvKZhO/uTkhz2v7+mc1CWBQohhDDJ/jNH+XT1TO1yl9VpQY/6F9u+5uJDb//gYwmAUmoTUNjHMrrbXViUXojnc7J4eclEs0MTQghRQb2w6Gsyc7K1ylhUAKO73Wl/6ZuC03B9hk8lAAWeBtIAEmPrcmOL7toVTN+2jOVJHj9ZUQghRDmz7MAm5uxcqV3uttZX0ywmwfY1FXjWzLjM4HMJgFLqEHbHBT9z+Y1EBIdp1zNqwVfkGbIsUAghhHNyjTxGLhyvXa5qSKXi89heUUodNi0wk/hcAlDgbWAfQHRYFae2CP776G7GrfvF5LCEEEJUFGPXzGbzsX3a5R7vPISo0Ajb1z3A+yaGZRqfTACUUhnkDwUAcG/b3jSI1NsiGOCVJRPlnAAhhBDaklKOO7XNfKOoOO5ofY39pceUUj65Pt0nEwAApdQkYAmA1RLIC1ferl1HenYmT88da3ZoQgghyrnHf/+UtKzz2uVe7HYH1n+2/F2olJpmamAm8tkEoMAjFCwLvLrBJVxZr7V2BfP3rmXq1j/MjksIIUQ59ePmRSzcq79cv0f9i+ler63tay75bZjP8ukEQCm1DvjK9v3lK++0z6wc9t/5X3IyPcXEyIQQQpRHpzJSeGHR19rlrAEWXrjyDvtLnyulNpgVlzv4dAJQ4BngLECjavHc2upq7Qqc/QMVQghRsTw7f5xTL4x3te1lf5z9GeB5M+NyB59PAJRSx4DXbN+fuuwGYsOratfjbJeOEEKIimHenrVM2ap/qFyNSlE83mmI/aUXlVInTAvMTXw+ASjwPrAL8tdXju5+t1OVODupQwghRPmWnp3JM/OcmzT+2lX32O9Xsw342Ky43MkvEoCCJRT3UnBaYL8mnexPV3JYUspx3nBiWYcQQojy7dUl3zq1bPy6xh3o1ai97asBjFBK6e0b7CV+kQAAKKUWYTch8NXu91A5KFS7ni/WzGZ18nbzAhNCCOHXViZt5ct1c7TLVQkO59Wr7rG/9JlSaoFpgbmZ3yQABf4PSAaoVbkaz3a5RbuCXCOPYbPeJzUr3ezYhBBC+JmUzHRGzPnAqa3jn7/iVqqHR9q+HiZ/0rrf8KsEQCl1lvwkAIDbW/ekfXwz7XoOnD3Gs/O/NDM0IYQQfujpeWOdOkK+U+1Ebm55lf2lEUqpM6YF5gF+lQAAKKV+BKYBBCjFuz2HExxo1a5n0qZFskGQEEJUYDO2/8nkLUu0ywVZrLzZ4z4UynbpZ6XUVFOD8wC/SwAKjCB/nSUNo2rxSIdBTlXy1NzPSUo5bmZcQggh/MCh1BM88ftnTpV9vNMQGlWLt309i4/v+FcSv0wAlFLJwH9t3x9qP5CLYutp13M2M40Rs8eQa+SZGZ4QQggflmcYPDD7A86cP6ddtnlMAsPb9bO/9HjBMfZ+xy8TgAKfAUsBAgMsvH31/ViU/m9nRdJWPlrps2c1CCGEMNl7y3/mz4ObtcsFKMVbV99vvyX9YsBvJ5T5bQKglMoD7gHOA7Sp2Yhhl/Z1qq63lv3A+iO7TYxOCCGEL1qTvIN3l//kVNkH2w/gklpNbF8zgf8opfSXD/gIv00AAJRSO4DRtu9PX34TbWo20q4nOy+X+2e+y7msDDPDE0II4UPSszN5cM6H5OTlapdtVb0BT3Qaan9plFJqm2nBeYFfJwAF3gCWQ/5pTB/2epBQa7B2JfvOHGHkgvFmxyaEEMJHPDX3c3afTtYuFx4Uwqd9/g+rJdB2aRnwtpmxeYPfJwBKqRzgZiAFoFFUHC9ecbtTdX23cT7fbZxvYnRCCCF8wdfrf+PHzYucKju6213Uj6xp+3oWuEUppd+N4GNU2bf4B8Mwbsduq+Dbp77Br7tWadcTHGhlxo2jaV2joYnRCSG8zsjm5LGdbEg6wP7TpzlzPpMcLAQHhRAWEkFM1RhqRdagbvUaRAf5/buRsLP28E76fT+SrFz9Lfp7NWrP+P5P2l+6WSn1nWnBeVG5SQAADMP4DrgR4FRGCleMf5Sjaae164mLiGburW9RLSzC7BCFW+Xy99TbuWrmXnL+9WuKyM5vsvXuTugPEDlSv76gxo+w5qnBxDv9r9Ddv99S5O3j3dG38/I+M/5PlCy4xTNsfuQ6qrnwkyrrzAZ+mPsj36xYzroz58krY8qWCgihWnQCiXWacUmjVnRs3o6ucVUJLL2Y8FEn0s/S45snSE49qV22ZqUoFt7xLpGhlW2XJiqlbjU1QC8qb2nucGA/QFRoBB/2etB+pyaHHUo5wX0z35X9AYTwa+fZ+scrXPnsCB7+ZSFrTpfd+AMYeec5cWw7i1dP453vX+SmCXM54rfzvCu2XCOP4bPHONX4ByjFh70esm/8DwIPmRmft5WrBKBgH+ZbgVyArnVbce/FvZ2q648DG3l9abno5RGiAspiy9yn6TN+DlsyJJGvqF5ePIHF+/52quzwS/txeUIL29c84FallH6Xsg8rVwkAgFJqKfCm7fvIrreQGFvXqbo+XDmNmduXmxSZEMJTMvdPYNjPqzkpb+4V1pydK/n0r5lOlW0RW4+nL7vR/tLLSqnFpgTmQ8rrsNbzQDegfZDFyie9H+HqCU9yPidLqxIDg//79WOaxtShUVScWwIVQpjMSOWXOT+zKbuE1l8FEBqRQMvadYirHEaIyiEtI5VTZw6xPTmZ45m5SN7g33acTOKBOR9gOPEnGWoN5pOiS/7+Al4xMz5fUS4TAKVUjmEYNwPrgMpNomvzbs9hDJ89Rruu1KwM7pj6Or/e+gaVg8JMj1WUF4rwZrfzcfcmDv+jCqjckGh/nYarYuk79BWapJXWvZ7LhoWv89bmcxf4MRxAzYuH8XrHeCwXKGljqdKEyrr/j7LWMmtzKheKLCCiLY/d+TQPt4wj/EL1GpkcS97M0s0rmLdhKb9sO4hsD+ZfzmVlcNf0t0jLOu9U+Teuus/+he8c+bP+9ZcP+IFymQAAKKV2G4bxCAX7NA9q3oVVh7bx1frftOvadSqZh3/5mC/6Pk6A8tef2MLdgqISuaatm2bd+xoVRsMml1H6YtlsQjYEouACCYCiUvU29GrbzPQfQjnHdrL1/AXe/FQIVw58gWdaVSt5arAKJjauLYPi2jLo6mFknNzInD2BVC7pfuFT8gyDEbM/YOfJJKfK39u2N0MvusL+0nCl1E4zYvNF5W4OgD2l1DjgC9v30d3vpn18M6fqmr1jBa8smWhWaEIIN8lLO8vpC/X8qkga16yisS5IEVqtJUNLr5cAACAASURBVIMubU4Vyfv9wqiFXzm1/wvAJbWaMOqK2+wvfaKUmmBKYD6qXCcABR4gfwwHa4CFL/o+To1KUU5V9NGqaYxb94uZsQkhTKYCLAResHv/OH9s3CVd+uXUhL/n8vmaWU6VjQ2vypf9Hrcf918J/J9Zsfmqcp8AKKUygUHAccj/g/6ib5E/aC3PzR/Hb7v+MjFCIYSZLFE1qXWhn2xGDpvmPMq1Y7/mpx0HOeP3G7kKm3l71vL0vLFOlbUGWBhb9MXwGHB9QdtRrpXbOQD2lFIHDcO4AfgNCLw0rgkju9zC8wu/0q4r18hj2Oz3mX7jaFrE1jM7VOG3DE4ve4Iayxy8PbAjH7/3FjddcCaacEVAVGs6x1pYmfzvFt7IO8vfyz/nvuVjsQRH0bBOU1onNKFVQhPa1GtGq5rVCJU/Er+y4ege7pv5jlMn/AG8eOWddPhnaDgHGKqUcm4SgZ+pEAkAgFJqgWEYzwGvA9x/SR82Hdvn1OEQaVnnufnnV/jllteJi4g2OVIhhEsCGnHrla34/Lu1nCtxFZhBbuZJtu9cxvady5gEgCKoUm0uTezMdZf2ZFCrRsSUtkRBeN3hc6e4ferrTs/4H9jscu5ue639paeUUovMiM0flPshgGLeBH6yfXmjx300ja7jVEVH005z4+TRnM1MMys2IYQpAqh7xeO8kFhV8wecQda5Ayxb+T3PfHQnrZ55hOdW7CkliRDelJqVzk0/j3Zqm1+A5jEJvNtzmP2lqcB7ZsTmLypUAqCUMoC7gC0AYdZgxvd/kirB4U7Vt/3EQe6c9ibZue49EEUIocmSwN0jxvBOh4QLr/cvk0HGib/4eOy99PhmMYdkN2Gfkp2Xy93T32bL8f1Ola8aUonx/Z8k1Fq4aHcbcEdBG1FhVKgEAEApdQ4YSP6ZztSPrMknfR4hMMC5vr5lBzbxlJOTT4QQbhTckDvuG8+fjz7Enc1qUcmZPTyM82xb8jJ3/baHcrkTjB8yMHj8t0+c3uPfGmDhsz6PUrdqDdulVGCgUirFrBj9RYWZA2BPKbXdMIzbye/yUd3rteXNHvfx6G+fOFXftxvmERtetfje0aJCUYQ3vYUPujUpdWe7QgHVaBsis83cL5g6iUN5N3EIo09uYcGGlSzZsZG/dm9h88lzlLRbcBFGBqt/+ZrZXV6gv0za9LpXl3zLD5sWOl1+dPe7uaJuK9tXA7hTKbXVjNj8TYVMAACUUtMNw3gJGAVwc8ur2HP6MB+tmuZUfe8t/5nQwGAe7jDQzDCFHwmq1pLel1SQnQD9jiKsWiLXXZnIdVcCGJxPOcDfezaxcvtq5v39J8uPniOnhIQgL20Fs7afp3/bUE8GLYp5d/lPfLByqtPlH+kwiDta97S/NFIpNdnlwPxUhRsCKOZF4Gvbl+e63sKg5l2cruzVpd/yyV8zzIhLCOFWipCIBNq37s1DQ0cx45VprBhxA5eElfAj0chg+8FDyGwf7/li7Rze+OMHp8v3a9KJpy8v0ks7TilVLg/5cVSFTgAKJnzcC8wDUCje6zmcdnFNna7zxUXfMHHDXJMiFEJ4hAqlQdsRfHRNI6wXvMHgbHqanBLoJT9sWshz88c5Xb5DfDM+6v0Q6p+NoBcBw0ouUTFU6AQAoOCUp0HARoDgQCvfDHiaBpG1nKrPwODJ3z9n6tY/TIxSCOGwvJPsP3neicY6gLo1a2MtYZg/yMndQ4VrZm5fzqO//s+po30B6latwbh+TxJkKUzttgADlFJ658OXQxU+AQAomP3ZFzgCEBlame+vf47osCpO1Zdr5PHgnA/4ffdqE6MUQjgkczXPjLyebp+NY8q+Uzj+Uz6bTXt3kXXBdsZCTGSUYxM8hWl+2/UXw2a9R67h3DrMqNAIvr/+OaqFRdguHQZ6KaXOmBWjP5OUtoBSap9hGNcBi4HwhKrVmTjwGQZMGkVGtv6W0Nl5udw1/S2+HvAU3eu1NT1e4XuyTm5g9upMxxsJVYmmzS+hiZv2nvW1eDwq9zTrV37J3au+JrJGW65r153rWrbmktpxRF3opKCck6xc/AEPzN1/4XH+gCha1omWNyYPWrJ/A/fOfIdsJ7f4tfXm1o+sabuUDvRXSjm3eUA5JAmAHaXUGsMwhgLTAUubmo344NoHuH/mu+QZ+t1P2bk53D39bb6//jk6xjc3PV7hSwzStk3g7m0aRQIa8OSo8TxT2x3vlb4Wj5cYOZw+vIoJ01cxYboiwBpB3Vp1qVOlKlGVwgkhi7NnDrFl3072peeU2MlsibyM3vUvPDtAmG918nbumPYGmTnO7b6gUIy55gEujWtiu5QL3KSUcu6s4HJKEoBilFKzDcMYAXwK0LdJJ46mnXZ6AkpGdia3Tn6Vbwc9S/t/DpwQQnicQV72Wfbs/5s9OsVUOJ16DqGztP8esTJpKzdPfsXp/f0BXrvqHgY0u8z+0iNKqekuB1fOSI/WBSilPgM+sH2/t21vXrzyDqfrS83KYOjPL7PIyZ2rhBBeoizUbPMwY7rFy/i/Byw7sIkbJ48mNSvD6Tqe7XILd7a5xv7SO0qpj1wOrhySBKBkjwKFi07/c0kfHu4wyOnKMrIzuWXKq8zescKM2IQQJQmMo32zBkRfaKxfgwqowsVXvsCs//SmnvykdLu5u1dz4+TRLr35P9ZpMA+1H2B/aSLwpKuxlVcyBFACpVSuYRi3ABZgMMB/L7+J7Nwc/veXcz1J2bk53DvjHd6/dgRDEq8wL1ghxD+sF/HwI98wIv0gKzb8yYJtf7Ni50bWHTnN+TLn8iiCKyXQqc3V3NK9P/3qVJE3fw+Ytu0PHpj9gdMT/gDuaduLJzvfUKRa8rf5laOcSlAOpvu6l2EYQeT/RboW8tf5P/H7Z0z42/nNfiwqgLd7/oebWnQ3KUohRFlyMk9y8Ngh9hw7THLqOc6dzyA9OxtDWQkNq0Js1RrUq9mAi2pEIcc0eM7EDXN54vfPnJpobXPDRVfy/rUj7Df6mQv0UUrpL+GqQOSvuQMMwwgD5gBdAfIMgxGzxzBl61Kn61QoXrzydu6/pI9JUQohhH8Zt+4X/jvvS6c3+QHo06Qjn/V5FIsqHKf5E7haKZVmRozlmSQADjIMI4L8LYMvhfzNfv4z8z1mbP/TpXqf6DyUxzsNMSFCIYTwHx+unMroJRNdquOahu34st/j9se5rwKuUkqluhpfRSAJgAbDMKoCC4A2AFm52dw65TWXZ/c/3GEQ/738JhMiFEII3zd6yUQ+dOFUP4Ar67XmmwFP22/xuxG4Uil10tX4KgpJADQZhhFL/kESzSB/dv+NP49medIWl+q9qUV33rz6fqwBMuVICFE+Zefl8vhvn/DDpoUu1dOpdiLfDXqWUGvh4ds7gS5KqSOuxliRSALgBMMw4oElQD3ITwLunP4mC/eud6neyxNaMK7fk0QEh5kQpRBC+I5zWRncN+Nd5u9d61I9netcxIQBzxAeFGK7dBC4XLb41ScJgJMMw2hAfhJQC/KX+N0/6z2X1/k3ja7Dt4P+S3xEjAlRCiGE9x0+d4pbJr/KpmN7XaqnR4NL+LLv4wQHFnb7HwK6KqV2uxpjRSQJgAsMw6hL/sTABpA/MfD/fv2YSZsWuVRv9fBIJgx6hlbVG7gcoxBCeNOW4/u5efIrJKe6NjTfv+llfNT7Ifth0v3kT/jb5WqMFZUkAC4yDKMm+WtOEyF/ieDjv3/KtxvmuVRvmDWYz/o8ytUNLjEhSiGE8LyFe9dzz4y3OefC1r4At7TswVtX30+AKmyytgM9lFIHXY2xIpMEwASGYVQHfgNaQf5mQaMWfs1nq2e6VK9FBfByt7u4u+21JkQphBCeM3HDXJ6aO5YcF3b3A7irzbW8etXd9pv8bCG/8U92NcaKThIAkxiGEUn+ZkEdbNfMWOcK+YcRvdTtTvvsVwghfJKBwdvLfuTtP390ua4H2w/guS632F9aA/SUpX7mkBbFRIZhVAKmA91s18asmMKrS791ue5ejdrzYa8HqRQU6nJdQgjhDqlZ6Tww+0N+3bXK5bpGdr2VB9r1t7+0FLhOKZXicuUCkATAdAXbBk8FrrZdG7t2NiPnj3dpu0uARlFxjO//JI2qxbsYpRBCmGvHySTunPYGu0651jMfoBSvdr+n+JG+C4B+SqlzLlUuipAEwA0KDhD6HhhouzZrxwpGzB7D+Zwsl+oODwrh/WtG0LdJJxejFEIIc/y6axUPzvmQlMx0l+oJslj5sNcD9G96mf3lmcAQpZTz5wSLC5IEwE0Mw7AA44DbbNfWJO/gtqmvcyL9rEt1KxT3tO3FqCtvl50DhRBek2vk8drS7/ho5TSXezgjQyvzdf+naB/fzP7y98BtSqkclyoXFyQJgBsVJAHvAA/bru0/c5SbJo92uZsMoGN8c8b2fYyY8Kou1yWEEDpOZaRw/8z3WLJ/g8t11YuswbeDnqVBZC37y+8ATyql8lx+gLggSQA8wDCM+4CPgUCAM+fPccfUN1w+PwCgVuVqfNH3cS6u1djluoQQwhEbju7hzmlvkpRy3OW6Lo1rwtf9n6ZaWITtUi7wiFLqI5crF6WSBMBDDMO4BvgRqAz5Jwk+/MvHTNm61OW6gyxWnu96K/de3NvluoQQojQ/bl7EE79/5vJ8JoC+TTrxUa+H7Lf2TQNuVEq5tomKcIgkAB5kGEYrYBYQD/nrZV9Z8q3Lx2La3NiiG690u9v+kAwhhDDFuawMnpn3BT9uXmRKfY90GMTTl99ov8HPYaCPUmqNKQ8QZZIEwMMMw4gjPwlobbv23cYFPPn7p2S7uGMWQJ0qsXzc+2HaxTV1uS4hhABYf2QXw2a9z57Th12uKzDAwqvd7+b21j3tL28if42/nOjnQZIAeIFhGJXJHw4oXOi6YO86/jPzPc5mprlcvzXAwhOdh/JA+wFYVIDL9QkhKqZcI48xKybzzp8/ubylL0DVkEp83udRutZtZX95PjBIKeXa8iihTRIALzEMI5D8iYH32a7tPX2Eu6a/yZbj5iTBF9dqzP96P0zdqjVMqU8IUXEcSjnBiNljTJmsDJAYW5dx/Z4o/vPoK+A+pVS2KQ8RWiQB8CLDMBTwPDCKgj+LzJxsnpz7GT9sWmjKMyoHhfJ6j/u4vnkXU+oTQpR/M7b/yRO/f8aZ8+ZsvDew2eW823MYodZg2yUDGKmUesWUBwinSALgAwzD6ANMAKrYrk34ey7PzBtryrwAyJ9t+9bV91M1pJIp9Qkhyp/UrHReXPQNE/6ea0p9gQEWnr7sRh5sP6DIY4A7lVKTTXmIcJokAD7CMIzGwBQg0XZtedIW7pvxDsfSzpjyjDpVYvlf70e4NK6JKfUJIcqPVYe2MXz2GA6ePWZKfdXDI/mi3+PFJyRvBwYqpcwZVxAukQTAhxScJjgOGGy7duTcKe6Z8TZ/HdpuyjMClOLmllfxwhW3y8mCQggysjN5Z/lP/G/VdHINczbdax/fjLF9H6N6eKT95enkb+srp/n5CEkAfEzBvICHgLcAK0BOXi6v//G9afsFANSoFMXrV93LtY3amVanEMK/zN+7lid//9yUHf1sbm3Vg9e634PVEmi7lAM8B7yplHLtwABhKkkAfJRhGF2BSUB127WfNi/m8d8/NWUHLptBzbswutudRIVGlH2zEKJcOJmewnMLxpmyE6lNmDWYd3oOY2Czy+0vnwBuUErNN+1BwjSSAPgwwzDigZ+ADrZrO08dYtjM99h4bK9pz6kaUonnutzCra16mFanEMI3zdj+J0/PG8vJdPN64ptG1+HT6x6hWUyC/eU15K/vl819fJQkAD7OMIxg4APs9gvIzsvl/eU/8+7yn8gzzOtR61avDW9dfT/xETGm1SmE8A0Hzx7jibmfsXDvetPqtB1N/vwVtxJksdr/0ufAg0op87orhekkAfAThmHcSX4iULiOb+n+jTw45wMOnztl2nNCrcE81nEww9v1k10EhSgH8gyDbzfMY9Sir0jLOm9avbHhVRlz7QN0q9fG/nIqMEIpNcG0Bwm3kQTAjxiGUY/8/QI6266dzUzjyd8/Z9q2P0x9VovYerzU7U461U4s+2YhhE/68+BmRi4YzyYThwwBejfuwDtX/4fI0Mr2l1cBNyuldpn6MOE2kgD4mYIthJ8r+M9iu/7j5kU8PW+sqRk+QI8Gl/BKt7tIqFq97JuFED7hUOoJXlv6HT9tXmxqvSGBQTzX5ZbiR4/nAm+Tv7OfbOnrRyQB8FOGYXQAvgXq264dOHuM4bPfN23PABurJZA7WvXkqctvoHJQmKl1CyHMk56dycerpvHhqqlk5pjbFreu0YD/XfcIDSJr2V/eT/7a/iWmPkx4hCQAfswwjAjyDxS6xXYtOy+XN//4no9N3NTDpkalKJ7tcjODE7van+EthPCyPMPgx82LeHXJtxxNO21q3RYVwAPtB/BE56FYAyz2v/QTcL9SytwHCo+Rn+LlgGEYg4HPgMJttzYd28ujv37C30d3m/68VtUb8HK3O2kf38z0uoUQetYf2cWz88exOtncnj+A5jEJvNtzGG1qNrK/nAI8IBP9/J8kAOWEYRgJ5E8QLNyFIzsvl49XTePd5T+Z3h2oUAxsfjnPXHYjtavEmlq3EKJsB84e45Ul3zJ92zIMzN1gLzjQymMdhzC8Xb/ib/0rgFuUUua/WQiPkwSgHCmYIPgE+UcMh9iu7ztzhMd++5Q/Dmw0/ZnWAAv9m/1/e3ceHVd9HXD8+xstI2tkLZbksRZbG2jBsoQXLLCwY2zLhKQGsy/BpYGWhC0nbQk5TeGkaXpokpKTnJPUbU2KCaFAgRRsDBhvgFe8WzK2JRtJlq19sTRaRstI+vWPJ5nxWLJs0LwZSfdzzpyR3nujd+0jzbvz+73fvTfyTP59zJBEQAivq25rYvW+dfyxcBM9faN/z11eYha/vvkxrp6S4L65E/gZ8IJSanRalAqfkwRgHNJap2FMCSw9vw3NW8c+5blta0etx7e7oIBA7su+iacX3MO0sCmj/vOFmOianK38x4H1rDm4YdRH9ADCraE8k38fj8z5FhZ1waVhB/CoUqp41E8qfEoSgHFqoKnQKuA3wPkrcn1HCz/Z+gfeK9njlfNOCrLy4Kxl/OD6O5hqi/TKOYSYSM51trJ6/3r+cOgDOl3dXjlHQdo8flXwKPGTo903O4CfAr9TSo3uHcXCL0gCMM5pracBvwPuct++qfQAP968huq2Jq+cNzTIyiNzvsWT81cSGRI28guEEBdo6WrnxYPv818H3qOtp9Mr55hqi+T5pX/NiowbPHdtAB5TSlV65cTCL0gCMEForVcAq4HEwW2O7g7+bef/8vKRjbj6vTOtF2G18b15K/ibud8m3Co1BIQYiaO7gzUHNrDm4AZau51eOUeQJYDvzr6FH+Xf6/l3WYtRw/9tr5xY+BVJACYQrXUE8M/Ak8D5Qv+lzdX89OM/srn0gNfObQsO4YHspXz/uhXSbEiIIdR1NPPKkU28ePB9HN0dXjvPoqQc/mXJw2TETHffrIFXgR8qpUavuYjwa5IATEBa68UYNwmmu2/fXlHEs9teoqTxrNfObVGKpalz+bsb7mLOhWuLhZiQPq8v5z8PvMe7J3Z6bSQOIC0qnp/d9BAFafM8dxVjFPSRan4TjCQAE5TWOgh4HGNpT8Tgdld/H28c3cbzO17jXOfo9QsfyvyETJ7Ku52CtLlSWVBMKBrNjoqjrDn4vldH3sCYhnsq73a+P28FQQGB7rtagF8Av1VKeefuQuHX5F13gtNaR2PUDXgCt+ZCLV3tvLDrTV46/OGolxT2lBoVx8Ozb2FVbgEhgcFePZcQvuTq6+Wd4p38ft+7Xh1pA2O07c5rFvFPix8iJjTCfVc/Rh+Rp5VS9V4NQvg1SQAEAFrrLIwlgze7bz9Wf5rnPl7LrjOfez0Guy2Kh+fcwv2zlmC3RY38AiHGiNr2c7x2dCtrD2+kvqPF6+dbmDSLn9/0XbJikzx3fQz8rVKq0OtBCL8nCYC4wMBqgd/i1mUQjGWDv9z5xqj3FR9KoCWAZalzeTB3GUtSZhOgLCO/SAg/06f72Vp2iFeLtrC17BC9XpzfH5RjT+WZG++jIHWu566zwLNKqVe8HoQYMyQBEBfRWgcDj2GsGAg/vx3N5tKDpiUCYIwK3JO9mFU5BSRF2k05pxBfR037Od4+9ikvH/mIytYGU86ZHp3Ij/LvZUXGDZ7303QALwC/UEp1mRKMGDMkARDD0lrHA89jVBQ8/zG8X2s2nNzDL3e+zhfnqk2JxaIUN86YxarcAm65ar7nzUxC+JSrr5ePTx/hrWOf8v7Jz7x+38ygGRFT+UHeHTyQs9RzpKwfeBn4R6VUrSnBiDFHEgAxooH7A/4B+A5uiUBvfx9vH9/Or3e/yRmHefcSxYRGcG/2Yu7LXkJ6dOLILxDCS0oaz/LG5x/z5rFPaHQ6TDtvcuQ0/n7B3dx5zSLPC78G3scY7pd5fnFJkgCIy6a1zsZYMXAXbr87rv4+3jmxgxd2v0lFS52pMaVHJ3JrxgJWZt3o2b1MCK8466hn4xf7WV+ym31V5vbHiZ8cw+PX3cpD1y4nOCDIc/cW4MdKqUOmBiXGLEkAxBXTWucAzwJ3u2/v6XPxSuFm/n3fOqrbGk2Pa9bUFG7NzGdlZr60Jhaj6nRLLeuKd7O+ZLdp97+4SwyP5cn5K3kwZ9lQ019bgJ8opfabHpgY0yQBEF+Z1voG4Oe4tR0G4x6BLWUH+c2etzlUc8onsQ2ODNw98xskR07zSQxibKtqa+SDk3tZX7Kb/VUlaLTpMWRPTeF78/6CO7IWEmgJ8Ny9C2Oo/xPTAxPjgiQA4mvTWt+IkQgs9ty388xRVu9bz7bywz55A1Uo5iWkc8tVeSxNnU1mzAzTYxBjx/GGCraVH+aDU3s5VH3KZ7+zy1Ln8Nh1t5I/I3uoQ/YAzymltpocmhhnJAEQo0Zr/U2MmwUXee4ra67hpUMf8qeizXT19pgf3IBYWySLk3NZnjaPbyTnEmG1+SwW4XtOVzc7zxxlU+kBtpYd9snU1aCggEBWZubz1PzbPRv1DPoE+Fel1CZzIxPjlSQAYtRprecAPwQewK28MECj08Hawxv578Mf0tzZ5pP4BgUoC9lTUyhIm8vyq+aRY0+VngQTQEVLHZtKD7Cp9AB7Ko/j6uv1aTzh1lDunXkTT+StJC5siufufuAD4Hml1B7zoxPjmbzbCa/RWl8DPAPcD1xQ5N/p6ub1o9tYe2Qjp5oqfRKfJ7stiiWps1mUlENeYhYJk2N8HZIYBVWtjeytOsGnpwvZVn7YlFK8lyM9OpG/uvab3D9rCaFBVs/dPRj1+n+llDJ3qYGYMCQBEF6ntbZjVBZ8ArjoqlpYV8qfCjfz5+Pbcbr8pymZ3RZFzrQ08hIymZ+QyZy4q6UAkZ/r0/180VTFvqpi9ladYG/lCVNrVIzEGhjEzWnXsSq3gIVJs4YacWoAXgJ+r5Tyj8xYjFuSAAjTaK2twL3A08Asz/1tPU7ePbGLVwo3UVRXZnp8IwkNspI9NYW8xCzmDyQFkSFhvg5rQnO6ujlaVzZwwS9mf1UxLV3tvg7rIunRidwzczGrcguG+505CawGXlRKOc2NTkxUkgAI02mtFcbSwceBFcBFH6uP1JbyP0VbeOfEDtp6Os0O8bIEKAtZsUnk2FOZZU8he2oKM2OTsQWH+Dq0cam9p5PjDRUcrSvn8/pyiurKONFQYVrZ3SsVbg3l9qyFPJizjBx76lCH9ALvYVz4tyqlzF9yICY0SQCET2mt44C/xJgiuKh3qdPVzbvFu3i1aDMHq0+aHt+VsihFalQcM2OTyYiZQXp0Ipkx00mJihtqHbcYgqu/j/LmGkoaz1LSdJaSxrN8Xl/O6ZZa+rX/XyPnJ2TynZxl3JaxgEkXz+0D1ACvAKuVUmfMjU6IL0kCIPyC1joQYzTgUaAAj9UDAKXN1awv3s27xbsobhxb75tBAYGkRcWTHp1IcqSd5MhppETFkRRpJ35y9IRbfaDRVLc1cbq5ltMttZS3GM+nmqooPVeFy4TWuaPpmtgkbsvM57aMfFKihiw81Qd8BKwBNiilxtY/UIxLE+tdR4wJA10IVwGPAFcPdczJpkrWFe9iXfEuTp2rMjW+0WYNDGJG+FTiw2NImBxNQngsCZNjSAiPwW6LIjo0nJjQCF+HeUUanQ6anK3UdTRT1dpIVVsjVa0NVLU1Ud3aSIWjnp4+l6/D/FrSoxMHLvoLuHr4plQngdeBl5VSp00LTojLIAmA8FsD9wrkAw9jNCCaPNRxxxsqWFe8i/UluylrrjEzRNMEWgKInhROdGg49rAoIqxhRITYiAyxEW61EWG1ETHwdaDFwmRrKMGWQEKDQggJCsbq1jgmJDCYkMALVmXS0+e6YAWGq68Xp6sbp6uLnv5e2rqd9Pb309rdgaOrA0d3B46udhzdThxdHbR0tVHf0UKTs5WmzlZ6x9gn+MuVGhV3/qKfFXvRjNWgVuAtYK1Sapd50QlxZSQBEGOC1joEY2rgbuBOIHSo44rqylhfYjRtMbszoRifkiLt3JqxgNsy85k1NWW4w7qBzRgX/j8rpTpMC1CIr0gSADHmaK2jMJKABzDKDg95d11FSx3bK4r4qPQA2ysK6e4d20POwhyBlgDmxF3N8rR5LErOIdeeNtyhfcCnwGsYF33/qDAkxGWSBECMaVrraODbGCMDy/GoODioq7eHfVXFRkLwxX5O+kn1QeEfkiLtLErKYVFSDktSZhMWPGm4Q/uAzzA+6b+plBqfc05iQpAEQIwbWuspwG3AHRh1BoZ9Fx8cHdheUcS28sO0+2mtAeEdIYHBzE/INC76l/6UD9AJbAH+D1ivlDpnSpBCeJkkAGJc0lpPwriBcAVwOzBkezX43B9NOAAAA2RJREFUcnRgb+UJ9lUVc7DmJB09XWaFKkwQFjyJufHpzE/IJC/BqORoDQy61EvqMZbtvQdsVEr5tnOVEF4gCYAY9wZWE1yLMVWwHLgeGPbd39/ryYuRfYU+Di5gD8ZF/wOl1BFTAhXChyQBEBOO1toG3AAsG3jMYYS/hdr2c+yrKmZfZTGFdaUcrjk15orVjFcBykLalPjzPRpy7WlkxAw74OOuDGNofwuwSSnl8GqgQvgZSQDEhKe1ng4sBhZirCrIGOk1rr5eypprKKwrpai2jMK6Uo7Wl9PpR90Mx6MgSwApUXHkTksj15420Ichdah2ukMpBrYDO4BPpNuemOgkARDCg9Z6GkYisBBjuiCXS0wZDOrt76P0XPX5+vUnmyopbjxDeXONjBZcoSBLAKlT4smInk56dCIZMdPJiJ5O2pT4y+2p4AKOYNyxvx3YoZSSwhBCuJEEQIgRDNxQOBcjGbgeyAOGrf3qydXfx+nmGsqaay6oe1/eXEtla8O4rZo3kiBLAIkRsaRExpEcOY3kSDspUXGkRBnfB11Z86RKYC/GPP5nwCGllCztEOISJAEQ4ivQWkcC2RiJweAjE7Bcyc/p7e+jrr2ZytYGqtoaqW5rorqtkbOOBhqdDuo6mml0OsZcEaOQwGCjbLEtilhbJNPDY4mfHENCeDTxk2NIDI/FHhZFgLqi/65BNcBBt8d+pVTtaMYvxEQgCYAQo0RrHQZcA8wEsjAShCyMNsdf62+tvafTSAY6HDR3teHochp1+c/X5m/H6erG0dXxZR3/3m56+ly0dXfSr/vP/yynq/uiRjye/QECLBbCgidhDQhiUqAVW3AIgZYAIkJs2IJCjP4DIUYPAuPrUKYM9iqwRV2qkM7l0kAFcBw45v4sZXaFGB2SAAjhZQOJQTqQBlzl8XzZUwnjkAaqgC+AUo/nU0qpdh/GJsS4JwmAED6ktbZiFClKBGYMPAa/twPTgFiGKXHsx7qBBqAOqMWYo68Ezgw8zgKVSilZNiGEj0gCIMQYMNAAyY6RDEQDkQOPKLevbUAEYMXolmjDSBwiufBvfXC7ux7AfWhdAy1u250YF3XHwPctQPPA8+CjCeOiXyuNcYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQYLf8PZjLBQnOHB7sAAAAASUVORK5CYII=" class="brand-logo" alt="9 IELTS logo">
+    <span class="logo">IELTS<sup>™</sup></span>
+    <a class="brand-telegram" href="https://t.me/EnjoyListeningTests" target="_blank" rel="noopener noreferrer" title="Join our Telegram channel @EnjoyListeningTests" aria-label="Open Telegram channel @EnjoyListeningTests in a new tab">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
+    </a>
+  </div>
+  <div class="taker">
+    <strong>Test taker ID</strong>
+    <span>🔊 <span id="audioStatus">Audio is paused</span></span>
+  </div>
+  <div class="spacer"></div>
+
+  <!-- exam timer: 29 minutes, starts when the recording starts playing -->
+  <div class="timer" id="examTimer" title="Time remaining">--:--</div>
+
+  <!-- volume: icon only; vertical slider appears on hover -->
+  <div class="volume" title="Audio volume">
+    <button class="vol-icon" id="volIcon" aria-label="Mute / unmute">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+        <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+        <path id="volWave1" d="M16 8.5a4 4 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <path id="volWave2" d="M18.5 6a7.5 7.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <div class="vol-pop">
+      <span class="vol-val" id="volVal">100%</span>
+      <div class="vol-slot">
+        <input type="range" class="vol-range" id="volSlider" min="0" max="100" value="100" aria-label="Volume">
+      </div>
+    </div>
+  </div>
+
+  <div class="icons">
+    <button class="menu-btn hicon" id="fsBtn" title="Full screen" aria-label="Full screen">
+      <svg id="fsIcon" viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/>
+      </svg>
+    </button>
+    <span class="hicon hide-sm" title="Wi-Fi" aria-label="Wi-Fi">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+        <path d="M12 18a1.6 1.6 0 1 0 0 3.2A1.6 1.6 0 0 0 12 18zM12 12.6c1.7 0 3.3.66 4.5 1.85a.85.85 0 0 0 1.2-1.2A8 8 0 0 0 12 10.9a8 8 0 0 0-5.7 2.35.85.85 0 0 0 1.2 1.2A6.3 6.3 0 0 1 12 12.6zM12 6.9c3.23 0 6.27 1.26 8.55 3.55a.85.85 0 0 0 1.2-1.2A13.7 13.7 0 0 0 12 5.2 13.7 13.7 0 0 0 2.25 9.25a.85.85 0 1 0 1.2 1.2A12 12 0 0 1 12 6.9z"/>
+      </svg>
+    </span>
+    <span class="hicon hide-sm" title="Notifications" aria-label="Notifications">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+      </svg>
+    </span>
+    <button class="menu-btn hicon" id="scriptBtn" title="Transcript" aria-label="Transcript">
+      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 2h8l4 4v16H6z"/>
+        <path d="M14 2v4h4"/>
+        <line x1="9" y1="13" x2="15" y2="13"/>
+        <line x1="9" y1="17" x2="15" y2="17"/>
+        <line x1="9" y1="9" x2="11" y2="9"/>
+      </svg>
+    </button>
+    <button class="menu-btn hicon" id="menuBtn" title="Options" aria-label="Options">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ============ CONTENT ============ -->
+<div class="main-row">
+<main class="content" id="content">
+
+  <!-- ===================== PART 1 ===================== -->
+  <section class="part active" data-part="1">
+    <div class="part-banner"><h2>Part 1</h2><p>Listen and answer questions 1&ndash;10.</p></div>
+    <div class="q-range">Questions 1&ndash;6</div>
+    <p class="q-instruction">Complete the table below. Write <strong>ONE WORD AND/OR A NUMBER</strong> for each answer.</p>
+    <div class="section-title">Oyster Bay Sailing Club Courses</div>
+    <div class="table-scroll">
+    <table class="qtable">
+      <thead><tr><th>Name of course</th><th>What you learn</th><th>Cost</th><th>Other information</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Taster day</td>
+          <td>introduction to sailing</td>
+          <td>&pound;120 if booking one place</td>
+          <td>small groups (max <span class="qnum">1</span> <input class="gap sm" data-q="1" aria-label="Question 1"> people)</td>
+        </tr>
+        <tr>
+          <td>Level 1</td>
+          <td>basic theory e.g. understanding the <span class="qnum">2</span> <input class="gap" data-q="2" aria-label="Question 2"> and tides<br>basic sailing skills including <span class="qnum">3</span> <input class="gap" data-q="3" aria-label="Question 3"> information</td>
+          <td>&pound;200<br>a <span class="qnum">4</span> <input class="gap" data-q="4" aria-label="Question 4"> available for club members<br>all inclusive (plus a useful <span class="qnum">5</span> <input class="gap" data-q="5" aria-label="Question 5">)</td>
+          <td><span class="qnum">6</span> <input class="gap" data-q="6" aria-label="Question 6"> at the end of the course for all participants</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="q-range" style="margin-top:22px;">Questions 7&ndash;10</div>
+    <p class="q-instruction">Complete the notes below. Write <strong>ONE WORD ONLY</strong> for each answer.</p>
+    <div class="form-box">
+      <div class="sub-head">General information</div>
+      <ul class="bullet">
+        <li>Participants must be able to swim.</li>
+        <li>Bring suitable clothing, a <span class="qnum">7</span> <input class="gap" data-q="7" aria-label="Question 7"> and toiletries (e.g. shampoo).</li>
+        <li>There is a <span class="qnum">8</span> <input class="gap" data-q="8" aria-label="Question 8"> at the club.</li>
+        <li>Online training <span class="qnum">9</span> <input class="gap" data-q="9" aria-label="Question 9"> are recommended.</li>
+        <li><span class="qnum">10</span> <input class="gap" data-q="10" aria-label="Question 10"> are available for course participants.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="part" data-part="2">
+    <div class="part-banner"><h2>Part 2</h2><p>Listen and answer questions 11&ndash;20.</p></div>
+    <div class="q-range">Questions 11&ndash;16</div>
+    <p class="q-instruction">Choose the correct letter, <strong>A</strong>, <strong>B</strong> or <strong>C</strong>.</p>
+    <div class="section-title">Working as a makeup trainee</div>
+
+    <div class="mcq" data-q="11">
+      <div class="stem"><span class="qnum">11</span> What should trainees always expect to get when working on low budget short films?</div>
+      <label><input type="radio" name="q11" value="A"><span class="opt-letter">A</span> travel expenses</label>
+      <label><input type="radio" name="q11" value="B"><span class="opt-letter">B</span> a minimum wage</label>
+      <label><input type="radio" name="q11" value="C"><span class="opt-letter">C</span> meals</label>
+    </div>
+    <div class="mcq" data-q="12">
+      <div class="stem"><span class="qnum">12</span> According to the speaker, on big budget films trainees may get experience of</div>
+      <label><input type="radio" name="q12" value="A"><span class="opt-letter">A</span> makeup for special effects.</label>
+      <label><input type="radio" name="q12" value="B"><span class="opt-letter">B</span> working with different ethnicities.</label>
+      <label><input type="radio" name="q12" value="C"><span class="opt-letter">C</span> creating a variety of hair styles.</label>
+    </div>
+    <div class="mcq" data-q="13">
+      <div class="stem"><span class="qnum">13</span> The speaker says a problem for makeup artists is</div>
+      <label><input type="radio" name="q13" value="A"><span class="opt-letter">A</span> dealing with difficult directors.</label>
+      <label><input type="radio" name="q13" value="B"><span class="opt-letter">B</span> being shouted at by their supervisor.</label>
+      <label><input type="radio" name="q13" value="C"><span class="opt-letter">C</span> waiting around for hours doing nothing.</label>
+    </div>
+    <div class="mcq" data-q="14">
+      <div class="stem"><span class="qnum">14</span> How did the speaker feel when she met famous actors for the first time?</div>
+      <label><input type="radio" name="q14" value="A"><span class="opt-letter">A</span> very shy</label>
+      <label><input type="radio" name="q14" value="B"><span class="opt-letter">B</span> very proud</label>
+      <label><input type="radio" name="q14" value="C"><span class="opt-letter">C</span> very disappointed</label>
+    </div>
+    <div class="mcq" data-q="15">
+      <div class="stem"><span class="qnum">15</span> What advice does the speaker give about makeup kits?</div>
+      <label><input type="radio" name="q15" value="A"><span class="opt-letter">A</span> Always carry a basic kit with you.</label>
+      <label><input type="radio" name="q15" value="B"><span class="opt-letter">B</span> Only buy the best products for a makeup kit.</label>
+      <label><input type="radio" name="q15" value="C"><span class="opt-letter">C</span> Ask other makeup artists to check your kit.</label>
+    </div>
+    <div class="mcq" data-q="16">
+      <div class="stem"><span class="qnum">16</span> What advice does the speaker give about creating a portfolio?</div>
+      <label><input type="radio" name="q16" value="A"><span class="opt-letter">A</span> Keep print and digital photos.</label>
+      <label><input type="radio" name="q16" value="B"><span class="opt-letter">B</span> Only include a small selection of photos.</label>
+      <label><input type="radio" name="q16" value="C"><span class="opt-letter">C</span> Get permission to use photos.</label>
+    </div>
+
+    <div class="q-range" style="margin-top:24px;">Questions 17&ndash;20</div>
+    <p class="q-instruction">What ability is required for each of the following duties? Drag the correct ability into the box next to each duty. <strong>You may use any ability more than once.</strong></p>
+    <div class="dd-wrap dd-compact">
+      <div class="dd-col-q">
+        <div class="dd-head">Duties</div>
+        <div class="match-row"><div class="mtext">Prepping an actor</div><div class="dropzone" data-q="17" data-num="17"><span class="dz-num">17</span></div></div>
+        <div class="match-row"><div class="mtext">Continuity</div><div class="dropzone" data-q="18" data-num="18"><span class="dz-num">18</span></div></div>
+        <div class="match-row"><div class="mtext">General</div><div class="dropzone" data-q="19" data-num="19"><span class="dz-num">19</span></div></div>
+        <div class="match-row"><div class="mtext">Applying makeup</div><div class="dropzone" data-q="20" data-num="20"><span class="dz-num">20</span></div></div>
+      </div>
+      <div class="dd-col-o">
+        <div class="dd-head">Abilities</div>
+        <div class="chip-bank" id="abilityBank" data-reuse="1">
+          <div class="chip" draggable="true" data-letter="A">being well-organised</div>
+          <div class="chip" draggable="true" data-letter="B">being flexible</div>
+          <div class="chip" draggable="true" data-letter="C">working quickly</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="part" data-part="3">
+    <div class="part-banner"><h2>Part 3</h2><p>Listen and answer questions 21&ndash;30.</p></div>
+    <div class="q-range">Questions 21 and 22</div>
+    <p class="q-instruction">Choose <strong>TWO</strong> letters, <strong>A&ndash;E</strong>.</p>
+    <div class="mcq multi" data-qs="21,22">
+      <div class="stem"><span class="qnum">21&ndash;22</span><span>Which <strong>TWO</strong> features of the lecture on ocean biodiversity had the greatest impact on the students?</span></div>
+      <label><input type="checkbox" value="A"><span class="opt-letter">A</span> the references to local problems</label>
+      <label><input type="checkbox" value="B"><span class="opt-letter">B</span> the broad focus of the examples</label>
+      <label><input type="checkbox" value="C"><span class="opt-letter">C</span> the practical suggestions for solutions</label>
+      <label><input type="checkbox" value="D"><span class="opt-letter">D</span> the type of issues discussed</label>
+      <label><input type="checkbox" value="E"><span class="opt-letter">E</span> the implications for government policy</label>
+    </div>
+
+    <div class="q-range" style="margin-top:24px;">Questions 23 and 24</div>
+    <p class="q-instruction">Choose <strong>TWO</strong> letters, <strong>A&ndash;E</strong>.</p>
+    <div class="mcq multi" data-qs="23,24">
+      <div class="stem"><span class="qnum">23&ndash;24</span><span>Which <strong>TWO</strong> details about the research project particularly impressed the students?</span></div>
+      <label><input type="checkbox" value="A"><span class="opt-letter">A</span> the team&rsquo;s previous successes</label>
+      <label><input type="checkbox" value="B"><span class="opt-letter">B</span> its wide geographical scale</label>
+      <label><input type="checkbox" value="C"><span class="opt-letter">C</span> the use of new technology</label>
+      <label><input type="checkbox" value="D"><span class="opt-letter">D</span> the extensive statistical evidence</label>
+      <label><input type="checkbox" value="E"><span class="opt-letter">E</span> the large range of specialists involved</label>
+    </div>
+
+    <div class="q-range" style="margin-top:24px;">Questions 25&ndash;30
+      <button type="button" class="help-btn" id="helpBtn" aria-expanded="false">
+        <svg viewBox="0 0 24 16" width="20" height="14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1" y="1" width="22" height="14" rx="2"/><line x1="7" y1="11" x2="17" y2="11"/></svg>
+        Help
+      </button>
+    </div>
+    <p class="help-text" id="helpText">Drag an option from the box into the answer box next to each resource. Drag it back to the box to remove it. Your answer is saved continuously.</p>
+    <p class="q-instruction">What is the students&rsquo; opinion of each of the following resources related to ocean biodiversity? Choose <strong>SIX</strong> answers from the box and drag the correct option next to questions 25&ndash;30.</p>
+
+    <div class="dd-wrap">
+      <div class="dd-col-q">
+        <div class="dd-head">Resources</div>
+        <div class="match-row"><div class="mtext">Article on invasive lionfish</div><div class="dropzone" data-q="25" data-num="25"><span class="dz-num">25</span></div></div>
+        <div class="match-row"><div class="mtext">Documentary on microplastics</div><div class="dropzone" data-q="26" data-num="26"><span class="dz-num">26</span></div></div>
+        <div class="match-row"><div class="mtext">Podcast on ocean pollution</div><div class="dropzone" data-q="27" data-num="27"><span class="dz-num">27</span></div></div>
+        <div class="match-row"><div class="mtext">Book on coastal ecosystems</div><div class="dropzone" data-q="28" data-num="28"><span class="dz-num">28</span></div></div>
+        <div class="match-row"><div class="mtext">Article on metal toxicity</div><div class="dropzone" data-q="29" data-num="29"><span class="dz-num">29</span></div></div>
+        <div class="match-row"><div class="mtext">Podcast on floating marine cities</div><div class="dropzone" data-q="30" data-num="30"><span class="dz-num">30</span></div></div>
+      </div>
+      <div class="dd-col-o">
+        <div class="dd-head">Opinions</div>
+        <div class="chip-bank" id="productBank">
+          <div class="chip" draggable="true" data-letter="A">This is aimed at a very specialist audience.</div>
+          <div class="chip" draggable="true" data-letter="B">This is now rather outdated.</div>
+          <div class="chip" draggable="true" data-letter="C">This was an effective description of a new danger.</div>
+          <div class="chip" draggable="true" data-letter="D">This suggests possible ways to improve the situation.</div>
+          <div class="chip" draggable="true" data-letter="E">This does not give a balanced account.</div>
+          <div class="chip" draggable="true" data-letter="F">This is too predictable to be useful.</div>
+          <div class="chip" draggable="true" data-letter="G">This gives insufficient evidence for its claims.</div>
+          <div class="chip" draggable="true" data-letter="H">This gives a clear explanation of the problems.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="part" data-part="4">
+    <div class="part-banner"><h2>Part 4</h2><p>Listen and answer questions 31&ndash;40.</p></div>
+    <div class="q-range">Questions 31&ndash;40</div>
+    <p class="q-instruction">Complete the notes below. Write <strong>ONE WORD ONLY</strong> for each answer.</p>
+    <div class="form-box" style="max-width:760px;">
+      <div class="form-title">Sources of rubber</div>
+      <div class="sub-head">Three resources which are essential for industrial civilisation</div>
+      <ul class="bullet">
+        <li><span class="qnum">31</span> <input class="gap" data-q="31"></li>
+        <li>fossil fuels</li>
+        <li>rubber</li>
+      </ul>
+      <div class="sub-head">Natural rubber</div>
+      <p class="note-line">This mainly comes from the Para rubber tree, now cultivated in South-East Asia.</p>
+      <p class="note-line">The supply is limited because</p>
+      <ul class="bullet">
+        <li>the growth of the tree is <span class="qnum">32</span> <input class="gap" data-q="32">.</li>
+        <li>production cannot easily be adjusted because of increasing or decreasing <span class="qnum">33</span> <input class="gap" data-q="33">.</li>
+        <li>the tree only grows near the <span class="qnum">34</span> <input class="gap" data-q="34">.</li>
+        <li>extracting the latex (rubber) is labour-intensive</li>
+        <li>it is very difficult to <span class="qnum">35</span> <input class="gap" data-q="35"> rubber after production.</li>
+      </ul>
+      <p class="note-line">New threats include</p>
+      <ul class="bullet">
+        <li>lack of genetic diversity, leading to danger of disease caused by a <span class="qnum">36</span> <input class="gap" data-q="36">.</li>
+        <li>a shift to the cultivation of palm oil</li>
+        <li>extreme <span class="qnum">37</span> <input class="gap" data-q="37"> events.</li>
+      </ul>
+      <div class="sub-head">Synthetic rubber</div>
+      <ul class="bullet">
+        <li>may be used for engine parts and cooking utensils</li>
+        <li>is less <span class="qnum">38</span> <input class="gap" data-q="38"> than natural rubber</li>
+        <li>is unsuitable for many purposes e.g. the tyres of aircraft.</li>
+      </ul>
+      <div class="sub-head">An alternative source of natural rubber</div>
+      <ul class="bullet">
+        <li>A wild flower (a type of dandelion) has rubber in its <span class="qnum">39</span> <input class="gap" data-q="39">.</li>
+        <li>It can be grown in many locations and does not require good <span class="qnum">40</span> <input class="gap" data-q="40">.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- floating arrows -->  <!-- floating arrows -->
+  <div class="arrows">
+    <button class="prev" id="prevBtn" aria-label="Previous">&larr;</button>
+    <button class="next" id="nextBtn" aria-label="Next">&rarr;</button>
+  </div>
+</main>
+
+<!-- ============ TRANSCRIPT PANEL (post-submission) ============ -->
+<aside class="script-panel" id="scriptPanel" aria-label="Transcript">
+  <div class="script-top"><span class="script-title">Transcript &mdash; Cambridge 21 Test 1</span><button class="script-close" id="scriptClose" aria-label="Close transcript">&#10006;</button></div>
+  <div class="script-text" id="scriptText">
+    <h3>Section 1</h3>
+    <p class="nar">You will hear a telephone conversation between a man who wants to learn to sail and a woman at a sailing club.</p>
+    <p><b>Woman:</b> Hello, Oyster Bay Sailing Club. How can I help you?</p>
+    <p><b>Man:</b> Oh hi. I'd like to find out about sailing courses for beginners.</p>
+    <p><b>Woman:</b> No problem. Is it for yourself?</p>
+    <p><b>Man:</b> Yes. I had a look online but I'm not sure which course would be best.</p>
+    <p><b>Woman:</b> OK. Well you might be interested in our Taster Days?</p>
+    <p><b>Man:</b> Possibly.</p>
+    <p><b>Woman:</b> So these are for people who've never sailed before - it's basically an introduction to sailing to find out whether you enjoy it and want to carry on with it.</p>
+    <p><b>Man:</b> And how much is that?</p>
+    <p><b>Woman:</b> It's £120 for the day - but it's reduced to £110 each if there are two of you.</p>
+    <p><b>Man:</b> No, it would just be me.</p>
+    <p><b>Woman:</b> Oh that's fine. You'd be in a small group, usually about eight people but no more than ten - and everyone's always very friendly.</p>
+    <p><b>Man:</b> Uh huh. And are there any other suitable courses?</p>
+    <p><b>Woman:</b> The other option is the Level 1 course. These are two-day weekend courses and we run those all year round.</p>
+    <p><b>Man:</b> OK. And what do you learn on that course?</p>
+    <p><b>Woman:</b> This is a mix of theory and practical skills. So you learn about things like the weather, which is obviously really important and also the tides, as well as learning basic sailing skills. You go out into the harbour in special training dinghies for beginners, two people in each dinghy and an instructor. He or she will make sure you understand everything you need to know about safety.</p>
+    <p><b>Man:</b> It sounds like hard work!</p>
+    <p><b>Woman:</b> Yes, but you'll have a lot of fun too.</p>
+    <p><b>Man:</b> And the cost of that one is ...?</p>
+    <p><b>Woman:</b> £200. But it's a bit cheaper if you decide to join the club. There's a discount for members.</p>
+    <p><b>Man:</b> Well, I'm not sure about that yet.</p>
+    <p><b>Woman:</b> You've got plenty of time to decide.</p>
+    <p><b>Man:</b> And does the cost include everything?</p>
+    <p><b>Woman:</b> Yes, everything's included and you also get a really good dictionary explaining all the sailing terminology. A lot of people struggle with this at first. It's got lots of pictures, so I'm sure you'd find it really helpful. And on completion of the course you get a certificate. Then you're ready to move on to the Level 2 course.</p>
+    <p><b>Man:</b> Sounds good.</p>
+    <p><b>Woman:</b> I think that's all the info you need for now. Just a couple of general things. For example, it's really important that you know how to swim.</p>
+    <p><b>Man:</b> Yes, I'm pretty confident in the water.</p>
+    <p><b>Woman:</b> Great. The other thing I should tell you is that we provide wetsuits and life jackets but you need to bring swimming trunks and some old trainers.</p>
+    <p><b>Man:</b> And a towel?</p>
+    <p><b>Woman:</b> Yes definitely. And you might want to bring your own toiletries, things like shampoo.</p>
+    <p><b>Man:</b> OK. What about food and drink? Do I need to bring that or is there a cafe at the club?</p>
+    <p><b>Woman:</b> Yes, you can get sandwiches, cakes and snacks there. The food's pretty reasonable.</p>
+    <p><b>Man:</b> OK good. Well I think I'm interested in the Level 1 course. But I know absolutely nothing about sailing so is there anything I can do to prepare myself a bit?</p>
+    <p><b>Woman:</b> I recommend you watch some videos we use for training. They're available online. I can send you the link. They'll give you an idea of what to expect.</p>
+    <p><b>Man:</b> Perfect, thanks. That would be very helpful. Oh and just one other thing - I'll be cycling to the club and will need somewhere to put valuables. I'm just wondering if there are lockers for people to use?</p>
+    <p><b>Woman:</b> Yes, there are plenty in the changing rooms.</p>
+    <p><b>Man:</b> Great. OK well could you book me onto ...</p>
+
+    <h3>Section 2</h3>
+    <p class="nar">You will hear part of a podcast in which an experienced makeup artist gives advice about working as a makeup trainee in the film industry.</p>
+    <p><b>Ian:</b> Hello and welcome to the film making podcast. In this week's episode, Claire Lemarre talks to us about how to become a makeup artist. Claire's been working as a makeup artist in the film industry for over 20 years and has lots of useful advice about how to get started.</p>
+    <p><b>Claire:</b> Thanks Ian. Well, before you can become a makeup artist on films you have to spend about 2 years working as a makeup trainee. A good place to get your first job would be on a low budget short film. Of course, this means that you'll be working for free. But it's often worth it for the experience. Make sure your transport costs are covered - and remember, there's very unlikely to be any catering provided, so bring plenty of food.</p>
+    <p><b>Claire:</b> If you're lucky, you might start out on a big budget film where you'll get the most useful experience. On productions like this, makeup and hair styling are separate departments - so you won't need to bring your curling tongs! But you're likely to get the opportunity to work with a range of age groups, as well as different ethnicities. Doing makeup for special effects is highly specialised, so don't expect to be offered any practical experience in that.</p>
+    <p><b>Claire:</b> One problem with working in the makeup department is that it's a high-pressure environment. There are very few times when you'll be bored or have nothing to do. It can be stressful but you'll see that the top makeup artists are very professional - even when they're having to work with directors who are impatient or unhappy with the makeup artist's work. Follow your supervisor's lead and try to remain calm at all times.</p>
+    <p><b>Claire:</b> I've worked with many very famous actors over the years. At first, I found it overwhelming and could hardly speak. I was so in awe. That's preferable, by the way, to becoming too excited and asking for selfies. Now meeting the talent is just a normal part of the job and to be honest most actors don't look that special without all the makeup!</p>
+    <p><b>Claire:</b> Every makeup trainee will need a makeup kit, which they'll be expected to have with them at all times. Just the essentials will do for the kinds of tasks you'll be given - it won't be anything complicated. It's worth looking at what the other makeup artists have in their kits - but whatever you do, don't borrow anything without asking first.</p>
+    <p><b>Claire:</b> It's very important to build your portfolio. You should take photos of all the work you do and ideally show the different stages of makeup application if you can. But remember you'll need to get approval from the makeup designer in charge of the department. As you'll be sending your portfolio digitally, you won't need to get photos printed.</p>
+    <p><b>Claire:</b> So what does a makeup trainee actually do? You may be asked to help prep an actor ready for makeup. Some actors will arrive having already cleansed and moisturized their skin. But sometimes you'll need to step in and get this done without wasting any time, otherwise the makeup artist will get behind schedule.</p>
+    <p><b>Claire:</b> Trainees play a useful role in continuity. It will be your responsibility to take photos, log them digitally and print out a hard copy to put in each actor's file. This information needs to be kept in good order as a reshoot can mean replicating makeup months later.</p>
+    <p><b>Claire:</b> General duties mean doing anything from getting the teas and coffees to putting on a wash. Having a positive attitude and being willing to do whatever is asked of you will help you get your next film job.</p>
+    <p><b>Claire:</b> You won't be asked to apply makeup to any of the principal cast, only the extras. If there are dozens of extras involved you'll need to keep up a swift pace and not spend too long on each person. It takes quite a lot of confidence to be able to do this well.</p>
+
+    <h3>Section 3</h3>
+    <p class="nar">You will hear two students, Phil and Lucy, discussing a lecture on ocean biodiversity and a list of resources for a seminar.</p>
+    <p><b>Phil:</b> That lecture from the visiting speaker yesterday was good, wasn't it?</p>
+    <p><b>Lucy:</b> Yeah. I learned a lot from her about ocean biodiversity. I've already done some reading on it, and I did an assignment on some of the problems associated with it last year, but I especially liked the way her lecture focused on more long-term issues.</p>
+    <p><b>Phil:</b> Yes, things that aren't currently receiving widespread attention but are likely to be important in the future. That impressed me too. It wasn't exactly a feel-good conclusion because it's hard to see any real solution for a lot of the problems.</p>
+    <p><b>Lucy:</b> No, though she did point to where policy changes could be made to protect our marine and coastal environments.</p>
+    <p><b>Phil:</b> Mm. But that's just at a national level. The examples she gave were at a more global level, and they really made it clear to me just how wide-ranging the threats to ocean biodiversity are.</p>
+    <p><b>Lucy:</b> Yes, me too. The research project she described was impressive, wasn't it? I'd have thought it was quite unusual to have so many experts working together.</p>
+    <p><b>Phil:</b> Yeah, and from such different backgrounds. Must have been a really exciting team to work with. I'd heard of a couple of them before - they were involved in research way back in 2009 warning about the dangers of ocean pollution.</p>
+    <p><b>Lucy:</b> But now people are much more aware of that, aren't they? Right. I liked the way she didn't bombard us with figures - I mean, they were available, but she focused more on the general points they indicated.</p>
+    <p><b>Phil:</b> Mm. And her description of how robotics can be used to investigate threats to biodiversity was really interesting.</p>
+    <p><b>Lucy:</b> Absolutely. While you're here, can we talk about the list of resources we have to evaluate for the seminar tomorrow.</p>
+    <p><b>Phil:</b> Yeah. What did you think of that article on invasive lionfish? The one claiming they were expanding their habitat throughout the Mediterranean Sea.</p>
+    <p><b>Lucy:</b> Well, the writer went on about how dangerous they were in environmental terms, which is probably true, but he didn't really provide much information to explain why.</p>
+    <p><b>Phil:</b> I know what you mean. I watched the documentary on microplastics, at least I started to, but then I found it was made ten years ago so I gave up.</p>
+    <p><b>Lucy:</b> I watched to the end but you're right, it was showing its age.</p>
+    <p><b>Phil:</b> Yeah. Did you listen to the podcast on ocean pollution?</p>
+    <p><b>Lucy:</b> Mm. I didn't get anything out of it though. Most of it was stating the obvious.</p>
+    <p><b>Phil:</b> Did you read that book on coastal ecosystems? The one by John Harper?</p>
+    <p><b>Lucy:</b> Yes, I found it hard going at first, it went into a lot of detail, but actually I ended up with a much better understanding of the issues.</p>
+    <p><b>Phil:</b> The article on metal toxicity was way above my head. I didn't know anything about how metals from industrial emissions react in the ocean ... and I still don't understand it.</p>
+    <p><b>Lucy:</b> I gave up reading after the first chapter - I just couldn't follow it.</p>
+    <p><b>Phil:</b> That podcast on floating marine cities was interesting, though it presented a rather one-sided picture, I thought.</p>
+    <p><b>Lucy:</b> Yes, it focused on how this would benefit people and ignored the effects on the environment.</p>
+
+    <h3>Section 4</h3>
+    <p class="nar">You will hear part of a lecture about the sources of rubber.</p>
+    <p>Much of the world now lives in an industrial civilisation. But this has only become possible because we have the necessary natural resources. There are three types of natural resource without which industry could not exist. One of these is metal - without that we'd have no machines and no transportation. Another is fossil fuels, which we need to power those machines. But there's a third resource that's essential to connect the different parts of a machine together, and that is rubber. It's now used in over 40,000 products, from waterproof footwear to surgical gloves.</p>
+    <p>At present, we have two types of rubber in common use. One is natural rubber, which nearly all comes from the Para rubber tree. This was originally native to Brazil, but is now cultivated on plantations in South-East Asia. Recently, however, concern's been growing that supplies may soon be insufficient for the world's needs.</p>
+    <p>Well, for one thing, rubber trees don't just spring up overnight. It can take eight to ten years for a tree to start producing rubber, so cultivating them's a slow process. And this leads to another problem. With most crops, farmers can easily change what crop they produce, or how much of a crop they produce, if they find the demand for that crop is rising or falling. But if you have to plant eight or ten years ahead, that's much harder. And also the rubber tree's very choosy about where it grows. It needs the right temperature, the right amount of rainfall, and the right altitude. The result is that it can't be grown in the northern or southern parts of the globe, only around the equator. Another problem is that the rubber is basically extracted in the same way as it's been done for hundreds of years, and that's by hand. It's very labour-intensive. And it's not just the initial production that's limiting supplies. With other resources such as water and glass, when we've finished using them we can recycle them, but although this is also possible with rubber, it's very difficult, so that also reduces the amount we have available.</p>
+    <p>And in the last few years, there have been new threats to the supply of natural rubber. Nearly all the rubber trees in South-East Asia are descended from just a small number of seeds brought from Brazil in the nineteenth century. This means that there's very little genetic diversity among the trees, which in turn makes them very vulnerable to disease. The most dangerous threat is a fungus, which destroyed large numbers of rubber trees in Brazil. Another problem is that farmers in South-East Asia are increasingly turning to the cultivation of palm oil. And finally, in recent years South-East Asia has been repeatedly hit by extreme types of weather, and this looks likely to continue in the future.</p>
+    <p>However, as well as using natural rubber, it's also possible to make rubber synthetically. This works very well for some purposes, for example, making engine parts, or silicone pots and pans used for cooking. But compared with natural rubber, it's not anything like as strong, and this means it can't replace natural rubber in other products. For example, only natural rubber can stand up to the extreme speeds of aircraft tyres during take-off and landing.</p>
+    <p>So for some time, scientists have been looking for alternative sources of natural rubber. One is a wild plant with yellow flowers that we normally regard as a weed when we see it in our gardens. But when it's pulled up and its roots cut open, they're found to contain rubber. Compared to the rubber tree, dandelions produce relatively small amounts of rubber, but unlike rubber trees, they're very adaptable. They'll grow in all sorts of places, and they don't need rich soil. So at present there are several projects underway investigating the possibility of using dandelions as a source of rubber.</p>
+  </div>
+</aside>
+</div>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer" id="footer">
+  <div class="fpart active" data-part="1"><span class="fitem flabel"><span class="fseg"></span><span class="plabel">Part 1</span></span><span class="fdots"></span><span class="pcount">0 of 10</span></div>
+  <div class="fpart" data-part="2"><span class="fitem flabel"><span class="fseg"></span><span class="plabel">Part 2</span></span><span class="fdots"></span><span class="pcount">0 of 10</span></div>
+  <div class="fpart" data-part="3"><span class="fitem flabel"><span class="fseg"></span><span class="plabel">Part 3</span></span><span class="fdots"></span><span class="pcount">0 of 10</span></div>
+  <div class="fpart" data-part="4"><span class="fitem flabel"><span class="fseg"></span><span class="plabel">Part 4</span></span><span class="fdots"></span><span class="pcount">0 of 10</span></div>
+  <button class="submit-btn" id="footerSubmit"><span class="fs-label">Submit ✓</span><span class="fs-hint" id="footerHint">0 of 40 answered</span></button>
+</footer>
+
+<!-- ============ PLAY OVERLAY ============ -->
+<div class="overlay play-ov" id="playOverlay">
+  <div class="hp">🎧</div>
+  <p class="warn">You will be listening to an audio clip during this test. You will not be permitted to pause or rewind the audio while answering the questions.</p>
+  <div class="dl-wrap">
+    <div class="dl-bar"><div class="dl-fill" id="dlBar"></div></div>
+    <div class="dl-row"><span id="dlStatus">Downloading audio&hellip;</span><span id="dlPct">0%</span></div>
+  </div>
+  <p class="cta">Play will become available as soon as enough audio has loaded; it keeps loading while you listen.</p>
+  <button class="play-btn" id="playBtn" disabled><span class="tri"></span> Play</button>
+</div>
+
+<!-- ============ OPTIONS SHEET ============ -->
+<div class="sheet" id="optionsSheet">
+  <div class="top"><span></span><span class="title">Options</span><span class="close" data-close-sheet>✖</span></div>
+  <div class="opt-list">
+    <div class="opt-row primary" id="goSubmission">✈ &nbsp; Go to submission page <span class="chev">›</span></div>
+    <div class="opt-row" data-open="contrastSheet">◑ &nbsp; Contrast <span class="chev">›</span></div>
+    <div class="opt-row" data-open="textSheet">🔍 &nbsp; Text size <span class="chev">›</span></div>
+  </div>
+</div>
+
+<!-- ============ CONTRAST SHEET ============ -->
+<div class="sheet" id="contrastSheet">
+  <div class="top"><span class="back" data-back="optionsSheet">‹ Options</span><span class="title">Contrast</span><span class="close" data-close-sheet>✖</span></div>
+  <div class="opt-list">
+    <div class="opt-row" data-contrast="contrast-bw"><span class="check">✔</span> Black on white <span class="swatch sw-bw"><i></i><i></i><i></i></span></div>
+    <div class="opt-row" data-contrast="contrast-wb"><span class="check"></span> White on black <span class="swatch sw-wb"><i></i><i></i><i></i></span></div>
+    <div class="opt-row" data-contrast="contrast-yb"><span class="check"></span> Yellow on black <span class="swatch sw-yb"><i></i><i></i><i></i></span></div>
+  </div>
+</div>
+
+<!-- ============ TEXT SIZE SHEET ============ -->
+<div class="sheet" id="textSheet">
+  <div class="top"><span class="back" data-back="optionsSheet">‹ Options</span><span class="title">Text size</span><span class="close" data-close-sheet>✖</span></div>
+  <div class="opt-list">
+    <div class="opt-row" data-size="size-1"><span class="check">✔</span> Standard</div>
+    <div class="opt-row" data-size="size-2"><span class="check"></span> Large</div>
+    <div class="opt-row" data-size="size-3"><span class="check"></span> Extra large</div>
+  </div>
+</div>
+
+<!-- ============ SUBMISSION PANEL ============ -->
+<div class="panel" id="submissionPanel">
+  <div class="wrap">
+    <h1>Submission page</h1>
+    <p class="lead">Review your answers below. Empty answers are highlighted. Click <strong>Submit test</strong> to finish and see your score.</p>
+    <div class="completion-stats" id="completionStats">
+      <div class="ring-wrap">
+        <svg class="prog-ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+          <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="ring-center"><b id="answeredNum">0</b><span>of 40</span></div>
+      </div>
+      <div class="cstat-legend">
+        <span class="cstat answered"><span class="ic">✓</span> Answered: <b id="answeredNumTxt">0</b></span>
+        <span class="cstat unanswered"><span class="ic">⚠</span> Unanswered: <b id="unansweredNum">0</b></span>
+        <button class="jump-btn" id="jumpUnanswered" type="button">↪ Go to first unanswered</button>
+      </div>
+    </div>
+    <div class="sub-grid" id="subGrid"></div>
+    <button class="big-submit" id="doSubmit">Submit test</button>
+    <button class="ghost" data-close-panel="submissionPanel">Back to test</button>
+  </div>
+</div>
+
+<!-- ============ RESULTS PANEL ============ -->
+<div class="panel" id="resultsPanel">
+  <div class="wrap">
+    <h1>Your results</h1>
+    <div class="score-head">
+      <div class="score-card"><div class="num" id="rawScore">0</div><div class="cap">out of 40 correct</div></div>
+      <div class="score-card band"><div class="num" id="bandScore">0</div><div class="cap">estimated band</div></div>
+    </div>
+    <div class="weak-feedback" id="weakFeedback"></div>
+    <div class="radar-wrap"><h3>Accuracy by question type</h3><div id="typeRadar"></div></div>
+    <div class="analysis">
+      <div class="analysis-col"><h3>By question type</h3><div class="bd-list" id="typeBreakdown"></div></div>
+      <div class="analysis-col"><h3>By part</h3><div class="bd-list" id="partBreakdown"></div></div>
+    </div>
+    <table class="review"><thead><tr><th>#</th><th>Your answer</th><th>Correct answer(s)</th><th>Result</th></tr></thead>
+      <tbody id="reviewBody"></tbody>
+    </table>
+    <div class="result-dock" role="group" aria-label="Result actions">
+      <button class="dock-btn primary" id="retakeBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        <span>Retake test</span>
+      </button>
+      <button class="dock-btn" id="shareCardBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+        <span>Share result</span>
+      </button>
+      <button class="dock-btn" id="savePdfBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        <span>Save PDF</span>
+      </button>
+      <button class="dock-btn" data-close-panel="resultsPanel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <span>Review</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- off-screen staging area where the share card is built before rendering to an image -->
+<div id="shareStage"></div>
+
+<!-- share-result modal: shows the generated card image + download / copy actions -->
+<div class="share-modal" id="shareModal">
+  <div class="sm-box">
+    <h2 style="margin:0 0 14px;font-size:1.15rem;">Your result card</h2>
+    <img id="shareImg" alt="Result card">
+    <div class="sm-actions">
+      <button class="ghost" id="downloadCardBtn">⬇ Download image</button>
+      <button class="ghost" id="copyResultBtn">📋 Copy text for Telegram</button>
+      <button class="ghost" id="closeShareBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- highlighter floating buttons -->
+<button id="highlight-button" class="hidden" type="button">Highlight</button>
+<button id="clear-highlight-button" class="hidden" type="button">Clear Highlight</button>
+
+<audio id="audio" src="https://archive.org/download/c-21-t-1/C21T1.mp3" preload="auto"></audio>
+
+<!-- PDF export for the answer sheet -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<script>
+/* =====================================================================
+   IELTS LISTENING — LOGIC
+   ===================================================================== */
+
+/* ---------- ANSWER KEY (acceptable variants, lowercase) ---------- */
+const KEY = {
+  1:["10","ten"],
+  2:["weather"],
+  3:["safety"],
+  4:["discount","a discount"],
+  5:["dictionary","a dictionary"],
+  6:["certificate","a certificate"],
+  7:["towel","a towel"],
+  8:["cafe","café","café"],
+  9:["videos","video"],
+  10:["lockers","locker"],
+  11:["a"],12:["b"],13:["a"],14:["a"],15:["a"],16:["c"],
+  17:["c"],18:["a"],19:["b"],20:["c"],
+  21:["b","d"],22:["b","d"],
+  23:["c","e"],24:["c","e"],
+  25:["g"],26:["b"],27:["f"],28:["h"],29:["a"],30:["e"],
+  31:["metal","metals"],
+  32:["slow"],
+  33:["demand"],
+  34:["equator","the equator"],
+  35:["recycle"],
+  36:["fungus"],
+  37:["weather"],
+  38:["strong"],
+  39:["roots","its roots"],
+  40:["soil","good soil"]
+};
+const TOTAL = 40;
+
+/* question type per question (for the results breakdown) */
+const TYPE_ORDER = ['Table completion','Note completion','Multiple choice','Matching'];
+const QTYPE = {};
+(function(){
+  const set=(a,b,t)=>{ for(let q=a;q<=b;q++) QTYPE[q]=t; };
+  set(1,6,'Table completion');     // Part 1 — sailing club courses table
+  set(7,10,'Note completion');     // Part 1 — general info notes
+  set(11,16,'Multiple choice');    // Part 2 — single-answer MCQ
+  set(17,20,'Matching');           // Part 2 — duties / abilities
+  set(21,24,'Multiple choice');    // Part 3 — choose TWO letters
+  set(25,30,'Matching');           // Part 3 — resources / opinions
+  set(31,40,'Note completion');    // Part 4 — sources of rubber notes
+})();
+
+/* ---------- helpers ---------- */
+const $  = (s,el=document)=>el.querySelector(s);
+const $$ = (s,el=document)=>Array.from(el.querySelectorAll(s));
+const norm = s => (s||'').toString().trim().toLowerCase().replace(/[.,;:!?'"]+$/,'').replace(/\s+/g,' ');
+
+function getUserAnswer(q){
+  // text gaps
+  const gap = $(`.gap[data-q="${q}"]`);
+  if(gap) return gap.value.trim();
+  // "choose TWO letters" checkbox groups (e.g. 27&28, 29&30)
+  const mg = multiPairForQ(q);
+  if(mg) return multiAnswer(mg,q);
+  // radios
+  const radio = $(`input[name="q${q}"]:checked`);
+  if(radio) return radio.value;
+  // dropzones
+  const dz = $(`.dropzone[data-q="${q}"]`);
+  if(dz) return dz.dataset.value || '';
+  return '';
+}
+function isCorrect(q){
+  const ua = norm(getUserAnswer(q));
+  if(!ua) return false;
+  const variants = KEY[q].map(norm);
+  if(variants.includes(ua)) return true;
+  // postcode: also compare with spaces removed
+  const uaNoSpace = ua.replace(/\s+/g,'');
+  return variants.some(v=>v.replace(/\s+/g,'')===uaNoSpace);
+}
+function answeredCount(part){
+  let c=0; const lo=(part-1)*10+1, hi=part*10;
+  for(let q=lo;q<=hi;q++) if(getUserAnswer(q)!=='') c++;
+  return c;
+}
+
+/* ---------- footer dots + navigation ---------- */
+/* "choose TWO letters" questions (e.g. 27&28) share ONE footer dot labelled
+   "27–28", so map each such question to its pair before building the strip */
+const qGroups = {};
+$$('.mcq.multi').forEach(mc=>{
+  const qs = mc.dataset.qs.split(',').map(n=>+n);
+  qs.forEach(q=>{ qGroups[q]=qs; });
+});
+const fparts = $$('.fpart');
+fparts.forEach(fp=>{
+  const part = +fp.dataset.part;
+  const dots = $('.fdots',fp);
+  const lo=(part-1)*10+1, hi=part*10;
+  for(let q=lo;q<=hi;q++){
+    const grp=qGroups[q];
+    if(grp && grp[0]!==q) continue;            // pair already drawn on its first member
+    const item=document.createElement('span');
+    item.className='fitem';
+    item.addEventListener('click',e=>{ e.stopPropagation(); focusQuestion(q); });
+    const s=document.createElement('span');
+    s.className='fseg'; s.dataset.q=q;
+    const d=document.createElement('span');
+    d.className='fdot'; d.dataset.q=q;
+    if(grp){
+      d.classList.add('pair'); s.classList.add('pair');
+      d.dataset.qs=grp.join(','); s.dataset.qs=grp.join(',');
+      d.textContent=grp.join('–');         // 27–28
+    } else {
+      d.textContent=q;
+    }
+    item.appendChild(s); item.appendChild(d);
+    dots.appendChild(item);
+  }
+  fp.addEventListener('click',()=>{
+    switchPart(part);
+    fp.classList.add('flash');                          // brief blue border on click
+    setTimeout(()=>fp.classList.remove('flash'), 650);
+  });
+});
+
+let currentPart=1, currentQ=1, testSubmitted=false;
+
+function switchPart(part){
+  currentPart=part;
+  $$('.part').forEach(p=>p.classList.toggle('active',+p.dataset.part===part));
+  fparts.forEach(fp=>fp.classList.toggle('active',+fp.dataset.part===part));
+  $('#content').scrollTop=0;
+  refreshFooter();
+  // on a narrow screen the footer scrolls horizontally — bring the active part's
+  // question numbers into view so they're reachable on phones
+  const afp=fparts.find(fp=>+fp.dataset.part===part);
+  if(afp) requestAnimationFrame(()=>{ try{ afp.scrollIntoView({block:'nearest', inline:'center'}); }catch(e){} });
+}
+function focusQuestion(q){
+  q=Math.max(1,Math.min(TOTAL,q));
+  currentQ=q;
+  const part=Math.ceil(q/10);
+  if(part!==currentPart) switchPart(part);
+  let el = $(`.gap[data-q="${q}"]`) || $(`.mcq[data-q="${q}"]`) || $(`.dropzone[data-q="${q}"]`);
+  // paired "choose TWO" questions live on a .mcq.multi keyed by data-qs (e.g. "27,28")
+  if(!el) el = $$('.mcq.multi').find(mc=>mc.dataset.qs.split(',').map(n=>+n).includes(q));
+  if(el){
+    // 'nearest' scrolls only the small amount needed (and not at all if the
+    // question is already on screen) instead of re-centring on every step
+    el.scrollIntoView({block:'nearest',behavior:'smooth'});
+    if(el.classList.contains('gap')) el.focus({preventScroll:true});
+  }
+  refreshFooter();
+}
+function refreshFooter(){
+  fparts.forEach(fp=>{
+    const part=+fp.dataset.part;
+    $('.pcount',fp).textContent = answeredCount(part)+' of 10';
+    // a combined dot/segment carries both questions in data-qs; a plain one just data-q
+    const qsOf = el => el.dataset.qs ? el.dataset.qs.split(',').map(n=>+n) : [+el.dataset.q];
+    $$('.fdot',fp).forEach(d=>{
+      const qs=qsOf(d);
+      d.classList.toggle('answered', qs.every(q=>getUserAnswer(q)!==''));
+      d.classList.toggle('current', qs.includes(currentQ));
+      if(testSubmitted){ const ok=qs.every(q=>isCorrect(q)); d.classList.toggle('result-ok',ok); d.classList.toggle('result-no',!ok); }
+    });
+    $$('.fseg',fp).forEach(s=>{
+      const qs=qsOf(s);
+      s.classList.toggle('answered', qs.every(q=>getUserAnswer(q)!==''));
+      s.classList.toggle('current', qs.includes(currentQ));
+      if(testSubmitted){ const ok=qs.every(q=>isCorrect(q)); s.classList.toggle('result-ok',ok); s.classList.toggle('result-no',!ok); }
+    });
+  });
+  // footer button hint: "X of 40 answered" (only before submit; afterwards it reads "Review")
+  const hintEl=$('#footerHint');
+  if(hintEl && !testSubmitted){
+    const total=[1,2,3,4].reduce((s,p)=>s+answeredCount(p),0);
+    hintEl.textContent=total+' of '+TOTAL+' answered';
+    hintEl.classList.toggle('complete', total===TOTAL);
+  }
+  // mirror the demo: the focused drag-and-drop box shows a blue dashed border
+  $$('.dropzone').forEach(dz=>dz.classList.toggle('current',+dz.dataset.q===currentQ));
+  // the current MCQ (single or paired) gets a glowing box around its number
+  $$('.mcq').forEach(mc=>{
+    const qs = mc.dataset.qs ? mc.dataset.qs.split(',').map(n=>+n) : [+mc.dataset.q];
+    mc.classList.toggle('current', qs.includes(currentQ));
+  });
+}
+$('#prevBtn').onclick=()=>focusQuestion(currentQ-1);
+$('#nextBtn').onclick=()=>focusQuestion(currentQ+1);
+
+/* track inputs — boxes stay a fixed width (matching the Inspera demo), so no autosize */
+$$('.gap').forEach(g=>{
+  g.addEventListener('focus',()=>{currentQ=+g.dataset.q; refreshFooter();});
+  g.addEventListener('input',()=>{ refreshFooter(); });
+});
+$$('.mcq input[type=radio]').forEach(r=>r.addEventListener('change',()=>{
+  currentQ=+r.closest('.mcq').dataset.q; refreshFooter();
+}));
+
+/* ---------- "choose TWO letters" checkbox groups ----------
+   A multi block (e.g. data-qs="27,28") holds checkboxes A–E; the user may pick
+   up to N. The N checked letters are sorted and assigned to the block's N
+   questions, so order doesn't matter when marking (standard IELTS behaviour). */
+const multiGroups = {};
+$$('.mcq.multi').forEach(mc=>{
+  const qs = mc.dataset.qs.split(',').map(n=>+n);
+  multiGroups[qs.join('_')] = {qs, el:mc};
+  const boxes = $$('input[type=checkbox]', mc);
+  boxes.forEach(b=>b.addEventListener('change',()=>{
+    const checked = boxes.filter(x=>x.checked);
+    if(checked.length > qs.length){ b.checked=false; return; }  // cap at N choices
+    currentQ = qs[0];
+    refreshFooter();
+  }));
+});
+function multiPairForQ(q){
+  for(const k in multiGroups){ if(multiGroups[k].qs.includes(q)) return multiGroups[k]; }
+  return null;
+}
+function multiAnswer(g,q){
+  const letters = $$('input[type=checkbox]', g.el).filter(b=>b.checked).map(b=>b.value).sort();
+  return letters[g.qs.indexOf(q)] || '';
+}
+
+/* ---------- play overlay + audio readiness gate ----------
+   The clip is large, so we DON'T wait for the whole file: the browser streams
+   it and we unlock Play as soon as it can play through at the current download
+   speed (canplaythrough). Playback then keeps downloading in the background.
+   The bar shows how much is buffered, and a manual override lets the user start
+   once a usable chunk is ready in case canplaythrough is slow. */
+const audio=$('#audio');
+const playBtn=$('#playBtn'), dlBar=$('#dlBar'), dlPct=$('#dlPct'), dlStatus=$('#dlStatus');
+let audioReady=false, displayedPct=0;
+function bufferedEnd(){
+  try{ return audio.buffered.length ? audio.buffered.end(audio.buffered.length-1) : 0; }catch(e){ return 0; }
+}
+function renderPct(){ const p=Math.max(0,Math.min(100,Math.round(displayedPct))); dlBar.style.width=p+'%'; dlPct.textContent=p+'%'; }
+function showPct(p){ if(p>displayedPct){ displayedPct=p; renderPct(); } }   // monotonic
+function markAudioReady(msg){
+  if(!audioReady){
+    audioReady=true;
+    dlStatus.textContent=msg||'Ready to play';
+    playBtn.disabled=false;
+  }
+}
+function updateDownload(){
+  const dur=audio.duration;
+  if(!dur || !isFinite(dur)) return;
+  showPct((bufferedEnd()/dur)*100);
+  if(bufferedEnd()>=dur-0.4){ markAudioReady('Download complete'); displayedPct=100; renderPct(); }
+}
+['progress','loadedmetadata','suspend','timeupdate'].forEach(ev=>audio.addEventListener(ev,updateDownload));
+// canplaythrough = the browser estimates it can play to the end without stalling
+audio.addEventListener('canplaythrough',()=>markAudioReady('Ready to play'));
+// safety net: once a usable buffer exists, let the user start even if
+// canplaythrough hasn't fired yet (slow/erratic connections)
+audio.addEventListener('canplay',()=>{ setTimeout(()=>markAudioReady('Ready to play (still buffering)'),4000); });
+audio.addEventListener('error',()=>{ if(!audioReady) dlStatus.textContent='Audio failed to load — check your connection.'; });
+audio.preload='auto';
+audio.load();   // start streaming immediately
+
+$('#playBtn').onclick=()=>{
+  if(!audioReady) return;
+  $('#playOverlay').classList.add('hidden');
+  $('#audioStatus').textContent='Audio is Playing';
+  if(audio.src) audio.play().catch(()=>{});
+  startTimer();              // the recording itself becomes the clock
+  focusQuestion(1);
+};
+
+/* ---------- exam timer ----------
+   The recording is the clock. While the audio plays the display is driven
+   straight from the recording's own time (audio.currentTime), so it can never
+   drift or fight a separate counter. When the recording finishes, students get
+   2 minutes to check their answers, then the test auto-submits.
+   Fallback (recording length unknown / not playable): a 30-minute countdown. */
+const CHECK_SECONDS  = 2*60;            // 2 minutes to check after the audio ends
+const TIMER_FALLBACK = 30*60;           // used only when the recording length is unknown
+let timerRemaining = TIMER_FALLBACK, timerInterval = null, timerStarted = false;
+let timerMode = 'idle';                 // 'idle' | 'audio' | 'check' | 'fallback'
+const timerEl = $('#examTimer');
+
+function fmtTime(sec){
+  sec = Math.max(0, Math.round(sec));
+  return Math.floor(sec/60) + ':' + String(sec%60).padStart(2,'0');
+}
+function paintTimer(sec){
+  timerEl.textContent = fmtTime(sec);
+  // red for the whole checking window and the last minute of the recording
+  timerEl.classList.toggle('low', (timerMode==='check' || sec<=60) && !testSubmitted);
+  timerEl.title = timerMode==='check' ? 'Time to check your answers' : 'Time remaining';
+}
+function stopTimer(){ if(timerInterval){ clearInterval(timerInterval); timerInterval=null; } }
+
+/* show the real recording length before play (instead of a guessed value) */
+function showInitialTime(){
+  if(!timerStarted && isFinite(audio.duration) && audio.duration>0) paintTimer(audio.duration);
+}
+audio.addEventListener('loadedmetadata', showInitialTime);
+audio.addEventListener('durationchange', showInitialTime);
+
+/* AUDIO PHASE — the display follows the recording exactly (timeupdate ~4Hz) */
+function audioTick(){
+  if(timerMode!=='audio' || testSubmitted) return;
+  const dur=audio.duration;
+  if(!(isFinite(dur)&&dur>0)) return;
+  const remaining = dur - audio.currentTime;
+  if(remaining<=0.3){ enterCheckPhase(); return; }   // safety net if 'ended' is late
+  paintTimer(remaining);
+}
+audio.addEventListener('timeupdate', audioTick);
+
+/* CHECK PHASE / FALLBACK — a plain 1-second countdown that auto-submits at 0 */
+function startCountdown(seconds){
+  timerRemaining = seconds;
+  paintTimer(timerRemaining);
+  stopTimer();
+  timerInterval = setInterval(()=>{
+    if(testSubmitted){ stopTimer(); return; }
+    timerRemaining--;
+    paintTimer(timerRemaining);
+    if(timerRemaining<=0){
+      stopTimer();
+      if(!testSubmitted) $('#doSubmit').onclick({skipConfirm:true});
+    }
+  }, 1000);
+}
+
+function enterCheckPhase(){
+  if(testSubmitted || timerMode==='check') return;
+  timerMode='check';
+  $('#audioStatus').textContent='Recording finished — 2 minutes to check your answers';
+  startCountdown(CHECK_SECONDS);
+}
+audio.addEventListener('ended', enterCheckPhase);
+
+function startTimer(){
+  if(timerStarted || testSubmitted) return;
+  timerStarted = true;
+  if(isFinite(audio.duration) && audio.duration>0){
+    timerMode='audio';
+    audioTick();                         // paint immediately from the recording
+  } else {
+    timerMode='fallback';
+    startCountdown(TIMER_FALLBACK);
+  }
+}
+
+paintTimer(timerRemaining);
+showInitialTime();
+
+/* ---------- volume slider ---------- */
+const volSlider=$('#volSlider'), volVal=$('#volVal'), volIcon=$('#volIcon'), volWrap=$('.volume');
+let lastVol=100;
+function applyVolume(v){
+  v=Math.max(0,Math.min(100,v));
+  audio.volume=v/100; audio.muted=(v===0);
+  volSlider.value=v; volVal.textContent=v+'%';
+  volSlider.style.backgroundSize=v+'% 100%';
+  volWrap.classList.toggle('muted',v===0);
+  $('#volWave1').style.opacity = v>0 ? 1 : .25;
+  $('#volWave2').style.opacity = v>=50 ? 1 : .25;
+}
+volSlider.addEventListener('input',()=>{ const v=+volSlider.value; if(v>0) lastVol=v; applyVolume(v); });
+volIcon.addEventListener('click',()=>{
+  if(audio.muted || +volSlider.value===0){ applyVolume(lastVol||100); }
+  else { lastVol=+volSlider.value; applyVolume(0); }
+});
+applyVolume(100);
+
+/* ---------- full screen ---------- */
+const fsBtn=$('#fsBtn');
+fsBtn.addEventListener('click',()=>{
+  if(!document.fullscreenElement){ (document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen||(()=>{})).call(document.documentElement); }
+  else { (document.exitFullscreen||document.webkitExitFullscreen||(()=>{})).call(document); }
+});
+document.addEventListener('fullscreenchange',()=>{
+  const on=!!document.fullscreenElement;
+  // swap expand/contract icon
+  $('#fsIcon').innerHTML = on
+    ? '<path d="M9 4H4v5"/><path d="M15 4h5v5"/><path d="M9 20H4v-5"/><path d="M15 20h5v-5"/>'
+    : '<path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/>';
+  fsBtn.title = on ? 'Exit full screen' : 'Full screen';
+});
+
+/* ---------- options / sheets ---------- */
+function showSheet(id){ $$('.sheet').forEach(s=>s.classList.remove('show')); $('#'+id).classList.add('show'); }
+function hideSheets(){ $$('.sheet').forEach(s=>s.classList.remove('show')); }
+$('#menuBtn').onclick=()=>showSheet('optionsSheet');
+$$('[data-close-sheet]').forEach(b=>b.onclick=hideSheets);
+$$('[data-open]').forEach(b=>b.onclick=()=>showSheet(b.dataset.open));
+$$('[data-back]').forEach(b=>b.onclick=()=>showSheet(b.dataset.back));
+
+$$('[data-contrast]').forEach(row=>row.onclick=()=>{
+  document.body.classList.remove('contrast-bw','contrast-wb','contrast-yb');
+  document.body.classList.add(row.dataset.contrast);
+  $$('#contrastSheet .check').forEach(c=>c.textContent='');
+  $('.check',row).textContent='✔';
+});
+const SIZE_PX={'size-1':16,'size-2':18,'size-3':21};
+function applyTextSize(size){
+  document.body.classList.remove('size-1','size-2','size-3');
+  document.body.classList.add(size);
+  // scale the ROOT font-size so every rem/em resizes together — the test content,
+  // the footer menu, and the options sheet itself update immediately
+  document.documentElement.style.fontSize=(SIZE_PX[size]||16)+'px';
+}
+$$('[data-size]').forEach(row=>row.onclick=()=>{
+  applyTextSize(row.dataset.size);
+  $$('#textSheet .check').forEach(c=>c.textContent='');
+  $('.check',row).textContent='✔';
+});
+applyTextSize('size-1');   // set the initial root size
+
+/* ---------- submission + scoring ---------- */
+function openSubmission(){
+  hideSheets();
+  const grid=$('#subGrid'); grid.innerHTML='';
+  let answered=0;
+  for(let q=1;q<=TOTAL;q++){
+    const a=getUserAnswer(q);
+    if(a!=='') answered++;
+    const cell=document.createElement('div');
+    cell.className='sub-cell'+(a===''?' empty':'');
+    cell.innerHTML=`<span class="qn">${q}</span>${a===''?'<em>— not answered —</em>':escapeHtml(a)}`;
+    cell.onclick=()=>{ closePanel('submissionPanel'); focusQuestion(q); };
+    grid.appendChild(cell);
+  }
+  const unanswered=TOTAL-answered;
+  $('#answeredNum').textContent=answered;
+  $('#answeredNumTxt').textContent=answered;
+  $('#unansweredNum').textContent=unanswered;
+  // drive the circular progress ring (circumference = 2·π·52 ≈ 326.73)
+  const CIRC=326.73;
+  $('#ringFill').style.strokeDashoffset = CIRC*(1-answered/TOTAL);
+  $('#ringFill').style.stroke = unanswered===0 ? '#1a7f37' : '#2f80ed';
+  // jump button: only useful while something is still blank
+  const jb=$('#jumpUnanswered');
+  jb.disabled = unanswered===0;
+  jb.textContent = unanswered===0 ? '✓ All questions answered' : '↪ Go to first unanswered';
+  $('#submissionPanel').classList.add('show');
+}
+/* before submit -> submission page; after submit -> results/review page */
+function openSubmitOrReview(){
+  if(testSubmitted){ hideSheets(); $('#resultsPanel').classList.add('show'); }
+  else openSubmission();
+}
+$('#goSubmission').onclick=openSubmitOrReview;
+$('#footerSubmit').onclick=openSubmitOrReview;
+
+/* jump straight to the first still-blank question from the submission page */
+function firstUnanswered(){
+  for(let q=1;q<=TOTAL;q++) if(getUserAnswer(q)==='') return q;
+  return 0;
+}
+$('#jumpUnanswered').onclick=()=>{
+  const q=firstUnanswered();
+  if(!q) return;
+  closePanel('submissionPanel');
+  focusQuestion(q);
+};
+
+/* ---------- save the answer sheet as a PDF (same approach as the reading test) ---------- */
+$('#savePdfBtn').onclick=()=>{
+  if(typeof html2pdf==='undefined'){ alert('PDF export needs an internet connection. Please try again online.'); return; }
+  const now=new Date();
+  const dateStr=now.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+  const wrap=document.createElement('div');
+  wrap.style.cssText='padding:30px;font-family:Arial,Helvetica,sans-serif;color:#111;background:#fff;width:760px;';
+  let cells='';
+  for(let i=1;i<=20;i++){
+    cells+='<tr>'+pdfCell(i)+pdfCell(i+20)+'</tr>';
+  }
+  let scoreLine='';
+  if(testSubmitted){
+    let raw=0; for(let q=1;q<=TOTAL;q++) if(isCorrect(q)) raw++;
+    scoreLine=`<p style="margin:6px 0 0;font-size:14px;"><b>Score:</b> ${raw}/40 &nbsp;·&nbsp; <b>Estimated band:</b> ${band(raw)}</p>`;
+  }
+  wrap.innerHTML=
+    `<div style="border-bottom:2px solid #e2231a;padding-bottom:10px;margin-bottom:16px;">
+       <h1 style="margin:0 0 4px;font-size:22px;">IELTS Listening — Answer Sheet</h1>
+       <p style="margin:0;color:#555;font-size:13px;">Full Test 32 &nbsp;·&nbsp; ${dateStr}</p>
+       <p style="margin:8px 0 0;font-size:13px;">Name: ____________________________ &nbsp;&nbsp; Test taker ID: ______________</p>
+       ${scoreLine}
+     </div>
+     <table style="width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed;">
+       <tbody>${cells}</tbody>
+     </table>`;
+  document.body.appendChild(wrap);
+  html2pdf().set({
+    margin:0.5, filename:'IELTS_Listening_Cambridge21_Test1_answer_sheet.pdf',
+    image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2},
+    jsPDF:{unit:'in',format:'a4',orientation:'portrait'}
+  }).from(wrap).save().then(()=>wrap.remove()).catch(()=>wrap.remove());
+};
+function pdfCell(q){
+  const a=getUserAnswer(q)||'—';
+  let mark='';
+  if(testSubmitted){ const ok=isCorrect(q); mark=` <span style="color:${ok?'#1a7f37':'#e2231a'};font-weight:700;">${ok?'✓':'✗'}</span>`; }
+  return `<td style="padding:7px 6px;border-bottom:1px solid #e2e2e2;width:50%;">
+            <b style="display:inline-block;width:26px;">${q}.</b> ${escapeHtml(a)}${mark}
+          </td>`;
+}
+
+$('#doSubmit').onclick=(opts)=>{
+  // confirmation guard: warn before scoring if any questions are still blank
+  // (skipped when the timer auto-submits — time's up, submit as-is)
+  const skipConfirm = opts && opts.skipConfirm===true;
+  if(!skipConfirm){
+    let blank=0; for(let q=1;q<=TOTAL;q++) if(getUserAnswer(q)==='') blank++;
+    if(blank>0 && !confirm(`You still have ${blank} unanswered question${blank>1?'s':''}.\n\nSubmit anyway? Your score will be calculated now and you won't be able to change your answers.`)) return;
+  }
+  let raw=0;
+  const body=$('#reviewBody'); body.innerHTML='';
+  const typeStat={}, partStat={1:{c:0,t:0},2:{c:0,t:0},3:{c:0,t:0},4:{c:0,t:0}};
+  for(let q=1;q<=TOTAL;q++){
+    const ok=isCorrect(q); if(ok) raw++;
+    // breakdown tallies
+    const ty=QTYPE[q]; if(!typeStat[ty]) typeStat[ty]={c:0,t:0}; typeStat[ty].t++; if(ok) typeStat[ty].c++;
+    const part=Math.ceil(q/10); partStat[part].t++; if(ok) partStat[part].c++;
+    const isDz=!!$(`.dropzone[data-q="${q}"]`);
+    let ua=getUserAnswer(q);
+    const correctDisp = isDz ? KEY[q].map(L=>chipTextForLetter(L,q)).join(' / ') : KEY[q].join(' / ');
+    ua = ua ? (isDz ? chipTextForLetter(ua,q) : ua) : '—';
+    const tr=document.createElement('tr');
+    if(!ok) tr.className='wrong';
+    tr.innerHTML=`<td>${q}</td><td>${escapeHtml(ua)}</td><td>${escapeHtml(correctDisp)}</td>`+
+                 `<td class="${ok?'ok':'no'}">${ok?'✔ correct':'✘ wrong'}</td>`;
+    body.appendChild(tr);
+  }
+  $('#rawScore').textContent=raw;
+  $('#bandScore').textContent=band(raw);
+  // render the two analysis breakdowns
+  const bdRow=(label,c,t)=>`<div class="bd-row"><span class="bd-label">${label}</span>`+
+    `<span class="bd-num">${c} / ${t}</span>`+
+    `<span class="bd-bar"><span class="bd-fill" style="width:${t?Math.round(c/t*100):0}%"></span></span></div>`;
+  $('#typeBreakdown').innerHTML = TYPE_ORDER.filter(t=>typeStat[t])
+    .map(t=>bdRow(t,typeStat[t].c,typeStat[t].t)).join('');
+  $('#partBreakdown').innerHTML = [1,2,3,4].map(p=>bdRow('Part '+p,partStat[p].c,partStat[p].t)).join('');
+  // weakest-area feedback, radar chart, and stash the result for the share card
+  renderWeakFeedback(typeStat, raw);
+  renderRadar(typeStat);
+  lastResult = { raw:raw, band:band(raw), date:new Date() };
+  testSubmitted=true;
+  stopTimer();                               // freeze the countdown on submit
+  timerEl.classList.remove('low');
+  document.body.classList.add('submitted');
+  $('#footerSubmit').textContent='Review';   // the footer button now reopens the results
+  try{ audio.pause(); }catch(e){}   // stop the recording immediately on submit
+  $('#audioStatus').textContent='Audio is stopped';
+  markResults();            // colour the test body + inject evidence buttons
+  refreshFooter();          // colour the footer dots/dashes green/red
+  closePanel('submissionPanel');
+  $('#resultsPanel').classList.add('show');
+};
+function band(r){
+  if(r>=39)return 9; if(r>=37)return 8.5; if(r>=35)return 8; if(r>=32)return 7.5;
+  if(r>=30)return 7; if(r>=26)return 6.5; if(r>=23)return 6; if(r>=18)return 5.5;
+  if(r>=16)return 5; if(r>=13)return 4.5; if(r>=10)return 4; if(r>=8)return 3.5;
+  if(r>=6)return 3; if(r>=4)return 2.5; return 2;
+}
+
+/* ---------- weakest-area feedback (pure text logic from the breakdowns) ---------- */
+let lastResult = null;
+const TYPE_TIP = {
+  'Form completion':  'Watch your spelling, capital letters and the word/number limit.',
+  'Note completion':  'Focus on spelling and keeping to the word limit — listen for paraphrases of the headings.',
+  'Multiple choice':  'Read every option carefully; the recording often paraphrases the right answer and includes distractors.',
+  'Table completion': 'Track the row/column headings so you know exactly which gap you are filling, and respect the word limit.',
+  'Matching':         'Listen for synonyms of the options and remember each one is usually used only once.'
+};
+function renderWeakFeedback(typeStat, raw){
+  const el=$('#weakFeedback');
+  const types=TYPE_ORDER.filter(t=>typeStat[t] && typeStat[t].t>0);
+  if(raw===TOTAL){
+    el.className='weak-feedback good';
+    el.innerHTML='<span class="wf-icon">🏆</span><span>Perfect score — every question correct. Outstanding listening!</span>';
+    return;
+  }
+  // pick the type with the lowest accuracy; ties broken by the larger number of marks lost
+  let weak=null, weakRatio=2, weakLost=-1;
+  types.forEach(t=>{
+    const s=typeStat[t], ratio=s.c/s.t, lost=s.t-s.c;
+    if(ratio<weakRatio-1e-9 || (Math.abs(ratio-weakRatio)<1e-9 && lost>weakLost)){
+      weak=t; weakRatio=ratio; weakLost=lost;
+    }
+  });
+  if(!weak || weakLost===0){
+    el.className='weak-feedback good';
+    el.innerHTML='<span class="wf-icon">✅</span><span>Strong, even performance across every question type — keep it up!</span>';
+    return;
+  }
+  const s=typeStat[weak];
+  el.className='weak-feedback';
+  el.innerHTML=`<span class="wf-icon">🎯</span><span>Your weakest area was <b>${weak} (${s.c}/${s.t})</b>. ${TYPE_TIP[weak]||''}</span>`;
+}
+
+/* ---------- radar / spider chart: accuracy by question type ---------- */
+function renderRadar(typeStat){
+  const types=TYPE_ORDER.filter(t=>typeStat[t] && typeStat[t].t>0);
+  const host=$('#typeRadar');
+  if(types.length<3){ host.innerHTML='<p style="color:var(--muted);font-size:.88rem;">Radar needs at least three question types.</p>'; return; }
+  const W=480,H=320,cx=W/2,cy=H/2+6,R=110,N=types.length;
+  const ang=i=>-Math.PI/2 + i*2*Math.PI/N;
+  const pt=(i,r)=>[cx+Math.cos(ang(i))*R*r, cy+Math.sin(ang(i))*R*r];
+  let svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Accuracy by question type">`;
+  // concentric grid rings at 25/50/75/100%
+  [0.25,0.5,0.75,1].forEach(r=>{
+    const poly=types.map((_,i)=>pt(i,r).map(n=>n.toFixed(1)).join(',')).join(' ');
+    svg+=`<polygon class="rd-grid" points="${poly}"/>`;
+  });
+  // spokes + labels
+  types.forEach((t,i)=>{
+    const [ax,ay]=pt(i,1);
+    svg+=`<line class="rd-axis" x1="${cx}" y1="${cy}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}"/>`;
+    const [lx,ly]=pt(i,1.18);
+    const anchor = Math.abs(lx-cx)<8 ? 'middle' : (lx<cx ? 'end':'start');
+    const s=typeStat[t], pct=Math.round(s.c/s.t*100);
+    svg+=`<text class="rd-label" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}">${t}</text>`;
+    svg+=`<text class="rd-pct" x="${lx.toFixed(1)}" y="${(ly+13).toFixed(1)}" text-anchor="${anchor}">${s.c}/${s.t} · ${pct}%</text>`;
+  });
+  // data polygon
+  const dataPts=types.map((t,i)=>{ const s=typeStat[t]; return pt(i, s.c/s.t).map(n=>n.toFixed(1)).join(','); });
+  svg+=`<polygon class="rd-area" points="${dataPts.join(' ')}"/>`;
+  dataPts.forEach(p=>{ const [x,y]=p.split(','); svg+=`<circle class="rd-dot" cx="${x}" cy="${y}" r="3.5"/>`; });
+  svg+='</svg>';
+  host.innerHTML=svg;
+}
+
+/* ---------- shareable result card (image + copyable Telegram text) ---------- */
+const CHANNEL = '@EnjoyListeningTests';
+const CHANNEL_URL = 't.me/EnjoyListeningTests';
+const TEST_NAME = 'IELTS Listening — Cambridge 21 Test 1';
+function fmtDate(d){ return d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}); }
+function shareText(){
+  if(!lastResult) return '';
+  const r=lastResult;
+  return `📝 ${TEST_NAME}\n`+
+         `✅ Score: ${r.raw}/40\n`+
+         `🎯 Estimated band: ${r.band}\n`+
+         `📅 ${fmtDate(r.date)}\n\n`+
+         `Practise free on ${CHANNEL} 🔊`;
+}
+/* draw the card on a canvas (fully offline — no external library needed) */
+function buildShareCardImage(){
+  return new Promise(resolve=>{
+    const r=lastResult, scale=2, W=600, H=360;
+    const cv=document.createElement('canvas'); cv.width=W*scale; cv.height=H*scale;
+    const c=cv.getContext('2d'); c.scale(scale,scale);
+    const rr=(x,y,w,h,rad)=>{ c.beginPath(); c.moveTo(x+rad,y); c.arcTo(x+w,y,x+w,y+h,rad);
+      c.arcTo(x+w,y+h,x,y+h,rad); c.arcTo(x,y+h,x,y,rad); c.arcTo(x,y,x+w,y,rad); c.closePath(); };
+    // background gradient
+    const g=c.createLinearGradient(0,0,W,H); g.addColorStop(0,'#1a73e8'); g.addColorStop(1,'#0b3d91');
+    c.fillStyle=g; c.fillRect(0,0,W,H);
+    c.fillStyle='rgba(255,255,255,.06)'; c.beginPath(); c.arc(W-60,H-30,160,0,7); c.fill();
+    let done=false;
+    const finish=()=>{
+      if(done) return; done=true;
+      // channel name
+      c.fillStyle='#fff'; c.textBaseline='alphabetic';
+      c.font='700 18px Arial'; c.fillText(CHANNEL, 96, 52);
+      // test title
+      c.font='600 17px Arial'; c.globalAlpha=.92; c.fillText(TEST_NAME, 40, 120); c.globalAlpha=1;
+      // big score
+      c.font='800 60px Arial'; c.fillText(String(r.raw), 40, 195);
+      const sw=c.measureText(String(r.raw)).width;
+      c.font='600 24px Arial'; c.globalAlpha=.8; c.fillText('/ 40', 48+sw, 195); c.globalAlpha=1;
+      // band box
+      c.fillStyle='rgba(255,255,255,.18)'; rr(370,150,180,70,14); c.fill();
+      c.fillStyle='#fff'; c.textAlign='center';
+      c.font='800 34px Arial'; c.fillText(String(r.band), 460, 192);
+      c.font='600 11px Arial'; c.globalAlpha=.85; c.fillText('ESTIMATED BAND', 460, 210); c.globalAlpha=1;
+      c.textAlign='left';
+      // date
+      c.font='400 15px Arial'; c.globalAlpha=.9; c.fillText('📅 '+fmtDate(r.date), 40, 245); c.globalAlpha=1;
+      // footer divider + url
+      c.strokeStyle='rgba(255,255,255,.25)'; c.beginPath(); c.moveTo(40,290); c.lineTo(560,290); c.stroke();
+      c.font='600 14px Arial'; c.globalAlpha=.9; c.fillText(CHANNEL_URL, 40, 320);
+      c.font='400 14px Arial'; c.textAlign='right'; c.fillText('Practise free 🔊', 560, 320); c.textAlign='left'; c.globalAlpha=1;
+      resolve(cv.toDataURL('image/png'));
+    };
+    // draw the channel logo (already loaded in the header) on a white rounded tile
+    const logo=$('.brand-logo');
+    c.fillStyle='#fff'; rr(40,28,44,44,8); c.fill();
+    const img=new Image();
+    img.onload=()=>{ try{ c.drawImage(img,46,34,32,32); }catch(e){} finish(); };
+    img.onerror=finish;
+    img.src = logo ? logo.src : '';
+    if(img.complete && img.naturalWidth){ try{ c.drawImage(img,46,34,32,32); }catch(e){} finish(); }
+  });
+}
+async function openShareCard(){
+  if(!lastResult) return;
+  const data=await buildShareCardImage();
+  $('#shareImg').src=data;
+  $('#shareImg').dataset.url=data;
+  $('#shareModal').classList.add('show');
+}
+$('#shareCardBtn').onclick=openShareCard;
+$('#closeShareBtn').onclick=()=>$('#shareModal').classList.remove('show');
+$('#shareModal').onclick=e=>{ if(e.target===$('#shareModal')) $('#shareModal').classList.remove('show'); };
+$('#downloadCardBtn').onclick=()=>{
+  const a=document.createElement('a');
+  a.href=$('#shareImg').dataset.url||$('#shareImg').src;
+  a.download='ielts-listening-result.png'; a.click();
+};
+$('#copyResultBtn').onclick=async ()=>{
+  const txt=shareText();
+  try{ await navigator.clipboard.writeText(txt); $('#copyResultBtn').textContent='✓ Copied!';
+       setTimeout(()=>$('#copyResultBtn').textContent='📋 Copy text for Telegram',1800); }
+  catch(e){ prompt('Copy your result:', txt); }
+};
+function closePanel(id){ $('#'+id).classList.remove('show'); }
+$$('[data-close-panel]').forEach(b=>b.onclick=()=>closePanel(b.dataset.closePanel));
+$('#retakeBtn').onclick=()=>{ if(confirm('Do you want to take the test again? Your current answers and results will be cleared.')) location.reload(); };
+function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ---------- highlighter (same logic as the reading tests) ----------
+   Select text → floating "Highlight" button → click to wrap the selection.
+   Click an existing highlight → "Clear Highlight" button → click to remove it. */
+let clearHighlightState = { highlightId: null };
+const highlightBtn = document.getElementById('highlight-button');
+const clearBtn = document.getElementById('clear-highlight-button');
+
+function hideHighlightButton() { highlightBtn.classList.add('hidden'); }
+function hideClearHighlightButton() { clearBtn.classList.add('hidden'); clearHighlightState.highlightId = null; }
+function showHighlightButton(x, y) { highlightBtn.style.left = Math.max(10, Math.min(window.innerWidth - 110, x)) + 'px'; highlightBtn.style.top = Math.max(10, y) + 'px'; highlightBtn.classList.remove('hidden'); }
+function showClearHighlightButton(x, y, id) { clearBtn.style.left = Math.max(10, Math.min(window.innerWidth - 150, x)) + 'px'; clearBtn.style.top = Math.max(10, y) + 'px'; clearBtn.classList.remove('hidden'); clearHighlightState.highlightId = id; }
+function removeHighlight(id) { $$(`span[data-highlight-id="${id}"]`).forEach(el => { const p = el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); }); hideClearHighlightButton(); }
+function makeHighlightSpan(id) { const span = document.createElement('span'); span.setAttribute('data-highlight-id', id); span.className = 'saved-highlight'; span.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); showClearHighlightButton(e.clientX + 10, e.clientY - 35, id); }); return span; }
+function applyHighlight() {
+  const sel = window.getSelection();
+  if(!sel || sel.isCollapsed || !sel.toString().trim()) { hideHighlightButton(); return; }
+  const range = sel.getRangeAt(0);
+  const id = 'highlight-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  const root = range.commonAncestorContainer.nodeType === 3 ? range.commonAncestorContainer.parentNode : range.commonAncestorContainer;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: function(n) {
+    if(!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+    if(n.parentElement.closest('script,style,button,input,textarea,select,.chip,.dropzone,.fdot,.gap,.help-btn,.settings-overlay')) return NodeFilter.FILTER_REJECT;
+    if(n.parentElement.closest('[data-highlight-id]')) return NodeFilter.FILTER_REJECT;
+    const nr = document.createRange(); nr.selectNodeContents(n);
+    if(range.compareBoundaryPoints(Range.END_TO_START, nr) >= 0) return NodeFilter.FILTER_REJECT;
+    if(range.compareBoundaryPoints(Range.START_TO_END, nr) <= 0) return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT;
+  }});
+  const nodes = []; let node; while((node = walker.nextNode())) nodes.push(node);
+  nodes.forEach(n => { const r = document.createRange(); r.selectNodeContents(n); if(n === range.startContainer) r.setStart(n, range.startOffset); if(n === range.endContainer) r.setEnd(n, range.endOffset); if(!r.collapsed) { try { const frag = r.extractContents(); const span = makeHighlightSpan(id); span.appendChild(frag); r.insertNode(span); } catch(err) {} } });
+  sel.removeAllRanges(); hideHighlightButton();
+}
+highlightBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); applyHighlight(); });
+clearBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); if(clearHighlightState.highlightId) removeHighlight(clearHighlightState.highlightId); });
+document.addEventListener('mouseup', function(e) {
+  if(e.target.closest('#highlight-button,#clear-highlight-button,select,input,textarea,button,.chip,.dropzone,.sheet,.panel,.overlay')) return;
+  setTimeout(() => {
+    const sel = window.getSelection();
+    if(sel && !sel.isCollapsed && sel.toString().trim()) {
+      const common = sel.getRangeAt(0).commonAncestorContainer;
+      const node = common.nodeType === 3 ? common.parentNode : common;
+      const c = document.getElementById('content');
+      const sp = document.getElementById('scriptText');   // allow highlighting the transcript too
+      if((c && c.contains(node)) || (sp && sp.contains(node))) {
+        showHighlightButton(e.clientX + 10, e.clientY - 35); hideClearHighlightButton(); return;
+      }
+    }
+    hideHighlightButton();
+  }, 10);
+});
+document.addEventListener('mousedown', e => { if(!e.target.closest('#highlight-button,#clear-highlight-button,[data-highlight-id]')) hideClearHighlightButton(); });
+
+/* ---------- drag & drop (matching) — token-moving model (as in the reading tests) ----------
+   The whole chip (letter + label) physically moves between the bank and the
+   boxes. Place an answer by dragging a chip into a box; take it back by dragging
+   the chip out — onto the bank or onto another box. There is no click-to-clear,
+   so an answer can only be removed by moving it. Because each chip is a single
+   nowrap element, a placed answer always stays on one line and the box grows to
+   fit it. */
+/* Supports any number of matching tasks. A bank marked data-reuse="1" lets the
+   same option be used in more than one box (a clone is dropped in, the original
+   stays in the bank); a normal bank is single-use (the chip itself moves, and
+   each option keeps a fixed empty home slot). */
+const chipBanks = $$('.chip-bank');
+let draggedChip = null;
+
+chipBanks.forEach(bank=>{
+  const reuse = bank.dataset.reuse==='1';
+  $$('.chip', bank).forEach(chip=>{
+    chip.dataset.origin = chip.dataset.letter;
+    chip.setAttribute('draggable','true');
+    chip._homeBank = bank;
+    if(!reuse){
+      const slot=document.createElement('div');
+      slot.className='option-slot';
+      slot.dataset.slot=chip.dataset.letter;
+      bank.insertBefore(slot, chip);
+      slot.appendChild(chip);
+    }
+  });
+});
+
+function dzRestoreNum(dz){
+  if(!dz.querySelector('.chip')){
+    dz.dataset.value='';
+    dz.classList.remove('filled');
+    dz.innerHTML = `<span class="dz-num">${dz.dataset.num}</span>`;
+  }
+}
+function chipReturnHome(chip){   // single-use chip → back into its fixed slot
+  const bank = chip._homeBank;
+  const slot = bank && $(`.option-slot[data-slot="${chip.dataset.origin}"]`, bank);
+  if(slot) slot.appendChild(chip); else if(bank) bank.appendChild(chip);
+}
+function clearToken(tok){        // remove whatever is sitting in a box
+  if(!tok) return;
+  if(tok.dataset.clone==='1') tok.remove();   // reusable copy → discard
+  else chipReturnHome(tok);                   // single-use chip → send home
+}
+function placeChip(chip, dz){
+  if(testSubmitted) return;
+  if(dz.querySelector('.chip')===chip) return;        // already here
+  const placed = chip.closest('.dropzone');           // a token being moved between boxes
+  const reuse  = !placed && chip._homeBank && chip._homeBank.dataset.reuse==='1';
+  const oldDz  = placed && placed!==dz ? placed : null;
+  clearToken(dz.querySelector('.chip'));              // empty the target box first
+  const token = reuse ? chip.cloneNode(true) : chip;  // reusable → drop a copy; else move the chip
+  if(reuse){ token.dataset.clone='1'; token._homeBank=chip._homeBank; token.setAttribute('draggable','true'); }
+  token.classList.remove('dragging');
+  dz.innerHTML='';
+  dz.appendChild(token);
+  dz.dataset.value = token.dataset.letter || token.dataset.origin;
+  dz.classList.add('filled');
+  if(oldDz) dzRestoreNum(oldDz);                      // it moved out of its old box
+  currentQ = +dz.dataset.q;
+  refreshFooter();
+}
+
+document.addEventListener('dragstart', e=>{
+  if(testSubmitted) return;
+  const chip = e.target.closest('.chip');
+  if(!chip) return;
+  draggedChip = chip;
+  e.dataTransfer.setData('text/plain', chip.dataset.letter);
+  e.dataTransfer.effectAllowed='move';
+  setTimeout(()=>chip.classList.add('dragging'),0);
+  document.body.classList.add('dnd-active');
+});
+document.addEventListener('dragend', ()=>{
+  if(draggedChip) draggedChip.classList.remove('dragging');
+  draggedChip=null;
+  document.body.classList.remove('dnd-active');
+  $$('.dropzone.over').forEach(d=>d.classList.remove('over'));
+});
+function chipFromEvent(e){
+  return draggedChip || $(`.chip[data-letter="${e.dataTransfer.getData('text/plain')}"]`);
+}
+
+$$('.dropzone').forEach(dz=>{
+  dz.addEventListener('dragover', e=>{ if(testSubmitted) return; e.preventDefault(); e.dataTransfer.dropEffect='move'; dz.classList.add('over'); });
+  dz.addEventListener('dragleave', ()=>dz.classList.remove('over'));
+  dz.addEventListener('drop', e=>{
+    if(testSubmitted) return;
+    e.preventDefault(); dz.classList.remove('over');
+    const chip = chipFromEvent(e);
+    if(chip) placeChip(chip, dz);
+  });
+});
+
+/* dropping a chip back on any bank takes that answer out of its box */
+chipBanks.forEach(bank=>{
+  bank.addEventListener('dragover', e=>{ if(testSubmitted) return; e.preventDefault(); e.dataTransfer.dropEffect='move'; });
+  bank.addEventListener('drop', e=>{
+    if(testSubmitted) return;
+    e.preventDefault();
+    const chip = chipFromEvent(e);
+    if(!chip) return;
+    const oldDz = chip.closest('.dropzone');
+    if(oldDz){ clearToken(chip); dzRestoreNum(oldDz); currentQ=+oldDz.dataset.q; refreshFooter(); }
+  });
+});
+
+/* Help toggle */
+const helpBtn=$('#helpBtn'), helpText=$('#helpText');
+helpBtn.onclick=()=>{
+  const open=helpText.classList.toggle('show');
+  helpBtn.classList.toggle('active',open);
+  helpBtn.setAttribute('aria-expanded',open);
+};
+
+/* answer boxes: number inside the box as placeholder + kill browser autofill icon */
+$$('.gap').forEach(g=>{
+  // show the question number inside the empty box, then drop the external label
+  g.setAttribute('placeholder',g.dataset.q);
+  const lbl=g.previousElementSibling;
+  if(lbl && lbl.classList.contains('qnum')) lbl.remove();
+
+  // suppress the browser's autofill / contacts (person-with-chevron) button:
+  // the readonly-until-focus trick stops the browser treating it as an autofill field
+  g.setAttribute('autocomplete','off');
+  g.setAttribute('autocapitalize','off');
+  g.setAttribute('autocorrect','off');
+  g.setAttribute('spellcheck','false');
+  g.setAttribute('data-lpignore','true');   // LastPass
+  g.setAttribute('data-1p-ignore','');       // 1Password
+  g.setAttribute('data-form-type','other');
+  g.removeAttribute('name');                  // not a recognisable form field
+  g.setAttribute('readonly','readonly');
+  g.addEventListener('focus',()=>g.removeAttribute('readonly'));
+  g.addEventListener('blur',()=>g.setAttribute('readonly','readonly'));
+});
+
+/* completion boxes grow to fit the answer as you type. Widths use ch units so
+   they start at the demo size and also scale with the text-size setting. */
+function autosizeGap(g){
+  const min = g.classList.contains('sm') ? 13 : 16;
+  const len = Math.max((g.value||'').length, (g.placeholder||'').length, min);
+  g.style.width = (len + 2) + 'ch';
+}
+$$('.gap').forEach(g=>{
+  autosizeGap(g);
+  g.addEventListener('input',()=>autosizeGap(g));
+});
+
+/* wrap each MCQ option's text in one inline span so it can be highlighted
+   without the flex label splitting the words apart */
+$$('.mcq label').forEach(lb=>{
+  const letter=lb.querySelector('.opt-letter');
+  if(!letter || lb.querySelector('.opt-text')) return;
+  const wrap=document.createElement('span'); wrap.className='opt-text';
+  let n=letter.nextSibling;
+  while(n){ const next=n.nextSibling; wrap.appendChild(n); n=next; }
+  lb.appendChild(wrap);
+});
+
+/* Highlighting must never shift the layout. Loose text sitting directly inside a
+   flex/grid container (note lines, form values, question stems…) would, when a
+   highlight splits its text node, turn each fragment into a separate flex item —
+   inserting the container's gap between words. Pre-wrap each such text run in an
+   inline span so highlights stay inside it and the box layout is untouched. */
+(function wrapFlexText(){
+  const flexy=/^(flex|inline-flex|grid|inline-grid)$/;
+  $$('#content *').forEach(el=>{
+    if(!flexy.test(getComputedStyle(el).display)) return;
+    [...el.childNodes].forEach(n=>{
+      if(n.nodeType===3 && n.nodeValue.trim()){
+        const s=document.createElement('span'); s.className='hl-safe';
+        el.replaceChild(s,n); s.appendChild(n);
+      }
+    });
+  });
+})();
+
+/* ====================================================================
+   POST-SUBMISSION ANALYSIS: result marking + transcript evidence
+   ==================================================================== */
+
+/* Script (transcript) panel toggle — button only visible after submit */
+$('#scriptBtn').onclick = ()=>document.body.classList.toggle('show-script');
+$('#scriptClose').onclick = ()=>document.body.classList.remove('show-script');
+
+/* For each question, the exact phrase in the transcript that gives the answer.
+   Snippets are matched case-insensitively against #scriptText. */
+const evidence = {
+  1:{text:"no more than ten"},
+  2:{text:"you learn about things like the weather"},
+  3:{text:"everything you need to know about safety"},
+  4:{text:"There's a discount for members."},
+  5:{text:"you also get a really good dictionary"},
+  6:{text:"on completion of the course you get a certificate"},
+  7:{text:"And a towel?"},
+  8:{text:"is there a cafe at the club?"},
+  9:{text:"I recommend you watch some videos we use for training"},
+  10:{text:"if there are lockers for people to use?"},
+  11:{text:"Make sure your transport costs are covered"},
+  12:{text:"work with a range of age groups, as well as different ethnicities"},
+  13:{text:"even when they're having to work with directors who are impatient"},
+  14:{text:"At first, I found it overwhelming and could hardly speak"},
+  15:{text:"which they'll be expected to have with them at all times"},
+  16:{text:"you'll need to get approval from the makeup designer"},
+  17:{text:"you'll need to step in and get this done without wasting any time"},
+  18:{text:"This information needs to be kept in good order"},
+  19:{text:"being willing to do whatever is asked of you"},
+  20:{text:"you'll need to keep up a swift pace"},
+  21:{text:"The examples she gave were at a more global level"},
+  22:{text:"I especially liked the way her lecture focused on more long-term issues"},
+  23:{text:"to have so many experts working together"},
+  24:{text:"her description of how robotics can be used to investigate threats"},
+  25:{text:"he didn't really provide much information to explain why"},
+  26:{text:"it was made ten years ago"},
+  27:{text:"Most of it was stating the obvious."},
+  28:{text:"I ended up with a much better understanding of the issues"},
+  29:{text:"The article on metal toxicity was way above my head"},
+  30:{text:"it presented a rather one-sided picture"},
+  31:{text:"One of these is metal"},
+  32:{text:"cultivating them's a slow process"},
+  33:{text:"the demand for that crop is rising or falling"},
+  34:{text:"only around the equator"},
+  35:{text:"we can recycle them, but although this is also possible with rubber, it's very difficult"},
+  36:{text:"The most dangerous threat is a fungus"},
+  37:{text:"hit by extreme types of weather"},
+  38:{text:"it's not anything like as strong"},
+  39:{text:"its roots cut open, they're found to contain rubber"},
+  40:{text:"they don't need rich soil"}
+};
+
+/* ---- evidence highlighting (adapted from the reading test) ---- */
+let lastEvidenceSpans = [];
+function _findTextNodeAtOffset(root, target){
+  const w=document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let acc=0, n;
+  while((n=w.nextNode())){
+    const len=n.nodeValue.length;
+    if(target<=acc+len) return {node:n, off:Math.max(0,target-acc)};
+    acc+=len;
+  }
+  return null;
+}
+function clearTempEvidence(){
+  lastEvidenceSpans.forEach(s=>{
+    if(!s.parentNode) return;
+    const p=s.parentNode;
+    if(s.classList && s.classList.contains('evidence-qbadge')){ p.removeChild(s); }
+    else { while(s.firstChild) p.insertBefore(s.firstChild,s); p.removeChild(s); }
+    p.normalize();
+  });
+  lastEvidenceSpans=[];
+}
+function highlightEvidenceText(rootEl, snippet){
+  const fullText=rootEl.textContent;
+  const idx=fullText.toLowerCase().indexOf(snippet.toLowerCase());
+  if(idx<0) return null;
+  const startPos=_findTextNodeAtOffset(rootEl, idx);
+  const endPos=_findTextNodeAtOffset(rootEl, idx+snippet.length);
+  if(!startPos||!endPos) return null;
+  const range=document.createRange();
+  try{ range.setStart(startPos.node,startPos.off); range.setEnd(endPos.node,endPos.off); }catch(e){ return null; }
+  const walker=document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, {
+    acceptNode(n){
+      if(n.parentElement.closest('.evidence-highlight')) return NodeFilter.FILTER_REJECT;
+      const nr=document.createRange(); nr.selectNodeContents(n);
+      if(range.compareBoundaryPoints(Range.END_TO_START,nr)>=0) return NodeFilter.FILTER_REJECT;
+      if(range.compareBoundaryPoints(Range.START_TO_END,nr)<=0) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  const nodes=[]; let n;
+  while((n=walker.nextNode())) nodes.push(n);
+  const created=[];
+  nodes.forEach(node=>{
+    const r=document.createRange(); r.selectNodeContents(node);
+    if(node===range.startContainer) r.setStart(node,range.startOffset);
+    if(node===range.endContainer) r.setEnd(node,range.endOffset);
+    if(!r.collapsed){ try{ const frag=r.extractContents(); const s=document.createElement('span'); s.className='evidence-highlight'; s.setAttribute('data-evidence-temp','1'); s.appendChild(frag); r.insertNode(s); created.push(s); }catch(err){} }
+  });
+  return created.length?created[0]:null;
+}
+function showEvidence(q){
+  const ev=evidence[q]; if(!ev) return;
+  document.body.classList.add('show-script');
+  const root=$('#scriptText'); if(!root) return;
+  clearTempEvidence();
+  const first=highlightEvidenceText(root, ev.text);
+  lastEvidenceSpans=Array.from(root.querySelectorAll('[data-evidence-temp="1"]'));
+  if(first){
+    const badge=document.createElement('span');
+    badge.className='evidence-qbadge'; badge.setAttribute('data-evidence-temp','1');
+    badge.textContent='Q'+q;
+    first.parentNode.insertBefore(badge, first);
+    lastEvidenceSpans.unshift(badge);
+  }
+  setTimeout(()=>{
+    (first||root).scrollIntoView({behavior:'smooth', block:'center'});
+    if(first){ first.classList.add('evidence-current'); setTimeout(()=>first.classList.remove('evidence-current'),1800); }
+  }, 130);
+}
+
+/* ---- mark the test body once the test is submitted ---- */
+let resultsMarked=false;
+function markResults(){
+  if(resultsMarked) return; resultsMarked=true;
+  for(let q=1;q<=TOTAL;q++){
+    const ok=isCorrect(q);
+    const gap=$(`.gap[data-q="${q}"]`);
+    const mcq=$(`.mcq[data-q="${q}"]`);
+    const dz=$(`.dropzone[data-q="${q}"]`);
+    if(gap){ gap.classList.add(ok?'correct':'incorrect'); }
+    if(mcq){
+      const chosen=$(`input[name="q${q}"]:checked`);
+      if(chosen){ chosen.closest('label').classList.add(ok?'correct':'incorrect'); }
+      const keyLetters=KEY[q].map(v=>v.toUpperCase());
+      $$(`input[name="q${q}"]`,mcq).forEach(r=>{ if(keyLetters.includes(r.value)) r.closest('label').classList.add('answer-key'); });
+    }
+    if(dz){ dz.classList.add(ok?'correct':'incorrect'); }
+    // inline feedback: tick / cross (+ correct answer when wrong) + Evidence button
+    const host = mcq
+      || (dz && dz.closest('.match-row'))
+      || (gap && (gap.closest('td, .form-row, .note-line, li') || gap.parentNode));
+    if(host){
+      const fb=document.createElement('span'); fb.className='qfb';
+      const mark=document.createElement('span');
+      mark.className='qfb-mark '+(ok?'ok':'no');
+      mark.innerHTML = ok ? '&#10003;' : '&#10007;';   // ✓ / ✗
+      fb.appendChild(mark);
+      if(!ok){
+        const ans=document.createElement('span'); ans.className='qfb-ans';
+        ans.innerHTML='Correct: <b>'+escapeHtml(correctAnswerText(q))+'</b>';
+        fb.appendChild(ans);
+      }
+      if(evidence[q]){
+        const btn=document.createElement('button');
+        btn.type='button'; btn.className='show-evidence-inline'; btn.dataset.evq=q;
+        btn.innerHTML='&#128269; Evidence';
+        btn.addEventListener('click',()=>showEvidence(q));
+        fb.appendChild(btn);
+      }
+      host.appendChild(fb);
+    }
+  }
+  // mark the "choose TWO letters" groups: colour the checked boxes + show marks
+  for(const k in multiGroups){
+    const g=multiGroups[k];
+    const keyset=new Set();
+    g.qs.forEach(q=>KEY[q].forEach(v=>keyset.add(v.toUpperCase())));
+    $$('input[type=checkbox]',g.el).forEach(b=>{
+      const lb=b.closest('label');
+      if(keyset.has(b.value)) lb.classList.add('answer-key');
+      if(b.checked) lb.classList.add(keyset.has(b.value)?'correct':'incorrect');
+    });
+    const fb=document.createElement('div'); fb.className='qfb';
+    g.qs.forEach(q=>{
+      const ok=isCorrect(q);
+      const mark=document.createElement('span'); mark.className='qfb-mark '+(ok?'ok':'no');
+      mark.innerHTML='Q'+q+'&nbsp;'+(ok?'&#10003;':'&#10007;');
+      fb.appendChild(mark);
+    });
+    const ans=document.createElement('span'); ans.className='qfb-ans';
+    ans.innerHTML='Correct: <b>'+Array.from(keyset).sort().join(', ')+'</b>';
+    fb.appendChild(ans);
+    g.qs.forEach(q=>{
+      if(!evidence[q]) return;
+      const btn=document.createElement('button');
+      btn.type='button'; btn.className='show-evidence-inline'; btn.dataset.evq=q;
+      btn.innerHTML='&#128269; Q'+q+' Evidence';
+      btn.addEventListener('click',()=>showEvidence(q));
+      fb.appendChild(btn);
+    });
+    g.el.appendChild(fb);
+  }
+}
+/* map a matching option's letter to the text shown on its chip. Scoped to the
+   question's own matching block (.dd-wrap), because different tasks reuse the
+   same letters (A–C for the abilities task, A–H for the resources task). */
+function chipTextForLetter(L, q){
+  L=(L||'').toString().toUpperCase();
+  let scope=document;
+  if(q!=null){ const dz=$(`.dropzone[data-q="${q}"]`); const w=dz&&dz.closest('.dd-wrap'); if(w) scope=w; }
+  const c=$(`.chip[data-letter="${L}"]`, scope);
+  return c ? c.textContent.trim() : L;
+}
+/* the correct answer to show inline: the option text for drag-and-drop matching,
+   a letter for MCQ, else the key word */
+function correctAnswerText(q){
+  if($(`.dropzone[data-q="${q}"]`)) return KEY[q].map(L=>chipTextForLetter(L,q)).join(' / ');
+  if($(`.mcq[data-q="${q}"]`)) return KEY[q].map(v=>v.toUpperCase()).join('/');
+  return KEY[q][0];
+}
+
+/* Keep the app the height of the *visible* viewport so the footer menu never slides
+   off-screen. On modern browsers CSS `height:100dvh` already tracks the viewport
+   (including full-screen / browser-UI changes), so we DON'T pin a pixel height there:
+   a stale `window.innerHeight` px value was making the body taller than the viewport
+   and pushing the footer below the fold after a resize/full-screen toggle. The JS pin
+   is only a fallback for old webviews that lack dvh; recompute it on every viewport
+   change so it can't go stale. */
+function setAppHeight(){ document.body.style.height = window.innerHeight + 'px'; }
+if(!(window.CSS && CSS.supports && CSS.supports('height','100dvh'))){
+  setAppHeight();
+  window.addEventListener('resize', ()=>requestAnimationFrame(setAppHeight));
+  window.addEventListener('orientationchange', ()=>setTimeout(setAppHeight,150));
+  ['fullscreenchange','webkitfullscreenchange'].forEach(ev=>
+    document.addEventListener(ev, ()=>setTimeout(setAppHeight,80)));
+}
+
+/* init */
+refreshFooter();
+</script>
+</body>
+</html>
