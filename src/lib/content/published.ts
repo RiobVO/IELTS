@@ -25,6 +25,9 @@ export const getPublishedTests = unstable_cache(
         question_types: contentItem.questionTypes,
         duration_seconds: contentItem.durationSeconds,
         tier_required: contentItem.tierRequired,
+        // Флаг наличия очищенного раннера (iframe-обёртка) — НЕ тащим сам text
+        // (~200КБ/тест) в кэш каталога; каталог только маршрутизирует по нему.
+        has_runner: sql<boolean>`${contentItem.runnerHtml} IS NOT NULL`,
       })
       .from(contentItem)
       .where(

@@ -22,6 +22,12 @@ import { FilterChip } from "@/components/app/FilterChip";
 type Breakdown = Record<string, { correct: number; total: number }> | null;
 type Test = Awaited<ReturnType<typeof getPublishedTests>>[number];
 
+/**
+ * Куда ведёт «Start»: тесты с очищенным runner_html идут в iframe-обёртку
+ * (/app/exam/[id]); legacy без раннера — в старый React-раннер (/app/reading/[id]).
+ */
+const examHref = (t: Test) => (t.has_runner ? `/app/exam/${t.id}` : `/app/reading/${t.id}`);
+
 const TIER_LABEL: Record<Tier, string> = {
   basic: "Basic",
   premium: "Premium",
@@ -226,7 +232,7 @@ function TestCard({ t, locked, weakSet }: { t: Test; locked: boolean; weakSet: S
   const extra = t.question_types.length - shownTypes.length;
   const mins = t.duration_seconds ? Math.round(t.duration_seconds / 60) : null;
   return (
-    <Link href={locked ? "/app/upgrade" : `/app/reading/${t.id}`} style={{ textDecoration: "none", color: "inherit", height: "100%" }}>
+    <Link href={locked ? "/app/upgrade" : examHref(t)} style={{ textDecoration: "none", color: "inherit", height: "100%" }}>
       <Card interactive padding="18px 20px" style={{ display: "flex", flexDirection: "column", height: "100%", opacity: locked ? 0.94 : 1 }}>
         <div style={S.cardTop}>
           <Badge tone="brand">{categoryLabel(t.category)}</Badge>
@@ -310,7 +316,7 @@ function RecommendedBanner({ test, weak, locked }: { test: Test; weak: string[];
         <Button
           variant="secondary"
           trailingIcon="arrow-right"
-          href={locked ? "/app/upgrade" : `/app/reading/${test.id}`}
+          href={locked ? "/app/upgrade" : examHref(test)}
           style={{ color: "var(--brand-active)", marginTop: 10 }}
         >
           {locked ? "Unlock" : "Start"}
