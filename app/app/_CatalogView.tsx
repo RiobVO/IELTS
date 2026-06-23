@@ -55,7 +55,7 @@ export async function CatalogView({
   // Профиль / попытки (для рекомендации) / published-список — параллельно.
   const [profile, attemptsRes, all] = await Promise.all([
     getProfile(),
-    supabase.from("attempt").select("per_type_breakdown").eq("status", "submitted").limit(50),
+    supabase.from("attempt").select("per_type_breakdown").eq("status", "submitted").limit(20),
     getPublishedTests(section),
   ]);
   const userTier = profile

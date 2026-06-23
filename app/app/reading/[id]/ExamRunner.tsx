@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { categoryLabel } from "@/lib/labels";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
@@ -228,13 +228,15 @@ export default function ExamRunner({
     startSubmit(() => submitAttempt(attemptId, answers));
   };
 
-  const jump = (n: number) => {
+  // useCallback → стабильная ссылка onJump, чтобы memo(QuestionNavigator) не ломался
+  // на каждый тик таймера (setCurrent/setPane/qScrollRef стабильны, deps пусты).
+  const jump = useCallback((n: number) => {
     setCurrent(n);
     setPane("questions"); // на мобильном гарантируем, что таб вопросов активен
     const el = document.getElementById(`q-${n}`);
     const wrap = qScrollRef.current;
     if (el && wrap) wrap.scrollTo({ top: el.offsetTop - 14, behavior: "smooth" });
-  };
+  }, []);
 
   // submitRef держит свежий submit (с актуальными answers) для авто-сабмита из таймера.
   useEffect(() => {
@@ -415,7 +417,10 @@ export default function ExamRunner({
 
   const meta = `${categoryLabel(category)} · ${questions.length} questions`;
 
-  const partGroups = buildParts(questions, answers, flags);
+  // useMemo: partGroups зависит только от [questions, answers, flags] — тик таймера
+  // их не меняет, поэтому memo(QuestionNavigator) ниже получает ту же ссылку и не
+  // ре-рендерится 1/сек (на Listening — до ~4/сек из-за onTimeUpdate).
+  const partGroups = useMemo(() => buildParts(questions, answers, flags), [questions, answers, flags]);
 
   const defaultMockMinutes =
     durationSeconds != null
@@ -485,17 +490,24 @@ export default function ExamRunner({
       );
   }
 
-  const questionList = questions.map((q) => (
-    <QuestionBlock
-      key={q.id}
-      q={q}
-      value={answers[String(q.number)] ?? ""}
-      flagged={!!flags[String(q.number)]}
-      onAnswer={set}
-      onToggle={toggle}
-      onFlag={flag}
-    />
-  ));
+  // useMemo: список вопросов перестраивается лишь при смене ответов/флагов/набора
+  // вопросов, не на каждый тик таймера. Колбэки стабильны (useCallback) → элементы
+  // QuestionBlock переиспользуются, его memo продолжает работать.
+  const questionList = useMemo(
+    () =>
+      questions.map((q) => (
+        <QuestionBlock
+          key={q.id}
+          q={q}
+          value={answers[String(q.number)] ?? ""}
+          flagged={!!flags[String(q.number)]}
+          onAnswer={set}
+          onToggle={toggle}
+          onFlag={flag}
+        />
+      )),
+    [questions, answers, flags, set, toggle, flag],
+  );
 
   return (
     <div className="exam-cambridge" style={S.shell}>
