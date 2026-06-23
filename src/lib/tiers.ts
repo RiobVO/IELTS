@@ -48,7 +48,7 @@ export function meetsTier(userTier: Tier, required: Tier): boolean {
  * grading insight that grows the audience, W1-1); only the answer / why / evidence
  * are Premium. Flip to `true` to re-open the full review to all in a single edit.
  */
-export const REVIEW_OPEN = true;
+export const REVIEW_OPEN = false;
 
 /**
  * True if the tier gets the full post-submit review (breakdown + evidence).

@@ -31,26 +31,26 @@ const CARDS: PlanCardMeta[] = [
     cta: "Start free",
     features: [
       { t: "Unlimited Reading & Listening", on: true },
-      { t: "Per-type breakdown — what you miss", on: true },
-      { t: "Answer explanations & evidence", on: true },
-      { t: "League, badges & streaks", on: true },
-      { t: "Full 40-question mock tests + band", on: false },
-      { t: "Writing & Speaking feedback (coming)", on: false },
+      { t: "Score & band per test", on: true },
+      { t: "Per-type breakdown", on: true },
+      { t: "Answer explanations & evidence", on: false },
+      { t: "Full 40-question mock tests", on: false },
+      { t: "League & badges", on: true },
     ],
   },
   {
     id: "premium",
     name: "Premium",
-    tagline: "Sit full mocks. Know your real band.",
+    tagline: "See exactly where you lose points.",
     popular: true,
     cta: "Upgrade to Premium",
     features: [
-      { t: "Everything in Basic, free", on: true },
-      { t: "Full 40-question mock tests + real band", on: true, hero: true },
-      { t: "Sit it under real exam timing", on: true },
+      { t: "Everything in Basic", on: true },
+      { t: "Per-type breakdown (the analytics)", on: true, hero: true },
+      { t: "Answer explanations & evidence", on: true, hero: true },
+      { t: "Full 40-question mock tests", on: true },
       { t: "Drill any weak type on demand", on: true },
-      { t: "AI Writing feedback (coming)", on: true, hero: true },
-      { t: "Priority new content", on: true },
+      { t: "AI Writing feedback — coming", on: true },
     ],
   },
   {
@@ -71,8 +71,8 @@ const CARDS: PlanCardMeta[] = [
 
 const FAQ = [
   { q: "Can I cancel anytime?", a: "Yes, one click in your profile. Access stays until the end of your paid period." },
-  { q: "What's the difference between free and paid?", a: "Reading & Listening — including the per-type breakdown and full answer explanations — are free forever. You pay for full 40-question mock tests with an official band score, and (coming) Writing & Speaking feedback." },
-  { q: "Premium vs Ultra?", a: "Premium adds full 40-question mock tests with your real band, plus AI Writing feedback (coming). Ultra adds a real human review, a band-prediction report, and a 1:1 strategy call." },
+  { q: "What's the difference between free and paid?", a: "Reading & Listening are free forever. You pay for the per-type breakdown, full 40-question mock tests, and (coming) Writing & Speaking feedback." },
+  { q: "Premium vs Ultra?", a: "Premium gives all the analytics plus AI Writing feedback (coming). Ultra adds a real human review, a band-prediction report, and a 1:1 strategy call." },
   { q: "Are the tests like the real IELTS?", a: "Yes — real Cambridge material in a runner that mirrors the computer-delivered exam: same interface, timer, drag-and-drop." },
   { q: "How accurate is the band?", a: "Reading & Listening use the official Cambridge band scale. Writing & Speaking (coming) are scored on the 4 official criteria, with a human check on Ultra." },
   { q: "When do Writing & Speaking launch?", a: "They're in active development; Ultra members get access first." },
@@ -103,11 +103,11 @@ export default function PricingScreen({
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: 8 }}>
         <span style={S.eyebrow}>
-          <Icon name="bar-chart" size={14} /> Know your real band. Unlock Writing &amp; Speaking.
+          <Icon name="bar-chart" size={14} /> Unlock the analytics that move your band
         </span>
         <h1 style={S.h1}>Pick your plan</h1>
         <p style={S.lead}>
-          Practice and review free. Upgrade for full mock exams with your <i style={{ fontFamily: "var(--font-reading)" }}>real</i> band — and Writing &amp; Speaking feedback.
+          Start free. Upgrade when you want to know <i style={{ fontFamily: "var(--font-reading)" }}>exactly</i> where you lose points.
         </p>
       </div>
 
@@ -135,7 +135,7 @@ export default function PricingScreen({
 
       {/* Trust line */}
       <div style={S.trust}>
-        {["Cancel anytime", "Local cards (Uzcard, Humo, Visa)", "7-day money-back", "Reading & Listening free forever"].map((t) => (
+        {["Cancel anytime", "Local cards (Uzcard, Humo, Visa)", "7-day money-back", "Free first full test"].map((t) => (
           <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
             <Icon name="circle-check" size={15} style={{ color: "var(--success-text)" }} /> {t}
           </span>
