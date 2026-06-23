@@ -53,6 +53,8 @@ const EXACT: Record<string, QuestionType> = {
   diagramlabel: "diagram_label",
   planmapdiagramlabelling: "map_labelling",
   maplabelling: "map_labelling",
+  mapplanlabelling: "map_labelling",
+  planmaplabelling: "map_labelling",
   formcompletion: "form_completion",
   shortanswer: "short_answer",
   shortanswerquestions: "short_answer",
