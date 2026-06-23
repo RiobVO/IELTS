@@ -42,13 +42,13 @@ export function meetsTier(userTier: Tier, required: Tier): boolean {
 }
 
 /**
- * Launch flag (REDESIGN S5 / W1-1): the post-submit review — correct answers,
- * explanations and text evidence — is FREE for everyone to grow the audience.
- * The Premium gate below is intact: flip this to `false` to re-gate the review
- * behind Premium in a single edit (no claw-back of anything new; see REDESIGN
- * "Политика монетизации").
+ * Monetization flag (REDESIGN S5 / W1-1). When `false`, the post-submit review —
+ * correct answers, explanations and text evidence — is gated behind Premium. The
+ * per-type breakdown and per-question ✓/✗ stay FREE for everyone regardless (the
+ * grading insight that grows the audience, W1-1); only the answer / why / evidence
+ * are Premium. Flip to `true` to re-open the full review to all in a single edit.
  */
-export const REVIEW_OPEN = true;
+export const REVIEW_OPEN = false;
 
 /**
  * True if the tier gets the full post-submit review (breakdown + evidence).
