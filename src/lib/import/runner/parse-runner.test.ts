@@ -50,3 +50,15 @@ describe("parseRunner — listening", () => {
     expect(r.parsed.bandScale?.["40"]).toBe(9);
   });
 });
+
+describe("parseRunner — listening qtype", () => {
+  const r = parseRunner(listening);
+  const qt = (n: number) => r.parsed.questions.find((q) => q.number === n)!.qtype;
+  it("маппит qtype из QTYPE range-builder (не всё short_answer)", () => {
+    expect(qt(1)).toBe("table_completion");
+    expect(qt(7)).toBe("note_completion");
+    expect(qt(11)).toBe("mcq_single");
+    expect(qt(17)).toBe("matching_info");
+    expect(new Set(r.parsed.questions.map((q) => q.qtype)).size).toBeGreaterThan(1);
+  });
+});

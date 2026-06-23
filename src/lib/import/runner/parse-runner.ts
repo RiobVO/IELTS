@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { extractData, extractFunctionTable } from "../extract-js";
+import { extractData, extractFunctionTable, extractRangeBuilderTable } from "../extract-js";
 import { canonQuestionType } from "../question-types";
 import type { ParsedTest, ParsedQuestion, ParsedAnswerKey } from "../types";
 
@@ -81,7 +81,14 @@ function parseReadingRunner(html: string): RunnerParseResult {
 function parseListeningRunner(html: string): RunnerParseResult {
   const src = scriptText(html);
   const key = extractData<Record<string, string[]>>(src, "KEY") ?? {};
-  const types = extractData<Record<string, string>>(src, "QTYPE") ?? {};
+  // QTYPE может быть статичным литералом ИЛИ наполняться range-builder'ом в IIFE
+  // (тогда литерал на момент объявления пуст). Литерал имеет приоритет; если он
+  // пуст/отсутствует — восстанавливаем типы из вызовов-наполнителей.
+  const literalTypes = extractData<Record<string, string>>(src, "QTYPE");
+  const types =
+    literalTypes && Object.keys(literalTypes).length > 0
+      ? literalTypes
+      : extractRangeBuilderTable(src, "QTYPE") ?? {};
   const bandScale = extractFunctionTable(src, "band", 0, 40);
 
   const numbers = Object.keys(key).map(Number).sort((a, b) => a - b);
