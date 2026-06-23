@@ -31,13 +31,20 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // IMPORTANT: do not run logic between createServerClient and getUser().
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // IMPORTANT: do not run logic between createServerClient and the auth call.
+  // getClaims() still refreshes the session (it calls getSession() internally,
+  // which rotates an expiring token and writes the new cookies via setAll), so
+  // session lifetime is unchanged — but with the project's asymmetric ES256
+  // signing key it verifies the JWT LOCALLY (WebCrypto + cached JWKS) instead of
+  // a round-trip to the Auth server on every request (getUser cost ~200ms/req to
+  // Frankfurt). Matches lib/auth.ts, which already gates pages off getClaims.
+  // Tradeoff: a revoked token is accepted until its exp (~1h) — already the case
+  // at the RLS/data layer and for the page guards, so middleware adds no new gap.
+  const { data } = await supabase.auth.getClaims();
+  const authed = Boolean(data?.claims?.sub);
 
   const path = request.nextUrl.pathname;
-  if (!user && (path.startsWith("/app") || path.startsWith("/admin"))) {
+  if (!authed && (path.startsWith("/app") || path.startsWith("/admin"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth";
     url.searchParams.set("next", path);
