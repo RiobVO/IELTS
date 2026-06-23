@@ -56,3 +56,20 @@ export const PLANS: Plan[] = [
 export function findPlan(tier: string, months: number): Plan | undefined {
   return PLANS.find((p) => p.tier === tier && p.months === months);
 }
+
+/**
+ * Анти-фрод инвариант вебхука: выданный доступ допустим, только если (tier, срок)
+ * — продаваемый план из каталога, а сумма точно совпадает с его ценой. Чистая
+ * функция от полей доверенной payment-строки (НЕ от тела вебхука), вынесена из
+ * applyCompletedPayment, чтобы покрыть тестами в изоляции. Любое расхождение
+ * суммы (частичная оплата, подделка) или непроданная пара -> false: доступ не
+ * выдаётся (см. src/lib/payments/index.ts).
+ */
+export function validateEntitlement(row: {
+  tier: string;
+  periodMonths: number;
+  amount: number;
+}): boolean {
+  const plan = findPlan(row.tier, row.periodMonths);
+  return plan !== undefined && plan.amount === row.amount;
+}

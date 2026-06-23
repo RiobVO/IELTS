@@ -23,7 +23,7 @@ import { captureError } from "@/lib/monitoring/capture";
 import { db } from "@/db";
 import { payment, profile } from "@/db/schema";
 import { type PaymentProviderKey, paymentSecret } from "@/env";
-import { findPlan } from "./plans";
+import { validateEntitlement } from "./plans";
 
 /** true в боевом окружении — там stub-режим вебхука запрещён (fail closed). */
 function isProduction(): boolean {
@@ -127,8 +127,7 @@ export async function applyCompletedPayment(
       //    сумма — совпадать с его ценой. Инвариант независим от доверия к
       //    провайдеру: даже подписанное, но несогласованное сообщение (частичная
       //    оплата, непроданный срок) не выдаст доступ.
-      const plan = findPlan(row.tier, row.periodMonths);
-      if (!plan || plan.amount !== row.amount) {
+      if (!validateEntitlement(row)) {
         await tx
           .update(payment)
           .set({ status: "failed", updatedAt: sql`now()` })
