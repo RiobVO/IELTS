@@ -6,6 +6,7 @@ import {
   extractData,
   extractFunctionTable,
   extractObjectLiteral,
+  extractRangeBuilderTable,
 } from "./extract-js";
 
 describe("extractObjectLiteral", () => {
@@ -89,5 +90,36 @@ describe("extractFunctionTable", () => {
     );
     expect(t).toEqual({ 0: 0, 1: 1 }); // функция отработала в песочнице
     expect((globalThis as Record<string, unknown>)[sentinel]).toBeUndefined(); // но наружу не вырвалась
+  });
+});
+
+describe("extractRangeBuilderTable", () => {
+  it("разворачивает range-builder IIFE в {q: type} по диапазонам (без eval)", () => {
+    // Декларация — пустой `{}`; реальный маппинг строит сеттер во время выполнения.
+    const src = `const QTYPE = {};
+(function(){ const set = (a, b, t) => { for (let q = a; q <= b; q++) QTYPE[q] = t; };
+  set(1, 6, 'Table completion'); })();`;
+    expect(extractRangeBuilderTable(src, "QTYPE")).toEqual({
+      "1": "Table completion",
+      "2": "Table completion",
+      "3": "Table completion",
+      "4": "Table completion",
+      "5": "Table completion",
+      "6": "Table completion",
+    });
+  });
+
+  it("null, если сеттер не пишет в искомое имя (другой объект)", () => {
+    // Сеттер найден, но присваивает в OTHER[...], не в QTYPE → форма не распознана.
+    const src = `const QTYPE = {};
+(function(){ const set = (a, b, t) => { for (let q = a; q <= b; q++) OTHER[q] = t; };
+  set(1, 6, 'Table completion'); })();`;
+    expect(extractRangeBuilderTable(src, "QTYPE")).toBeNull();
+  });
+
+  it("null на пустой таблице (сеттер есть, но ни одного вызова)", () => {
+    const src = `const QTYPE = {};
+(function(){ const set = (a, b, t) => { for (let q = a; q <= b; q++) QTYPE[q] = t; }; })();`;
+    expect(extractRangeBuilderTable(src, "QTYPE")).toBeNull();
   });
 });

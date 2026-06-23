@@ -79,10 +79,14 @@ describe("hasFullReview", () => {
     expect(hasFullReview("ultra", true)).toBe(true);
   });
 
-  // По умолчанию следует launch-флагу REVIEW_OPEN (сейчас открыт → free для всех).
-  it("по умолчанию следует REVIEW_OPEN", () => {
+  // По умолчанию следует launch-флагу REVIEW_OPEN, каким бы он ни был — инвариант,
+  // а не хардкод значения флага. Защищает обе стороны переключателя: при open=false
+  // дефолт повторяет premium-гейт (basic — нет), при open=true стал бы free для всех.
+  it("по умолчанию следует REVIEW_OPEN (без хардкода значения флага)", () => {
     expect(hasFullReview("basic")).toBe(REVIEW_OPEN);
-    expect(REVIEW_OPEN).toBe(true);
-    expect(hasFullReview("basic")).toBe(true);
+    // Явные кейсы premium-гейта (open=false): basic закрыт, premium открыт —
+    // фиксируют сам гейт независимо от текущего значения REVIEW_OPEN.
+    expect(hasFullReview("basic", false)).toBe(false);
+    expect(hasFullReview("premium", false)).toBe(true);
   });
 });

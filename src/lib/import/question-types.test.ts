@@ -61,4 +61,15 @@ describe("canonQuestionType", () => {
       confident: false,
     });
   });
+
+  it("EXACT приоритетнее CONTAINS: точная метка уверенна, обёртка — substring", () => {
+    // Точная метка попадает в таблицу EXACT первой → confident:true; та же метка
+    // внутри обёртки («Section 2 — …») промахивается мимо EXACT и ловится только
+    // substring-фолбэком → confident:false. Доказывает порядок EXACT перед CONTAINS.
+    expect(canonQuestionType("Note Completion").confident).toBe(true);
+    expect(canonQuestionType("Section 2 — Note Completion")).toEqual({
+      type: "note_completion",
+      confident: false,
+    });
+  });
 });
