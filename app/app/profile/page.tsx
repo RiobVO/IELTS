@@ -3,6 +3,7 @@ import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { leaderboardEntry } from "@/db/schema";
+import { getActiveBadges } from "@/lib/content/badges";
 import { effectiveTier, type Tier } from "@/lib/tiers";
 import { qtypeLabel } from "@/lib/labels";
 import { AppShell } from "../_AppShell";
@@ -79,7 +80,7 @@ export default async function ProfilePage() {
     { data: paymentData },
     regionName,
     rankRows,
-    { data: badgeData },
+    badgeData,
     { data: earnedData },
   ] = await Promise.all([
     supabase.from("attempt").select("id", { count: "exact", head: true }).eq("status", "submitted"),
@@ -116,7 +117,7 @@ export default async function ProfilePage() {
         ),
       )
       .limit(1),
-    supabase.from("badge").select("id,code,name"),
+    getActiveBadges(),
     supabase.from("user_badge").select("badge_id,earned_at").eq("user_id", user.id),
   ]);
 
@@ -157,7 +158,7 @@ export default async function ProfilePage() {
   });
 
   // Achievements preview — реальные earned (как на странице badges); earned-first, 6 ячеек.
-  const badges = (badgeData ?? []) as BadgeRow[];
+  const badges: BadgeRow[] = badgeData;
   const earnedMap = new Map<string, string>(
     ((earnedData ?? []) as { badge_id: string; earned_at: string }[]).map((e) => [e.badge_id, e.earned_at]),
   );
