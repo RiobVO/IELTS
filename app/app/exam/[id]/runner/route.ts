@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { contentItem, profile } from "@/db/schema";
 import { getUser } from "@/lib/auth";
 import { scopeRunnerStorage } from "@/lib/import/runner/scope-storage";
+import { skinRunnerGate } from "@/lib/import/runner/skin-runner";
 import { effectiveTier, meetsTier } from "@/lib/tiers";
 
 // Отдаёт очищенный runner_html в iframe. Auth — через middleware (/app защищён) +
@@ -42,8 +43,11 @@ export async function GET(
   // Заскоупить весь localStorage раннера под user.id (анти-утечка черновика между
   // аккаунтами в одном браузере). Трансформируем КОПИЮ строки — контент в БД не трогаем.
   // Нет точки инжекта → fail-closed (нескоупленный html вернул бы утечку).
-  const html = scopeRunnerStorage(item.html, user.id);
-  if (!html) return new Response("Runner unavailable", { status: 500 });
+  const scoped = scopeRunnerStorage(item.html, user.id);
+  if (!scoped) return new Response("Runner unavailable", { status: 500 });
+  // bando re-skin аудио-гейта (listening) поверх скоупленного html, на read-time:
+  // светлый overlay вместо тёмного оригинала. No-op для reading / тестов без гейта.
+  const html = skinRunnerGate(scoped);
 
   return new Response(html, {
     status: 200,
