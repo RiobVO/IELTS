@@ -284,9 +284,9 @@ export async function readLeaderboard(
   regionName: string | null,
   viewerId?: string,
 ): Promise<{ rows: LeaderRow[]; viewerRow: LeaderRow | null }> {
-  // Top-100 join and the movement baseline are independent reads — run them
-  // concurrently instead of one-after-the-other.
-  const [top, snapRanks] = await Promise.all([
+  // Top-100 join, the movement baseline, and the viewer's own row are independent
+  // reads — run them concurrently instead of one-after-the-other.
+  const [top, snapRanks, viewerRows] = await Promise.all([
     db
       .select({
         rank: leaderboardEntry.rank,
@@ -308,6 +308,31 @@ export async function readLeaderboard(
       .limit(100),
     // Movement baseline (defensive — empty if the snapshot table isn't there yet).
     getSnapshotRanks(period, scope),
+    // Viewer's own row — for the "you are #137" pin when they're outside the top
+    // 100. Read in parallel with `top` instead of as a trailing serial hop; if the
+    // viewer turns out to BE in the visible top-100 the result is simply discarded
+    // (cheap single-row lookup on (period, scope, user_id)).
+    viewerId
+      ? db
+          .select({
+            rank: leaderboardEntry.rank,
+            userId: leaderboardEntry.userId,
+            rating: leaderboardEntry.rating,
+            score: leaderboardEntry.score,
+            displayName: profile.displayName,
+            avatarUrl: profile.avatarUrl,
+          })
+          .from(leaderboardEntry)
+          .innerJoin(profile, eq(profile.id, leaderboardEntry.userId))
+          .where(
+            and(
+              eq(leaderboardEntry.period, period),
+              eq(leaderboardEntry.scope, scope),
+              eq(leaderboardEntry.userId, viewerId),
+            ),
+          )
+          .limit(1)
+      : Promise.resolve([]),
   ]);
 
   const toRow = (e: {
@@ -335,28 +360,11 @@ export async function readLeaderboard(
 
   const rows = top.map(toRow);
 
-  // Viewer's own row, only if they're not already in the visible top-100.
+  // Show the pre-fetched viewer row only if they're not already in the visible
+  // top-100 (otherwise it's already rendered in the list above).
   let viewerRow: LeaderRow | null = null;
   if (viewerId && !rows.some((r) => r.userId === viewerId)) {
-    const [v] = await db
-      .select({
-        rank: leaderboardEntry.rank,
-        userId: leaderboardEntry.userId,
-        rating: leaderboardEntry.rating,
-        score: leaderboardEntry.score,
-        displayName: profile.displayName,
-        avatarUrl: profile.avatarUrl,
-      })
-      .from(leaderboardEntry)
-      .innerJoin(profile, eq(profile.id, leaderboardEntry.userId))
-      .where(
-        and(
-          eq(leaderboardEntry.period, period),
-          eq(leaderboardEntry.scope, scope),
-          eq(leaderboardEntry.userId, viewerId),
-        ),
-      )
-      .limit(1);
+    const v = viewerRows[0];
     if (v) viewerRow = toRow(v);
   }
 
