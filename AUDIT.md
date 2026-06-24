@@ -53,50 +53,48 @@ _CatalogView.tsx:29 — examHref = has_runner ? `/app/exam/${id}` : `/app/readin
 
 ## Открытые находки
 
-### P2 — слишком быстрый submit не исключается из рейтинга (Codex: P1)
-- **Severity:** P2 — понижено. Integrity-фарм XP, не деньги/безопасность.
-- **Где:** время считается сервером (`reading/[id]/actions.ts:333-336`, `timeUsedSeconds`), но
-  `apply-post-submit.ts:116` рейтингует первую попытку по `count==1` **без взгляда на duration**.
-- **Суть:** инстант-сабмит (старт → мгновенная сдача) идёт в rating/XP/streak/difficulty.
-- **Почему P2, не P1:** уже частично кроется — velocity-throttle 5/60с (`src/lib/anti-cheat.ts:14-17`),
-  rated только раз на тест (`count==1`), рейтинг растёт от `performance=rawScore/total` (мусорный
-  быстрый сабмит даёт низкий score → поднимает в основном XP/streak, не рейтинг).
-- **Предложение:** floor-guard перед rated — `timeUsedSeconds < N` (относительно `durationSeconds`/
-  кол-ва вопросов) → `unrated`, опц. флаг для review. Дёшево.
-- **Статус:** open. Примечание: на result-странице уже есть guard на отображение абсурдного времени
-  (`result/page.tsx:159`, `timeReliable`) — но это про вывод, не про rating.
-
-### P2 — Telegram-аудио привязывается к последнему Listening-тесту
-- **Severity:** P2 — minor (admin-only поток, низкая частота).
-- **Где:** `app/api/telegram/webhook/route.ts:178-183` — `handleAudioUpload` выбирает
-  `contentItem where section='listening' order by createdAt desc limit 1`.
-- **Суть:** mp3 привязывается к ПОСЛЕДНЕМУ listening-тесту, не к конкретному. Два админа /
-  повторная загрузка / задержка → аудио уедет к чужому тесту.
-- **Предложение:** pending-mapping `chat/admin → content_item_id`, либо reply/callback к
-  конкретному тесту, либо explicit id в потоке.
-- **Статус:** open.
-
-### P2 — percentile считает все attempts И самого пользователя
-- **Severity:** P2 — minor (продуктовая метрика).
-- **Где:** `app/app/reading/[id]/result/page.tsx:92-99` — `count(*) where contentItemId AND status='submitted'`;
-  UI «of other students» (`:174`).
-- **Суть:** percentile считает ВСЕ submitted-попытки по тесту, включая ретейки **и текущего
-  пользователя** (нет `userId != user.id`, нет «первая попытка на юзера»). Сравни: лидерборд для
-  анти-фарма уже берёт первую попытку на `(user, test)`.
-- **Предложение:** считать по первой submitted-попытке каждого юзера, исключив текущего из
-  «other students». Показывается при `total >= 5` (`:169`).
-- **Статус:** open.
-
-### P3 — SCHEMA_NOTES фиксирует «13 tables», реально 16
-- **Severity:** P3 — minor (schema governance / verify-count).
-- **Где:** `SCHEMA_NOTES.md:7,14` («Table count: 13»). Реально в `src/db/schema.ts` — **16** `pgTable`:
-  +`leaderboard_snapshot` (`:424`), +`annotation` (`:452`), +`payment` (`:521`) сверх карты.
-- **Предложение:** обновить счётчик + «post-Phase additions», связать каждую новую таблицу с миграцией.
-- **Статус:** open.
+_Открытых находок нет — все P0–P3 закрыты (см. раздел «Закрыто»)._
 
 ---
 
 ## Закрыто
+
+### P2 — слишком быстрый submit не исключался из рейтинга (Codex: P1)
+- **Severity:** P2 — integrity-фарм рейтинга (не деньги/безопасность).
+- **Было:** `apply-post-submit.ts` рейтинговал первую попытку по `count==1` без взгляда на
+  длительность — инстант-сабмит (start→мгновенная сдача) двигал Elo и difficulty теста.
+- **Закрыто:** 2026-06-24 — floor-guard `isTooFastToRate(timeUsedSeconds, total)`
+  (`src/lib/anti-cheat.ts`, чистая функция + unit-тесты): `rated = count==1 && !isTooFastToRate`.
+  Порог `MIN_RATED_SECONDS_PER_QUESTION=3` сек/вопрос (в разы быстрее самого быстрого реального
+  чтения → нет ложных срабатываний). `timeUsedSeconds` серверный (submit−start), проброшен в
+  `applyPostSubmit`. Стрик/XP осознанно не трогаются (низкая ценность, не вектор лидерборда).
+  Принятое следствие: too-fast первая попытка → тест остаётся unrated для юзера (первая-попытка-only).
+
+### P2 — percentile считал все attempts и самого пользователя
+- **Severity:** P2 — продуктовая метрика.
+- **Было:** `result/page.tsx` считал percentile по ВСЕМ submitted-попыткам теста (включая ретейки и
+  текущего юзера) — «of other students» был неточным.
+- **Закрыто:** 2026-06-24 — percentile по ПЕРВОЙ submitted-попытке каждого ДРУГОГО юзера
+  (`selectDistinctOn([userId]) … order by userId, submitted_at asc`, `ne(userId, self)`) — тот же
+  first-attempt-per-user анти-фарм, что у лидерборда (опирается на `attempt_distinct_idx`). Порог
+  показа `total >= 5` теперь = 5 других учеников.
+
+### P2 — Telegram-аудио привязывалось к последнему Listening-тесту
+- **Severity:** P2 — minor (admin-only поток).
+- **Было:** `handleAudioUpload` брал глобально-последний listening (`order by created_at desc`) — mp3
+  мог уехать на уже укомплектованный/чужой тест (два админа / повторная загрузка / задержка).
+- **Закрыто:** 2026-06-24 — привязка к новейшему listening, КОТОРОМУ ЕЩЁ НУЖНО аудио (correlated
+  `NOT EXISTS passage с audio_path`); если таких нет → честное сообщение вместо тихой перезаписи. Без
+  миграции/состояния. Остаток (документирован): при двух ждущих черновиках берётся новейший — для
+  точной привязки слать HTML и его mp3 до следующего HTML.
+
+### P3 — SCHEMA_NOTES фиксировал «13 tables», реально 16
+- **Severity:** P3 — schema governance.
+- **Было:** `SCHEMA_NOTES.md` «Table count: 13», тогда как `src/db/schema.ts` — 16 `pgTable`
+  (`verify.ts` уже `APP_TABLE_COUNT=16`).
+- **Закрыто:** 2026-06-24 — счётчик обновлён до 16 с «post-Phase additions», каждая новая таблица
+  привязана к миграции (`payment`→`0006`, `annotation`→`0013`, `leaderboard_snapshot`→`0014`); снят
+  устаревший «13» и из RLS-секции.
 
 ### P2 — Listening-result ведёт drill-ссылками в Reading-каталог
 - **Severity:** P2 — minor UX.

@@ -2,7 +2,7 @@
  * Acceptance gate (BRIEF VERIFY block). Prints [OK]/[FAIL] per check; exits 0
  * only if every check passes.
  *
- *   1. migrate up        -> all 13 app tables present
+ *   1. migrate up        -> all 16 app tables present
  *   2. migrate down      -> clean revert (0 app tables)
  *   3. migrate up again  -> idempotent (re-apply works, second run is a no-op)
  *   4. anon role         -> SELECT * FROM answer_key is DENIED by RLS
@@ -300,7 +300,7 @@ async function main() {
   await sql.unsafe(readFileSync(join(HERE, "bootstrap-supabase-local.sql"), "utf8"));
   await resetPublicSchema();
 
-  // 1. migrate up -> 13 tables
+  // 1. migrate up -> 16 tables
   await migrateUp(sql);
   let n = await countAppTables();
   if (n === APP_TABLE_COUNT) ok(`migrate up — ${n} tables created`);

@@ -4,15 +4,21 @@ Ambiguities in BRIEF.md §5/§6.1 resolved while building the schema + migration
 The brief wins; where it was silent or self-conflicting, a sane choice was made
 and logged here. No tables were invented beyond what the brief implies.
 
-## Table count: 13 (matches the worked-example verify output)
+## Table count: 16 (Phase 1 shipped 13; +3 added in later phases)
 
-§5 enumerates 12 tables (`badge`/`user_badge` are two). The worked example expects
-**13 tables**. The 13th is **`notification`**, defined in **§11**
-("Notifications + weekly digest … таблица `notification`"). Included to satisfy
-both the brief and the verify count.
+§5 enumerates 12 tables (`badge`/`user_badge` are two). The Phase-1 worked example
+expected **13 tables** — the 13th is **`notification`**, defined in **§11**
+("Notifications + weekly digest … таблица `notification`").
 
-Full list: `region, profile, content_item, passage, question, answer_key,
+Phase-1 list (13): `region, profile, content_item, passage, question, answer_key,
 attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
+
+**Post-Phase additions (+3 → 16, in lockstep with `verify.ts` `APP_TABLE_COUNT = 16`):**
+- `payment` — migration `0006_payments` (Phase 2D: tiers + payment lifecycle).
+- `annotation` — migration `0013_annotation` (reader highlights/notes, W2-1).
+- `leaderboard_snapshot` — migration `0014_leaderboard_snapshot` (rank-movement deltas).
+
+So `src/db/schema.ts` defines **16** `pgTable`s; `verify.ts` asserts the same count.
 
 ## `user` → `profile`, keyed to `auth.users.id`
 
@@ -44,10 +50,12 @@ So an `anon` `SELECT` fails with `permission denied` (SQLSTATE 42501). `service_
 (grading) retains full access and bypasses RLS, mirroring Supabase. The verify
 gate asserts the anon denial.
 
-## RLS on all 13 tables (§6.1)
+## RLS on all tables (§6.1)
 
 §6.1 says the browser hits Postgres with the anon key, so every public table is
-RLS-protected (not just `answer_key`) with sensible baseline policies:
+RLS-protected (not just `answer_key`). Phase-1 baseline policies (the then-13
+tables; later tables carry their own RLS in their migrations — see Phase 2D
+`payment`, `0013_annotation`, `0014_leaderboard_snapshot`):
 - public read: `region`, `badge`, `topic`, `leaderboard_entry`;
 - published-only read: `content_item`, `passage`, `question`;
 - owner-only: `profile`, `attempt`, `user_badge`, `referral`, `notification`;
