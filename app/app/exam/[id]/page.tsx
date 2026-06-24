@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { contentItem } from "@/db/schema";
 import { ensureAttempt } from "../../reading/[id]/actions";
@@ -14,7 +14,9 @@ export default async function ExamPage({
   const [test] = await db
     .select({ id: contentItem.id, runnerHtml: contentItem.runnerHtml })
     .from(contentItem)
-    .where(eq(contentItem.id, id));
+    // Published-only: owner-path bypasses RLS, so a draft id must notFound() here
+    // too (parity with the catalog's content_item_select_published policy).
+    .where(and(eq(contentItem.id, id), eq(contentItem.status, "published")));
   if (!test?.runnerHtml) notFound();
 
   // Старт/resume attempt (server-stamped started_at, tier+daily-limit гейт внутри).

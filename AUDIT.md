@@ -53,18 +53,6 @@ _CatalogView.tsx:29 — examHref = has_runner ? `/app/exam/${id}` : `/app/readin
 
 ## Открытые находки
 
-### P2 — draft-тест доступен по прямому `/app/exam/:id` (Codex: P1)
-- **Severity:** P2 — понижено. Defense-in-depth, не активная дыра.
-- **Где:** `app/app/exam/[id]/page.tsx:14-18`, `runner/route.ts:28-32` — чтение по `id` **без**
-  `status='published'`. Сравни: каталог фильтрует published (`src/lib/content/published.ts:33-35`).
-- **Суть:** owner-путь (Drizzle, в обход RLS) проверяет auth + tier + daily-limit, но НЕ
-  published-статус. Юзер, знающий UUID неопубликованного теста, откроет его и создаст attempt.
-- **Почему P2, не P1:** единственный «эксплойт» — знать UUID draft-теста, а он нигде не отдаётся
-  (каталог отдаёт только published). Нет канала утечки id → нет активного вектора.
-- **Предложение:** добавить `eq(status,'published')` в `page.tsx`, `runner/route.ts` и submit-путь,
-  чтобы owner-путь не был слабее published-политики каталога. Дёшево.
-- **Статус:** open.
-
 ### P2 — слишком быстрый submit не исключается из рейтинга (Codex: P1)
 - **Severity:** P2 — понижено. Integrity-фарм XP, не деньги/безопасность.
 - **Где:** время считается сервером (`reading/[id]/actions.ts:333-336`, `timeUsedSeconds`), но
@@ -118,6 +106,20 @@ _CatalogView.tsx:29 — examHref = has_runner ? `/app/exam/${id}` : `/app/readin
 ---
 
 ## Закрыто
+
+### P2 — draft-тест доступен по прямому owner-пути `/app/exam/:id` (Codex: P1)
+- **Severity:** P2 — defense-in-depth (понижено с Codex P1: эксплойт требовал знать UUID
+  draft-теста, а каталог отдаёт только published → канала утечки id нет).
+- **Было:** owner-путь (Drizzle, в обход RLS) читал `content_item` по `id` без `status='published'`
+  в трёх точках старта/сервинга — `app/app/exam/[id]/page.tsx`, `runner/route.ts` и `loadAccessData`
+  (`app/app/reading/[id]/actions.ts`, общий гейт старта+сабмита). Юзер с UUID неопубликованного теста
+  мог открыть его и создать attempt. Legacy `/app/reading/[id]` дыры не имел — читает через
+  anon-клиент под RLS `content_item_select_published` (migration `0001_rls:45`).
+- **Закрыто:** 2026-06-24 — во все три owner-чтения добавлен `eq(status,'published')` (паритет с
+  RLS-политикой и каталогом `getPublishedTests`). Draft → `notFound()`/404 на exam-странице и
+  runner-route; `loadAccessData` → null → redirect, attempt не создаётся и не грейдится. Happy-path
+  published-теста без регресса; tier/auth-гейты не тронуты. tsc + build чисто.
+- **Не трогали:** legacy reading-страницу (уже RLS-safe), grading/answer_key/rating, значения тиров.
 
 ### P0 — `runner_html` исполнялся same-origin с широким CSP
 - **Severity:** P0 (Codex: P0) — единственная настоящая security-дыра в списке.
