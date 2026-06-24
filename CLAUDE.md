@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **Активный трек — perf/lag `/app`** (см. «🔜 Current — perf/lag /app» ниже). P0 iframe-раннер ✅,
 > Practice Hub ✅ и ВСЕ P2/P3 из [AUDIT.md](./AUDIT.md) ✅ закрыты и на Vercel prod (2026-06-24);
-> реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist (commit `4339f92`) и rank-2 leaderboard (commit
-> `ed2a612`) сделаны, **следующий — rank-3 exam/reading START** (skip `loadAccessData` дублей).
+> реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist (`4339f92`), rank-2 leaderboard (`ed2a612`) и
+> rank-3 exam/reading START (`7678f44`) сделаны, **следующий — rank-4 Result** (5-query `Promise.all`).
 > Любую новую работу вне этого порядка начинать по явной просьбе пользователя.
 >
 > Справка: [BRIEF.md](./BRIEF.md) — истина (спека/стек/§5/§6.1/§9). [BACKLOG.md](./BACKLOG.md) —
@@ -196,11 +196,15 @@ RLS, server-only grading, `answer_key` never client-side, tier gating, idempoten
    top-100 join + snapshot ranks. ≈ −2 serial hops; owner-path PUBLIC columns only; `getSnapshotRanks`
    stays fail-open. The viewer-pinned-row merge is still a separate query-shape-sensitive follow-up
    (rank-5 below).
-3. Exam/Reading start: skip `loadAccessData`'s duplicate content_item+profile READs on the START path
-   (keep `loadAccessData` for submit defense-in-depth). 4. Result: leading att-read → 5-query
-   `Promise.all` collapsed into 1 via correlated subselects (pctRow/prevRows). 5–8: leaderboard
-   viewer-row merge, badges `computeStats` concurrent, `getPublishedTests` cold-start parallelize,
-   Basic daily-count batch — detail in the `prod-infra-topology` memory.
+3. ✅ **Exam/Reading START** — done (commit `7678f44`): the start gate+attempt moved to a server-only
+   module (`src/lib/exam/access.ts`: `loadAccessData`+`enforceAccess`+new `startAttempt`); the RSC pages
+   now gate with the `content_item`+`profile` they already read and call `startAttempt` (no re-read).
+   `submitAttempt` and the `/runner` GET keep their own gate (defense-in-depth); `startAttempt` carries
+   no gate and isn't a Server Action (network-unreachable). ≈ −1 serial hop per start path.
+4. **Result — NEXT:** leading att-read → 5-query `Promise.all` collapsed into 1 via correlated subselects
+   (pctRow/prevRows). 5–8: leaderboard viewer-row merge, badges `computeStats` concurrent,
+   `getPublishedTests` cold-start parallelize, Basic daily-count batch — detail in the
+   `prod-infra-topology` memory.
 
 Verify perf on **prod** via Server-Timing headers (can't measure latency from a static checkout; user
 reads prod numbers from UZ). Code verification per change: `npx tsc --noEmit` + `npm run build` (dev
