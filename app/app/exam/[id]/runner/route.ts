@@ -7,6 +7,7 @@ import { retargetBridgeOrigin } from "@/lib/import/runner/bridge";
 import { polyfillRunnerStorage } from "@/lib/import/runner/runner-storage";
 import { skinRunnerGate, skinRunnerBrand } from "@/lib/import/runner/skin-runner";
 import { effectiveTier, meetsTier } from "@/lib/tiers";
+import { isUuid } from "@/lib/uuid";
 
 // Origin Supabase Storage — единственный источник аудио раннера (storage.ts getPublicUrl).
 // Пиним media-src на него (не blanket https:), чтобы opaque-origin раннер не тянул медиа с
@@ -23,6 +24,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  // Malformed id never reaches the uuid-column query (would 500 on cast); 404 instead.
+  if (!isUuid(id)) return new Response("Not found", { status: 404 });
 
   const user = await getUser();
   if (!user) return new Response("Unauthorized", { status: 401 });

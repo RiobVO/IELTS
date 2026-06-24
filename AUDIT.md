@@ -53,11 +53,31 @@ _CatalogView.tsx:29 — examHref = has_runner ? `/app/exam/${id}` : `/app/readin
 
 ## Открытые находки
 
-_Открытых находок нет — все P0–P3 закрыты (см. раздел «Закрыто»)._
+_Открытых находок нет._ Сверх Codex-аудита проведён **свежий аудит-с-нуля (2026-06-24, 7 осей:
+data-exposure / tier-paywall / anti-cheat / auth-IDOR / recent-perf-changes / injection / schema-RLS,
+adversarial-верификация каждого кандидата).** 6 из 7 осей — чисто (0 находок); ядро (утечка answer_key,
+RLS, tier-гейт, целостность рейтинга, изоляция раннера, injection) подтверждено чистым в коде. Найдена
+1 low-находка (malformed UUID → 500) — **закрыта тем же заходом** (см. «Закрыто»).
 
 ---
 
 ## Закрыто
+
+### P3 — malformed UUID в owner-path → 500 вместо 404 (fresh audit 2026-06-24)
+- **Severity:** P3 — low. Graceful-degradation gap + дешёвый authenticated 500-spam / лог-шум. НЕ
+  security (не SQL-injection — интерполяция параметризована Drizzle; не утечка — answer_key EXISTS-gate
+  и ownership-проверки целы; не escalation).
+- **Было:** `id` (path) и `a` (`?a=`) шли прямо в Drizzle owner-path запросы по `uuid`-колонкам без
+  проверки формата. Малформный UUID → Postgres `22P02 invalid input syntax for type uuid` → `global-error`
+  рисует 500 вместо чистого `notFound()`. Поверхность: 3 owner-path screens (`exam/[id]/page.tsx`,
+  `runner/route.ts`, `result/page.tsx`) + client-reachable `submitAttempt`. Legacy `/app/reading/[id]`
+  иммунен (Supabase/PostgREST-клиент → `data:null` → `notFound`). Только новый Drizzle owner-path лишён
+  graceful-деградации. Не регрессия perf-рефактора — pre-existing паттерн owner-path.
+- **Закрыто:** 2026-06-24 — UUID-гард `isUuid()` (`src/lib/uuid.ts`, чистая функция + unit-тесты)
+  перед запросом: `notFound()`/404/redirect до обращения к БД в `exam/[id]/page.tsx`, `runner/route.ts`,
+  `result/page.tsx` (id + `?a=`), `submitAttempt`. Паритет с legacy-страницей.
+- **Не трогали:** `saveProgress`/annotation-actions (уже в try/catch → тихий no-op, не 500);
+  grading/answer_key/tier-гейты/EXISTS-gate.
 
 ### P2 — слишком быстрый submit не исключался из рейтинга (Codex: P1)
 - **Severity:** P2 — integrity-фарм рейтинга (не деньги/безопасность).

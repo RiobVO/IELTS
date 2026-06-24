@@ -7,6 +7,7 @@ import { getProfile, getUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
+import { isUuid } from "@/lib/uuid";
 import { categoryLabel, qtypeLabel } from "@/lib/labels";
 import { AppShell } from "../../../_AppShell";
 import { Button } from "@/components/core/Button";
@@ -37,7 +38,8 @@ export default async function ResultPage({
   if (!user) redirect("/auth");
   const { id } = await params;
   const { a: attemptId, unlocked } = await searchParams;
-  if (!attemptId) notFound();
+  // Malformed id / ?a= never reach the uuid-column queries (would 500 on cast); 404 instead.
+  if (!isUuid(id) || !isUuid(attemptId)) notFound();
 
   // otherFirsts: ПЕРВАЯ submitted-попытка каждого ДРУГОГО юзера на этот тест
   // (ретейки не накручивают percentile, сам пользователь исключён — тот же

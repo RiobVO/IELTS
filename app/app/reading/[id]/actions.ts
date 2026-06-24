@@ -17,6 +17,7 @@ import { bandForScore } from "@/lib/grading/band";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
 import { recomputeLeaderboard } from "@/lib/progress/leaderboard";
+import { isUuid } from "@/lib/uuid";
 
 /**
  * Persist in-progress answers (autosave, §4.3). Owner-checked, only while the
@@ -58,6 +59,9 @@ export async function submitAttempt(
 ) {
   const user = await getUser();
   if (!user) redirect("/auth");
+  // Client-reachable action: a malformed attemptId must not 500 the uuid-column
+  // query — bounce to the catalog instead (same as a missing attempt).
+  if (!isUuid(attemptId)) redirect("/app/reading");
 
   const [att] = await db
     .select({

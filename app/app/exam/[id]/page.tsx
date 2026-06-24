@@ -5,6 +5,7 @@ import { contentItem } from "@/db/schema";
 import { getProfile, requireUser } from "@/lib/auth";
 import { enforceAccess, startAttempt } from "@/lib/exam/access";
 import { effectiveTier, type Tier } from "@/lib/tiers";
+import { isUuid } from "@/lib/uuid";
 import ExamFrame from "./ExamFrame";
 
 export default async function ExamPage({
@@ -14,6 +15,8 @@ export default async function ExamPage({
 }) {
   const user = await requireUser();
   const { id } = await params;
+  // Malformed id never reaches the uuid-column query (would 500 on cast); 404 instead.
+  if (!isUuid(id)) notFound();
 
   // content_item (раннер + требуемый tier) и профиль независимы → один параллельный
   // слой. Раньше страница читала content_item, а старт через loadAccessData читал его
