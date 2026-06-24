@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **Активный трек — perf/lag `/app`** (см. «🔜 Current — perf/lag /app» ниже). P0 iframe-раннер ✅,
 > Practice Hub ✅ и ВСЕ P2/P3 из [AUDIT.md](./AUDIT.md) ✅ закрыты и на Vercel prod (2026-06-24);
-> реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist сделан (commit `4339f92`), **следующий — rank-2
-> leaderboard.** Любую новую работу вне этого порядка начинать по явной просьбе пользователя.
+> реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist (commit `4339f92`) и rank-2 leaderboard (commit
+> `ed2a612`) сделаны, **следующий — rank-3 exam/reading START** (skip `loadAccessData` дублей).
+> Любую новую работу вне этого порядка начинать по явной просьбе пользователя.
 >
 > Справка: [BRIEF.md](./BRIEF.md) — истина (спека/стек/§5/§6.1/§9). [BACKLOG.md](./BACKLOG.md) —
 > продуктовый бэклог (Волна 1 закрыта, Волна 2 ждёт). [AUDIT.md](./AUDIT.md) — открытые долги.
@@ -190,12 +191,11 @@ RLS, server-only grading, `answer_key` never client-side, tier gating, idempoten
 1. ✅ **AppShell header hoist** — done (commit `4339f92`): notification queries were a trailing serial
    hop on every page → now `getHeaderData()` (`cache()`'d, `src/lib/notifications/header-data.ts`)
    pre-warmed in each page's `Promise.all` (or early `void` on sequential pages); AppShell reuses it.
-2. **Leaderboard `readLeaderboard` (`src/lib/progress/leaderboard.ts`, `/app/leaderboard`) — NEXT:**
-   ~6-deep serial chain. Drop the redundant region-name lookup (`leaderboard.ts:~288` — thread the
-   scope label the page already resolved at `leaderboard/page.tsx:82-96/111`) + `Promise.all` the 3
-   independent internals (region-name, top-100 join, snapshot ranks). ≈ −3 serial hops, low-risk
-   (owner-path PUBLIC columns only; `getSnapshotRanks` already fail-open). The viewer-pinned-row merge
-   is a separate, query-shape-sensitive follow-up (do after).
+2. ✅ **Leaderboard `readLeaderboard`** — done (commit `ed2a612`): deleted the redundant region-name
+   lookup (page now threads the pre-resolved `scopeLabel`, null for global) and `Promise.all`'d the
+   top-100 join + snapshot ranks. ≈ −2 serial hops; owner-path PUBLIC columns only; `getSnapshotRanks`
+   stays fail-open. The viewer-pinned-row merge is still a separate query-shape-sensitive follow-up
+   (rank-5 below).
 3. Exam/Reading start: skip `loadAccessData`'s duplicate content_item+profile READs on the START path
    (keep `loadAccessData` for submit defense-in-depth). 4. Result: leading att-read → 5-query
    `Promise.all` collapsed into 1 via correlated subselects (pctRow/prevRows). 5–8: leaderboard
