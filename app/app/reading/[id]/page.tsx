@@ -1,12 +1,12 @@
 import { and, asc, eq } from "drizzle-orm";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { annotation } from "@/db/schema";
-import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
+import { enforceAccess, startAttempt } from "@/lib/exam/access";
+import { effectiveTier, type Tier } from "@/lib/tiers";
 import { normalizePassageHtml } from "@/lib/reading/normalize-passage";
-import { ensureAttempt } from "./actions";
 import ExamRunner from "./ExamRunner";
 
 export const dynamic = "force-dynamic";
@@ -71,14 +71,15 @@ export default async function ReadingTestPage({
   const questionsHtml =
     qHtmlParts.length > 0 && qHtmlParts.every(Boolean) ? qHtmlParts.join("\n") : null;
 
-  // Access gate (§4.8): a Basic user must not even reach the exam for a
-  // Premium/Ultra test. effectiveTier downgrades an expired premium to basic,
-  // so a stale profile.tier can't slip past. The submit action re-checks
-  // server-side (defense in depth) — this redirect is the UX-facing guard.
+  // Access gate (§4.8): tier entitlement + Basic daily limit, enforced server-side
+  // from the profile + content_item already read above (no extra round-trip).
+  // effectiveTier downgrades an expired premium to basic, so a stale profile.tier
+  // can't slip past. submitAttempt re-runs the same gate (defense in depth);
+  // startAttempt below assumes it has already passed.
   const userTier = profile
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
     : "basic";
-  if (!meetsTier(userTier, test.tier_required as Tier)) redirect("/app/upgrade");
+  await enforceAccess(user.id, userTier, test.tier_required as Tier);
 
   // Listening: one audio file for the whole test. Local public/ path now;
   // a full Storage URL (signed, §11) once audio lives in the cloud.
@@ -91,11 +92,11 @@ export default async function ReadingTestPage({
       : `/${rawAudio.replace(/^\/+/, "")}`
     : null;
 
-  // Открытие/resume attempt (серверный гейт §4.8) и чтение аннотаций пользователя
-  // независимы → параллелим (annotations был отдельным RT-слоем ПОСЛЕ ensureAttempt).
-  // Оба после tier-гейта: annotations read-only/user-scoped, attempt re-проверяет доступ.
+  // Открытие/resume attempt и чтение аннотаций пользователя независимы → параллелим
+  // (annotations был отдельным RT-слоем ПОСЛЕ старта). Доступ уже сгейчен выше
+  // (enforceAccess), поэтому startAttempt не перечитывает content_item/profile.
   const [{ attemptId, answers: savedAnswers }, annotations] = await Promise.all([
-    ensureAttempt(id),
+    startAttempt(user.id, id),
     // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
     // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
     db
