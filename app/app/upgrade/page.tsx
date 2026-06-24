@@ -1,4 +1,5 @@
 import { getProfile, requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { effectiveTier, type Tier } from "@/lib/tiers";
 import { findPlan } from "@/lib/payments/plans";
 import { AppShell } from "../_AppShell";
@@ -8,6 +9,8 @@ export const dynamic = "force-dynamic";
 
 export default async function UpgradePage() {
   await requireUser();
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
   const profile = await getProfile();
   const current: Tier = profile
     ? effectiveTier({ tier: profile.tier, premium_until: profile.premium_until })

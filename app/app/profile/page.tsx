@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { leaderboardEntry } from "@/db/schema";
 import { getActiveBadges } from "@/lib/content/badges";
@@ -119,6 +120,8 @@ export default async function ProfilePage() {
       .limit(1),
     getActiveBadges(),
     supabase.from("user_badge").select("badge_id,earned_at").eq("user_id", user.id),
+    // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+    getHeaderData(),
   ]);
 
   const payments = (paymentData ?? []) as PaymentRow[];

@@ -1,7 +1,5 @@
-import { getProfile } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import { AppHeader, type ActivePage } from "@/components/app/AppHeader";
-import type { NotifItem } from "@/components/app/NotificationsBell";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { markAllRead } from "@/lib/notifications/actions";
 import { signOut } from "../auth/actions";
 
@@ -24,24 +22,10 @@ export async function AppShell({
   active: ActivePage;
   children: React.ReactNode;
 }) {
-  // Профиль, счётчик непрочитанных и последние уведомления независимы → один
-  // Promise.all вместо водопада. recent кормит dropdown-окошко в шапке; count —
-  // точное число непрочитанных (не только из показанных recent).
-  const supabase = await createClient();
-  const [profile, notif, recent] = await Promise.all([
-    getProfile(),
-    supabase
-      .from("notification")
-      .select("id", { count: "exact", head: true })
-      .is("read_at", null),
-    supabase
-      .from("notification")
-      .select("id,type,title,body,read_at,created_at")
-      .order("created_at", { ascending: false })
-      .limit(8),
-  ]);
-  const count = notif.count;
-  const recentItems = (recent.data ?? []) as NotifItem[];
+  // Данные шапки (profile + непрочитанные + recent) — через общий cache()'d
+  // getHeaderData(): страница уже запустила его конкурентно со своим телом, тут
+  // кэш-хит (см. header-data.ts — иначе это был бы trailing round-trip после тела).
+  const { profile, unread, recent } = await getHeaderData();
 
   const initials = computeInitials(
     (profile?.display_name ?? profile?.email ?? "") as string,
@@ -55,8 +39,8 @@ export async function AppShell({
         streak={profile?.current_streak ?? 0}
         xp={profile?.xp ?? 0}
         initials={initials}
-        unread={count ?? 0}
-        recent={recentItems}
+        unread={unread}
+        recent={recent}
         markAllRead={markAllRead}
         signOut={signOut}
       />

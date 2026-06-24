@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { payment } from "@/db/schema";
 import { AppShell } from "../../_AppShell";
@@ -22,6 +23,8 @@ export default async function CheckoutPage({
   searchParams: Promise<{ pid?: string }>;
 }) {
   const user = await requireUser();
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
   const { pid } = await searchParams;
 
   // Owner-path read (Drizzle): need provider/tier/months/amount to build the stub
