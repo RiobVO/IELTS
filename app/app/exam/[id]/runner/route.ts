@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { contentItem, profile } from "@/db/schema";
 import { getUser } from "@/lib/auth";
 import { scopeRunnerStorage } from "@/lib/import/runner/scope-storage";
-import { skinRunnerGate } from "@/lib/import/runner/skin-runner";
+import { skinRunnerGate, skinRunnerBrand } from "@/lib/import/runner/skin-runner";
 import { effectiveTier, meetsTier } from "@/lib/tiers";
 
 // Отдаёт очищенный runner_html в iframe. Auth — через middleware (/app защищён) +
@@ -45,9 +45,10 @@ export async function GET(
   // Нет точки инжекта → fail-closed (нескоупленный html вернул бы утечку).
   const scoped = scopeRunnerStorage(item.html, user.id);
   if (!scoped) return new Response("Runner unavailable", { status: 500 });
-  // bando re-skin аудио-гейта (listening) поверх скоупленного html, на read-time:
-  // светлый overlay вместо тёмного оригинала. No-op для reading / тестов без гейта.
-  const html = skinRunnerGate(scoped);
+  // bando re-skin на read-time поверх скоупленного html: (1) аудио-гейт (listening)
+  // — светлый overlay вместо тёмного; (2) шапка — bando-знак вместо чужого логотипа
+  // «IELTS™» + снос чужого telegram-канала. No-op для незнакомых шаблонов.
+  const html = skinRunnerBrand(skinRunnerGate(scoped));
 
   return new Response(html, {
     status: 200,

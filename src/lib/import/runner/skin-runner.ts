@@ -41,3 +41,58 @@ export function skinRunnerGate(html: string): string {
   if (!/<\/head>/i.test(html)) return html; // нет безопасной точки — не трогаем
   return html.replace(/<\/head>/i, `${GATE_SKIN}</head>`);
 }
+
+// RUNTIME (read-time) bando re-brand шапки раннера. Импортированные computer-IELTS
+// файлы несут В ШАПКЕ чужой брендинг: картинку-логотип источника (img.brand-logo),
+// стилизованный вордмарк «IELTS™» (span.logo) и КЛИКАБЕЛЬНЫЙ чужой telegram-канал
+// (a.brand-telegram, напр. t.me/EnjoyListeningTests) — последнее уводит наших
+// студентов на сторонний канал прямо из экзамена. Снимаем чужой логотип/бренд и
+// канал, ставим bando-знак (1:1 с Logo.tsx). Слово «IELTS» в тексте/title не
+// трогаем — это нарицательное имя экзамена; убираем только ЛОГОТИП и чужой трафик.
+// Делается на read-time (рядом со skinRunnerGate) → покрывает все runner_html без
+// переимпорта. Якорь известного шаблона — span.logo / img.brand-logo; нет якоря →
+// no-op (незнакомую шапку не калечим).
+
+// bando-знак из Logo.tsx — три скруглённые полосы. Цвета = токены colors.css
+// (--brand=violet-600, --text-primary=slate-900) литералами: runner изолирован от
+// наших токенов. Jakarta = шрифт bando UI.
+const BRAND_FONT = `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&display=swap">`;
+
+const BRAND_STYLE = `<style id="bando-brand-skin">
+.bando-brand{display:inline-flex!important;align-items:center!important;gap:10px!important;line-height:1!important}
+.bando-brand .bm{display:block!important;flex:none!important}
+.bando-brand .bm .r1{fill:oklch(0.585 0.225 292)!important}
+.bando-brand .bm .r2{fill:oklch(0.245 0.014 280)!important;opacity:.92!important}
+.bando-brand .bm .r3{fill:oklch(0.245 0.014 280)!important;opacity:.5!important}
+.bando-brand .bw{font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif!important;font-weight:800!important;font-size:1.25rem!important;letter-spacing:-0.02em!important;color:oklch(0.245 0.014 280)!important}
+.bando-brand .bw i{font-style:normal!important;color:oklch(0.585 0.225 292)!important}
+</style>`;
+
+const BANDO_BRAND = `<span class="bando-brand" aria-label="bando"><svg class="bm" width="30" height="30" viewBox="0 0 64 64" fill="none" role="img" aria-hidden="true"><rect class="r1" x="9" y="18" width="34" height="9" rx="4.5"/><rect class="r2" x="9" y="31" width="46" height="9" rx="4.5"/><rect class="r3" x="9" y="44" width="22" height="9" rx="4.5"/></svg><span class="bw">band<i>o</i></span></span>`;
+
+const RE_TELEGRAM = /<a\b[^>]*class=["'][^"']*brand-telegram[^"']*["'][^>]*>[\s\S]*?<\/a>/gi;
+const RE_LOGO_IMG = /<img\b[^>]*class=["'][^"']*brand-logo[^"']*["'][^>]*>/gi;
+const RE_LOGO_TEXT = /<span\s+class=["']logo["']>[\s\S]*?<\/span>/i;
+
+/**
+ * Заменяет чужой брендинг шапки раннера на bando + удаляет чужой telegram-канал.
+ * No-op, если шаблон не распознан (нет span.logo и img.brand-logo) или нет `</head>`.
+ * Идемпотентно: повторный вызов исключён маркером `bando-brand-skin`.
+ */
+export function skinRunnerBrand(html: string): string {
+  if (html.includes("bando-brand-skin")) return html; // уже ребрендировано
+  const hasText = RE_LOGO_TEXT.test(html);
+  const hasImg = /class=["'][^"']*brand-logo[^"']*["']/i.test(html);
+  if (!hasText && !hasImg) return html; // незнакомая шапка — не трогаем
+  if (!/<\/head>/i.test(html)) return html; // нет безопасной точки инжекта
+
+  let out = html.replace(RE_TELEGRAM, ""); // увести трафик на чужой канал — нельзя
+  if (hasText) {
+    out = out.replace(RE_LOGO_IMG, ""); // картинку убираем, bando-знак ставим вместо текста
+    out = out.replace(RE_LOGO_TEXT, BANDO_BRAND);
+  } else {
+    out = out.replace(RE_LOGO_IMG, BANDO_BRAND); // вордмарка нет — bando вместо картинки
+  }
+  return out.replace(/<\/head>/i, `${BRAND_FONT}${BRAND_STYLE}</head>`);
+}
