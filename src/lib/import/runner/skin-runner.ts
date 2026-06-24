@@ -3,8 +3,8 @@
 // прогресс / Play). Перекрываем его светлой bando-палитрой (violet brand, Jakarta,
 // 3D-push Play со state'ами) инжектом <style> ПЕРЕД </head> — после оригинальных
 // стилей файла, чтобы override выигрывал по порядку (+ #id-специфичность +
-// !important как страховка). Делается на read-time в /runner route (рядом со
-// scopeRunnerStorage), поэтому применяется ко ВСЕМ listening-тестам без переимпорта.
+// !important как страховка). Делается на read-time в /runner route (рядом с
+// polyfillRunnerStorage), поэтому применяется ко ВСЕМ listening-тестам без переимпорта.
 // Трогаем ТОЛЬКО селекторы gate (#playOverlay и его дети) — сам тест-раннер не наш,
 // его интерфейс не переопределяем.
 
