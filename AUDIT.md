@@ -103,8 +103,9 @@ _Открытых находок нет — все P0–P3 закрыты (см.
   после Listening-теста дрилл-ссылки уходили в Reading-каталог (где listening-типов нет).
 - **Закрыто:** 2026-06-24 — в `ci`-выборку дотянут `content_item.section`; выведен `catalogBase`
   (`/app/${section}`), на него переведены все catalog/drill-ссылки + `AppShell active` (теперь
-  секционный; в навигации всё равно подсвечивает Practice). «Try again» → `/app/reading/${id}`
-  оставлен как есть — это runner-routing (has_runner), отдельный долг, не секционный base path.
+  секционный; в навигации всё равно подсвечивает Practice). Доп. (по prod-смоку): «Try again» теперь
+  повторяет маршрутизацию каталога — `has_runner ? /app/exam/${id} : /app/reading/${id}` (флаг
+  `has_runner` тянется в `ci` без самого runner_html), а не хардкод `/app/reading/${id}`.
 - **Не трогали:** grading/percentile/answer_key, `InsightReport`, submit/runner. tsc + build чисто.
 
 ### P2 — draft-тест доступен по прямому owner-пути `/app/exam/:id` (Codex: P1)

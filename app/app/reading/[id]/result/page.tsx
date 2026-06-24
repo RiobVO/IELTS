@@ -103,6 +103,9 @@ export default async function ResultPage({
         category: contentItem.category,
         section: contentItem.section,
         durationSeconds: contentItem.durationSeconds,
+        // Только флаг наличия раннера для маршрутизации «Try again» — НЕ сам
+        // runner_html (~200КБ); как в каталоге (getPublishedTests).
+        hasRunner: sql<boolean>`${contentItem.runnerHtml} IS NOT NULL`,
       })
       .from(contentItem)
       .where(eq(contentItem.id, id))
@@ -168,6 +171,9 @@ export default async function ResultPage({
   // catalog» уходили в Reading-фильтр, где listening-типов нет (AUDIT P2).
   const section = ci[0]?.section === "listening" ? "listening" : "reading";
   const catalogBase = `/app/${section}`;
+  // «Try again» повторяет маршрутизацию каталога: тесты с очищенным runner_html идут
+  // в iframe-обёртку (/app/exam), legacy без раннера — в React-раннер (/app/reading).
+  const retryHref = ci[0]?.hasRunner ? `/app/exam/${id}` : `/app/reading/${id}`;
 
   // Honest key metrics — only those backed by real data are rendered. Colour is
   // semantic: green ONLY when the number is genuinely good; neutral otherwise.
@@ -419,7 +425,7 @@ export default async function ResultPage({
           <Button variant="secondary" fullWidth href={catalogBase}>
             Back to catalog
           </Button>
-          <Button fullWidth trailingIcon="arrow-right" href={`/app/reading/${id}`}>
+          <Button fullWidth trailingIcon="arrow-right" href={retryHref}>
             Try again
           </Button>
         </div>
