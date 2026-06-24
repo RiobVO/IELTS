@@ -2,12 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Активный трек — [AUDIT.md](./AUDIT.md)** (аудит 2026-06-24, верифицирован по коду).
-> Работать по нему последовательно: P0 изоляция iframe-раннера ✅ закрыта и проверена на Vercel prod
-> (2026-06-24, Reading/Listening submit → result подтверждены); Practice Hub ✅ закрыт и проверен на
-> Vercel prod (2026-06-24, commit `956d43c`); **текущая работа — открытые P2/P3 из AUDIT.md по
-> приоритету и продуктовой связности.** Любую новую работу вне этого порядка начинать по явной
-> просьбе пользователя.
+> **Активный трек — perf/lag `/app`** (см. «🔜 Current — perf/lag /app» ниже). P0 iframe-раннер ✅,
+> Practice Hub ✅ и ВСЕ P2/P3 из [AUDIT.md](./AUDIT.md) ✅ закрыты и на Vercel prod (2026-06-24);
+> реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist сделан (commit `4339f92`), **следующий — rank-2
+> leaderboard.** Любую новую работу вне этого порядка начинать по явной просьбе пользователя.
 >
 > Справка: [BRIEF.md](./BRIEF.md) — истина (спека/стек/§5/§6.1/§9). [BACKLOG.md](./BACKLOG.md) —
 > продуктовый бэклог (Волна 1 закрыта, Волна 2 ждёт). [AUDIT.md](./AUDIT.md) — открытые долги.
@@ -176,18 +174,37 @@ early).
 - **Weekly digest / email** — `notification` table + in-app centre exist; digest jobs + email provider TODO.
 - **i18n** — deferred (EN at launch per §10).
 
-### 🔜 Current — AUDIT.md P2/P3 remediation
+### 🔜 Current — perf/lag `/app`
 
-P0 iframe isolation ✅ and the Practice Hub ✅ are closed on Vercel prod. Active track: the open
-P2/P3 findings in [AUDIT.md](./AUDIT.md), by priority.
+AUDIT.md empty (all P0–P3 closed). Active: cut SERIAL server-render round-trips on `/app` (dashboard
+~0.6–0.9 s, exam 1.3–2.5 s from UZ). Diagnosis (audit 2026-06-24, verified in code; full detail in the
+`prod-infra-topology` memory): the prior "round-trips exhausted / ~200 ms regional floor" claim was
+**WRONG** — auth is already local-verify (`getClaims` ES256, no network) and Vercel fra1 ↔ Supabase
+eu-central-1 is same-region (per-RT single-digit ms), so the lever is the **count of serial
+round-trips**, not per-RT latency. Non-code floor: end-user UZ↔fra1 leg + the exam iframe's 2nd
+`/runner` request (P0 sandbox — never inline via `srcdoc`).
 
-1. Pick **one finding at a time** from AUDIT.md "Открытые находки". Do not bundle unrelated fixes,
-   refactors, or polish into the same change.
-2. Before editing, state touched files and the invariants being protected: auth, grading, submit,
-   tier gating, rating, and existing `/app/reading` + `/app/listening` catalog routes.
-3. Verify with the narrowest deterministic checks (`npx tsc --noEmit`; build only when dev is not
-   running); browser/visual smoke on Vercel prod after push.
-4. New work outside this order — only on the user's explicit request.
+Ranked code wins — do ONE at a time → verify → commit → push. Invariants every change protects: auth,
+RLS, server-only grading, `answer_key` never client-side, tier gating, idempotent submit;
+`getProfile`/`getUser` stay `cache()`-wrapped.
+1. ✅ **AppShell header hoist** — done (commit `4339f92`): notification queries were a trailing serial
+   hop on every page → now `getHeaderData()` (`cache()`'d, `src/lib/notifications/header-data.ts`)
+   pre-warmed in each page's `Promise.all` (or early `void` on sequential pages); AppShell reuses it.
+2. **Leaderboard `readLeaderboard` (`src/lib/progress/leaderboard.ts`, `/app/leaderboard`) — NEXT:**
+   ~6-deep serial chain. Drop the redundant region-name lookup (`leaderboard.ts:~288` — thread the
+   scope label the page already resolved at `leaderboard/page.tsx:82-96/111`) + `Promise.all` the 3
+   independent internals (region-name, top-100 join, snapshot ranks). ≈ −3 serial hops, low-risk
+   (owner-path PUBLIC columns only; `getSnapshotRanks` already fail-open). The viewer-pinned-row merge
+   is a separate, query-shape-sensitive follow-up (do after).
+3. Exam/Reading start: skip `loadAccessData`'s duplicate content_item+profile READs on the START path
+   (keep `loadAccessData` for submit defense-in-depth). 4. Result: leading att-read → 5-query
+   `Promise.all` collapsed into 1 via correlated subselects (pctRow/prevRows). 5–8: leaderboard
+   viewer-row merge, badges `computeStats` concurrent, `getPublishedTests` cold-start parallelize,
+   Basic daily-count batch — detail in the `prod-infra-topology` memory.
+
+Verify perf on **prod** via Server-Timing headers (can't measure latency from a static checkout; user
+reads prod numbers from UZ). Code verification per change: `npx tsc --noEmit` + `npm run build` (dev
+not running) + browser smoke of the touched route(s).
 
 ### ✅ Practice Hub — done (2026-06-24, Vercel prod, commit `956d43c`)
 
@@ -201,13 +218,11 @@ availability). Bando system, zero new runtime deps. Files: `app/app/practice/{pa
 `src/components/app/navActive.ts`, `AppHeader.tsx`, `Skeletons.tsx`. Reviewed (nav state / RSC
 boundary / auth+tier+scope — clean); `tsc` + `build` clean.
 
-### 🔜 Next after AUDIT.md — perf/lag (priority, user-facing)
-`/app` pages lag on round-trips to **cloud Supabase**: public routes ~5–8 ms in prod, but dashboard
-~0.6–0.9 s and exam 1.3–2.5 s (server-render on DB queries). Done: parallel queries + dedup auth
-`getUser`. Plan: (1) measure per-query, (2) cut round-trips (merge selects / RPC / cache the
-published-tests list), (3) **check the Supabase project REGION** — if far from UZ it's a structural
-floor (infra fix: closer region / edge cache, not code). Middleware `getUser()` is a mandatory auth
-round-trip on every `/app`, can't be deduped with render.
+### ✅ AUDIT.md — all P0–P3 findings closed (2026-06-24, Vercel prod)
+P0 iframe isolation, Practice Hub, and every open P2/P3 (draft owner-path access, Listening-result
+section links + Try-again runner routing, rating floor-guard, percentile first-attempt, Telegram audio
+targeting, SCHEMA_NOTES table count) are closed. AUDIT.md "Открытые находки" is empty. perf/lag is now
+the active track (above).
 
 ### 🧊 Phase 3 — AI Writing/Speaking (§4.10) — FROZEN, «coming soon», LAST
 Frozen 2026-06-15: audience-first; AI stays a marketing hook + Ultra upsell. NOT deleted — `topic`
