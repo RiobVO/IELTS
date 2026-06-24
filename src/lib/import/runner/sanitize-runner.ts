@@ -14,6 +14,11 @@ const READING_KEYS = ["correctAnswers", "acceptableAnswers", "explanations", "ev
 // listening evidence.text перефразирует/содержит ответ — вырезаем его тоже (иначе утечка).
 const LISTENING_KEYS = ["KEY", "QTYPE", "evidence"];
 
+/** Подменяет первый `<audio ... src="...">` на наш Storage URL (listening). */
+export function setRunnerAudioSrc(html: string, url: string): string {
+  return html.replace(/(<audio[^>]*\ssrc=)(["'])[^"']*\2/i, `$1$2${url}$2`);
+}
+
 /** Заменяет `const NAME = {...}` на `const NAME = {}` (балансировка из extract-js). */
 function blankObject(src: string, name: string): string {
   const literal = extractObjectLiteral(src, name);
@@ -45,7 +50,7 @@ export function sanitizeRunner(html: string, opts: SanitizeOpts): string {
 
   // 2. Подменить audio src (listening)
   if (opts.section === "listening" && opts.audioUrl) {
-    out = out.replace(/(<audio[^>]*\ssrc=)(["'])[^"']*\2/i, `$1$2${opts.audioUrl}$2`);
+    out = setRunnerAudioSrc(out, opts.audioUrl);
   }
 
   // 3. Уникализировать STORAGE_KEY (+ HIGHLIGHT_STORAGE_KEY если есть)

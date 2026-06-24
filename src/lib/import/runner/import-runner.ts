@@ -4,6 +4,7 @@ import { contentItem, passage } from "@/db/schema";
 import { uploadAudio } from "@/lib/telegram/storage";
 import { parseRunner } from "./parse-runner";
 import { sanitizeRunner, assertNoKeyLeak } from "./sanitize-runner";
+import { runnerBrandResidue } from "./skin-runner";
 import { persistTest } from "../persist";
 
 export interface ImportRunnerResult {
@@ -11,6 +12,10 @@ export interface ImportRunnerResult {
   title: string;
   questions: number;
   warnings: number;
+  /** Чужой бренд/ссылки, НЕ вычищенные read-time ребрендом (новый источник). */
+  brandWarnings: string[];
+  /** Аудио (listening) перезалито из HTML в наш Storage. false → нужен отдельный mp3. */
+  hasAudio: boolean;
 }
 
 /** Полный импорт обёртки: parse → persist → (audio) → sanitize → runner_html. */
@@ -44,6 +49,15 @@ export async function importRunner(
   });
   assertNoKeyLeak(runnerHtml, parsed);
 
+  // 3b. Бренд-гейт: read-time ребренд опознаёт шапку по якорям текущего источника.
+  // Файл из НОВОГО источника может их не иметь → чужой логотип/канал просочится
+  // молча. Считаем остаток и возвращаем как предупреждение (импорт не валим — тест
+  // валиден, бренд правится отдельно расширением skinRunnerBrand).
+  const brandWarnings = runnerBrandResidue(runnerHtml);
+  if (brandWarnings.length) {
+    console.warn(`[import] brand residue in "${parsed.title}":`, brandWarnings);
+  }
+
   // 4. Сохранить runner_html
   await db.update(contentItem).set({ runnerHtml }).where(eq(contentItem.id, contentItemId));
 
@@ -52,5 +66,7 @@ export async function importRunner(
     title: parsed.title,
     questions: parsed.questions.length,
     warnings: parsed.warnings.length,
+    brandWarnings,
+    hasAudio: !!audioUrl,
   };
 }
