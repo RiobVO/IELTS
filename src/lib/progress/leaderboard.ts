@@ -274,47 +274,41 @@ async function getSnapshotRanks(
  * 100 (so the UI can pin
  * "you are #137"). Owner-path read of public profile columns only.
  *
- * `scope` is `'global'` or a region id (as text). `regionName` is resolved from
- * `region.id::text = scope` (null for 'global' or an unknown id).
+ * `scope` is `'global'` or a region id (as text). `regionName` is the scope's
+ * display name (null for 'global'), pre-resolved by the caller — the page already
+ * looks the region up for its scope switcher, so we don't re-read it here.
  */
 export async function readLeaderboard(
   period: Period,
   scope: string,
+  regionName: string | null,
   viewerId?: string,
 ): Promise<{ rows: LeaderRow[]; viewerRow: LeaderRow | null }> {
-  // region name for this scope (null for 'global').
-  let regionName: string | null = null;
-  if (scope !== "global") {
-    const [r] = await db
-      .select({ name: region.name })
-      .from(region)
-      .where(sql`${region.id}::text = ${scope}`)
-      .limit(1);
-    regionName = r?.name ?? null;
-  }
-
-  const top = await db
-    .select({
-      rank: leaderboardEntry.rank,
-      userId: leaderboardEntry.userId,
-      rating: leaderboardEntry.rating,
-      score: leaderboardEntry.score,
-      displayName: profile.displayName,
-      avatarUrl: profile.avatarUrl,
-    })
-    .from(leaderboardEntry)
-    .innerJoin(profile, eq(profile.id, leaderboardEntry.userId))
-    .where(
-      and(
-        eq(leaderboardEntry.period, period),
-        eq(leaderboardEntry.scope, scope),
-      ),
-    )
-    .orderBy(leaderboardEntry.rank)
-    .limit(100);
-
-  // Movement baseline (defensive — empty if the snapshot table isn't there yet).
-  const snapRanks = await getSnapshotRanks(period, scope);
+  // Top-100 join and the movement baseline are independent reads — run them
+  // concurrently instead of one-after-the-other.
+  const [top, snapRanks] = await Promise.all([
+    db
+      .select({
+        rank: leaderboardEntry.rank,
+        userId: leaderboardEntry.userId,
+        rating: leaderboardEntry.rating,
+        score: leaderboardEntry.score,
+        displayName: profile.displayName,
+        avatarUrl: profile.avatarUrl,
+      })
+      .from(leaderboardEntry)
+      .innerJoin(profile, eq(profile.id, leaderboardEntry.userId))
+      .where(
+        and(
+          eq(leaderboardEntry.period, period),
+          eq(leaderboardEntry.scope, scope),
+        ),
+      )
+      .orderBy(leaderboardEntry.rank)
+      .limit(100),
+    // Movement baseline (defensive — empty if the snapshot table isn't there yet).
+    getSnapshotRanks(period, scope),
+  ]);
 
   const toRow = (e: {
     rank: number | null;

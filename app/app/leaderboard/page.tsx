@@ -101,8 +101,17 @@ export default async function Leaderboard({
 
   const validScopes = new Set(scopeOptions.map((o) => o.value));
   const scope = sp.scope && validScopes.has(sp.scope) ? sp.scope : "global";
+  const scopeLabel = scopeOptions.find((o) => o.value === scope)?.label ?? "Global";
 
-  const { rows, viewerRow } = await readLeaderboard(period, scope, profile?.id);
+  // regionName for the board rows = the scope's region name (null for global, so
+  // rows don't print "Global" under every player). Already resolved above for the
+  // scope switcher — thread it in so readLeaderboard doesn't re-query the region.
+  const { rows, viewerRow } = await readLeaderboard(
+    period,
+    scope,
+    scope === "global" ? null : scopeLabel,
+    profile?.id,
+  );
 
   const showScore = period !== "all_time";
   const viewerPinned = !!viewerRow && !rows.some((r) => r.userId === viewerRow.userId);
@@ -111,7 +120,6 @@ export default async function Leaderboard({
   const val = (r: LeaderRow) => (showScore ? r.score : r.rating);
   const total = rows.length + (viewerPinned ? 1 : 0);
 
-  const scopeLabel = scopeOptions.find((o) => o.value === scope)?.label ?? "Global";
   const rating = profile?.rating ?? 1000;
   const tIdx = tierIndex(rating);
   const nextTier = TIERS[tIdx + 1] ?? null;
