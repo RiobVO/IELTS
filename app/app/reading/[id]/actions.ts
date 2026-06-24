@@ -383,6 +383,7 @@ export async function submitAttempt(
     attemptId,
     rawScore: result.rawScore,
     total: result.total,
+    timeUsedSeconds,
     submittedAt,
   });
 

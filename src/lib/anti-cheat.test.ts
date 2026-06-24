@@ -4,6 +4,8 @@ import { describe, it, expect } from "vitest";
 import {
   countSubmitsInWindow,
   exceedsSubmitRate,
+  isTooFastToRate,
+  MIN_RATED_SECONDS_PER_QUESTION,
   SUBMIT_THROTTLE_MAX,
   SUBMIT_THROTTLE_WINDOW_SECONDS,
 } from "./anti-cheat";
@@ -46,5 +48,29 @@ describe("exceedsSubmitRate", () => {
 
   it("больше потолка → true", () => {
     expect(exceedsSubmitRate(SUBMIT_THROTTLE_MAX + 1)).toBe(true);
+  });
+});
+
+describe("isTooFastToRate", () => {
+  const N = MIN_RATED_SECONDS_PER_QUESTION;
+
+  it("инстант-сабмит (0с на 40 вопросов) → too fast", () => {
+    expect(isTooFastToRate(0, 40)).toBe(true);
+  });
+
+  it("строго ниже порога (на границе минус 1с) → too fast", () => {
+    expect(isTooFastToRate(40 * N - 1, 40)).toBe(true);
+  });
+
+  it("ровно на пороге (N сек/вопрос) → НЕ too fast (граница не включительна)", () => {
+    expect(isTooFastToRate(40 * N, 40)).toBe(false);
+  });
+
+  it("реальный темп (минуты на тест) → НЕ too fast", () => {
+    expect(isTooFastToRate(20 * 60, 40)).toBe(false);
+  });
+
+  it("нет вопросов (total 0) → НЕ too fast (нет делителя, не наказываем)", () => {
+    expect(isTooFastToRate(0, 0)).toBe(false);
   });
 });
