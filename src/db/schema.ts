@@ -650,6 +650,12 @@ export const writingSubmission = pgTable(
   (t) => [
     index("writing_submission_user_created_idx").on(t.userId, t.createdAt),
     index("writing_submission_status_updated_idx").on(t.status, t.updatedAt),
+    // At most one active (pending|evaluating) submission per user — DB-level guard
+    // behind insertPendingSubmission's ON CONFLICT DO NOTHING. Closes the in-flight
+    // preview-farm race (migration 0024); mirrors attempt_one_in_progress_idx (0007).
+    uniqueIndex("writing_submission_one_active_idx")
+      .on(t.userId)
+      .where(sql`${t.status} in ('pending','evaluating')`),
   ],
 );
 
