@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { publicSiteUrl } from "@/env";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getHeaderData } from "@/lib/notifications/header-data";
@@ -19,11 +20,17 @@ export default async function InvitePage() {
   const profile = await getProfile();
   const supabase = await createClient();
 
-  // Build the invite URL from the request host (no env dependency).
-  const h = await headers();
-  const host = h.get("host");
-  const proto = host?.startsWith("localhost") || host?.startsWith("127.") ? "http" : "https";
-  const url = `${proto}://${host}/auth?ref=${profile?.referral_code ?? ""}`;
+  // Invite URL anchored to the trusted public origin when configured
+  // (NEXT_PUBLIC_SITE_URL); otherwise fall back to the request host. Anchoring
+  // avoids emitting links to a spoofed Host under a non-standard proxy.
+  let base = publicSiteUrl();
+  if (!base) {
+    const h = await headers();
+    const host = h.get("host");
+    const proto = host?.startsWith("localhost") || host?.startsWith("127.") ? "http" : "https";
+    base = `${proto}://${host}`;
+  }
+  const url = `${base}/auth?ref=${profile?.referral_code ?? ""}`;
 
   // referral has OWNER read RLS (inviter_id = auth.uid()) — only the user's own
   // invites. 'rewarded' = invitee finished >=1 test and the bonus fired.

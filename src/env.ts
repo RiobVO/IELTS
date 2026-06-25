@@ -60,6 +60,26 @@ export function cronSecret(): string | null {
 }
 
 /**
+ * Канонический публичный origin приложения для absolute-ссылок (invite/referral).
+ * OPTIONAL: задан `NEXT_PUBLIC_SITE_URL` → строим ссылки от доверенного origin, а
+ * не от входящего `Host` (anti-spoof: при нестандартном proxy/host заголовок
+ * подделываем — ссылка ушла бы на чужой домен). Не задан → null, вызывающий
+ * деградирует на request host (текущее поведение, ничего не ломает). Возвращаем
+ * нормализованный origin (схема http/https, без пути), иначе null.
+ */
+export function publicSiteUrl(): string | null {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Опциональная конфигурация PostHog (продуктовая аналитика, BRIEF §11). Как и
  * платёжные ключи — НЕ обязательна для старта: без ключа аналитика работает
  * no-op (fail-open — телеметрия некритична, в отличие от платежей). Один
