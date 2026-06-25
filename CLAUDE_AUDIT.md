@@ -18,10 +18,17 @@
 - ✅ P1 admin publish review gate → parser warnings + `content_item.reviewed_at`/`import_warnings` (migration `0019`) + Approve-перед-Publish с серверным enforcement (commits `af20b55`, `e28e4fb`, `2185269`).
 
 - ✅ P3 invite Host header → invite URL якорится на `NEXT_PUBLIC_SITE_URL` (validated origin) с fallback на host (commit `c72cbfe`).
+- ✅ P2 pending payments expiry → `payment.expires_at` (migration `0020`) + TTL на initiate + отклонение устаревшего pending в webhook (outcome `expired`); applied-replay остаётся идемпотентным (commit `91cbb94`).
 
-Открыто:
+Раздел «Открытые находки» (P1–P3): закрыт полностью.
 
-- ⏸ P2 pending payments expiry → отложено в payment-hardening пакет (вместе с D1 provider signatures, перед реальными платежами).
+Раздел «Осознанно отложенное» (D1–D5) — статус:
+
+- ⛔ D1 provider-specific payment signatures → BLOCKED: нужны схемы подписи + sandbox-ключи Payme/Click/Uzum. Текущий placeholder fail-closed в проде.
+- 🟡 D2 anti-bot/email-verify/referral farming → код-часть закрываема (wire captchaToken, velocity-cap); активация ждёт Cloudflare-ключей.
+- 🟢 D3 result snapshot/regrade → закрываемо кодом (snapshot при submit); ещё не сделано.
+- 🤝 D4 full review free → продуктовое решение (что монетизировать), не код.
+- 🧊 D5 AI Phase 3 → frozen by design (§4.2 LLM-free core); разморозка = отдельный стратегический трек, не «фикс».
 
 Деплой: применить миграции к Supabase (`npm run db:migrate`) — `0018` (google в enum) и `0019` (review-gate колонки). Код
 обратно совместим: прод не падает без них (google сохраняется как `email`, а publish работает по-старому), но фичи
@@ -221,7 +228,7 @@ query/form `next` проходит из `/auth` в server action и исполь
 
 ### P2 — pending payments не имеют срока жизни
 
-Статус: open — отложено в payment-hardening пакет (вместе с D1 provider signatures, перед реальными платежами).
+Статус: closed — commit `91cbb94` (2026-06-25). `payment.expires_at` (migration `0020`) + TTL на initiate + отклонение устаревшего pending в webhook (`expired` → 'failed', доступ не выдан); applied-replay идемпотентен.
 Тип: improvement.
 Усилие: M.
 
