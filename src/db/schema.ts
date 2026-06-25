@@ -346,6 +346,22 @@ export const attempt = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
+/* attempt_review_snapshot — stable post-submit review (D3, migration 0021)     */
+/* SERVER-ONLY, locked like answer_key (BRIEF §6.1): RLS on, grants revoked, no  */
+/* anon/authenticated policy. Stores the correct answers + explanation/evidence  */
+/* captured AT SUBMIT so /result is stable against later content edits.          */
+/* -------------------------------------------------------------------------- */
+export const attemptReviewSnapshot = pgTable("attempt_review_snapshot", {
+  attemptId: uuid("attempt_id")
+    .primaryKey()
+    .references(() => attempt.id, { onDelete: "cascade" }),
+  snapshot: jsonb("snapshot").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/* -------------------------------------------------------------------------- */
 /* badge / user_badge                                                          */
 /* -------------------------------------------------------------------------- */
 export const badge = pgTable("badge", {

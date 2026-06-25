@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 16; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014)
+const APP_TABLE_COUNT = 17; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021)
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);
@@ -105,18 +105,18 @@ async function resetPublicSchema(): Promise<void> {
  *   - there is NO policy granting anon/authenticated access, and
  *   - an actual anon SELECT is denied.
  */
-async function answerKeyLock(): Promise<{
+async function tableLock(table: string): Promise<{
   rlsEnabled: boolean;
   noClientPolicy: boolean;
   anonDenied: boolean;
 }> {
   const [{ rls }] = await sql<{ rls: boolean }[]>`
     SELECT relrowsecurity AS rls FROM pg_class
-    WHERE oid = 'public.answer_key'::regclass`;
+    WHERE oid = ${`public.${table}`}::regclass`;
 
   const [{ n }] = await sql<{ n: number }[]>`
     SELECT count(*)::int AS n FROM pg_policies
-    WHERE schemaname = 'public' AND tablename = 'answer_key'
+    WHERE schemaname = 'public' AND tablename = ${table}
       AND (roles::text[] && ARRAY['anon','authenticated']
            OR 'public' = ANY(roles::text[]))`;
 
@@ -124,7 +124,7 @@ async function answerKeyLock(): Promise<{
   try {
     await sql.begin(async (tx) => {
       await tx.unsafe("SET LOCAL ROLE anon");
-      await tx.unsafe("SELECT * FROM answer_key");
+      await tx.unsafe(`SELECT * FROM ${table}`);
     });
   } catch (e: unknown) {
     const err = e as { code?: string; message?: string };
@@ -322,13 +322,25 @@ async function main() {
     fail(`migrate up (re-apply) — tables=${n}, second run applied=${secondRun}`);
 
   // 4. answer_key locked (BRIEF §6.1): RLS enabled + no anon/auth policy + anon denied
-  const lock = await answerKeyLock();
+  const lock = await tableLock("answer_key");
   if (lock.rlsEnabled && lock.noClientPolicy && lock.anonDenied)
     ok("RLS — anon SELECT on answer_key denied");
   else
     fail(
       `RLS — answer_key not fully locked (rlsEnabled=${lock.rlsEnabled}, ` +
         `noClientPolicy=${lock.noClientPolicy}, anonDenied=${lock.anonDenied})`,
+    );
+
+  // 4b. attempt_review_snapshot locked the SAME way (D3): it holds correct
+  // answers + evidence, so a client leak would bypass the answer_key lock and the
+  // tier gate. Mirror of the answer_key assertion above.
+  const snapLock = await tableLock("attempt_review_snapshot");
+  if (snapLock.rlsEnabled && snapLock.noClientPolicy && snapLock.anonDenied)
+    ok("RLS — anon SELECT on attempt_review_snapshot denied");
+  else
+    fail(
+      `RLS — attempt_review_snapshot not fully locked (rlsEnabled=${snapLock.rlsEnabled}, ` +
+        `noClientPolicy=${snapLock.noClientPolicy}, anonDenied=${snapLock.anonDenied})`,
     );
 
   // 5. auth trigger: a new auth.users row auto-creates a profile

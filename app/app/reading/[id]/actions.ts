@@ -4,7 +4,13 @@ import { and, desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
-import { annotation, answerKey, attempt, question } from "@/db/schema";
+import {
+  annotation,
+  answerKey,
+  attempt,
+  attemptReviewSnapshot,
+  question,
+} from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
 import {
   countSubmitsInWindow,
@@ -15,6 +21,7 @@ import { getUser } from "@/lib/auth";
 import { enforceAccess, loadAccessData } from "@/lib/exam/access";
 import { bandForScore } from "@/lib/grading/band";
 import { grade, type GradeKey } from "@/lib/grading/grade";
+import { buildReviewSnapshot } from "@/lib/exam/review-snapshot";
 import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
 import { recomputeLeaderboard } from "@/lib/progress/leaderboard";
 import { isUuid } from "@/lib/uuid";
@@ -103,6 +110,10 @@ export async function submitAttempt(
         qtype: question.qtype,
         mode: answerKey.mode,
         accept: answerKey.accept,
+        // explanation/evidence нужны только для D3-snapshot (грейдинг их не
+        // использует) — кладём их в snapshot на момент сдачи.
+        explanation: answerKey.explanation,
+        evidence: answerKey.evidence,
       })
       .from(question)
       .innerJoin(answerKey, eq(answerKey.questionId, question.id))
@@ -165,6 +176,19 @@ export async function submitAttempt(
   if (updated.length === 0) {
     // Lost the race — another submit already graded it.
     redirect(`/app/reading/${contentItemId}/result?a=${attemptId}`);
+  }
+
+  // D3: snapshot разбора на момент сдачи (server-only locked-таблица). /result
+  // читает его вместо ЖИВОГО answer_key, чтобы разбор не «плыл» при позднейшей
+  // правке контента. Best-effort: провал не ломает сабмит (/result деградирует
+  // на live-ключ). onConflictDoNothing — ровно один snapshot на попытку.
+  try {
+    await db
+      .insert(attemptReviewSnapshot)
+      .values({ attemptId, snapshot: buildReviewSnapshot(rows) })
+      .onConflictDoNothing();
+  } catch (e) {
+    console.error("submitAttempt: review snapshot insert failed", e);
   }
 
   // test_submit — событие воронки (§11). Регистрируется ПОСЛЕ выигранного single-fire
