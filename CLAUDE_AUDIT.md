@@ -26,7 +26,7 @@
 
 - ⛔ D1 provider-specific payment signatures → BLOCKED-external (решение: провайдеры ещё не подключены). Нужны схемы подписи + sandbox-ключи Payme/Click/Uzum; до онбординга placeholder fail-closed в проде (доступ не выдаёт) — безопасен.
 - 🟡 D2 anti-bot/email-verify/referral farming → captchaToken УЖЕ подключён (`app/auth/actions.ts:34-37`, проверено — claim `SCHEMA_NOTES:246` устарел). Остаётся: signup velocity-cap (нужна IP-инфра) + порог referral-награды (мелкое продуктовое). Активация Turnstile ждёт Cloudflare-ключей (fail-open).
-- 🟠 D3 result snapshot/regrade → доступно кодом, НО security-sensitive: snapshot должен быть SERVER-ONLY (отдельная RLS-locked таблица / revoke column-grant), иначе client-read через owner-RLS `attempt` утечёт gated answer_key/evidence basic-юзеру (регресс инварианта). Делать отдельным выверенным проходом + verify-тест на отсутствие client-утечки. Не сделано.
+- 🟢 D3 result snapshot → ✅ forward-часть закрыта (commit `fd8bef1`, migration `0021`): snapshot разбора снимается на submit в server-only locked-таблицу `attempt_review_snapshot` (RLS + revoke, зеркало `answer_key`), `/result` читает его с fallback на live-ключ; verify проверяет anon-denied (нет client-утечки gated ключа). ⏳ Остаётся открытым: full **regrade исторических результатов** при правке ключа (требует content-versioning) — отдельный трек, делать перед активным content-ops.
 - 🤝 D4 full review free → РЕШЕНО: пересмотр на Wave 2 pricing (с retention/conversion-данными). Сейчас `REVIEW_OPEN=true` остаётся. Кода не требует.
 - 🧊 D5 AI Phase 3 → РЕШЕНО: остаётся frozen (§4.2 LLM-free core; CLAUDE.md FROZEN/LAST). Не баг, осознанный трек.
 
