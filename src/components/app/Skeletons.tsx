@@ -139,39 +139,88 @@ export function CatalogSkeleton() {
     контент не давал layout-shift; брейкпоинт-колонки в классе, не inline. */
 export function PracticeSkeleton() {
   return (
-    <div style={P.wrap}>
-      <style>{`.phs-grid{display:grid;grid-template-columns:1fr;gap:16px}@media(min-width:640px){.phs-grid{grid-template-columns:1fr 1fr}}`}</style>
-      <Skeleton w={120} h={14} style={{ marginBottom: 12 }} />
-      <Skeleton w={300} h={28} style={{ marginBottom: 10 }} />
-      <Skeleton w={360} h={14} style={{ marginBottom: 26 }} />
+    <div className="phs-wrap">
+      <style>{`
+        .phs-wrap{max-width:1160px;margin:0 auto;display:flex;flex-direction:column;gap:30px;padding:24px 16px 56px}
+        .phs-head{display:grid;grid-template-columns:1fr;gap:20px}
+        .phs-skills{display:grid;grid-template-columns:1fr;gap:14px}
+        .phs-cat{display:grid;grid-template-columns:1fr;gap:20px;align-items:start}
+        @media(min-width:560px){.phs-skills{grid-template-columns:repeat(2,1fr);gap:16px}}
+        @media(min-width:768px){.phs-wrap{padding:32px 28px 72px}}
+        @media(min-width:1024px){
+          .phs-head{grid-template-columns:1fr 360px;gap:24px}
+          .phs-skills{grid-template-columns:repeat(4,1fr)}
+          .phs-cat{grid-template-columns:300px 1fr;gap:24px}
+        }
+      `}</style>
 
-      <Skeleton w="100%" h={132} r="var(--radius-xl)" style={{ marginBottom: 26 }} />
+      {/* header + hero */}
+      <div className="phs-head">
+        <div>
+          <Skeleton w={130} h={14} style={{ marginBottom: 14 }} />
+          <Skeleton w="72%" h={40} style={{ marginBottom: 12 }} />
+          <Skeleton w="90%" h={16} style={{ marginBottom: 8 }} />
+          <Skeleton w="58%" h={16} style={{ marginBottom: 22 }} />
+          <Skeleton w={240} h={42} r="var(--radius-full)" />
+        </div>
+        <Skeleton w="100%" h={200} r={22} />
+      </div>
 
-      <Skeleton w={120} h={14} style={{ marginBottom: 14 }} />
-      <div className="phs-grid">
+      {/* skills */}
+      <div className="phs-skills">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} style={P.card}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <Skeleton w={46} h={46} r={14} />
-              <Skeleton w={64} h={22} r="var(--radius-full)" style={{ marginLeft: "auto" }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <Skeleton w={42} h={42} r={12} />
+              <Skeleton w={52} h={22} r="var(--radius-full)" />
             </div>
-            <Skeleton w="50%" h={22} style={{ marginBottom: 12 }} />
-            <Skeleton w="92%" h={13} style={{ marginBottom: 6 }} />
-            <Skeleton w="78%" h={13} />
+            <Skeleton w="55%" h={20} style={{ marginBottom: 8 }} />
+            <Skeleton w="75%" h={12} />
           </div>
         ))}
+      </div>
+
+      {/* catalog: filter + list */}
+      <div className="phs-cat">
+        <Skeleton w="100%" h={300} r="var(--radius-xl)" />
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <Skeleton w={120} h={22} />
+            <Skeleton w={70} h={14} />
+          </div>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} style={P.row}>
+              <Skeleton w={48} h={48} r={13} />
+              <div style={{ flex: 1 }}>
+                <Skeleton w={100} h={12} style={{ marginBottom: 8 }} />
+                <Skeleton w="58%" h={16} style={{ marginBottom: 6 }} />
+                <Skeleton w="40%" h={12} />
+              </div>
+              <Skeleton w={64} h={40} r="var(--radius-sm)" />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
 const P: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 980, margin: "0 auto", padding: "var(--space-8) var(--space-6) var(--space-12)" },
   card: {
     background: "var(--surface)",
     border: "2px solid var(--border)",
-    borderRadius: "var(--radius-lg)",
-    padding: "22px",
+    borderRadius: 18,
+    padding: 20,
+    boxShadow: "var(--shadow-solid)",
+  },
+  row: {
+    display: "flex",
+    alignItems: "center",
+    gap: 18,
+    background: "var(--surface)",
+    border: "2px solid var(--border)",
+    borderRadius: 18,
+    padding: "18px 20px",
     boxShadow: "var(--shadow-solid)",
   },
 };
