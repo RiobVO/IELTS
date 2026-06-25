@@ -22,13 +22,13 @@
 
 Раздел «Открытые находки» (P1–P3): закрыт полностью.
 
-Раздел «Осознанно отложенное» (D1–D5) — статус:
+Раздел «Осознанно отложенное» (D1–D5) — статус (решения 2026-06-25):
 
-- ⛔ D1 provider-specific payment signatures → BLOCKED: нужны схемы подписи + sandbox-ключи Payme/Click/Uzum. Текущий placeholder fail-closed в проде.
-- 🟡 D2 anti-bot/email-verify/referral farming → код-часть закрываема (wire captchaToken, velocity-cap); активация ждёт Cloudflare-ключей.
-- 🟢 D3 result snapshot/regrade → закрываемо кодом (snapshot при submit); ещё не сделано.
-- 🤝 D4 full review free → продуктовое решение (что монетизировать), не код.
-- 🧊 D5 AI Phase 3 → frozen by design (§4.2 LLM-free core); разморозка = отдельный стратегический трек, не «фикс».
+- ⛔ D1 provider-specific payment signatures → BLOCKED-external (решение: провайдеры ещё не подключены). Нужны схемы подписи + sandbox-ключи Payme/Click/Uzum; до онбординга placeholder fail-closed в проде (доступ не выдаёт) — безопасен.
+- 🟡 D2 anti-bot/email-verify/referral farming → captchaToken УЖЕ подключён (`app/auth/actions.ts:34-37`, проверено — claim `SCHEMA_NOTES:246` устарел). Остаётся: signup velocity-cap (нужна IP-инфра) + порог referral-награды (мелкое продуктовое). Активация Turnstile ждёт Cloudflare-ключей (fail-open).
+- 🟠 D3 result snapshot/regrade → доступно кодом, НО security-sensitive: snapshot должен быть SERVER-ONLY (отдельная RLS-locked таблица / revoke column-grant), иначе client-read через owner-RLS `attempt` утечёт gated answer_key/evidence basic-юзеру (регресс инварианта). Делать отдельным выверенным проходом + verify-тест на отсутствие client-утечки. Не сделано.
+- 🤝 D4 full review free → РЕШЕНО: пересмотр на Wave 2 pricing (с retention/conversion-данными). Сейчас `REVIEW_OPEN=true` остаётся. Кода не требует.
+- 🧊 D5 AI Phase 3 → РЕШЕНО: остаётся frozen (§4.2 LLM-free core; CLAUDE.md FROZEN/LAST). Не баг, осознанный трек.
 
 Деплой: применить миграции к Supabase (`npm run db:migrate`) — `0018` (google в enum) и `0019` (review-gate колонки). Код
 обратно совместим: прод не падает без них (google сохраняется как `email`, а publish работает по-старому), но фичи
