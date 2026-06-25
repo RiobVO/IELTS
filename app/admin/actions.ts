@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -67,18 +67,52 @@ export async function uploadTest(formData: FormData) {
 /**
  * Flip a content item between draft and published (BRIEF §4.2.1 — admin confirms
  * the key before students can see it). Owner-only.
+ *
+ * Review gate: publishing requires a prior `markReviewed` (reviewed_at set). The
+ * admin UI hides Publish until approved, but enforce it here too — the action is
+ * reachable by POST regardless of the page. Unpublishing (→ draft) is unguarded.
  */
 export async function setStatus(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!id || (status !== "draft" && status !== "published")) redirect("/admin");
+
+  if (status === "published") {
+    const [row] = await db
+      .select({ reviewedAt: contentItem.reviewedAt })
+      .from(contentItem)
+      .where(eq(contentItem.id, id))
+      .limit(1);
+    if (!row) redirect("/admin");
+    if (!row.reviewedAt) {
+      fail("Approve the import (review the key) before publishing.");
+    }
+  }
+
   await db
     .update(contentItem)
     .set({ status })
     .where(eq(contentItem.id, id));
   // Catalog's published list is cached by tag — publish/unpublish invalidates it.
   revalidateTag("content_item");
+  revalidatePath("/admin");
+  redirect("/admin");
+}
+
+/**
+ * Approve an imported draft (BRIEF §4.2.1 — admin confirms the answer key before
+ * students see it). Stamps reviewed_at so publishing is unlocked. Owner-only. A
+ * re-import replaces the row, so reviewed_at resets and re-approval is required.
+ */
+export async function markReviewed(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect("/admin");
+  await db
+    .update(contentItem)
+    .set({ reviewedAt: sql`now()` })
+    .where(eq(contentItem.id, id));
   revalidatePath("/admin");
   redirect("/admin");
 }

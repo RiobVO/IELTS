@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/auth";
 import { categoryLabel } from "@/lib/labels";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
-import { setStatus, uploadTest } from "./actions";
+import { markReviewed, setStatus, uploadTest } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +25,8 @@ export default async function AdminPage({
       section: contentItem.section,
       category: contentItem.category,
       status: contentItem.status,
+      reviewedAt: contentItem.reviewedAt,
+      importWarnings: contentItem.importWarnings,
       questions: sql<number>`(SELECT count(*)::int FROM question q WHERE q.content_item_id = ${contentItem.id})`,
     })
     .from(contentItem)
@@ -69,26 +71,62 @@ export default async function AdminPage({
           <p style={S.hint}>Nothing uploaded yet.</p>
         ) : (
           <ul style={S.list}>
-            {items.map((it) => (
-              <li key={it.id} style={S.row}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={S.rowTitle}>{it.title}</div>
-                  <div style={S.meta}>
-                    <Badge tone="brand">{categoryLabel(it.category)}</Badge>
-                    <span>{it.section}</span>
-                    <span>· {it.questions} q.</span>
-                    <Badge tone={it.status === "published" ? "success" : "warn"}>{it.status}</Badge>
+            {items.map((it) => {
+              const warnings = (it.importWarnings as string[] | null) ?? [];
+              const reviewed = it.reviewedAt != null;
+              const isDraft = it.status !== "published";
+              return (
+                <li key={it.id} style={S.row}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={S.rowTitle}>{it.title}</div>
+                    <div style={S.meta}>
+                      <Badge tone="brand">{categoryLabel(it.category)}</Badge>
+                      <span>{it.section}</span>
+                      <span>· {it.questions} q.</span>
+                      <Badge tone={it.status === "published" ? "success" : "warn"}>{it.status}</Badge>
+                      {isDraft && (
+                        <Badge tone={reviewed ? "success" : "warn"}>
+                          {reviewed ? "reviewed" : "needs review"}
+                        </Badge>
+                      )}
+                      {warnings.length > 0 && <span>· {warnings.length} warning(s)</span>}
+                    </div>
+                    {isDraft && warnings.length > 0 && (
+                      <details style={S.warnBox}>
+                        <summary style={S.warnSummary}>
+                          Review {warnings.length} parser warning(s) before approving
+                        </summary>
+                        <ul style={S.warnList}>
+                          {warnings.map((w, i) => (
+                            <li key={i} style={S.warnItem}>{w}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                   </div>
-                </div>
-                <form action={setStatus}>
-                  <input type="hidden" name="id" value={it.id} />
-                  <input type="hidden" name="status" value={it.status === "published" ? "draft" : "published"} />
-                  <Button type="submit" variant="secondary" size="sm">
-                    {it.status === "published" ? "Unpublish" : "Publish"}
-                  </Button>
-                </form>
-              </li>
-            ))}
+                  <div style={S.actions}>
+                    {it.status === "published" ? (
+                      <form action={setStatus}>
+                        <input type="hidden" name="id" value={it.id} />
+                        <input type="hidden" name="status" value="draft" />
+                        <Button type="submit" variant="secondary" size="sm">Unpublish</Button>
+                      </form>
+                    ) : reviewed ? (
+                      <form action={setStatus}>
+                        <input type="hidden" name="id" value={it.id} />
+                        <input type="hidden" name="status" value="published" />
+                        <Button type="submit" variant="secondary" size="sm">Publish</Button>
+                      </form>
+                    ) : (
+                      <form action={markReviewed}>
+                        <input type="hidden" name="id" value={it.id} />
+                        <Button type="submit" size="sm">Approve</Button>
+                      </form>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -110,7 +148,12 @@ const S: Record<string, React.CSSProperties> = {
   file: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", flex: 1, minWidth: 0, color: "var(--text-secondary)" },
   listHead: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-base)", color: "var(--text-primary)", margin: "28px 0 12px" },
   list: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 },
-  row: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 16px" },
+  row: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 16px" },
   rowTitle: { fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   meta: { display: "flex", gap: 8, alignItems: "center", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", marginTop: 6, flexWrap: "wrap" },
+  actions: { flexShrink: 0 },
+  warnBox: { marginTop: 10, background: "var(--warn-subtle, var(--bg-base))", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 10px" },
+  warnSummary: { cursor: "pointer", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--warn-text, var(--text-secondary))" },
+  warnList: { margin: "8px 0 0", padding: "0 0 0 18px", display: "flex", flexDirection: "column", gap: 4 },
+  warnItem: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.5 },
 };
