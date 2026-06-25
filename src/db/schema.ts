@@ -42,6 +42,7 @@ export const authProvider = pgEnum("auth_provider", [
   "email",
   "apple",
   "facebook",
+  "google",
 ]);
 export const userRole = pgEnum("user_role", ["student", "admin"]);
 export const userTier = pgEnum("user_tier", ["basic", "premium", "ultra"]);
