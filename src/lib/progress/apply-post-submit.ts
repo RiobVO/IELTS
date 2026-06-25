@@ -220,9 +220,10 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
     }
 
     // Referral reward (BRIEF §4.9 / §11): rewards the invitee's pending referral
-    // exactly once, only after their first completed test. Best-effort — never
-    // throws; it's also inside applyPostSubmit's own try/catch guard.
-    await maybeRewardReferral(input.userId);
+    // exactly once, only after a RATED first attempt (anti-farm — a too-fast
+    // submit must not claim it). Best-effort — never throws; it's also inside
+    // applyPostSubmit's own try/catch guard.
+    await maybeRewardReferral(input.userId, progression.rated);
 
     return {
       rated: progression.rated,
