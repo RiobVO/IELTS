@@ -4,7 +4,7 @@ Ambiguities in BRIEF.md §5/§6.1 resolved while building the schema + migration
 The brief wins; where it was silent or self-conflicting, a sane choice was made
 and logged here. No tables were invented beyond what the brief implies.
 
-## Table count: 18 (Phase 1 shipped 13; +5 added in later phases)
+## Table count: 22 (Phase 1 shipped 13; +9 added in later phases)
 
 §5 enumerates 12 tables (`badge`/`user_badge` are two). The Phase-1 worked example
 expected **13 tables** — the 13th is **`notification`**, defined in **§11**
@@ -13,7 +13,7 @@ expected **13 tables** — the 13th is **`notification`**, defined in **§11**
 Phase-1 list (13): `region, profile, content_item, passage, question, answer_key,
 attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
 
-**Post-Phase additions (+5 → 18, in lockstep with `verify.ts` `APP_TABLE_COUNT = 18`):**
+**Post-Phase additions (+9 → 22, in lockstep with `verify.ts` `APP_TABLE_COUNT = 22`):**
 - `payment` — migration `0006_payments` (Phase 2D: tiers + payment lifecycle).
 - `annotation` — migration `0013_annotation` (reader highlights/notes, W2-1).
 - `leaderboard_snapshot` — migration `0014_leaderboard_snapshot` (rank-movement deltas).
@@ -21,8 +21,12 @@ attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
   post-submit review; SERVER-ONLY, locked like `answer_key`).
 - `signup_throttle` — migration `0022_signup_throttle` (signup velocity-cap by IP
   hash; SERVER-ONLY).
+- `writing_task`, `writing_submission`, `writing_feedback`, `writing_feedback_debug`
+  — migration `0023_writing_lab` (Phase 3 Writing Lab: AI essay evaluation; the
+  debug table is SERVER-ONLY, locked like `answer_key`). See the Phase 3 Writing
+  section below.
 
-So `src/db/schema.ts` defines **18** `pgTable`s; `verify.ts` asserts the same count.
+So `src/db/schema.ts` defines **22** `pgTable`s; `verify.ts` asserts the same count.
 
 ## `user` → `profile`, keyed to `auth.users.id`
 
@@ -404,3 +408,50 @@ the telemetry review).
   (2nd in_progress via ON CONFLICT inserts nothing; plain 2nd raises a unique
   violation; a fresh in_progress is allowed once the prior one is submitted),
   then deleted. Applied to Supabase (verified in `_migrations` + `attempt_one_in_progress_idx` present on the live DB).
+
+## Phase 3 Writing (migration `0023_writing_lab`): AI essay evaluation tables
+
+Phase 3 unfreeze, **Writing only** (BRIEF §4.10 — was FROZEN). Four **additive**
+tables for the AI Writing Lab (IELTS Task 2 essay, Academic + General one format).
+Core Reading/Listening grading/import stays deterministic + LLM-free (§4.2) — zero
+contact with R/L `answer_key`/grading. Bumps the app table count **18 → 22**
+(`verify.ts` `APP_TABLE_COUNT = 22`). New enums: `writing_category`
+(`academic|general`), `writing_task_status` (`draft|published`),
+`writing_submission_status` (`pending|evaluating|completed|failed`),
+`writing_confidence` (`low|medium|high`).
+
+- **`writing_task`** — admin-authored essay prompt. Published-gated like
+  `content_item` (RLS `SELECT` to `authenticated USING (status='published')`);
+  drafts read owner-path only. `tier_required` defaults to `ultra` (AI = Ultra,
+  §4.8). **Not a reuse of the `topic` stub:** `topic` is too thin and its skill
+  generality would mix writing/speaking semantics (Speaking structures by Part
+  1/2/3, not academic/general), so a dedicated table — the `topic` stub is left
+  untouched for the Speaking phase.
+- **`writing_submission`** — a user's essay attempt. Owner-read like `annotation`
+  (`SELECT` own rows; **no insert/update grant** — writes go owner-path). The
+  `status` lifecycle drives the async evaluator; `updated_at` feeds the reaper (a
+  row stuck in `evaluating` past a threshold → `failed`).
+- **`writing_feedback`** — the user-visible analysis snapshot (band range +
+  confidence + per-criterion + top fixes + annotations + rewrite + checklist +
+  `provider`/`model`/`prompt_version`). Owner-read **through** the submission
+  (EXISTS join, like `passage`→`content_item`), one row per submission
+  (`submission_id UNIQUE`). Holds **no** raw model output.
+- **`writing_feedback_debug`** — raw model output for calibration/debugging.
+  **HARD-LOCKED like `answer_key`**: RLS on, **no** anon/authenticated policy,
+  `REVOKE ALL FROM anon, authenticated, PUBLIC`; only `service_role` / owner-path
+  reads it. Raw may carry prompt-leakage / model reasoning, so it never reaches the
+  client.
+
+RLS posture mirrors existing tables exactly; `writing_task`/`writing_submission`/
+`writing_feedback` grant `authenticated` **only `SELECT`** (all writes server-side,
+like `annotation`/`payment`), so a client cannot insert/update a submission status
+or forge feedback. `schema.ts` kept in lockstep. **Data foundation only** — the
+evaluator, internal `/api/writing/evaluate` route, server actions, admin form, and
+`/app/writing` UI land in later Writing plans.
+
+**Verification.** `verify` gate green on local docker (22 tables; up→down→up clean
++ idempotent; per-table RLS proven by catalog probe — `writing_feedback_debug` RLS
+on with zero anon/authenticated grants + no policy; the other three `SELECT`-only
+for `authenticated`). **Supabase application pending** — additive with no readers
+until the evaluator ships, so it can land before Plan 2 (the evaluator) without a
+deploy-window break.
