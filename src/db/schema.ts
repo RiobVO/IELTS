@@ -540,6 +540,10 @@ export const payment = pgTable(
     amount: integer("amount").notNull(), // minor units (tiyin)
     currency: text("currency").notNull().default("UZS"),
     status: paymentStatus("status").notNull().default("pending"),
+    // PENDING-чекаут протухает после expires_at (PENDING_TTL_MS): webhook больше
+    // не применит устаревшую строку (доступ не выдаётся). NULL = без срока
+    // (legacy-строки до миграции 0020).
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     appliedUntil: timestamp("applied_until", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

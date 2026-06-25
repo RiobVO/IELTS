@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { payment } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import { findPlan } from "@/lib/payments/plans";
+import { findPlan, PENDING_TTL_MS } from "@/lib/payments/plans";
 import type { PaymentProviderKey } from "@/env";
 
 const VALID_PROVIDERS: readonly PaymentProviderKey[] = ["payme", "click", "uzum"];
@@ -50,6 +50,8 @@ export async function initiatePayment(formData: FormData): Promise<void> {
       amount: plan.amount,
       currency: plan.currency,
       status: "pending",
+      // Срок жизни чекаута: устаревший pending webhook не применит (§4.8).
+      expiresAt: new Date(Date.now() + PENDING_TTL_MS),
     })
     .returning({ id: payment.id });
 
