@@ -97,6 +97,9 @@
   --streak-subtle:  var(--orange-200);
   --xp:             var(--gold-500);
   --info:           var(--sky-500);
+  /* darkened sky → AA (4.5:1) as small text on info-subtle / white (sky-500 itself
+     gave only ~4.1:1 on info-subtle; the Listening pill/tile leaned on a raw mix) */
+  --info-text:      oklch(0.49 0.13 232);
   --info-subtle:    var(--sky-200);
 
   --focus-ring:     var(--violet-600);
