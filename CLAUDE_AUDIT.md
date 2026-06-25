@@ -17,10 +17,11 @@
 - ✅ P3 Basic daily-limit doc drift → `SCHEMA_NOTES`/`LAUNCH` синхронизированы с `BASIC_DAILY_LIMIT=25` (commit `7cfe5ca`).
 - ✅ P1 admin publish review gate → parser warnings + `content_item.reviewed_at`/`import_warnings` (migration `0019`) + Approve-перед-Publish с серверным enforcement (commits `af20b55`, `e28e4fb`, `2185269`).
 
+- ✅ P3 invite Host header → invite URL якорится на `NEXT_PUBLIC_SITE_URL` (validated origin) с fallback на host (commit `c72cbfe`).
+
 Открыто:
 
-- ⏸ P2 pending payments expiry → отложено в payment-hardening пакет (вместе с D1 provider signatures).
-- ⏸ P3 invite Host header → низкий приоритет (на Vercel host валидируется платформой).
+- ⏸ P2 pending payments expiry → отложено в payment-hardening пакет (вместе с D1 provider signatures, перед реальными платежами).
 
 Деплой: применить миграции к Supabase (`npm run db:migrate`) — `0018` (google в enum) и `0019` (review-gate колонки). Код
 обратно совместим: прод не падает без них (google сохраняется как `email`, а publish работает по-старому), но фичи
@@ -282,7 +283,7 @@ checkout создаёт `pending` payment без expiry. `applyCompletedPayment`
 
 ### P3 — invite URL строится из входящего `Host` header
 
-Статус: open, runtime-dependent.
+Статус: closed — commit `c72cbfe` (2026-06-25). invite URL предпочитает `NEXT_PUBLIC_SITE_URL` (validated origin), fallback на host только без env.
 Тип: risk.
 Усилие: S.
 
