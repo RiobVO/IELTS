@@ -75,6 +75,10 @@ export default async function PracticePage() {
   const userTier: Tier = profile
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
     : "basic";
+  // Target band (set at onboarding, numeric → may arrive as string). Editable
+  // inline on the hub via setTargetBand. null only defends the unset edge.
+  const rawTarget = (profile as { target_band: string | number | null } | null)?.target_band;
+  const targetBand = rawTarget != null ? Number(rawTarget) : null;
   const submitted = (submittedRes.data ?? []) as unknown as SubmittedRow[];
   const inProgress = (inProgressRes.data ?? []) as unknown as InProgressRow[];
 
@@ -167,6 +171,10 @@ export default async function PracticePage() {
     return bestBand[section] > 0 ? `${base} · best ${bestBand[section]}` : base;
   };
 
+  // Best single-test band so far (max over R/L). Motivational proxy vs the target
+  // — not an official overall band (that needs all four skills). null = no tests yet.
+  const bestOverall = Math.max(bestBand.reading, bestBand.listening);
+
   return (
     <AppShell active="practice">
       <PracticeCatalog
@@ -177,6 +185,8 @@ export default async function PracticePage() {
         hero={hero}
         readingMeta={skillMeta("reading", readingTests)}
         listeningMeta={skillMeta("listening", listeningTests)}
+        targetBand={targetBand}
+        bestBand={bestOverall > 0 ? bestOverall : null}
       />
     </AppShell>
   );
