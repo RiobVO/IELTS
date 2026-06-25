@@ -4,7 +4,7 @@ Ambiguities in BRIEF.md §5/§6.1 resolved while building the schema + migration
 The brief wins; where it was silent or self-conflicting, a sane choice was made
 and logged here. No tables were invented beyond what the brief implies.
 
-## Table count: 16 (Phase 1 shipped 13; +3 added in later phases)
+## Table count: 18 (Phase 1 shipped 13; +5 added in later phases)
 
 §5 enumerates 12 tables (`badge`/`user_badge` are two). The Phase-1 worked example
 expected **13 tables** — the 13th is **`notification`**, defined in **§11**
@@ -13,12 +13,16 @@ expected **13 tables** — the 13th is **`notification`**, defined in **§11**
 Phase-1 list (13): `region, profile, content_item, passage, question, answer_key,
 attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
 
-**Post-Phase additions (+3 → 16, in lockstep with `verify.ts` `APP_TABLE_COUNT = 16`):**
+**Post-Phase additions (+5 → 18, in lockstep with `verify.ts` `APP_TABLE_COUNT = 18`):**
 - `payment` — migration `0006_payments` (Phase 2D: tiers + payment lifecycle).
 - `annotation` — migration `0013_annotation` (reader highlights/notes, W2-1).
 - `leaderboard_snapshot` — migration `0014_leaderboard_snapshot` (rank-movement deltas).
+- `attempt_review_snapshot` — migration `0021_attempt_review_snapshot` (D3: stable
+  post-submit review; SERVER-ONLY, locked like `answer_key`).
+- `signup_throttle` — migration `0022_signup_throttle` (signup velocity-cap by IP
+  hash; SERVER-ONLY).
 
-So `src/db/schema.ts` defines **16** `pgTable`s; `verify.ts` asserts the same count.
+So `src/db/schema.ts` defines **18** `pgTable`s; `verify.ts` asserts the same count.
 
 ## `user` → `profile`, keyed to `auth.users.id`
 
@@ -49,6 +53,31 @@ read it". Implemented with **both** mechanisms:
 So an `anon` `SELECT` fails with `permission denied` (SQLSTATE 42501). `service_role`
 (grading) retains full access and bypasses RLS, mirroring Supabase. The verify
 gate asserts the anon denial.
+
+## Audit closure (2026-06-25): migrations 0018–0022
+
+Schema changes from the CLAUDE_AUDIT.md closure batch (findings detail there):
+- **0018 `auth_provider` += `google`** — Google is a launch OAuth provider; the enum
+  + the `handle_new_user` clamp now store `google` instead of collapsing it to
+  `email`. `ALTER TYPE ADD VALUE` is irreversible on prod, so the `down` recreates
+  the enum (folding any `google` row → `email`).
+- **0019 `content_item.reviewed_at` + `import_warnings`** — admin import review gate:
+  a draft can't be published until `reviewed_at` is set (`markReviewed`), and
+  `setStatus('published')` re-checks it server-side; `import_warnings` (jsonb) holds
+  parser low-confidence notes for the review screen. (Re)import resets `reviewed_at`
+  (the row is replaced).
+- **0020 `payment.expires_at`** — pending-checkout TTL (`PENDING_TTL_MS`); the webhook
+  rejects an expired pending (`expired` → `failed`, no access). The completed-replay
+  idempotency check runs **before** the expiry check, so an applied payment stays
+  idempotent past its TTL. TTL is a placeholder until provider onboarding.
+- **0021 `attempt_review_snapshot`** — D3 stable review; SERVER-ONLY, locked like
+  `answer_key` (RLS on, grants revoked). Holds correct answers + explanation/evidence
+  captured at submit; `/result` reads it owner-path (fallback to the live key for
+  legacy attempts). A client read would bypass the answer_key lock **and** the tier
+  gate — `verify` asserts the anon denial (mirror of the `answer_key` assertion).
+- **0022 `signup_throttle`** — signup velocity-cap; SERVER-ONLY, RLS + grants revoked.
+  Stores `sha256(ip)` (not PII), one row per signup attempt; `signUp` caps sign-ups
+  per IP per hour (`SIGNUP_THROTTLE_*`) over the fail-open captcha.
 
 ## RLS on all tables (§6.1)
 
