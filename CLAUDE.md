@@ -2,17 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Активный трек — perf/lag `/app`** (см. «🔜 Current — perf/lag /app» ниже). P0 iframe-раннер ✅,
-> Practice Hub ✅ и ВСЕ P2/P3 из [AUDIT.md](./AUDIT.md) ✅ закрыты и на Vercel prod (2026-06-24);
-> реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist (`4339f92`), rank-2 leaderboard + viewer-row merge
-> (`ed2a612`/`990a868`), rank-3 exam/reading START (`7678f44`), rank-4 Result (`6600249`) и rank-7
-> getPublishedTests parallelize (`a8feabd`) сделаны, **остаются — badges `computeStats` concurrent /
-> Basic daily-count batch**.
-> Любую новую работу вне этого порядка начинать по явной просьбе пользователя.
->
-> Справка: [BRIEF.md](./BRIEF.md) — истина (спека/стек/§5/§6.1/§9). [BACKLOG.md](./BACKLOG.md) —
-> продуктовый бэклог (Волна 1 закрыта, Волна 2 ждёт). [AUDIT.md](./AUDIT.md) — открытые долги.
+> Справка по докам: [BRIEF.md](./BRIEF.md) — единственная истина (спека/стек/§5/§6.1/§9, читать первой).
+> [SCHEMA_NOTES.md](./SCHEMA_NOTES.md) — разрешённые неоднозначности схемы. [BACKLOG.md](./BACKLOG.md) —
+> продуктовый бэклог (Волна 1 закрыта, Волна 2 ждёт). [AUDIT.md](./AUDIT.md) — реестр аудита.
 > [REDESIGN.md](./REDESIGN.md) / [WORKLOG.md](./WORKLOG.md) — закрытые треки (редизайн / perf+sec).
+> Новую работу начинать по явной просьбе пользователя.
 
 ## Source of truth
 
@@ -177,65 +171,18 @@ early).
 - **Weekly digest / email** — `notification` table + in-app centre exist; digest jobs + email provider TODO.
 - **i18n** — deferred (EN at launch per §10).
 
-### 🔜 Current — perf/lag `/app`
-
-AUDIT.md empty (all P0–P3 closed). Active: cut SERIAL server-render round-trips on `/app` (dashboard
-~0.6–0.9 s, exam 1.3–2.5 s from UZ). Diagnosis (audit 2026-06-24, verified in code; full detail in the
-`prod-infra-topology` memory): the prior "round-trips exhausted / ~200 ms regional floor" claim was
-**WRONG** — auth is already local-verify (`getClaims` ES256, no network) and Vercel fra1 ↔ Supabase
-eu-central-1 is same-region (per-RT single-digit ms), so the lever is the **count of serial
-round-trips**, not per-RT latency. Non-code floor: end-user UZ↔fra1 leg + the exam iframe's 2nd
-`/runner` request (P0 sandbox — never inline via `srcdoc`).
-
-Ranked code wins — do ONE at a time → verify → commit → push. Invariants every change protects: auth,
-RLS, server-only grading, `answer_key` never client-side, tier gating, idempotent submit;
-`getProfile`/`getUser` stay `cache()`-wrapped.
-1. ✅ **AppShell header hoist** — done (commit `4339f92`): notification queries were a trailing serial
-   hop on every page → now `getHeaderData()` (`cache()`'d, `src/lib/notifications/header-data.ts`)
-   pre-warmed in each page's `Promise.all` (or early `void` on sequential pages); AppShell reuses it.
-2. ✅ **Leaderboard `readLeaderboard`** — done (commit `ed2a612`): deleted the redundant region-name
-   lookup (page now threads the pre-resolved `scopeLabel`, null for global) and `Promise.all`'d the
-   top-100 join + snapshot ranks. ≈ −2 serial hops; owner-path PUBLIC columns only; `getSnapshotRanks`
-   stays fail-open. **Viewer-row merge done** (commit `990a868`): the "you are #137" own-row lookup now
-   reads inside the same `Promise.all` (always-run when viewerId, discarded if the viewer is in top-100,
-   no UNION/OR so the top-100 query shape is untouched). ≈ −1 more serial hop. Leaderboard fully closed.
-3. ✅ **Exam/Reading START** — done (commit `7678f44`): the start gate+attempt moved to a server-only
-   module (`src/lib/exam/access.ts`: `loadAccessData`+`enforceAccess`+new `startAttempt`); the RSC pages
-   now gate with the `content_item`+`profile` they already read and call `startAttempt` (no re-read).
-   `submitAttempt` and the `/runner` GET keep their own gate (defense-in-depth); `startAttempt` carries
-   no gate and isn't a Server Action (network-unreachable). ≈ −1 serial hop per start path.
-4. ✅ **Result** — done (commit `6600249`): the leading att-read folded into the same `Promise.all`;
-   `pctRow`/`prevRows` get their bounds via correlated subselects on `attemptId` (not JS values), so the
-   whole set reads in one round-trip. Ownership is a JS guard after the await; `answer_key` is locked
-   behind a SQL `EXISTS` gate (rows return only for the owner — invariant now holds at the DB level).
-   Equivalence + gate confirmed against prod data (8 attempts). ≈ −1 serial hop.
-7. ✅ **getPublishedTests parallelize** — done (commit `a8feabd`): the cached catalog builder read the
-   published list then the grouped Q-counts serially; counts never depended on the list, so both now run
-   in one `Promise.all` (−1 round-trip on a cold cache miss). Cache key/tag/revalidate unchanged.
-Remaining (NEXT): badges `computeStats` concurrent, Basic daily-count batch — detail in the
-   `prod-infra-topology` memory.
-
-Verify perf on **prod** via Server-Timing headers (can't measure latency from a static checkout; user
-reads prod numbers from UZ). Code verification per change: `npx tsc --noEmit` + `npm run build` (dev
-not running) + browser smoke of the touched route(s).
-
-### ✅ Practice Hub — done (2026-06-24, Vercel prod, commit `956d43c`)
-
-Shipped and prod-verified. Top-level Reading/Listening nav replaced by one `Practice` entry
-(`/app/practice`); `/app/reading` + `/app/listening` kept as catalog routes; active nav highlights
-`Practice` on all three via a shared `navHighlight` helper (also used by the loading skeleton). Hub =
-continuation/recommended hero (recommended test for the weakest type / resume / first-test, against
-the "extra click") + four skill cards: Reading/Listening as live CTAs into the catalogs,
-Writing/Speaking as honest `Coming soon` / Ultra-hook (Phase 3 AI stays frozen, no implied
-availability). Bando system, zero new runtime deps. Files: `app/app/practice/{page,loading}.tsx`,
-`src/components/app/navActive.ts`, `AppHeader.tsx`, `Skeletons.tsx`. Reviewed (nav state / RSC
-boundary / auth+tier+scope — clean); `tsc` + `build` clean.
-
-### ✅ AUDIT.md — all P0–P3 findings closed (2026-06-24, Vercel prod)
-P0 iframe isolation, Practice Hub, and every open P2/P3 (draft owner-path access, Listening-result
-section links + Try-again runner routing, rating floor-guard, percentile first-attempt, Telegram audio
-targeting, SCHEMA_NOTES table count) are closed. AUDIT.md "Открытые находки" is empty. perf/lag is now
-the active track (above).
+### ✅ Closed tracks (detail in git / [WORKLOG.md](./WORKLOG.md) / [REDESIGN.md](./REDESIGN.md))
+- **Practice Hub** — top-level Reading/Listening nav свёрнут в один `Practice` (`/app/practice`) с
+  continuation-героем и skill-карточками; каталоги `/app/reading` + `/app/listening` живы как routes.
+- **Аудит** — Codex-аудит + from-scratch sweep (7 осей, adversarial-verify); все находки закрыты,
+  [AUDIT.md](./AUDIT.md) реестр пуст. Ядро (answer_key / RLS / tier / anti-cheat / injection) подтверждено
+  чистым в коде.
+- **Perf/lag `/app`** — срезаны серийные server-render round-trips: AppShell header-hoist, leaderboard
+  (+ viewer-row), exam/reading START (server-only access-модуль `src/lib/exam/access.ts`), Result
+  (correlated subselects + `answer_key` EXISTS-gate), getPublishedTests parallelize. Каждое изменение
+  держит инварианты: auth, RLS, server-only grading, `answer_key` never client-side, tier gating,
+  idempotent submit; `getProfile`/`getUser` остаются `cache()`-wrapped. Замер — на prod через
+  Server-Timing (из статичного checkout латентность не мерится).
 
 ### 🧊 Phase 3 — AI Writing/Speaking (§4.10) — FROZEN, «coming soon», LAST
 Frozen 2026-06-15: audience-first; AI stays a marketing hook + Ultra upsell. NOT deleted — `topic`
