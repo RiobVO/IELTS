@@ -501,7 +501,7 @@ const FLOW_CSS = `
 `;
 
 const S: Record<string, CSSProperties> = {
-  wrap: { maxWidth: 1360, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
+  wrap: { maxWidth: 1440, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   back: { display: "inline-flex", alignItems: "center", gap: 7, alignSelf: "flex-start", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, cursor: "pointer", padding: 4, transition: "var(--transition-colors)" },
 
   grid: {},
@@ -528,7 +528,7 @@ const S: Record<string, CSSProperties> = {
   editorHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
   editorTitle: { margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" },
   timerBtn: { display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 14px", borderRadius: "var(--radius-full)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-secondary)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "var(--transition-colors)" },
-  textarea: { flex: 1, minHeight: 470, width: "100%", resize: "vertical", background: "var(--reading-surface)", color: "var(--reading-text)", fontFamily: "var(--font-reading)", fontSize: 17, lineHeight: 1.7, border: "2px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-solid)", padding: "18px 20px", outline: "none" },
+  textarea: { flex: 1, minHeight: 540, width: "100%", resize: "vertical", background: "var(--reading-surface)", color: "var(--reading-text)", fontFamily: "var(--font-reading)", fontSize: 17, lineHeight: 1.7, border: "2px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-solid)", padding: "18px 20px", outline: "none" },
 
   // Live coach tip
   ctCard: { position: "relative", overflow: "hidden", borderRadius: 16, borderWidth: 1, borderStyle: "solid", padding: "15px 17px" },
