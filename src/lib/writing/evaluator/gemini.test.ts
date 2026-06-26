@@ -23,7 +23,7 @@ const validFeedback = {
     { name: "lexical_resource", bandLow: 5.5, bandHigh: 6, strength: "a", mainIssue: "b", nextStep: "c" },
     { name: "grammar_accuracy", bandLow: 6, bandHigh: 6.5, strength: "a", mainIssue: "b", nextStep: "c" },
   ],
-  topFixes: ["x"], annotations: [], rewrite: { thesis: "t", paragraph: "p", replacements: [] }, checklist: ["x"],
+  topFixes: ["x"], annotations: [], rewrite: { thesisOld: "o", thesis: "t", paragraph: "p", replacements: [] }, checklist: ["x"],
 };
 const input = { essay: "e", taskPrompt: "t", category: "academic" as const };
 

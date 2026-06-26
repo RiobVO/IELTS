@@ -3,6 +3,10 @@ import { z } from "zod";
 // Band 0–9 in 0.5 steps; we store a range, not a point (spec: estimate, not authoritative).
 const band = z.number().min(0).max(9);
 
+// Annotation type drives the legend + <mark> tint + comment-card accent in the UI:
+// good = a strong move to reinforce, style = style/clarity, grammar = a grammar slip.
+const AnnotationType = z.enum(["good", "style", "grammar"]);
+
 const CriterionSchema = z.object({
   name: z.enum(["task_response", "coherence_cohesion", "lexical_resource", "grammar_accuracy"]),
   bandLow: band,
@@ -18,9 +22,10 @@ export const FeedbackSchema = z.object({
   confidence: z.enum(["low", "medium", "high"]),
   criteria: z.array(CriterionSchema).length(4),
   topFixes: z.array(z.string().min(1)).min(1).max(3),
-  annotations: z.array(z.object({ quote: z.string(), comment: z.string() })),
+  annotations: z.array(z.object({ quote: z.string(), comment: z.string(), type: AnnotationType })),
   rewrite: z.object({
-    thesis: z.string(),
+    thesisOld: z.string(), // candidate's original thesis — shown struck as "YOURS"
+    thesis: z.string(), // the improved thesis — shown as "STRONGER"
     paragraph: z.string(),
     replacements: z.array(z.object({ from: z.string(), to: z.string() })),
   }),
