@@ -102,10 +102,16 @@ const S: Record<string, CSSProperties> = {
   legendDot: { width: 12, height: 4, borderRadius: "var(--radius-full)" },
 
   grid: { display: "grid", gap: 16, alignItems: "start" },
-  essay: { background: "var(--reading-surface)", color: "var(--reading-text)", fontFamily: "var(--font-reading)", fontSize: 16, lineHeight: 1.95, whiteSpace: "pre-wrap", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 22px" },
-  cards: { display: "flex", flexDirection: "column", gap: 10 },
+  // minWidth:0 on both grid children: without it grid items default to min-width:auto
+  // (= min-content), so the nowrap cardQuote blows the right column out and collapses
+  // the essay column to one-word-per-line. minWidth:0 lets the 1.45fr/1fr split hold
+  // and lets the quote ellipsis work.
+  essay: { minWidth: 0, background: "var(--reading-surface)", color: "var(--reading-text)", fontFamily: "var(--font-reading)", fontSize: 16, lineHeight: 1.95, whiteSpace: "pre-wrap", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 22px" },
+  cards: { minWidth: 0, display: "flex", flexDirection: "column", gap: 10 },
   card: { display: "flex", flexDirection: "column", gap: 5, textAlign: "left", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", cursor: "pointer", fontFamily: "var(--font-ui)", transition: "background-color var(--duration-fast) var(--ease-standard)" },
   cardType: { fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" },
-  cardQuote: { fontFamily: "var(--font-reading)", fontStyle: "italic", fontSize: 13.5, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  // text-primary (not -secondary): the muted grey washes out on the success/warn/error
+  // subtle tint when a card is active. Keep italic for the quote, fix the contrast.
+  cardQuote: { fontFamily: "var(--font-reading)", fontStyle: "italic", fontSize: 13.5, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   cardComment: { fontSize: 13.5, lineHeight: 1.5, color: "var(--text-primary)" },
 };
