@@ -493,7 +493,8 @@ function LossRow({ item, idx }: { item: Weak; idx: number }) {
   const worst = idx === 0;
   return (
     // Deep-link в дрилл этого типа В ЕГО СЕКЦИИ — listening-слабость не уводим в
-    // reading-каталог (там её типа нет). Каталог фильтрует по ?q_type (_CatalogView).
+    // reading (там её типа нет). /app/{section} редиректит в хаб практики, перенося
+    // ?q_type в предвыбор фильтра.
     <Link className="dash-loss" href={`/app/${item.section}?q_type=${encodeURIComponent(item.type)}`} style={S.loss}>
       <span style={{ ...S.lossRank, ...(worst ? S.lossRankWorst : null) }}>{idx + 1}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
