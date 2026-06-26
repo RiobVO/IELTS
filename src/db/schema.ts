@@ -17,6 +17,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   unique,
@@ -615,6 +616,13 @@ export const writingTask = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     category: writingCategory("category").notNull(),
     prompt: text("prompt").notNull(),
+    // Catalog presentation metadata (migration 0025). Nullable — legacy rows
+    // predate the backfill, the UI degrades to a neutral card. CHECK-pinned in SQL.
+    topic: text("topic"),
+    taskType: text("task_type"),
+    difficulty: smallint("difficulty"),
+    bandLow: numeric("band_low", { precision: 2, scale: 1 }),
+    bandHigh: numeric("band_high", { precision: 2, scale: 1 }),
     tierRequired: userTier("tier_required").notNull().default("ultra"),
     status: writingTaskStatus("status").notNull().default("draft"),
     createdBy: uuid("created_by").references(() => profile.id, {

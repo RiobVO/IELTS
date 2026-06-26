@@ -2,6 +2,14 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { writingSubmission, writingTask } from "@/db/schema";
 import type { Tier } from "@/lib/tiers";
+import {
+  coerceDifficulty,
+  coerceTaskType,
+  coerceTopic,
+  type WritingDifficulty,
+  type WritingTaskType,
+  type WritingTopic,
+} from "./topic-meta";
 
 // Admin reads/writes for Writing Lab topics. Owner path; the route gates with
 // requireAdmin. Publish is a deliberate status flip (draft → published), not a
@@ -10,6 +18,11 @@ import type { Tier } from "@/lib/tiers";
 export async function insertWritingTask(input: {
   category: "academic" | "general";
   prompt: string;
+  topic: WritingTopic | null;
+  taskType: WritingTaskType | null;
+  difficulty: WritingDifficulty | null;
+  bandLow: number | null;
+  bandHigh: number | null;
   tierRequired: Tier;
   createdBy: string;
   publish: boolean;
@@ -19,6 +32,12 @@ export async function insertWritingTask(input: {
     .values({
       category: input.category,
       prompt: input.prompt,
+      topic: input.topic,
+      taskType: input.taskType,
+      difficulty: input.difficulty,
+      // numeric columns take a string; null stays null.
+      bandLow: input.bandLow != null ? input.bandLow.toFixed(1) : null,
+      bandHigh: input.bandHigh != null ? input.bandHigh.toFixed(1) : null,
       tierRequired: input.tierRequired,
       status: input.publish ? "published" : "draft",
       createdBy: input.createdBy,
@@ -31,6 +50,11 @@ export interface AdminTaskRow {
   id: string;
   prompt: string;
   category: "academic" | "general";
+  topic: WritingTopic | null;
+  taskType: WritingTaskType | null;
+  difficulty: WritingDifficulty | null;
+  bandLow: number | null;
+  bandHigh: number | null;
   tierRequired: Tier;
   status: "draft" | "published";
   createdAt: Date;
@@ -38,17 +62,30 @@ export interface AdminTaskRow {
 
 /** Every topic — draft and published — for the admin panel. Route-gated by requireAdmin. */
 export async function listAllTasks(): Promise<AdminTaskRow[]> {
-  return db
+  const rows = await db
     .select({
       id: writingTask.id,
       prompt: writingTask.prompt,
       category: writingTask.category,
+      topic: writingTask.topic,
+      taskType: writingTask.taskType,
+      difficulty: writingTask.difficulty,
+      bandLow: writingTask.bandLow,
+      bandHigh: writingTask.bandHigh,
       tierRequired: writingTask.tierRequired,
       status: writingTask.status,
       createdAt: writingTask.createdAt,
     })
     .from(writingTask)
     .orderBy(desc(writingTask.createdAt));
+  return rows.map((r) => ({
+    ...r,
+    topic: coerceTopic(r.topic),
+    taskType: coerceTaskType(r.taskType),
+    difficulty: coerceDifficulty(r.difficulty),
+    bandLow: r.bandLow != null ? Number(r.bandLow) : null,
+    bandHigh: r.bandHigh != null ? Number(r.bandHigh) : null,
+  }));
 }
 
 /** Flip a topic's catalog visibility: publish (draft→published) or unpublish (published→draft). */

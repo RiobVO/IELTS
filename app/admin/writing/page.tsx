@@ -3,6 +3,13 @@ import { requireAdmin } from "@/lib/auth";
 import { Badge, type BadgeTone } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
 import { listAllTasks, type AdminTaskRow } from "@/lib/writing/admin";
+import {
+  WRITING_TASK_TYPES,
+  WRITING_TOPICS,
+  writingDifficultyLabel,
+  writingTaskTypeLabel,
+  writingTopicLabel,
+} from "@/lib/writing/topic-meta";
 import { createWritingTask, publishTask, removeTask, unpublishTask } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -83,6 +90,48 @@ export default async function AdminWritingPage({
             </div>
           </div>
 
+          <div style={S.grid2}>
+            <div>
+              <label style={S.label} htmlFor="topic">Topic</label>
+              <select id="topic" name="topic" defaultValue="auto" style={S.select}>
+                <option value="auto">Auto-detect</option>
+                <option value="">None</option>
+                {WRITING_TOPICS.map((t) => (
+                  <option key={t} value={t}>{writingTopicLabel[t]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={S.label} htmlFor="task_type">Task type</label>
+              <select id="task_type" name="task_type" defaultValue="auto" style={S.select}>
+                <option value="auto">Auto-detect</option>
+                {WRITING_TASK_TYPES.map((t) => (
+                  <option key={t} value={t}>{writingTaskTypeLabel[t]}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={S.grid3}>
+            <div>
+              <label style={S.label} htmlFor="difficulty">Difficulty</label>
+              <select id="difficulty" name="difficulty" defaultValue="2" style={S.select}>
+                <option value="">None</option>
+                <option value="1">Foundation</option>
+                <option value="2">Core</option>
+                <option value="3">Stretch</option>
+              </select>
+            </div>
+            <div>
+              <label style={S.label} htmlFor="band_low">Band from</label>
+              <input id="band_low" name="band_low" type="number" min={0} max={9} step={0.5} defaultValue="6.5" style={S.select} />
+            </div>
+            <div>
+              <label style={S.label} htmlFor="band_high">Band to</label>
+              <input id="band_high" name="band_high" type="number" min={0} max={9} step={0.5} defaultValue="7.5" style={S.select} />
+            </div>
+          </div>
+
           <div style={S.actions}>
             <Button type="submit" name="intent" value="publish" icon="check">Publish topic</Button>
             <Button type="submit" name="intent" value="draft" variant="secondary">Save draft</Button>
@@ -126,6 +175,12 @@ function TopicRow({ task }: { task: AdminTaskRow }) {
           <Badge tone={statusTone}>{published ? "Published" : "Draft"}</Badge>
           <Badge tone="neutral">{CATEGORY_LABEL[task.category]}</Badge>
           <Badge tone="brand">{TIER_LABEL[task.tierRequired]}</Badge>
+          {task.topic && <Badge tone="neutral">{writingTopicLabel[task.topic]}</Badge>}
+          {task.taskType && <Badge tone="neutral">{writingTaskTypeLabel[task.taskType]}</Badge>}
+          {task.difficulty && <Badge tone="neutral">{writingDifficultyLabel[task.difficulty]}</Badge>}
+          {task.bandLow != null && task.bandHigh != null && (
+            <Badge tone="neutral">{`Band ${task.bandLow.toFixed(1)}–${task.bandHigh.toFixed(1)}`}</Badge>
+          )}
         </div>
       </div>
       <div style={S.rowActions}>
@@ -163,6 +218,7 @@ const S: Record<string, CSSProperties> = {
   label: { fontSize: 12, fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6, display: "block" },
   textarea: { width: "100%", resize: "vertical", minHeight: 130, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, lineHeight: 1.5, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", outline: "none", marginBottom: 14 },
   grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 },
+  grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 18 },
   select: { width: "100%", height: 44, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0 12px", cursor: "pointer" },
   actions: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
   caption: { fontSize: 12, color: "var(--text-muted)" },
