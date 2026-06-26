@@ -6,6 +6,7 @@ import { Button } from "@/components/core/Button";
 import { Icon, type IconName } from "@/components/core/icons";
 import { ExamTimer } from "@/components/exam/ExamTimer";
 import { wordCount, wordCountState, RING_CIRC } from "@/lib/writing/word-count";
+import { nextNudge, type NudgeTone } from "@/lib/writing/coach";
 import { writingCategoryLabel } from "@/lib/writing/labels";
 import type { CatalogTask } from "@/lib/writing/read";
 import { createWritingSubmission, getSubmissionStatus } from "../../actions";
@@ -149,6 +150,7 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
             style={S.textarea}
             aria-label="Your essay"
           />
+          <CoachTip text={essay} />
         </div>
       </div>
 
@@ -196,6 +198,73 @@ function WordRing({ count, state }: { count: number; state: ReturnType<typeof wo
         {count}
       </text>
     </svg>
+  );
+}
+
+/* ── Live coach tip ───────────────────────────────────────────────────────
+   ONE deterministic nudge derived from the draft (nextNudge). UI flavour only —
+   never a band or score. Animations replay only when the nudge id changes
+   (key-on-id remount); the card colour transitions in place. */
+const TONES: Record<NudgeTone, { bg: string; border: string; iconBg: string; accent: string; title: string }> = {
+  purple: {
+    bg: "var(--brand-subtle)",
+    border: "var(--brand-border)",
+    iconBg: "color-mix(in oklab, var(--brand) 16%, var(--surface))",
+    accent: "var(--brand)",
+    title: "var(--text-link)",
+  },
+  amber: {
+    bg: "var(--warn-subtle)",
+    border: "color-mix(in oklab, var(--warn) 38%, var(--surface))",
+    iconBg: "color-mix(in oklab, var(--warn) 22%, var(--surface))",
+    accent: "var(--warn)",
+    title: "var(--warn-text)",
+  },
+  green: {
+    bg: "var(--success-subtle)",
+    border: "color-mix(in oklab, var(--success) 34%, var(--surface))",
+    iconBg: "color-mix(in oklab, var(--success) 20%, var(--surface))",
+    accent: "var(--success)",
+    title: "var(--success-text)",
+  },
+};
+
+function CoachTip({ text }: { text: string }) {
+  const nudge = nextNudge(text);
+  const tone = TONES[nudge.tone];
+  const ready = nudge.id === "ready";
+  return (
+    <div
+      className="ct-card"
+      data-ready={ready}
+      style={{ ...S.ctCard, background: tone.bg, borderColor: tone.border }}
+      role="status"
+      aria-live="polite"
+    >
+      <span key={`bar-${nudge.id}`} className="ct-bar" style={{ ...S.ctBar, background: tone.accent }} aria-hidden="true" />
+      <div key={`body-${nudge.id}`} className="ct-body" style={S.ctBody}>
+        <span className="ct-iconwrap" style={S.ctIconWrap} aria-hidden="true">
+          <span className="ct-icon" style={{ ...S.ctIcon, background: tone.iconBg }}>{nudge.icon}</span>
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...S.ctTitle, color: tone.title }}>{nudge.title}</div>
+          <div style={S.ctText}>{nudge.body}</div>
+          <span className="ct-chip" style={{ ...S.ctChip, background: tone.iconBg, color: tone.title }}>
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 19V5" />
+              <path d="M6 11l6-6 6 6" />
+            </svg>
+            {nudge.criterion}
+          </span>
+        </div>
+      </div>
+      {ready && (
+        <>
+          <span key={`spark1-${nudge.id}`} className="ct-spark1" style={S.ctSpark1} aria-hidden="true">✨</span>
+          <span key={`spark2-${nudge.id}`} className="ct-spark2" style={S.ctSpark2} aria-hidden="true">✦</span>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -380,6 +449,25 @@ const CSS = `
   .wa-grid{grid-template-columns:320px 1fr}
   .wa-actionbar{flex-direction:row;align-items:center;justify-content:space-between}
 }
+/* Coach tip — colour morphs in place; entry/float/glow/spark are motion-gated. */
+.ct-card{transition:background .35s ease,border-color .35s ease}
+@keyframes ct-tipIn{from{opacity:0;transform:translateY(11px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes ct-iconPop{0%{opacity:0;transform:scale(.3) rotate(-22deg)}55%{opacity:1;transform:scale(1.22) rotate(9deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes ct-floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes ct-barWipe{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ct-chipIn{from{opacity:0;transform:translateX(-7px)}to{opacity:1;transform:none}}
+@keyframes ct-glow{0%,100%{box-shadow:0 8px 22px -12px transparent}50%{box-shadow:0 10px 30px -8px color-mix(in oklab, var(--success) 45%, transparent)}}
+@keyframes ct-spark{0%{opacity:0;transform:scale(0) translateY(0)}40%{opacity:1;transform:scale(1.15) translateY(-6px)}100%{opacity:0;transform:scale(.5) translateY(-18px)}}
+@media (prefers-reduced-motion:no-preference){
+  .ct-body{animation:ct-tipIn .42s cubic-bezier(.2,.8,.3,1) both}
+  .ct-bar{animation:ct-barWipe .5s cubic-bezier(.2,.8,.3,1) both}
+  .ct-iconwrap{animation:ct-floaty 3.2s ease-in-out .5s infinite}
+  .ct-icon{animation:ct-iconPop .5s cubic-bezier(.3,1.4,.5,1) both}
+  .ct-chip{animation:ct-chipIn .4s .16s ease both}
+  .ct-card[data-ready="true"]{animation:ct-glow 2.2s ease-in-out infinite}
+  .ct-spark1{animation:ct-spark .9s ease-out both}
+  .ct-spark2{animation:ct-spark 1.1s ease-out .15s both}
+}
 `;
 
 const FLOW_CSS = `
@@ -429,6 +517,18 @@ const S: Record<string, CSSProperties> = {
   editorTitle: { margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" },
   timerBtn: { display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 14px", borderRadius: "var(--radius-full)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-secondary)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "var(--transition-colors)" },
   textarea: { flex: 1, minHeight: 470, width: "100%", resize: "vertical", background: "var(--reading-surface)", color: "var(--reading-text)", fontFamily: "var(--font-reading)", fontSize: 17, lineHeight: 1.7, border: "2px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-solid)", padding: "18px 20px", outline: "none" },
+
+  // Live coach tip
+  ctCard: { position: "relative", overflow: "hidden", borderRadius: 16, borderWidth: 1, borderStyle: "solid", padding: "15px 17px" },
+  ctBar: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4, transformOrigin: "left" },
+  ctBody: { display: "flex", gap: 12, alignItems: "flex-start", paddingLeft: 4 },
+  ctIconWrap: { flexShrink: 0 },
+  ctIcon: { display: "flex", width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center", fontSize: 16 },
+  ctTitle: { fontFamily: "var(--font-ui)", fontWeight: 600, fontSize: 13, marginBottom: 3 },
+  ctText: { fontFamily: "var(--font-ui)", fontSize: 13, lineHeight: 1.5, color: "var(--text-secondary)" },
+  ctChip: { display: "inline-flex", alignItems: "center", gap: 5, marginTop: 9, borderRadius: 99, padding: "3px 9px", fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" },
+  ctSpark1: { position: "absolute", right: 16, top: 12, fontSize: 14, pointerEvents: "none" },
+  ctSpark2: { position: "absolute", right: 30, top: 22, fontSize: 10, pointerEvents: "none" },
 
   actionBar: { display: "flex", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-solid)", padding: 18 },
   ringRow: { display: "flex", alignItems: "center", gap: 16 },
