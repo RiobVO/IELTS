@@ -1,8 +1,10 @@
-import type { Tier } from "@/lib/tiers";
+import { meetsTier, WRITING_MIN_TIER, type Tier } from "@/lib/tiers";
 
 export const MIN_WORDS = 20; // below this it's not an essay
 export const MAX_WORDS = 1000; // cost guard — IELTS Task 2 is ~250-400 words
-export const WRITING_DAILY_CAP = 20; // soft Ultra/day cap (placeholder)
+// Daily analysis caps bound Gemini spend and form the Premium→Ultra upsell ladder.
+export const WRITING_DAILY_CAP_PREMIUM = 5; // Premium: enough for a real student, caps abuse
+export const WRITING_DAILY_CAP_ULTRA = 20; // Ultra: generous — effectively unlimited for a human
 export const WRITING_STALE_MS = 5 * 60 * 1000; // reap 'evaluating' older than this
 
 export type EssayCheck =
@@ -28,16 +30,19 @@ export type EvalGate =
   | { allowed: false; reason: "not_configured" | "preview_used" | "daily_cap" };
 
 // The one-active-submission UNIQUE INDEX (0024) closes the in-flight farm race at
-// the DB; this gate handles the steady-state policy (config, preview, cap).
+// the DB; this gate handles the steady-state policy (config, tier, preview, cap).
+// AI Writing is a paid feature: Premium+ get it daily-capped (Ultra more generous);
+// Basic gets one lifetime teaser, then must upgrade. Pricing-aligned via WRITING_MIN_TIER.
 export function canEvaluate(i: EvalGateInput): EvalGate {
   if (!i.configured) return { allowed: false, reason: "not_configured" };
-  if (i.tier !== "ultra") {
-    return i.lifetimeCompleted >= 1
-      ? { allowed: false, reason: "preview_used" }
+  if (meetsTier(i.tier, WRITING_MIN_TIER)) {
+    const cap = i.tier === "ultra" ? WRITING_DAILY_CAP_ULTRA : WRITING_DAILY_CAP_PREMIUM;
+    return i.todayCompleted >= cap
+      ? { allowed: false, reason: "daily_cap" }
       : { allowed: true };
   }
-  return i.todayCompleted >= WRITING_DAILY_CAP
-    ? { allowed: false, reason: "daily_cap" }
+  return i.lifetimeCompleted >= 1
+    ? { allowed: false, reason: "preview_used" }
     : { allowed: true };
 }
 

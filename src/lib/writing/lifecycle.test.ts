@@ -3,7 +3,8 @@ import {
   canEvaluate,
   validateEssay,
   isStuck,
-  WRITING_DAILY_CAP,
+  WRITING_DAILY_CAP_PREMIUM,
+  WRITING_DAILY_CAP_ULTRA,
   WRITING_STALE_MS,
   MIN_WORDS,
   MAX_WORDS,
@@ -23,16 +24,22 @@ describe("validateEssay", () => {
 });
 
 describe("canEvaluate", () => {
-  const base = { configured: true, tier: "ultra" as const, lifetimeCompleted: 0, todayCompleted: 0 };
+  const base = { configured: true, tier: "premium" as const, lifetimeCompleted: 0, todayCompleted: 0 };
   it("blocks when not configured", () => {
     expect(canEvaluate({ ...base, configured: false })).toEqual({ allowed: false, reason: "not_configured" });
   });
-  it("blocks Ultra at the daily cap", () => {
-    expect(canEvaluate({ ...base, todayCompleted: WRITING_DAILY_CAP })).toEqual({ allowed: false, reason: "daily_cap" });
-  });
-  it("allows non-Ultra first preview, blocks after", () => {
+  it("gives Basic one lifetime teaser, then blocks for upgrade", () => {
     expect(canEvaluate({ ...base, tier: "basic", lifetimeCompleted: 0 })).toEqual({ allowed: true });
-    expect(canEvaluate({ ...base, tier: "premium", lifetimeCompleted: 1 })).toEqual({ allowed: false, reason: "preview_used" });
+    expect(canEvaluate({ ...base, tier: "basic", lifetimeCompleted: 1 })).toEqual({ allowed: false, reason: "preview_used" });
+  });
+  it("lets Premium in regardless of lifetime, capped per day", () => {
+    expect(canEvaluate({ ...base, tier: "premium", lifetimeCompleted: 99 })).toEqual({ allowed: true });
+    expect(canEvaluate({ ...base, tier: "premium", todayCompleted: WRITING_DAILY_CAP_PREMIUM })).toEqual({ allowed: false, reason: "daily_cap" });
+  });
+  it("gives Ultra a higher daily cap than Premium", () => {
+    // at Premium's cap Ultra is still allowed — proves the cap is tier-differentiated
+    expect(canEvaluate({ ...base, tier: "ultra", todayCompleted: WRITING_DAILY_CAP_PREMIUM })).toEqual({ allowed: true });
+    expect(canEvaluate({ ...base, tier: "ultra", todayCompleted: WRITING_DAILY_CAP_ULTRA })).toEqual({ allowed: false, reason: "daily_cap" });
   });
 });
 

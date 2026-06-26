@@ -250,16 +250,16 @@ function FlowScreen({ phase, onRetry, onBack }: { phase: Phase; onRetry: () => v
           circle="var(--brand-subtle)"
           iconColor="var(--text-link)"
           title="That was your free analysis — nice start"
-          body="You've used your one free lifetime breakdown — and it's saved, so reread it any time. Ultra unlocks unlimited analyses."
+          body="You've used your one free lifetime breakdown — and it's saved, so reread it any time. Premium unlocks daily Task 2 analyses with your real band."
         >
           <div style={S.perks}>
-            {["Unlimited Task 2 analyses", "A model rewrite of every weak paragraph", "Your full attempt history"].map((p) => (
+            {["Up to 5 essay analyses every day", "A model rewrite of every weak paragraph", "Your full attempt history"].map((p) => (
               <div key={p} style={S.perk}>
                 <Icon name="check" size={16} strokeWidth={2.6} style={{ color: "var(--success-text)" }} /> {p}
               </div>
             ))}
           </div>
-          <Button trailingIcon="arrow-right" href="/app/upgrade">Upgrade to Ultra</Button>
+          <Button trailingIcon="arrow-right" href="/app/upgrade">Upgrade to Premium</Button>
           <Button variant="ghost" onClick={() => router.push("/app/writing/history")}>Reread my feedback</Button>
         </CenteredState>
       )}
