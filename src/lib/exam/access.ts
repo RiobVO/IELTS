@@ -93,7 +93,7 @@ export async function enforceAccess(
           lt(attempt.submittedAt, dayEnd),
         ),
       );
-    if ((usage?.n ?? 0) >= BASIC_DAILY_LIMIT) redirect("/app/reading?limit=1");
+    if ((usage?.n ?? 0) >= BASIC_DAILY_LIMIT) redirect("/app/practice?limit=1");
   }
 }
 

@@ -7,6 +7,7 @@ import { Icon, type IconName } from "@/components/core/icons";
 import { Badge } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
 import { QuestionFilter } from "@/components/exam/QuestionFilter";
+import { CatalogNotice } from "@/components/app/CatalogNotice";
 import { qtypeLabel, categoryLabel } from "@/lib/labels";
 import { setTargetBand } from "./actions";
 
@@ -111,6 +112,7 @@ export function PracticeCatalog({
   bestBand,
   writingEnabled = false,
   initialFilter,
+  notice,
 }: {
   tests: PracticeTest[];
   filterCategories: FilterOption[];
@@ -127,6 +129,8 @@ export function PracticeCatalog({
   writingEnabled?: boolean;
   /** Предвыбор фильтра из query (переход со старого каталога). undefined = чистый хаб. */
   initialFilter?: InitialFilter;
+  /** Почему отбросило в практику: дневной лимит / throttle сабмита. null = без баннера. */
+  notice?: "limit" | "throttled" | null;
 }) {
   const router = useRouter();
   const [selCats, setSelCats] = useState<string[]>(initialFilter?.cats ?? []);
@@ -168,6 +172,9 @@ export function PracticeCatalog({
   return (
     <div className="pc-wrap" style={S.wrap}>
       <style>{CSS}</style>
+
+      {/* Почему отбросило сюда: дневной лимит / throttle (URL-driven, ?limit/?throttled) */}
+      {notice && <CatalogNotice kind={notice} dismissHref="/app/practice" />}
 
       {/* Header + hero */}
       <section className="pc-headrow" style={S.headrow}>
