@@ -38,6 +38,28 @@ a { color: var(--text-link); text-decoration: none; }
   box-shadow: var(--ring);
 }
 
+/* Skip-to-content — bypass the sticky header for keyboard-only users (WCAG 2.4.1).
+   Off-canvas until focused; z-index sits above the sticky header (30) and drawer (61). */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -56px;
+  z-index: 80;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  background: var(--brand);
+  color: var(--text-on-brand);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+  box-shadow: var(--shadow-md);
+  transition: top var(--duration-fast) var(--ease-standard);
+}
+.skip-link:focus {
+  top: 12px;
+}
+
 /* Custom scrollbar */
 * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 *::-webkit-scrollbar { width: 10px; height: 10px; }

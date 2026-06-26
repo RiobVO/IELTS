@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useTransition, type CSSProperties } from "react";
+import { useState, useTransition, useEffect, useRef, type CSSProperties } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Icon, type IconName } from "@/components/core/icons";
 import { Badge } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
@@ -132,7 +131,6 @@ export function PracticeCatalog({
   /** Почему отбросило в практику: дневной лимит / throttle сабмита. null = без баннера. */
   notice?: "limit" | "throttled" | null;
 }) {
-  const router = useRouter();
   const [selCats, setSelCats] = useState<string[]>(initialFilter?.cats ?? []);
   const [selTypes, setSelTypes] = useState<string[]>(initialFilter?.types ?? []);
   const [skill, setSkill] = useState<Skill | null>(initialFilter?.skill ?? null);
@@ -224,20 +222,37 @@ export function PracticeCatalog({
           bd={cardBd("listening", "var(--info)")}
           pressed={skill === "listening"}
         />
-        <SkillCard
-          letter="W"
-          name="Writing"
-          meta={writingEnabled ? "Live · Task 2" : "Ultra plan"}
-          muted={!writingEnabled}
-          tileBg="var(--warn-subtle)"
-          tileFg="var(--warn-text)"
-          badge={writingEnabled ? { tone: "success", text: "Live" } : { tone: "warn", text: "Soon" }}
-          onClick={() => (writingEnabled ? router.push("/app/writing") : selectSkill("writing"))}
-          bg={cardBg("writing", "var(--warn-subtle)")}
-          bd={cardBd("writing", "var(--warn)")}
-          expanded={writingEnabled ? undefined : skill === "writing"}
-          controls={writingEnabled ? undefined : "pc-locked-panel"}
-        />
+        {writingEnabled ? (
+          // Live → настоящая навигация: ссылка (middle-click / новая вкладка, link-семантика).
+          <SkillCard
+            letter="W"
+            name="Writing"
+            meta="Live · Task 2"
+            tileBg="var(--warn-subtle)"
+            tileFg="var(--warn-text)"
+            badge={{ tone: "success", text: "Live" }}
+            href="/app/writing"
+            bg="var(--surface)"
+            bd="var(--border)"
+          />
+        ) : (
+          // Locked → раскрывает Ultra-панель. controls задаём только когда панель в DOM.
+          <SkillCard
+            letter="W"
+            name="Writing"
+            meta="Ultra plan"
+            muted
+            tileBg="var(--warn-subtle)"
+            tileFg="var(--warn-text)"
+            badge={{ tone: "warn", text: "Soon" }}
+            id="pc-skill-writing"
+            onClick={() => selectSkill("writing")}
+            bg={cardBg("writing", "var(--warn-subtle)")}
+            bd={cardBd("writing", "var(--warn)")}
+            expanded={skill === "writing"}
+            controls={skill === "writing" ? "pc-locked-panel" : undefined}
+          />
+        )}
         <SkillCard
           letter="S"
           name="Speaking"
@@ -246,11 +261,12 @@ export function PracticeCatalog({
           tileBg="var(--success-subtle)"
           tileFg="var(--success-text)"
           badge={{ tone: "warn", text: "Soon" }}
+          id="pc-skill-speaking"
           onClick={() => selectSkill("speaking")}
           bg={cardBg("speaking", "var(--success-subtle)")}
           bd={cardBd("speaking", "var(--success)")}
           expanded={skill === "speaking"}
-          controls="pc-locked-panel"
+          controls={skill === "speaking" ? "pc-locked-panel" : undefined}
         />
       </section>
 
@@ -287,7 +303,19 @@ export function PracticeCatalog({
                 </span>
               </div>
               {filtered.length === 0 ? (
-                <div style={S.empty}>No tests match this filter yet.</div>
+                <div style={S.empty}>
+                  <div>No tests match this filter yet.</div>
+                  {(selCats.length > 0 || selTypes.length > 0 || skill) && (
+                    <button
+                      type="button"
+                      onClick={() => { clearFilter(); clearSkill(); }}
+                      style={{ ...S.showAll, marginTop: 14 }}
+                      className="pc-showall"
+                    >
+                      <Icon name="x" size={13} /> Clear filters
+                    </button>
+                  )}
+                </div>
               ) : (
                 filtered.map((t) => <TestRow key={t.id} t={t} />)
               )}
@@ -370,7 +398,7 @@ function HeroCard({ hero }: { hero: HeroData }) {
             aria-valuemax={100}
             aria-valuetext={`${hero.progress.answered} of ${hero.progress.total} answered`}
           >
-            <div style={{ height: "100%", width: `${pct}%`, background: "white", borderRadius: "var(--radius-full)" }} />
+            <div style={{ height: "100%", width: `${pct}%`, background: "var(--text-on-brand)", borderRadius: "var(--radius-full)" }} />
           </div>
         ) : (
           hero.meta && <div style={S.heroMeta}>{hero.meta}</div>
@@ -396,6 +424,8 @@ function SkillCard({
   onClick,
   bg,
   bd,
+  id,
+  href,
   pressed,
   expanded,
   controls,
@@ -407,31 +437,52 @@ function SkillCard({
   tileFg: string;
   badge: { tone: "success" | "warn"; text: string };
   muted?: boolean;
-  onClick: () => void;
+  /** Тоггл-карты (Reading/Listening/locked W/S). Не задаётся для href-варианта. */
+  onClick?: () => void;
   bg: string;
   bd: string;
+  /** id кнопки — чтобы вернуть на неё фокус при закрытии locked-панели. */
+  id?: string;
+  /** Если задан — карта это ссылка-навигация (live Writing), а не тоггл. */
+  href?: string;
   /** Reading/Listening — фильтр-тоггл (aria-pressed). */
   pressed?: boolean;
   /** Writing/Speaking — раскрытие locked-панели (aria-expanded + aria-controls). */
   expanded?: boolean;
   controls?: string;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="pc-skillcard"
-      aria-pressed={pressed}
-      aria-expanded={expanded}
-      aria-controls={controls}
-      style={{ ...S.skillCard, background: bg, borderColor: bd }}
-    >
+  const inner = (
+    <>
       <div style={S.skillTop}>
         <span style={{ ...S.skillTile, background: tileBg, color: tileFg }}>{letter}</span>
         <Badge tone={badge.tone}>{badge.text}</Badge>
       </div>
       <div style={{ ...S.skillName, color: muted ? "var(--text-secondary)" : "var(--text-primary)" }}>{name}</div>
       <div style={S.skillMeta}>{meta}</div>
+    </>
+  );
+  const style = { ...S.skillCard, background: bg, borderColor: bd };
+
+  // Навигация → ссылка (link-семантика, middle-click / новая вкладка).
+  if (href) {
+    return (
+      <Link href={href} className="pc-skillcard" style={style}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <button
+      type="button"
+      id={id}
+      onClick={onClick}
+      className="pc-skillcard"
+      aria-pressed={pressed}
+      aria-expanded={expanded}
+      aria-controls={controls}
+      style={style}
+    >
+      {inner}
     </button>
   );
 }
@@ -474,8 +525,19 @@ function TestRow({ t }: { t: PracticeTest }) {
 /* ── Locked-skill panel (Writing / Speaking) ─────────────────────────────── */
 function LockedPanel({ skill, onBack }: { skill: "writing" | "speaking"; onBack: () => void }) {
   const sk = COMING[skill];
+  // Свап каталог→панель меняет контент без перезагрузки: переносим фокус на заголовок,
+  // чтобы скринридер озвучил новую секцию (а не молча подменил регион). На «Back» —
+  // возвращаем фокус на карту, что раскрыла панель (id="pc-skill-…").
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    titleRef.current?.focus();
+  }, []);
+  const back = () => {
+    document.getElementById(`pc-skill-${skill}`)?.focus();
+    onBack();
+  };
   return (
-    <div id="pc-locked-panel" className="pc-locked" style={S.locked}>
+    <div id="pc-locked-panel" className="pc-locked" style={S.locked} role="region" aria-labelledby="pc-locked-title">
       <div className="pc-bars" style={S.bars}>
         <span style={{ ...S.bar, width: "100%", background: sk.color, animation: "pc-grow .6s var(--ease-out) .25s forwards" }} />
         <span style={{ ...S.bar, width: "70%", background: sk.subtle, animation: "pc-grow .6s var(--ease-out) .15s forwards" }} />
@@ -483,7 +545,7 @@ function LockedPanel({ skill, onBack }: { skill: "writing" | "speaking"; onBack:
       </div>
       <div>
         <div style={{ ...S.comingPill, background: sk.subtle, color: sk.text }}>Coming soon</div>
-        <h2 style={S.lockedTitle}>{sk.name} is on the way</h2>
+        <h2 id="pc-locked-title" ref={titleRef} tabIndex={-1} style={{ ...S.lockedTitle, outline: "none" }}>{sk.name} is on the way</h2>
         <p style={S.lockedDesc}>{sk.desc}</p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "20px 0 24px" }}>
           {sk.items.map((it) => (
@@ -493,7 +555,7 @@ function LockedPanel({ skill, onBack }: { skill: "writing" | "speaking"; onBack:
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           <Button trailingIcon="arrow-right" href="/app/upgrade">Explore Ultra</Button>
           <Button variant="secondary" href="/app/upgrade">Notify me at launch</Button>
-          <button type="button" onClick={onBack} style={S.backBtn} className="pc-back">Back to live tests</button>
+          <button type="button" onClick={back} style={S.backBtn} className="pc-back">Back to live tests</button>
         </div>
       </div>
     </div>
@@ -538,9 +600,8 @@ const CSS = `
   .pc-filter{position:sticky;top:88px}
 }
 @keyframes pc-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@keyframes pc-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@media (pointer:coarse){.pc-showall{min-height:44px}}
 @media (prefers-reduced-motion:reduce){
-  .pc-bars{animation:none!important}
   .pc-bars span{animation:none!important;transform:none!important}
 }
 `;
@@ -565,20 +626,20 @@ const S: Record<string, CSSProperties> = {
   goalReached: { fontSize: 13, fontWeight: 800, color: "var(--success-text)" },
   goalHint: { fontSize: 13, fontWeight: 600, color: "var(--text-muted)" },
 
-  // Hero — violet 3D-карта, белый ink (WCAG AA на brand).
-  hero: { background: "var(--brand)", borderRadius: 22, boxShadow: "0 5px 0 0 var(--brand-edge)", padding: 24, color: "white", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 20, minHeight: 200 },
+  // Hero — violet 3D-карта, белый ink (WCAG AA на brand, проверено: 4.63:1).
+  hero: { background: "var(--brand)", borderRadius: "var(--radius-xl)", boxShadow: "0 5px 0 0 var(--brand-edge)", padding: 24, color: "var(--text-on-brand)", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 20, minHeight: 200 },
   heroEyebrow: { fontSize: 12, fontWeight: 700, letterSpacing: "0.03em", marginBottom: 10 },
   heroTitle: { fontSize: 20, fontWeight: 800, letterSpacing: "-0.015em", lineHeight: 1.2, textWrap: "balance" },
   heroSub: { fontSize: 13, marginTop: 8, lineHeight: 1.45 },
   rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
-  heroBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 13, background: "white", color: "var(--brand)", fontSize: 15, fontWeight: 800, textDecoration: "none", boxShadow: "0 4px 0 0 color-mix(in oklab, black 18%, transparent)", cursor: "pointer", transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
+  heroBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: "var(--radius-md)", background: "var(--surface)", color: "var(--brand)", fontSize: 15, fontWeight: 800, textDecoration: "none", boxShadow: "0 4px 0 0 color-mix(in oklab, black 18%, transparent)", cursor: "pointer", transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
 
   // Skills
   skills: {},
   skillCard: { textAlign: "left", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
   skillTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
-  skillTile: { width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center", fontSize: 19, fontWeight: 800 },
+  skillTile: { width: 42, height: 42, borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", fontSize: 19, fontWeight: 800 },
   skillName: { fontSize: 18, fontWeight: 800, letterSpacing: "-0.015em" },
   skillMeta: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", marginTop: 4 },
 
@@ -593,7 +654,7 @@ const S: Record<string, CSSProperties> = {
 
   // Test row
   row: { display: "flex", alignItems: "center", gap: 18, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: "18px 20px", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
-  rowTile: { width: 48, height: 48, flex: "none", borderRadius: 13, display: "grid", placeItems: "center" },
+  rowTile: { width: 48, height: 48, flex: "none", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center" },
   rowPill: { fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", padding: "2px 8px", borderRadius: "var(--radius-full)" },
   rowMeta: { fontSize: 12, color: "var(--text-muted)" },
   rowTitle: { fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
@@ -604,8 +665,8 @@ const S: Record<string, CSSProperties> = {
   lockFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700 },
 
   // Locked panel
-  locked: { display: "grid", gap: 36, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: 24, boxShadow: "var(--shadow-solid)", padding: 40 },
-  bars: { display: "flex", flexDirection: "column", gap: 12, width: 150, animation: "pc-float 6s ease-in-out infinite" },
+  locked: { display: "grid", gap: 36, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-solid)", padding: 40 },
+  bars: { display: "flex", flexDirection: "column", gap: 12, width: 150 },
   bar: { height: 20, borderRadius: "var(--radius-full)", transformOrigin: "left" },
   comingPill: { display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 12px", borderRadius: "var(--radius-full)", fontSize: 12, fontWeight: 700, marginBottom: 14 },
   lockedTitle: { margin: 0, fontSize: 30, fontWeight: 800, letterSpacing: "-0.025em", color: "var(--text-primary)" },
