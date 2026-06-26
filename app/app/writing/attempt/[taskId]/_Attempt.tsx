@@ -444,7 +444,7 @@ function CenteredState({
 
 const CSS = `
 .wa-wrap{padding:20px 16px 40px}
-.wa-grid{display:grid;grid-template-columns:1fr;gap:18px;align-items:stretch}
+.wa-grid{display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
 .wa-actionbar{flex-direction:column;gap:16px;align-items:stretch}
 .wa-back:hover{color:var(--text-primary)!important}
 .wa-timer:hover{background:var(--surface-hover)!important}
@@ -454,7 +454,7 @@ const CSS = `
 .wa-coach{width:100%}
 @media (min-width:880px){
   .wa-wrap{padding:24px 28px 56px}
-  .wa-grid{grid-template-columns:320px 1fr}
+  .wa-grid{grid-template-columns:280px 1fr}
   .wa-actionbar{flex-direction:row;align-items:center;justify-content:space-between}
 }
 @media (min-width:1024px){
@@ -516,7 +516,7 @@ const S: Record<string, CSSProperties> = {
   targetBand: { fontFamily: "var(--font-mono)", fontSize: 34, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.1, marginTop: 4 },
   targetHelp: { margin: "8px 0 0", fontSize: 13, color: "var(--text-secondary)" },
 
-  structCard: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 18, flex: 1 },
+  structCard: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 18 },
   structOver: { fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 14 },
   structList: { display: "flex", flexDirection: "column", gap: 14 },
   structStep: { display: "flex", gap: 12, alignItems: "flex-start" },
