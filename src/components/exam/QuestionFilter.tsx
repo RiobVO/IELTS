@@ -32,7 +32,9 @@ function Tag({ label, count, selected, subtle, onClick }: { label: string; count
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       aria-pressed={selected}
+      className="qf-tag"
       style={{
+        position: "relative",
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
@@ -86,6 +88,9 @@ export function QuestionFilter({
 
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "var(--space-5)", boxShadow: "var(--shadow-sm)", ...style }}>
+      {/* На touch расширяем вертикальную зону тапа чипа до 44px без визуального роста
+          (density фильтра сохраняется); на mouse-устройствах правило не активно. */}
+      <style>{".qf-tag::after{content:none}@media (pointer:coarse){.qf-tag::after{content:\"\";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:44px}}"}</style>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "var(--space-4)" }}>
         <Icon name="filter" size={18} style={{ color: "var(--brand)" }} />
         <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: "var(--weight-bold)", color: "var(--text-primary)" }}>Filter</span>
