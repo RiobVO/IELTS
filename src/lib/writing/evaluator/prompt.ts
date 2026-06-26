@@ -1,3 +1,4 @@
+import { TASK2_MIN_WORDS } from "../lifecycle";
 import type { EvaluateInput } from "./types";
 
 export const PROMPT_VERSION = "writing-task2-v1";
@@ -6,7 +7,19 @@ export const PROMPT_VERSION = "writing-task2-v1";
 // + per-criterion verdicts tied to the essay, top-3 fixes, inline annotations, a
 // PARTIAL rewrite (not the whole essay), and a next-attempt checklist. The model is
 // an estimating coach, NOT an authoritative examiner (spec non-goals).
-export function buildPrompt({ essay, taskPrompt, category }: EvaluateInput): string {
+export function buildPrompt({ essay, taskPrompt, category, wordCount }: EvaluateInput): string {
+  // Deterministic length signal (server word count, not the model's). Only below the
+  // minimum, so prompts for valid-length essays are byte-identical to before.
+  const lengthCheck =
+    wordCount < TASK2_MIN_WORDS
+      ? [
+          "",
+          `LENGTH CHECK: This essay is ${wordCount} words. IELTS Writing Task 2 requires at`,
+          `least ${TASK2_MIN_WORDS} words, so this response is UNDER the minimum. Treat underlength`,
+          "as a PRIMARY Task Response limitation: penalise Task Response and do NOT award it a",
+          "high band.",
+        ]
+      : [];
   return [
     "You are an IELTS Writing coach. Assess the candidate's Task 2 essay against the",
     "four official band descriptors. You are NOT issuing an official score — give an",
@@ -31,6 +44,7 @@ export function buildPrompt({ essay, taskPrompt, category }: EvaluateInput): str
     "",
     "If the essay is too short or off-topic to judge, set confidence='low' and say so",
     "in the criteria notes rather than inventing a score.",
+    ...lengthCheck,
     "",
     "<task_prompt>",
     taskPrompt,

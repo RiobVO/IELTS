@@ -25,7 +25,7 @@ const validFeedback = {
   ],
   topFixes: ["x"], annotations: [], rewrite: { thesisOld: "o", thesis: "t", paragraph: "p", replacements: [] }, checklist: ["x"],
 };
-const input = { essay: "e", taskPrompt: "t", category: "academic" as const };
+const input = { essay: "e", taskPrompt: "t", category: "academic" as const, wordCount: 280 };
 
 beforeEach(() => generateContent.mockReset());
 

@@ -36,6 +36,7 @@ async function main() {
   const { config: loadEnv } = await import("dotenv");
   loadEnv({ path: join(HERE, "..", ".env.local") });
   const { getEvaluator } = await import("@/lib/writing/evaluator");
+  const { wordCount } = await import("@/lib/writing/word-count");
 
   const set: CalibrationEntry[] = JSON.parse(await readFile(path, "utf8"));
   const evaluator = getEvaluator();
@@ -44,7 +45,7 @@ async function main() {
   let schemaOk = 0;
   for (const e of set) {
     try {
-      const r = await evaluator.evaluate({ essay: e.essay, taskPrompt: e.taskPrompt, category: e.category });
+      const r = await evaluator.evaluate({ essay: e.essay, taskPrompt: e.taskPrompt, category: e.category, wordCount: wordCount(e.essay) });
       schemaOk++;
       rows.push({ predMid: bandMid(r.feedback), truth: e.trueBand });
     } catch (err) {

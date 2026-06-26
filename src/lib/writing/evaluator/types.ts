@@ -48,6 +48,7 @@ export interface EvaluateInput {
   essay: string;
   taskPrompt: string;
   category: "academic" | "general";
+  wordCount: number; // server-trusted length (submission.wordCount), never the model's count
 }
 export interface EvaluateResult {
   feedback: Feedback;
