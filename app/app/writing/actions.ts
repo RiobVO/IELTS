@@ -3,7 +3,7 @@
 import { getProfile, getUser } from "@/lib/auth";
 import { writingEvalConfig } from "@/env";
 import { effectiveTier, type Tier } from "@/lib/tiers";
-import { canEvaluate, validateEssay, isStuckEvaluating, WRITING_STALE_MS } from "@/lib/writing/lifecycle";
+import { canEvaluate, validateEssay, isStuck, WRITING_STALE_MS } from "@/lib/writing/lifecycle";
 import {
   completedCounts,
   insertPendingSubmission,
@@ -59,11 +59,19 @@ export async function getSubmissionStatus(
   const row = await readOwnSubmission(user.id, submissionId);
   if (!row) return null;
 
+  const now = new Date();
   if (row.status === "pending") {
+    // A pending older than the stale window means the trigger never landed and
+    // re-kicks aren't progressing — reap it so the one-active index unblocks and
+    // the user can retry. Fresh pendings get re-kicked (idempotent via claim).
+    if (isStuck(row.updatedAt, now, WRITING_STALE_MS)) {
+      await markFailed(submissionId);
+      return { status: "failed" };
+    }
     triggerEvaluate(submissionId); // safety net if the original after()+fetch was lost
     return { status: "pending" };
   }
-  if (row.status === "evaluating" && isStuckEvaluating(row.updatedAt, new Date(), WRITING_STALE_MS)) {
+  if (row.status === "evaluating" && isStuck(row.updatedAt, now, WRITING_STALE_MS)) {
     await markFailed(submissionId);
     return { status: "failed" };
   }

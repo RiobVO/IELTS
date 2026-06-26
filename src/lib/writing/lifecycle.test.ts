@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   canEvaluate,
   validateEssay,
-  isStuckEvaluating,
+  isStuck,
   WRITING_DAILY_CAP,
   WRITING_STALE_MS,
   MIN_WORDS,
@@ -36,10 +36,10 @@ describe("canEvaluate", () => {
   });
 });
 
-describe("isStuckEvaluating", () => {
+describe("isStuck", () => {
   it("true past, false within the window", () => {
     const at = new Date("2026-06-25T12:00:00Z");
-    expect(isStuckEvaluating(at, new Date("2026-06-25T12:10:00Z"), WRITING_STALE_MS)).toBe(true);
-    expect(isStuckEvaluating(at, new Date("2026-06-25T12:01:00Z"), WRITING_STALE_MS)).toBe(false);
+    expect(isStuck(at, new Date("2026-06-25T12:10:00Z"), WRITING_STALE_MS)).toBe(true);
+    expect(isStuck(at, new Date("2026-06-25T12:01:00Z"), WRITING_STALE_MS)).toBe(false);
   });
 });

@@ -41,6 +41,11 @@ export function canEvaluate(i: EvalGateInput): EvalGate {
     : { allowed: true };
 }
 
-export function isStuckEvaluating(updatedAt: Date, now: Date, staleMs: number): boolean {
+// True when a row in a transient state (pending | evaluating) is older than the
+// stale window. Reaps two failure modes: a 'pending' whose trigger never landed
+// (lost after()/fetch, misconfig) and re-kicks aren't progressing, and an
+// 'evaluating' that died mid-eval. Either way → mark failed so the one-active
+// index unblocks and the user can retry.
+export function isStuck(updatedAt: Date, now: Date, staleMs: number): boolean {
   return now.getTime() - updatedAt.getTime() > staleMs;
 }
