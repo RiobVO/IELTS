@@ -34,7 +34,7 @@ export function Annotations({ essay, annotations }: { essay: string; annotations
       </div>
 
       <div className="wf-annogrid" style={S.grid}>
-        <div style={S.essay}>
+        <div className="wf-annoessay" style={S.essay}>
           {segments.map((seg, i) => {
             if (seg.annIndex === null) return <span key={i}>{seg.text}</span>;
             const a = annotations[seg.annIndex];
@@ -92,6 +92,13 @@ const CSS = `
 @keyframes wf-ring{0%{box-shadow:0 0 0 0 var(--brand)}100%{box-shadow:0 0 0 7px transparent}}
 .wf-cardactive{animation:wf-ring .5s var(--ease-out)}
 @media (prefers-reduced-motion:reduce){.wf-cardactive{animation:none!important}}
+/* Desktop only (≥760px, where the grid is two columns): pin the essay so it stays
+   in view while the longer card column scrolls — fills the empty space the short
+   essay otherwise leaves on the left. top:88 clears the sticky header (matches the
+   attempt coach). On mobile the essay stacks above the cards, so no sticky. */
+@media (min-width:760px){
+  .wf-annoessay{position:sticky;top:88px;align-self:start;max-height:calc(100vh - 104px);overflow:auto}
+}
 `;
 
 const S: Record<string, CSSProperties> = {
