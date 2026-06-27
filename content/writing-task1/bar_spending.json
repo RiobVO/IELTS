@@ -1,0 +1,38 @@
+{
+  "type": "bar_chart",
+  "title": "Average household monthly spending by category, 2022",
+  "units": "share of monthly budget (%)",
+  "categories": [
+    "Housing",
+    "Food",
+    "Transport",
+    "Leisure"
+  ],
+  "series": {
+    "France": [
+      28,
+      22,
+      14,
+      12
+    ],
+    "Germany": [
+      31,
+      18,
+      16,
+      10
+    ],
+    "Spain": [
+      25,
+      26,
+      12,
+      9
+    ]
+  },
+  "key_features": [
+    "Housing is the largest category for all three countries (25–31%).",
+    "Germany spends the most on housing (31%); Spain the least (25%).",
+    "Spain spends the most on food (26%), more than on housing-adjacent leisure.",
+    "Leisure is the smallest category everywhere (9–12%)."
+  ],
+  "prompt": "The bar chart below shows the average share of monthly household spending across four categories in France, Germany and Spain in 2022. Summarise the information by selecting and reporting the main features, and make comparisons where relevant."
+}
