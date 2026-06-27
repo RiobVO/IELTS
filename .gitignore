@@ -43,3 +43,5 @@ npm-debug.log*
 
 # local tooling worktrees / cache — not project source
 /.claude/
+# impeccable critique snapshots — local design-review archive, not shipped source
+/.impeccable/
