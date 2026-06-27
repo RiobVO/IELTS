@@ -17,6 +17,8 @@ import {
 
 export async function insertWritingTask(input: {
   category: "academic" | "general";
+  taskPart: "task1" | "task2";
+  imagePath: string | null;
   prompt: string;
   topic: WritingTopic | null;
   taskType: WritingTaskType | null;
@@ -31,6 +33,8 @@ export async function insertWritingTask(input: {
     .insert(writingTask)
     .values({
       category: input.category,
+      taskPart: input.taskPart,
+      imagePath: input.imagePath,
       prompt: input.prompt,
       topic: input.topic,
       taskType: input.taskType,
@@ -50,6 +54,8 @@ export interface AdminTaskRow {
   id: string;
   prompt: string;
   category: "academic" | "general";
+  taskPart: "task1" | "task2";
+  imagePath: string | null;
   topic: WritingTopic | null;
   taskType: WritingTaskType | null;
   difficulty: WritingDifficulty | null;
@@ -67,6 +73,8 @@ export async function listAllTasks(): Promise<AdminTaskRow[]> {
       id: writingTask.id,
       prompt: writingTask.prompt,
       category: writingTask.category,
+      taskPart: writingTask.taskPart,
+      imagePath: writingTask.imagePath,
       topic: writingTask.topic,
       taskType: writingTask.taskType,
       difficulty: writingTask.difficulty,

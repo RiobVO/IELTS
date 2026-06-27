@@ -62,13 +62,34 @@ export default async function AdminWritingPage({
         {done && DONE_NOTICE[done] && <p style={S.ok}>{DONE_NOTICE[done]}</p>}
 
         <form action={createWritingTask} style={S.card}>
+          <div style={S.grid2}>
+            <div>
+              <label style={S.label} htmlFor="task_part">Part</label>
+              <select id="task_part" name="task_part" defaultValue="task2" style={S.select}>
+                <option value="task2">Task 2 — essay</option>
+                <option value="task1">Task 1 — chart / diagram (Academic)</option>
+              </select>
+            </div>
+            <div>
+              <label style={S.label} htmlFor="image">Task 1 chart image</label>
+              <input
+                id="image"
+                name="image"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                style={S.file}
+              />
+              <span style={S.caption}>Required for Task 1 · PNG/JPEG/WebP · ignored for Task 2</span>
+            </div>
+          </div>
+
           <label style={S.label} htmlFor="prompt">Prompt</label>
           <textarea
             id="prompt"
             name="prompt"
             required
             rows={6}
-            placeholder="Some people believe that…"
+            placeholder="The chart below shows… / Some people believe that…"
             style={S.textarea}
           />
 
@@ -173,6 +194,7 @@ function TopicRow({ task }: { task: AdminTaskRow }) {
         <p style={S.prompt}>{task.prompt}</p>
         <div style={S.meta}>
           <Badge tone={statusTone}>{published ? "Published" : "Draft"}</Badge>
+          <Badge tone="brand">{task.taskPart === "task1" ? "Task 1" : "Task 2"}</Badge>
           <Badge tone="neutral">{CATEGORY_LABEL[task.category]}</Badge>
           <Badge tone="brand">{TIER_LABEL[task.tierRequired]}</Badge>
           {task.topic && <Badge tone="neutral">{writingTopicLabel[task.topic]}</Badge>}
@@ -220,6 +242,7 @@ const S: Record<string, CSSProperties> = {
   grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 },
   grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 18 },
   select: { width: "100%", height: 44, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0 12px", cursor: "pointer" },
+  file: { width: "100%", background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 13, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px", cursor: "pointer" },
   actions: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
   caption: { fontSize: 12, color: "var(--text-muted)" },
 
