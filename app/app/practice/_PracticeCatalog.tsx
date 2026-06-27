@@ -293,7 +293,6 @@ export function PracticeCatalog({
               onToggleCategory={toggleCat}
               onToggleType={toggleType}
               onClear={clearFilter}
-              resultCount={filtered.length}
             />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -338,26 +337,51 @@ export function PracticeCatalog({
 function GoalBar({ target, best }: { target: number | null; best: number | null }) {
   const [value, setValue] = useState(target);
   const [pending, startTransition] = useTransition();
-  // Озвучка оптимистичной записи для скринридера (визуально молча → live-region).
+  // Озвучка оптимистичной записи: aria-live для скринридера + видимый «Saved»-тик
+  // (визуальное подтверждение, что цель записалась), затухающий через ~1.8с.
+  // Подтверждение оптимистичной записи: aria-live для скринридера + видимый
+  // транзиент (Saved/Error), затухающий через ~1.8с. Честно: «Saved» только на
+  // resolve; reject откатывает значение и показывает ошибку (не врём «сохранено»).
   const [status, setStatus] = useState("");
-  const wasPending = useRef(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState(false);
   useEffect(() => {
-    if (wasPending.current && !pending && value != null) setStatus(`Target band set to ${value.toFixed(1)}`);
-    wasPending.current = pending;
-  }, [pending, value]);
+    if (!saved) return;
+    const id = setTimeout(() => setSaved(false), 1800);
+    return () => clearTimeout(id);
+  }, [saved]);
 
   if (value == null) return null; // unset edge — onboarding normally guarantees it
 
   const change = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const next = Number(e.target.value);
-    setValue(next); // optimistic; revalidate confirms server-side
+    const prev = value;
+    setValue(next); // optimistic
+    setError(false);
     startTransition(() => {
-      void setTargetBand(next.toFixed(1));
+      setTargetBand(next.toFixed(1))
+        .then(() => {
+          setSaved(true);
+          setStatus(`Target band set to ${next.toFixed(1)}`);
+        })
+        .catch(() => {
+          setValue(prev); // откат оптимизма — не оставляем непросохранённое значение
+          setError(true);
+          setStatus("Couldn't save your target — please try again");
+        });
     });
   };
 
   const reached = best != null && best >= value;
   const pct = best != null ? Math.min(100, Math.round((best / value) * 100)) : 0;
+  // Saved/Error замещают gap-текст транзиентно — не плодим лишний элемент в пилюле.
+  const tail = error ? (
+    <span style={S.goalError}>Couldn&apos;t save — try again</span>
+  ) : saved ? (
+    <span style={S.goalSaved} className="pc-goalsaved">
+      <Icon name="check" size={13} strokeWidth={3} /> Saved
+    </span>
+  ) : null;
 
   return (
     <div style={S.goal}>
@@ -379,23 +403,23 @@ function GoalBar({ target, best }: { target: number | null; best: number | null 
         <Icon name="chevron-down" size={14} strokeWidth={2.5} style={S.goalChevron} />
       </span>
       {best == null ? (
-        <span style={S.goalHint}>Sit a test to measure your gap</span>
+        tail ?? <span style={S.goalHint}>Sit a test to measure your gap</span>
       ) : (
         <>
           <span style={S.goalTrack}>
             <span style={{ ...S.goalFill, width: `${pct}%` }} />
           </span>
+          {/* «best single test» явным текстом — а не tooltip'ом: телефонной/клавиатурной
+              аудитории hover недоступен, а число рядом с Target читалось как офиц. band. */}
           <span style={S.goalLab}>
-            best test{" "}
-            <b style={{ color: "var(--text-primary)" }} title="Best single test so far — not an official overall band">
-              {best.toFixed(1)}
-            </b>
+            best single test{" "}
+            <b style={{ color: "var(--text-primary)" }}>{best.toFixed(1)}</b>
           </span>
-          {reached ? (
+          {tail ?? (reached ? (
             <span style={S.goalReached}>Target reached</span>
           ) : (
             <span style={S.goalGap}>+{(value - best).toFixed(1)} to go</span>
-          )}
+          ))}
         </>
       )}
       <span role="status" aria-live="polite" style={S.srOnly}>{status}</span>
@@ -428,10 +452,7 @@ function HeroCard({ hero }: { hero: HeroData }) {
           hero.meta && <div style={S.heroMeta}>{hero.meta}</div>
         )}
       </div>
-      <Link href={hero.href} style={S.heroBtn} className="pc-herobtn">
-        {hero.cta}
-        <Icon name="arrow-right" size={18} strokeWidth={2.75} />
-      </Link>
+      <Button variant="inverse" trailingIcon="arrow-right" href={hero.href} fullWidth>{hero.cta}</Button>
     </div>
   );
 }
@@ -577,13 +598,24 @@ function LockedPanel({ skill, onBack }: { skill: "writing" | "speaking"; onBack:
   // чтобы скринридер озвучил новую панель. На «Back» — возвращаем фокус на
   // coming-айтем, что раскрыл панель (id="pc-skill-…").
   const titleRef = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    titleRef.current?.focus();
-  }, []);
   const back = () => {
     document.getElementById(`pc-skill-${skill}`)?.focus();
     onBack();
   };
+  useEffect(() => {
+    titleRef.current?.focus(); // озвучить новую панель скринридеру при раскрытии
+  }, []);
+  // Esc закрывает панель и возвращает фокус на coming-айтем (WCAG 2.1.2 / user control).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        document.getElementById(`pc-skill-${skill}`)?.focus();
+        onBack();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [skill, onBack]);
   return (
     <div id="pc-locked-panel" className="pc-locked" style={S.locked} role="region" aria-labelledby="pc-locked-title">
       <div className="pc-bars" style={S.bars}>
@@ -603,7 +635,7 @@ function LockedPanel({ skill, onBack }: { skill: "writing" | "speaking"; onBack:
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           <Button trailingIcon="arrow-right" href="/app/upgrade">Explore Ultra</Button>
           <Button variant="secondary" href="/app/upgrade">Notify me at launch</Button>
-          <button type="button" onClick={back} style={S.backBtn} className="pc-back">Close</button>
+          <Button variant="ghost" onClick={back}>Close</Button>
         </div>
       </div>
     </div>
@@ -630,11 +662,11 @@ const CSS = `
 .pc-skillcard:hover{transform:translateY(-3px);box-shadow:var(--shadow-solid-lg)}
 .pc-coming-item:hover{border-color:var(--brand-border)!important;background:var(--surface-hover)!important}
 .pc-row:hover{transform:translateY(-2px);border-color:var(--brand-border)!important;box-shadow:var(--shadow-solid-lg)}
-.pc-drill:hover{background:var(--surface-hover)!important}
+.pc-drill:hover{border-color:var(--brand)!important}
+.pc-drill:active{transform:translateY(3px);box-shadow:none!important}
 .pc-showall:hover{background:var(--surface-hover)!important;color:var(--text-primary)!important}
-.pc-herobtn:active{transform:translateY(4px);box-shadow:none!important}
-.pc-back:hover{color:var(--text-primary)!important}
 .pc-goalselect:hover select{background:var(--surface-hover)}
+.pc-goalsaved{animation:pc-fade .18s var(--ease-out)}
 @media (min-width:560px){
   .pc-skills{grid-template-columns:repeat(2,1fr);gap:16px}
   .pc-showall{height:28px}
@@ -652,9 +684,11 @@ const CSS = `
   .pc-filter{position:sticky;top:88px}
 }
 @keyframes pc-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes pc-fade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
 @media (pointer:coarse){.pc-showall{min-height:44px}}
 @media (prefers-reduced-motion:reduce){
   .pc-bars span{animation:none!important;transform:none!important}
+  .pc-goalsaved{animation:none!important}
 }
 `;
 
@@ -666,9 +700,10 @@ const S: Record<string, CSSProperties> = {
   overlineDot: { width: 7, height: 7, borderRadius: "var(--radius-full)", background: "var(--brand)" },
   h1: { margin: 0, lineHeight: 1.04, fontWeight: 800, letterSpacing: "-0.025em", color: "var(--text-primary)", textWrap: "balance" },
   sub: { margin: "12px 0 0", fontSize: 17, lineHeight: 1.5, color: "var(--text-muted)", maxWidth: "46ch" },
-  // drill-чип — вторичное действие под hero. min-height + перенос: длинный label
-  // («Drill weakest: Sentence completion») не клипается на 320px.
-  drillChip: { display: "inline-flex", alignItems: "center", gap: 8, minHeight: 42, padding: "8px 16px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, lineHeight: 1.3, textAlign: "left", cursor: "pointer", transition: "var(--transition-colors)" },
+  // drill-чип — вторичное действие под hero, в той же 3D-тактильной грамматике, что
+  // и bando-кнопки (своя violet-кромка), но в брендовом тинте — это особый хук, не
+  // дженерик-кнопка. min-height + перенос: длинный label не клипается на 320px.
+  drillChip: { display: "inline-flex", alignItems: "center", gap: 8, minHeight: 42, padding: "8px 16px", marginBottom: 3, borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, lineHeight: 1.3, textAlign: "left", boxShadow: "0 3px 0 0 var(--brand-border)", cursor: "pointer", transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)" },
   firstNote: { display: "flex", alignItems: "flex-start", gap: 9, padding: "11px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.4, fontWeight: 600 },
 
   // Goal bar — target band + gap, inline-editable target select.
@@ -682,6 +717,8 @@ const S: Record<string, CSSProperties> = {
   goalGap: { fontSize: 13, fontWeight: 800, color: "var(--text-link)" },
   goalReached: { fontSize: 13, fontWeight: 800, color: "var(--success-text)" },
   goalHint: { fontSize: 13, fontWeight: 600, color: "var(--text-muted)" },
+  goalSaved: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 800, color: "var(--success-text)" },
+  goalError: { display: "inline-flex", alignItems: "center", fontSize: 12, fontWeight: 800, color: "var(--error-text)" },
   srOnly: { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 },
 
   // Hero — violet 3D-карта, белый ink (WCAG AA на brand, проверено: 4.63:1).
@@ -691,7 +728,6 @@ const S: Record<string, CSSProperties> = {
   heroSub: { fontSize: 13, marginTop: 8, lineHeight: 1.45 },
   rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
-  heroBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: "var(--radius-md)", background: "var(--surface)", color: "var(--brand)", fontSize: 15, fontWeight: 800, textDecoration: "none", boxShadow: "0 4px 0 0 color-mix(in oklab, black 18%, transparent)", cursor: "pointer", transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
 
   // Skills
   skillHead: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 },
@@ -738,5 +774,4 @@ const S: Record<string, CSSProperties> = {
   lockedTitle: { margin: 0, fontSize: 30, fontWeight: 800, letterSpacing: "-0.025em", color: "var(--text-primary)" },
   lockedDesc: { margin: "12px 0 0", fontSize: 15, lineHeight: 1.55, color: "var(--text-secondary)", maxWidth: "56ch" },
   featureChip: { display: "inline-flex", alignItems: "center", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", background: "var(--surface-inset)", padding: "7px 13px", borderRadius: "var(--radius-full)" },
-  backBtn: { border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 8 },
 };
