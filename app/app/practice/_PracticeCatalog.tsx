@@ -543,6 +543,17 @@ function SkillCard({
       </div>
       <div style={{ ...S.skillName, color: "var(--text-primary)" }}>{name}</div>
       <div style={S.skillMeta}>{meta}</div>
+      {/* Нижний аффорданс — заполняет карту И делает явным действие: ссылка → Open,
+          тоггл → Filter tests / Showing below (в цвете самого скилла). */}
+      <div style={{ ...S.skillFoot, color: tileFg }}>
+        {href ? (
+          <>Open {name} <Icon name="arrow-right" size={15} strokeWidth={2.5} /></>
+        ) : pressed ? (
+          <><Icon name="chevron-down" size={15} strokeWidth={2.5} /> Showing below</>
+        ) : (
+          <>Filter tests <Icon name="arrow-right" size={15} strokeWidth={2.5} /></>
+        )}
+      </div>
     </>
   );
   const style = { ...S.skillCard, background: bg, borderColor: bd };
@@ -591,8 +602,8 @@ function ComingItem({
     >
       <span style={{ ...S.comingTile, background: sk.subtle, color: sk.text }}>{sk.name.charAt(0)}</span>
       <span style={S.comingName}>{sk.name}</span>
-      {/* tone по самому скиллу — не золото-на-зелёном для Speaking */}
-      <Badge tone={skill === "speaking" ? "success" : "warn"}>Soon</Badge>
+      {/* Нейтральный тон: один статус «Soon» = один цвет; зелёный читался как «доступно». */}
+      <Badge tone="neutral">Soon</Badge>
       <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} strokeWidth={2.5} style={{ color: "var(--text-muted)", marginLeft: 2 }} />
     </button>
   );
@@ -789,11 +800,13 @@ const S: Record<string, CSSProperties> = {
   // Skills — sentence-case label (не uppercase-эйбрау)
   skillHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 12 },
   filterToggle: { width: "100%", alignItems: "center", gap: 8, minHeight: 44, padding: "0 14px", marginBottom: 12, borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "var(--shadow-solid)" },
-  skillCard: { textAlign: "left", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
+  skillCard: { display: "flex", flexDirection: "column", textAlign: "left", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
   skillTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
   skillTile: { width: 42, height: 42, borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", fontSize: 19, fontWeight: 800 },
   skillName: { fontSize: 18, fontWeight: 800, letterSpacing: "-0.015em" },
   skillMeta: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", marginTop: 4 },
+  // marginTop:auto прижимает футер к низу карты — заполняет пустую нижнюю зону.
+  skillFoot: { marginTop: "auto", paddingTop: 18, display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 800 },
 
   // Coming-soon strip (subordinated locked skills) — sentence-case label
   comingHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", margin: "0 0 12px" },
