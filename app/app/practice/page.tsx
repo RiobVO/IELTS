@@ -164,6 +164,7 @@ export default async function PracticePage({
       category: t.category,
       questionTypes: t.question_types,
       questionCount: t.question_count,
+      durationMin: t.duration_seconds ? Math.round(t.duration_seconds / 60) : null,
       locked,
       href: locked ? "/app/upgrade" : examHref(t),
       progress: answered != null && t.question_count > 0 ? `${answered} / ${t.question_count}` : null,
