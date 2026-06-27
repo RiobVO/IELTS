@@ -90,7 +90,7 @@ export function QuestionFilter({
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "var(--space-5)", boxShadow: "var(--shadow-sm)", ...style }}>
       {/* На touch расширяем вертикальную зону тапа чипа до 44px без визуального роста
           (density фильтра сохраняется); на mouse-устройствах правило не активно. */}
-      <style>{".qf-tag::after{content:none}@media (pointer:coarse){.qf-tag::after{content:\"\";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:44px}}"}</style>
+      <style>{".qf-tag::after{content:none}.qf-clear{position:relative}@media (pointer:coarse){.qf-tag::after{content:\"\";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:44px}.qf-clear::after{content:\"\";position:absolute;top:50%;left:-10px;right:-6px;transform:translateY(-50%);height:44px}}"}</style>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "var(--space-4)" }}>
         <Icon name="filter" size={18} style={{ color: "var(--brand)" }} />
         <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: "var(--weight-bold)", color: "var(--text-primary)" }}>Filter</span>
@@ -101,6 +101,7 @@ export function QuestionFilter({
           <button
             type="button"
             onClick={onClear}
+            className="qf-clear"
             style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 600, cursor: "pointer" }}
           >
             <Icon name="x" size={13} /> Clear
