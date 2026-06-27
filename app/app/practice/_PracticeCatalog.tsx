@@ -292,6 +292,23 @@ export function PracticeCatalog({
         </div>
       </section>
 
+      {/* Coming soon — НАД каталогом по решению пользователя (проект ещё демо, апселл
+          наверху приемлем). Тап раскрывает детали неразрушающе (каталог ниже остаётся). */}
+      <section>
+        <div style={S.comingHead}>Coming soon</div>
+        <div className="pc-coming" style={S.coming}>
+          {comingSkills.map((k) => (
+            <ComingItem
+              key={k}
+              skill={k}
+              expanded={skill === k}
+              onClick={() => selectSkill(k)}
+            />
+          ))}
+        </div>
+        {lockedSkill && <LockedPanel skill={lockedSkill} onBack={clearSkill} />}
+      </section>
+
       {/* Catalog — фильтр (сворачиваемый на мобиле) + список. Ведём фокус сюда при
           выборе скилла, чтобы действие выше сгиба не было «невидимым». */}
       <section ref={catalogRef}>
@@ -359,23 +376,6 @@ export function PracticeCatalog({
         <div aria-live="polite" style={S.srOnly}>
           {filtered.length} {filtered.length === 1 ? "test" : "tests"} shown
         </div>
-      </section>
-
-      {/* Coming soon — субординировано ПОД каталог: апселл не стоит между юзером и
-          core-задачей. Тап раскрывает детали неразрушающе (каталог выше остаётся). */}
-      <section>
-        <div style={S.comingHead}>Coming soon</div>
-        <div className="pc-coming" style={S.coming}>
-          {comingSkills.map((k) => (
-            <ComingItem
-              key={k}
-              skill={k}
-              expanded={skill === k}
-              onClick={() => selectSkill(k)}
-            />
-          ))}
-        </div>
-        {lockedSkill && <LockedPanel skill={lockedSkill} onBack={clearSkill} />}
       </section>
     </div>
   );
