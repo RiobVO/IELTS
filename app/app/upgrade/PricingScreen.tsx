@@ -35,7 +35,7 @@ const CARDS: PlanCardMeta[] = [
       { t: "Answer explanations & evidence", on: true },
       { t: "League, badges & streaks", on: true },
       { t: "Full 40-question mock tests + band", on: false },
-      { t: "Writing & Speaking feedback (coming)", on: false },
+      { t: "AI Writing feedback", on: false },
     ],
   },
   {
@@ -49,7 +49,7 @@ const CARDS: PlanCardMeta[] = [
       { t: "Full 40-question mock tests + real band", on: true, hero: true },
       { t: "Sit it under real exam timing", on: true },
       { t: "Drill any weak type on demand", on: true },
-      { t: "AI Writing feedback (coming)", on: true, hero: true },
+      { t: "AI Writing feedback — Task 1 & 2", on: true, hero: true },
       { t: "Priority new content", on: true },
     ],
   },
@@ -60,7 +60,8 @@ const CARDS: PlanCardMeta[] = [
     cta: "Upgrade to Ultra",
     features: [
       { t: "Everything in Premium", on: true },
-      { t: "Writing & Speaking — AI + human review (coming)", on: true, hero: true },
+      { t: "AI Writing feedback — priority", on: true, hero: true },
+      { t: "Speaking + human review (coming)", on: true },
       { t: "Monthly band-prediction report (coming)", on: true },
       { t: "1:1 strategy call (quarterly)", on: true, hero: true },
       { t: "Priority new content", on: true },
@@ -71,11 +72,11 @@ const CARDS: PlanCardMeta[] = [
 
 const FAQ = [
   { q: "Can I cancel anytime?", a: "Yes, one click in your profile. Access stays until the end of your paid period." },
-  { q: "What's the difference between free and paid?", a: "Reading & Listening — including the per-type breakdown and full answer explanations — are free forever. You pay for full 40-question mock tests with an official band score, and (coming) Writing & Speaking feedback." },
-  { q: "Premium vs Ultra?", a: "Premium adds full 40-question mock tests with your real band, plus AI Writing feedback (coming). Ultra adds a real human review, a band-prediction report, and a 1:1 strategy call." },
+  { q: "What's the difference between free and paid?", a: "Reading & Listening — including the per-type breakdown and full answer explanations — are free forever. You pay for full 40-question mock tests with an official band score, and AI Writing feedback (Speaking coming)." },
+  { q: "Premium vs Ultra?", a: "Premium adds full 40-question mock tests with your real band, plus AI Writing feedback. Ultra adds priority Writing, a band-prediction report, a 1:1 strategy call, and (coming) Speaking with a human review." },
   { q: "Are the tests like the real IELTS?", a: "Yes — real Cambridge material in a runner that mirrors the computer-delivered exam: same interface, timer, drag-and-drop." },
-  { q: "How accurate is the band?", a: "Reading & Listening use the official Cambridge band scale. Writing & Speaking (coming) are scored on the 4 official criteria, with a human check on Ultra." },
-  { q: "When do Writing & Speaking launch?", a: "They're in active development; Ultra members get access first." },
+  { q: "How accurate is the band?", a: "Reading & Listening use the official Cambridge band scale. Writing is scored by AI on the 4 official criteria as a coaching estimate to guide practice — not an official score. Speaking (coming) will work the same way, with a human check on Ultra." },
+  { q: "When does Speaking launch?", a: "AI Writing feedback is available now on Premium. Speaking is in active development; Ultra members get access first." },
   { q: "What payment methods work?", a: "Local cards: Uzcard, Humo, and Visa/Mastercard." },
   { q: "Is there a refund?", a: "Yes — 7-day money-back, no questions asked." },
   { q: "Can I switch plans?", a: "Yes, upgrade or downgrade anytime; the difference is prorated." },
@@ -107,7 +108,7 @@ export default function PricingScreen({
         </span>
         <h1 style={S.h1}>Pick your plan</h1>
         <p style={S.lead}>
-          Practice and review free. Upgrade for full mock exams with your <i style={{ fontFamily: "var(--font-reading)" }}>real</i> band — and Writing &amp; Speaking feedback.
+          Practice and review free. Upgrade for full mock exams with your <i style={{ fontFamily: "var(--font-reading)" }}>real</i> band — and AI Writing feedback.
         </p>
       </div>
 
