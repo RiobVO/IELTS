@@ -25,7 +25,7 @@ const validFeedback = {
   ],
   topFixes: ["x"], annotations: [], rewrite: { thesisOld: "o", thesis: "t", paragraph: "p", replacements: [] }, checklist: ["x"],
 };
-const input = { essay: "e", taskPrompt: "t", category: "academic" as const, wordCount: 280 };
+const input = { essay: "e", taskPrompt: "t", category: "academic" as const, taskPart: "task2" as const, wordCount: 280 };
 
 beforeEach(() => generateContent.mockReset());
 
@@ -45,5 +45,39 @@ describe("evaluateWithGemini", () => {
   it("throws when the model returns non-JSON", async () => {
     generateContent.mockResolvedValue({ text: "I cannot help with that." });
     await expect(evaluateWithGemini(input)).rejects.toThrow();
+  });
+
+  it("Task 2: text-only contents (no image part) + task2 prompt version", async () => {
+    generateContent.mockResolvedValue({ text: JSON.stringify(validFeedback) });
+    const r = await evaluateWithGemini(input);
+    const { contents } = generateContent.mock.calls[0][0];
+    expect(Array.isArray(contents)).toBe(true);
+    expect(contents.some((p: { text?: string }) => typeof p.text === "string")).toBe(true);
+    expect(contents.some((p: { inlineData?: unknown }) => p.inlineData)).toBe(false);
+    expect(r.promptVersion).toBe("writing-task2-v3");
+  });
+
+  it("Task 1: attaches the visual as an inline_data part + task1 prompt version", async () => {
+    generateContent.mockResolvedValue({ text: JSON.stringify(validFeedback) });
+    const r = await evaluateWithGemini({
+      ...input,
+      taskPart: "task1",
+      image: { data: "QkFTRTY0", mimeType: "image/png" },
+    });
+    const { contents } = generateContent.mock.calls[0][0];
+    const imagePart = contents.find((p: { inlineData?: { data: string; mimeType: string } }) => p.inlineData);
+    expect(imagePart?.inlineData).toEqual({ data: "QkFTRTY0", mimeType: "image/png" });
+    // The text part carries the Task 1 (vision) prompt, not the Task 2 essay prompt.
+    const textPart = contents.find((p: { text?: string }) => typeof p.text === "string");
+    expect(textPart.text).toContain("TASK ACHIEVEMENT");
+    expect(r.promptVersion).toBe("writing-task1-v1");
+  });
+
+  it("Task 1 without image bytes: still routes the task1 prompt, just no image part", async () => {
+    generateContent.mockResolvedValue({ text: JSON.stringify(validFeedback) });
+    const r = await evaluateWithGemini({ ...input, taskPart: "task1" });
+    const { contents } = generateContent.mock.calls[0][0];
+    expect(contents.some((p: { inlineData?: unknown }) => p.inlineData)).toBe(false);
+    expect(r.promptVersion).toBe("writing-task1-v1");
   });
 });

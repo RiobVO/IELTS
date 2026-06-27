@@ -57,7 +57,12 @@ export interface EvaluateInput {
   essay: string;
   taskPrompt: string;
   category: "academic" | "general";
+  taskPart: "task1" | "task2"; // routes the prompt + version; task1 also carries the visual
   wordCount: number; // server-trusted length (submission.wordCount), never the model's count
+  // Task 1 visual as a pre-loaded inline image (base64 + MIME) for Gemini vision. The
+  // caller (route / benchmark) loads the bytes — owner-path Storage download or a local
+  // file — so the evaluator stays I/O-free and unit-testable. Absent for Task 2.
+  image?: { data: string; mimeType: string };
 }
 export interface EvaluateResult {
   feedback: Feedback;
