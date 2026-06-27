@@ -146,6 +146,27 @@ export function PracticeCatalog({
   const [selCats, setSelCats] = useState<string[]>(initialFilter?.cats ?? []);
   const [selTypes, setSelTypes] = useState<string[]>(initialFilter?.types ?? []);
   const [skill, setSkill] = useState<Skill | null>(initialFilter?.skill ?? null);
+  // Мобильный фильтр свёрнут по умолчанию (стена чипов не загораживает список);
+  // на десктопе (≥1024) всегда раскрыт. matchMedia — как бургер-паттерн проекта.
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setFiltersOpen(!mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // Фильтр-действие выше сгиба (skill-карта / drill) меняет каталог ниже — ведём
+  // пользователя к результату: скролл каталога + фокус на заголовок списка
+  // (aria-live ниже озвучит счёт). Уважаем prefers-reduced-motion.
+  const catalogRef = useRef<HTMLElement>(null);
+  const listHeadRef = useRef<HTMLDivElement>(null);
+  const revealCatalog = () => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    catalogRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    listHeadRef.current?.focus({ preventScroll: true });
+  };
 
   const toggle = (set: (fn: (p: string[]) => string[]) => void) => (v: string) =>
     set((p) => (p.includes(v) ? p.filter((x) => x !== v) : [...p, v]));
@@ -155,14 +176,19 @@ export function PracticeCatalog({
     setSelCats([]);
     setSelTypes([]);
   };
-  const selectSkill = (k: Skill) => setSkill((s) => (s === k ? null : k));
+  const selectSkill = (k: Skill) => {
+    setSkill((s) => (s === k ? null : k));
+    if (k === "reading" || k === "listening") revealCatalog();
+  };
   const clearSkill = () => setSkill(null);
   const drill = () => {
     if (!drillWeakest) return;
     setSelTypes([drillWeakest.type]);
     setSelCats([]);
     setSkill(drillWeakest.section);
+    revealCatalog();
   };
+  const activeFilterCount = selCats.length + selTypes.length;
 
   const skillSection: Section | null = skill === "reading" || skill === "listening" ? skill : null;
   const lockedSkill = skill === "writing" || skill === "speaking" ? skill : null;
@@ -208,7 +234,7 @@ export function PracticeCatalog({
           {drillWeakest ? (
             <button type="button" onClick={drill} style={S.drillChip} className="pc-drill">
               <Icon name="bar-chart" size={16} strokeWidth={2.5} />
-              Drill weakest: {drillWeakest.label}
+              Practice your weakest type: {drillWeakest.label}
             </button>
           ) : (
             hero.kind === "first" && (
@@ -264,39 +290,40 @@ export function PracticeCatalog({
             />
           )}
         </div>
-
-        {/* Coming soon — субординированная полоса locked-скиллов. Тап раскрывает
-            детали НЕРАЗРУШАЮЩЕ (каталог ниже остаётся), а не свопит каталог. */}
-        <div style={S.comingHead}>Coming soon</div>
-        <div className="pc-coming" style={S.coming}>
-          {comingSkills.map((k) => (
-            <ComingItem
-              key={k}
-              skill={k}
-              expanded={skill === k}
-              onClick={() => selectSkill(k)}
-            />
-          ))}
-        </div>
-        {lockedSkill && <LockedPanel skill={lockedSkill} onBack={clearSkill} />}
       </section>
 
-      {/* Catalog — всегда виден (свопа на locked-панель больше нет) */}
-      <section>
+      {/* Catalog — фильтр (сворачиваемый на мобиле) + список. Ведём фокус сюда при
+          выборе скилла, чтобы действие выше сгиба не было «невидимым». */}
+      <section ref={catalogRef}>
         <div className="pc-catalog" style={S.catalog}>
           <div className="pc-filter" style={S.filterCol}>
-            <QuestionFilter
-              categories={filterCategories}
-              questionTypes={filterTypes}
-              selectedCategories={selCats}
-              selectedTypes={selTypes}
-              onToggleCategory={toggleCat}
-              onToggleType={toggleType}
-              onClear={clearFilter}
-            />
+            <button
+              type="button"
+              className="pc-filter-toggle"
+              onClick={() => setFiltersOpen((o) => !o)}
+              aria-expanded={filtersOpen}
+              aria-controls="pc-filter-body"
+              style={S.filterToggle}
+            >
+              <Icon name="filter" size={16} strokeWidth={2.5} />
+              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+              <Icon name={filtersOpen ? "chevron-up" : "chevron-down"} size={16} strokeWidth={2.5} style={{ marginLeft: "auto" }} />
+            </button>
+            <div id="pc-filter-body" className={filtersOpen ? "pc-filter-body is-open" : "pc-filter-body"}>
+              <QuestionFilter
+                categories={filterCategories}
+                questionTypes={filterTypes}
+                selectedCategories={selCats}
+                selectedTypes={selTypes}
+                onToggleCategory={toggleCat}
+                onToggleType={toggleType}
+                onClear={clearFilter}
+              />
+            </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={S.listHead}>
+            {/* tabIndex -1: программный фокус при выборе скилла (SR озвучит заголовок) */}
+            <div style={S.listHead} ref={listHeadRef} tabIndex={-1}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <h2 style={S.listTitle}>{catalogLabel}</h2>
                 {skillSection && (
@@ -328,6 +355,27 @@ export function PracticeCatalog({
             )}
           </div>
         </div>
+        {/* SR-анонс смены счёта результатов (визуально счёт уже в шапке списка) */}
+        <div aria-live="polite" style={S.srOnly}>
+          {filtered.length} {filtered.length === 1 ? "test" : "tests"} shown
+        </div>
+      </section>
+
+      {/* Coming soon — субординировано ПОД каталог: апселл не стоит между юзером и
+          core-задачей. Тап раскрывает детали неразрушающе (каталог выше остаётся). */}
+      <section>
+        <div style={S.comingHead}>Coming soon</div>
+        <div className="pc-coming" style={S.coming}>
+          {comingSkills.map((k) => (
+            <ComingItem
+              key={k}
+              skill={k}
+              expanded={skill === k}
+              onClick={() => selectSkill(k)}
+            />
+          ))}
+        </div>
+        {lockedSkill && <LockedPanel skill={lockedSkill} onBack={clearSkill} />}
       </section>
     </div>
   );
@@ -391,6 +439,7 @@ function GoalBar({ target, best }: { target: number | null; best: number | null 
       <span style={S.goalSelectWrap} className="pc-goalselect">
         <select
           aria-label="Target band"
+          className="pc-goalsel"
           value={value.toFixed(1)}
           onChange={change}
           disabled={pending}
@@ -403,7 +452,7 @@ function GoalBar({ target, best }: { target: number | null; best: number | null 
         <Icon name="chevron-down" size={14} strokeWidth={2.5} style={S.goalChevron} />
       </span>
       {best == null ? (
-        tail ?? <span style={S.goalHint}>Sit a test to measure your gap</span>
+        tail ?? <span style={S.goalHint}>Take a test to measure your gap</span>
       ) : (
         <>
           <span style={S.goalTrack}>
@@ -418,7 +467,7 @@ function GoalBar({ target, best }: { target: number | null; best: number | null 
           {tail ?? (reached ? (
             <span style={S.goalReached}>Target reached</span>
           ) : (
-            <span style={S.goalGap}>+{(value - best).toFixed(1)} to go</span>
+            <span style={S.goalGap}>+{(value - best).toFixed(1)} to target</span>
           ))}
         </>
       )}
@@ -542,7 +591,8 @@ function ComingItem({
     >
       <span style={{ ...S.comingTile, background: sk.subtle, color: sk.text }}>{sk.name.charAt(0)}</span>
       <span style={S.comingName}>{sk.name}</span>
-      <Badge tone="warn">Soon</Badge>
+      {/* tone по самому скиллу — не золото-на-зелёном для Speaking */}
+      <Badge tone={skill === "speaking" ? "success" : "warn"}>Soon</Badge>
       <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} strokeWidth={2.5} style={{ color: "var(--text-muted)", marginLeft: 2 }} />
     </button>
   );
@@ -667,6 +717,13 @@ const CSS = `
 .pc-showall:hover{background:var(--surface-hover)!important;color:var(--text-primary)!important}
 .pc-goalselect:hover select{background:var(--surface-hover)}
 .pc-goalsaved{animation:pc-fade .18s var(--ease-out)}
+.pc-filter-toggle{display:none}
+.pc-filter-body{display:block}
+@media (max-width:1023px){
+  .pc-filter-toggle{display:flex}
+  .pc-filter-body{display:none}
+  .pc-filter-body.is-open{display:block}
+}
 @media (min-width:560px){
   .pc-skills{grid-template-columns:repeat(2,1fr);gap:16px}
   .pc-showall{height:28px}
@@ -685,7 +742,7 @@ const CSS = `
 }
 @keyframes pc-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes pc-fade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
-@media (pointer:coarse){.pc-showall{min-height:44px}}
+@media (pointer:coarse){.pc-showall{min-height:44px}.pc-goalsel{min-height:44px}}
 @media (prefers-reduced-motion:reduce){
   .pc-bars span{animation:none!important;transform:none!important}
   .pc-goalsaved{animation:none!important}
@@ -703,7 +760,7 @@ const S: Record<string, CSSProperties> = {
   // drill-чип — вторичное действие под hero, в той же 3D-тактильной грамматике, что
   // и bando-кнопки (своя violet-кромка), но в брендовом тинте — это особый хук, не
   // дженерик-кнопка. min-height + перенос: длинный label не клипается на 320px.
-  drillChip: { display: "inline-flex", alignItems: "center", gap: 8, minHeight: 42, padding: "8px 16px", marginBottom: 3, borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, lineHeight: 1.3, textAlign: "left", boxShadow: "0 3px 0 0 var(--brand-border)", cursor: "pointer", transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)" },
+  drillChip: { display: "inline-flex", alignItems: "center", gap: 8, minHeight: 44, padding: "8px 16px", marginBottom: 3, borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, lineHeight: 1.3, textAlign: "left", boxShadow: "0 3px 0 0 var(--brand-border)", cursor: "pointer", transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)" },
   firstNote: { display: "flex", alignItems: "flex-start", gap: 9, padding: "11px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.4, fontWeight: 600 },
 
   // Goal bar — target band + gap, inline-editable target select.
@@ -729,16 +786,17 @@ const S: Record<string, CSSProperties> = {
   rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
 
-  // Skills
-  skillHead: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 },
+  // Skills — sentence-case label (не uppercase-эйбрау)
+  skillHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 12 },
+  filterToggle: { width: "100%", alignItems: "center", gap: 8, minHeight: 44, padding: "0 14px", marginBottom: 12, borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "var(--shadow-solid)" },
   skillCard: { textAlign: "left", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
   skillTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
   skillTile: { width: 42, height: 42, borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", fontSize: 19, fontWeight: 800 },
   skillName: { fontSize: 18, fontWeight: 800, letterSpacing: "-0.015em" },
   skillMeta: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", marginTop: 4 },
 
-  // Coming-soon strip (subordinated locked skills)
-  comingHead: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-muted)", margin: "22px 0 12px" },
+  // Coming-soon strip (subordinated locked skills) — sentence-case label
+  comingHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", margin: "0 0 12px" },
   coming: {},
   comingItem: { display: "inline-flex", alignItems: "center", gap: 10, minHeight: 48, padding: "8px 14px", borderRadius: "var(--radius-md)", border: "1.5px solid var(--border)", fontFamily: "var(--font-ui)", cursor: "pointer", transition: "var(--transition-colors)" },
   comingTile: { width: 30, height: 30, flex: "none", borderRadius: "var(--radius-sm)", display: "grid", placeItems: "center", fontSize: 14, fontWeight: 800 },
@@ -747,7 +805,7 @@ const S: Record<string, CSSProperties> = {
   // Catalog
   catalog: {},
   filterCol: {},
-  listHead: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 },
+  listHead: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, outline: "none" },
   listTitle: { margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
   showAll: { display: "inline-flex", alignItems: "center", gap: 5, padding: "0 13px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "var(--transition-colors)" },
   resultCount: { fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-muted)" },

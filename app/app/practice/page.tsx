@@ -292,7 +292,7 @@ function buildHero({
   return {
     kind: "first",
     eyebrow: "Start here",
-    title: "Sit your first test",
+    title: "Take your first test",
     sub: "Take a Reading test to surface your weakest question type — then we point your practice straight at it.",
     cta: "Browse Reading",
     href: first ? (first.has_runner ? `/app/exam/${first.id}` : `/app/reading/${first.id}`) : "/app/reading",
