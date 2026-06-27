@@ -103,7 +103,7 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
             Pick a prompt<span style={{ color: "var(--brand)" }}>.</span>
           </h1>
           <p style={S.sub}>
-            Write a Task 2 essay and get an estimated band range with a concrete plan to lift it — not a verdict.
+            Pick a Task 1 or Task 2 prompt and get an estimated band range with a concrete plan to lift it — not a verdict.
           </p>
         </div>
         {targetBand != null && (
@@ -144,7 +144,7 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
           aria-label="Search prompts"
         />
         <span style={S.count}>
-          {filtered.length} prompts · ~250 words each
+          {filtered.length} prompts · timed practice
         </span>
       </div>
 

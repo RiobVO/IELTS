@@ -260,7 +260,9 @@ const TONES: Record<NudgeTone, { bg: string; border: string; iconBg: string; acc
 function CoachTip({ text, taskPart }: { text: string; taskPart: "task1" | "task2" }) {
   const nudge = nextNudge(text, taskPart);
   const tone = TONES[nudge.tone];
-  const ready = nudge.id === "ready";
+  // The green tone IS the celebratory "ready" state for both parts (Task 2 "ready",
+  // Task 1 "t1_ready") — gate on tone, not the namespaced id.
+  const ready = nudge.tone === "green";
   return (
     <div
       className="ct-card"
