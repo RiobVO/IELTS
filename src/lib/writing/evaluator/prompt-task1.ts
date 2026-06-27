@@ -1,7 +1,7 @@
 import { TASK1_MIN_WORDS } from "../lifecycle";
 import type { EvaluateInput } from "./types";
 
-export const TASK1_PROMPT_VERSION = "writing-task1-v1";
+export const TASK1_PROMPT_VERSION = "writing-task1-v2";
 
 // Vision-anchored prompt for IELTS Academic Writing Task 1. The visual is attached as
 // an inline image (gemini.ts); the model assesses by COMPARING the essay to it. Same
@@ -19,7 +19,7 @@ CRITICAL — the first criterion is TASK ACHIEVEMENT (its key in the JSON is "ta
 - Accuracy: every figure, trend, and comparison the candidate states MUST match the attached visual. Data that is invented, misread, or contradicts the visual is a MAJOR failure — name the specific wrong claim.
 - Overview: a Task 1 response MUST contain a clear overview of the main trend(s) or stage(s). With no overview, Task Achievement cannot exceed band 5–6 however fluent the language.
 - Key features: the most significant features must be selected and reported; trivial detail without the big picture is weak.
-- Length: at least 150 words.{{LENGTH_NOTE}}
+- Length: do NOT count or estimate the word count yourself — a server word count is authoritative. Assume the length is acceptable unless a note appears here flagging it as underlength.{{LENGTH_NOTE}}
 
 First, in <thinking>, read the visual yourself: note its type, axes and units, every series, the key data points, and the main trends. THEN compare the essay against that ground truth and score each criterion. Do NOT include <thinking> in the final output.
 

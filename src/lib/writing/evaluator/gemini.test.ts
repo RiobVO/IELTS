@@ -70,7 +70,7 @@ describe("evaluateWithGemini", () => {
     // The text part carries the Task 1 (vision) prompt, not the Task 2 essay prompt.
     const textPart = contents.find((p: { text?: string }) => typeof p.text === "string");
     expect(textPart.text).toContain("TASK ACHIEVEMENT");
-    expect(r.promptVersion).toBe("writing-task1-v1");
+    expect(r.promptVersion).toBe("writing-task1-v2");
   });
 
   it("Task 1 without image bytes: still routes the task1 prompt, just no image part", async () => {
@@ -78,6 +78,6 @@ describe("evaluateWithGemini", () => {
     const r = await evaluateWithGemini({ ...input, taskPart: "task1" });
     const { contents } = generateContent.mock.calls[0][0];
     expect(contents.some((p: { inlineData?: unknown }) => p.inlineData)).toBe(false);
-    expect(r.promptVersion).toBe("writing-task1-v1");
+    expect(r.promptVersion).toBe("writing-task1-v2");
   });
 });
