@@ -27,6 +27,7 @@ const BANDS = ["4.0", "4.5", "5.0", "5.5", "6.0", "6.5", "7.0", "7.5", "8.0", "8
 
 type Section = "reading" | "listening";
 type Skill = Section | "writing" | "speaking";
+type Sort = "default" | "short" | "questions";
 
 /** Проброс CSS-переменной в style без нарушения инварианта «брейкпоинт-свойства в
  *  классах»: инлайн отдаёт лишь скаляр (--live-cols), а переключение колонок по
@@ -146,6 +147,7 @@ export function PracticeCatalog({
   const [selCats, setSelCats] = useState<string[]>(initialFilter?.cats ?? []);
   const [selTypes, setSelTypes] = useState<string[]>(initialFilter?.types ?? []);
   const [skill, setSkill] = useState<Skill | null>(initialFilter?.skill ?? null);
+  const [sort, setSort] = useState<Sort>("default");
   // Мобильный фильтр свёрнут по умолчанию (стена чипов не загораживает список);
   // на десктопе (≥1024) всегда раскрыт. matchMedia — как бургер-паттерн проекта.
   const [filtersOpen, setFiltersOpen] = useState(true);
@@ -200,6 +202,14 @@ export function PracticeCatalog({
       (selTypes.length === 0 || t.questionTypes.some((x) => selTypes.includes(x))),
   );
   const catalogLabel = skillSection ? `${cap(skillSection)} tests` : "All tests";
+  // Сортировка опциональна; default сохраняет порядок reading→listening.
+  const visible = sort === "default"
+    ? filtered
+    : [...filtered].sort((a, b) =>
+        sort === "short"
+          ? (a.durationMin ?? Infinity) - (b.durationMin ?? Infinity)
+          : b.questionCount - a.questionCount,
+      );
 
   // Подсветка выбранной skill-карты её цветом (фон-тинт + цветная рамка).
   const cardBg = (k: Skill, c: string) => (skill === k ? c : "var(--surface)");
@@ -349,10 +359,39 @@ export function PracticeCatalog({
                   </button>
                 )}
               </div>
-              <span style={S.resultCount}>
-                <b style={{ color: "var(--text-primary)" }}>{filtered.length}</b> results
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={S.sortWrap} className="pc-goalselect">
+                  <select
+                    aria-label="Sort tests"
+                    className="pc-goalsel"
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as Sort)}
+                    style={S.sortSelect}
+                  >
+                    <option value="default">Recommended</option>
+                    <option value="short">Shortest first</option>
+                    <option value="questions">Most questions</option>
+                  </select>
+                  <Icon name="chevron-down" size={14} strokeWidth={2.5} style={S.goalChevron} />
+                </span>
+                <span style={S.resultCount}>
+                  <b style={{ color: "var(--text-primary)" }}>{filtered.length}</b> results
+                </span>
+              </div>
             </div>
+            {/* Эхо активного фильтра при свёрнутой панели (мобайл): видно, что
+                ограничивает список, без открытия фильтра (recognition). */}
+            {!filtersOpen && activeFilterCount > 0 && (
+              <div style={S.activeEcho}>
+                <span style={S.echoLabel}>Filtering:</span>
+                {selTypes.map((v) => (
+                  <span key={v} style={S.echoChip}>{qLabel(v)}</span>
+                ))}
+                {selCats.map((v) => (
+                  <span key={v} style={S.echoChip}>{cat(v)}</span>
+                ))}
+              </div>
+            )}
             {filtered.length === 0 ? (
               <div style={S.empty}>
                 <div>No tests match this filter yet.</div>
@@ -368,7 +407,7 @@ export function PracticeCatalog({
                 )}
               </div>
             ) : (
-              filtered.map((t) => <TestRow key={t.id} t={t} />)
+              visible.map((t) => <TestRow key={t.id} t={t} />)
             )}
           </div>
         </div>
@@ -818,8 +857,13 @@ const S: Record<string, CSSProperties> = {
   // Catalog
   catalog: {},
   filterCol: {},
-  listHead: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, outline: "none" },
+  listHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", rowGap: 10, outline: "none" },
   listTitle: { margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
+  sortWrap: { position: "relative", display: "inline-flex", alignItems: "center" },
+  sortSelect: { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: 13, color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "var(--surface)", padding: "6px 28px 6px 12px", cursor: "pointer", transition: "var(--transition-colors)" },
+  activeEcho: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 },
+  echoLabel: { fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
+  echoChip: { display: "inline-flex", alignItems: "center", height: 28, padding: "0 11px", borderRadius: "var(--radius-full)", border: "1px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700 },
   showAll: { display: "inline-flex", alignItems: "center", gap: 5, padding: "0 13px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "var(--transition-colors)" },
   resultCount: { fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-muted)" },
   empty: { padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)" },
