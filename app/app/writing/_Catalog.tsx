@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { Input } from "@/components/core/Input";
 import type { CatalogTask } from "@/lib/writing/read";
@@ -26,6 +26,7 @@ import {
 
 type CatFilter = "all" | "academic" | "general";
 type PartFilter = "all" | "task1" | "task2";
+type DiffFilter = "all" | "1" | "2" | "3";
 
 const SEGMENTS: { value: CatFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -38,6 +39,14 @@ const PART_SEGMENTS: { value: PartFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "task1", label: "Task 1" },
   { value: "task2", label: "Task 2" },
+];
+// Difficulty filter — the audience picks by level, so this is the highest-value facet
+// (labels mirror the on-card meter + the help disclosure). Values are the 1/2/3 tier.
+const DIFF_SEGMENTS: { value: DiffFilter; label: string }[] = [
+  { value: "all", label: "Any" },
+  { value: "1", label: "Foundation" },
+  { value: "2", label: "Core" },
+  { value: "3", label: "Stretch" },
 ];
 
 const MINUTES = 40;
@@ -109,20 +118,40 @@ const TOPIC: Record<WritingTopic, TopicVisual> = {
 export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; targetBand: number | null }) {
   const [cat, setCat] = useState<CatFilter>("all");
   const [part, setPart] = useState<PartFilter>("all");
+  const [diff, setDiff] = useState<DiffFilter>("all");
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
   const filtered = tasks.filter(
     (t) =>
       (part === "all" || t.taskPart === part) &&
       (cat === "all" || t.category === cat) &&
+      (diff === "all" || String(t.difficulty ?? "") === diff) &&
       (!query || t.prompt.toLowerCase().includes(query)),
   );
-  const filtersActive = cat !== "all" || part !== "all" || q !== "";
+  const filtersActive = cat !== "all" || part !== "all" || diff !== "all" || q !== "";
   const clearFilters = () => {
     setCat("all");
     setPart("all");
+    setDiff("all");
     setQ("");
   };
+
+  // Power-user accelerator: "/" focuses search from anywhere on the page (skip when
+  // the user is already typing in a field). Escape-to-clear lives on the input itself.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "/" || e.defaultPrevented) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      const search = document.getElementById("wl-search-input");
+      if (search) {
+        e.preventDefault();
+        (search as HTMLInputElement).focus();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="wl-wrap" style={S.wrap}>
@@ -152,31 +181,47 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
         )}
       </header>
 
-      {/* Control row */}
-      <div className="wl-filterrow" style={S.filterRow}>
-        <Segmented segments={PART_SEGMENTS} value={part} onChange={(v) => setPart(v as PartFilter)} label="Filter by task" />
-        <Segmented segments={SEGMENTS} value={cat} onChange={(v) => setCat(v as CatFilter)} label="Filter by category" />
-        <Input
-          icon="search"
-          placeholder="Search prompts"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          wrapStyle={{ flex: 1, minWidth: 200 }}
-          aria-label="Search prompts"
-          trailing={
-            q ? (
-              <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="wl-clear" style={S.clear}>
-                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth={2.4} strokeLinecap="round" aria-hidden="true">
-                  <path d="M18 6 6 18 M6 6l12 12" />
-                </svg>
-              </button>
-            ) : null
-          }
-        />
-        <span className="wl-count" style={S.count}>
-          {filtered.length} prompts · timed practice
-        </span>
+      {/* Controls — facet filters on top, search + count below. Splitting the rows
+          keeps the three segmented groups grouped and lets the count sit with search
+          instead of orphaning when a single crowded row wraps. */}
+      <div className="wl-controls">
+        <div className="wl-segrow">
+          <Segmented segments={PART_SEGMENTS} value={part} onChange={(v) => setPart(v as PartFilter)} label="Filter by task" />
+          <Segmented segments={SEGMENTS} value={cat} onChange={(v) => setCat(v as CatFilter)} label="Filter by category" />
+          <Segmented segments={DIFF_SEGMENTS} value={diff} onChange={(v) => setDiff(v as DiffFilter)} label="Filter by difficulty" />
+        </div>
+        <div className="wl-searchrow">
+          <Input
+            id="wl-search-input"
+            icon="search"
+            placeholder="Search prompts"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && q) {
+                e.preventDefault();
+                setQ("");
+              }
+            }}
+            wrapStyle={{ flex: 1, minWidth: 200 }}
+            aria-label="Search prompts"
+            trailing={
+              q ? (
+                <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="wl-clear" style={S.clear}>
+                  <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth={2.4} strokeLinecap="round" aria-hidden="true">
+                    <path d="M18 6 6 18 M6 6l12 12" />
+                  </svg>
+                </button>
+              ) : (
+                <kbd className="wl-kbd" style={S.kbd} aria-hidden="true">/</kbd>
+              )
+            }
+          />
+          <span className="wl-count" style={S.count}>
+            {filtered.length} prompts · timed practice
+          </span>
+        </div>
       </div>
 
       {/* Help — progressive disclosure, collapsed by default. Decodes the page's
@@ -366,13 +411,19 @@ const CSS = `
 .wl-wrap{padding:24px 16px 56px}
 .wl-h1{font-size:30px}
 .wl-header{flex-direction:column;align-items:flex-start}
-.wl-filterrow{display:flex;flex-direction:column;gap:12px;align-items:stretch}
+.wl-controls{display:flex;flex-direction:column;gap:12px}
+.wl-segrow{display:flex;flex-wrap:wrap;gap:10px}
+.wl-searchrow{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
 .wl-grid{display:grid;grid-template-columns:1fr;gap:16px;list-style:none;margin:0;padding:0}
-.wl-count{flex:none}
-.wl-seg{min-height:44px}
+.wl-count{flex:none;margin-left:auto}
+/* Seg sizing lives in the class (not inline) so the breakpoint wins: smaller padding +
+   font on touch keeps the 4-up difficulty group ('Foundation') from clipping at 320px. */
+.wl-seg{min-height:44px;padding:0 12px;font-size:12px}
 .wl-seg:hover{color:var(--text-primary)!important}
 .wl-clear{color:var(--text-muted)}
 .wl-clear:hover{color:var(--text-primary)}
+/* The "/" hint only means something with a physical keyboard — hide it on touch. */
+@media (hover:none){.wl-kbd{display:none}}
 .wl-clearall:hover{background:var(--surface-hover);border-color:var(--brand-border);color:var(--brand)}
 .wl-help summary{cursor:pointer}
 .wl-help summary::-webkit-details-marker{display:none}
@@ -389,13 +440,9 @@ const CSS = `
 @media (min-width:768px){
   .wl-wrap{padding:32px 28px 72px}
   .wl-h1{font-size:42px}
-  /* Desktop: tighten the segment height back to 38 so the filter row lines up
-     with the 42px search field; the 44px min-target only matters on touch. */
-  .wl-seg{min-height:38px}
-  /* Two segment groups + search + count: wrap gracefully when the row gets tight.
-     margin-left:auto keeps the count pinned right so it never orphans mid-row. */
-  .wl-filterrow{flex-direction:row;align-items:center;flex-wrap:wrap}
-  .wl-count{margin-left:auto}
+  /* Desktop: roomier segments at the 13px field-matching size; the 44px touch
+     target and tighter mobile padding only matter on small screens. */
+  .wl-seg{min-height:38px;padding:0 16px;font-size:13px}
 }
 @media (prefers-reduced-motion:reduce){
   .wl-card,.wl-arrow{transition:none}
@@ -415,18 +462,19 @@ const S: Record<string, CSSProperties> = {
 
   target: { display: "inline-flex", alignItems: "center", gap: 8, flex: "none", padding: "12px 18px", borderRadius: 13, border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-xs)" },
   targetDot: { width: 8, height: 8, borderRadius: "var(--radius-full)", background: "var(--brand)" },
-  targetLab: { fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)" },
+  targetLab: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600, color: "var(--text-muted)" },
   targetVal: { fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 20, color: "var(--text-primary)" },
   targetHint: { fontSize: 12, color: "var(--text-muted)" },
 
-  filterRow: {},
   segment: { display: "inline-flex", padding: 4, gap: 4, background: "var(--surface-inset)", borderRadius: 11, flex: "none" },
-  seg: { appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 16px", borderRadius: 8, cursor: "pointer", transition: "var(--transition-colors)" },
+  seg: { appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, cursor: "pointer", transition: "var(--transition-colors)" },
   segActive: { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-xs)" },
   // Numeric meta → stays mono (sanctioned for numerals); bumped to 12 for legibility.
   count: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", flex: "none" },
   // Search clear-X — pure affordance, neutral until hover.
   clear: { appearance: "none", border: "none", background: "transparent", padding: 2, margin: 0, display: "grid", placeItems: "center", cursor: "pointer", flex: "none", borderRadius: "var(--radius-full)" },
+  // "/" hint — non-interactive cue that the key focuses search.
+  kbd: { fontFamily: "var(--font-mono)", fontSize: 11, lineHeight: 1, color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 7px", background: "var(--surface-inset)", flex: "none" },
 
   // Help disclosure — quiet, sits between the controls and the grid.
   help: { marginTop: -8 },
