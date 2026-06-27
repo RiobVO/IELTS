@@ -20,11 +20,11 @@ import { Checklist } from "./_feedback/Checklist";
  * fields. The snapshot never recomputes.
  */
 export function FeedbackView({ data, targetBand }: { data: FeedbackResult; targetBand: number }) {
-  const { feedback } = data;
+  const { feedback, taskPart } = data;
   const criteria = feedback.criteria;
   const blocker = criteria[blockerIndex(criteria)];
   const rows: PlotRow[] = sortWeakestFirst(criteria).map((c) => ({
-    label: criterionLabel(c.name),
+    label: criterionLabel(c.name, taskPart),
     bandLow: c.bandLow,
     bandHigh: c.bandHigh,
     strength: c.strength,
@@ -39,7 +39,7 @@ export function FeedbackView({ data, targetBand }: { data: FeedbackResult; targe
 
       <header style={S.header}>
         <div>
-          <div style={S.overline}>Feedback · Task 2</div>
+          <div style={S.overline}>Feedback · {taskPart === "task1" ? "Task 1" : "Task 2"}</div>
           <h1 style={S.h1}>Nice work finishing — here&apos;s where to focus next</h1>
         </div>
         <Link href="/app/writing/history" style={S.historyPill} className="wf-pill">
@@ -51,7 +51,7 @@ export function FeedbackView({ data, targetBand }: { data: FeedbackResult; targe
         bandLow={data.bandLow}
         bandHigh={data.bandHigh}
         confidence={data.confidence}
-        blockerName={criterionLabel(blocker.name)}
+        blockerName={criterionLabel(blocker.name, taskPart)}
         blockerNote={blocker.mainIssue}
       />
 
