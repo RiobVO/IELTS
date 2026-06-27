@@ -20,11 +20,19 @@ import {
  */
 
 type CatFilter = "all" | "academic" | "general";
+type PartFilter = "all" | "task1" | "task2";
 
 const SEGMENTS: { value: CatFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "academic", label: "Academic" },
   { value: "general", label: "General" },
+];
+// Task 1 (chart, 150 words, ~20 min) vs Task 2 (essay, 250 words, ~40 min) — distinct
+// formats, so the catalog lets the user train one. Client-side filter, same as category.
+const PART_SEGMENTS: { value: PartFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "task1", label: "Task 1" },
+  { value: "task2", label: "Task 2" },
 ];
 
 const MINUTES = 40;
@@ -82,10 +90,14 @@ const TOPIC: Record<WritingTopic, TopicVisual> = {
 
 export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; targetBand: number | null }) {
   const [cat, setCat] = useState<CatFilter>("all");
+  const [part, setPart] = useState<PartFilter>("all");
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
   const filtered = tasks.filter(
-    (t) => (cat === "all" || t.category === cat) && (!query || t.prompt.toLowerCase().includes(query)),
+    (t) =>
+      (part === "all" || t.taskPart === part) &&
+      (cat === "all" || t.category === cat) &&
+      (!query || t.prompt.toLowerCase().includes(query)),
   );
 
   return (
@@ -118,23 +130,8 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
 
       {/* Control row */}
       <div className="wl-filterrow" style={S.filterRow}>
-        <div style={S.segment} role="group" aria-label="Filter by category">
-          {SEGMENTS.map((seg) => {
-            const active = cat === seg.value;
-            return (
-              <button
-                key={seg.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setCat(seg.value)}
-                className="wl-seg"
-                style={{ ...S.seg, ...(active ? S.segActive : null) }}
-              >
-                {seg.label}
-              </button>
-            );
-          })}
-        </div>
+        <Segmented segments={PART_SEGMENTS} value={part} onChange={(v) => setPart(v as PartFilter)} label="Filter by task" />
+        <Segmented segments={SEGMENTS} value={cat} onChange={(v) => setCat(v as CatFilter)} label="Filter by category" />
         <Input
           icon="search"
           placeholder="Search prompts"
@@ -160,6 +157,39 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Pill segmented control (wl-seg) — shared by the task-part and category filters. */
+function Segmented({
+  segments,
+  value,
+  onChange,
+  label,
+}: {
+  segments: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  return (
+    <div style={S.segment} role="group" aria-label={label}>
+      {segments.map((seg) => {
+        const active = value === seg.value;
+        return (
+          <button
+            key={seg.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(seg.value)}
+            className="wl-seg"
+            style={{ ...S.seg, ...(active ? S.segActive : null) }}
+          >
+            {seg.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -265,7 +295,8 @@ const CSS = `
 @media (min-width:768px){
   .wl-wrap{padding:32px 28px 72px}
   .wl-h1{font-size:42px}
-  .wl-filterrow{flex-direction:row;align-items:center}
+  /* Two segment groups + search + count: wrap gracefully when the row gets tight. */
+  .wl-filterrow{flex-direction:row;align-items:center;flex-wrap:wrap}
 }
 @media (prefers-reduced-motion:reduce){
   .wl-card,.wl-arrow{transition:none}
