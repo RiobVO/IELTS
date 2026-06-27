@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { writingFeedback, writingSubmission, writingTask } from "@/db/schema";
 import type { Feedback } from "./evaluator/types";
+import { task1ImageUrl } from "./storage";
 import {
   coerceDifficulty,
   coerceTaskType,
@@ -18,6 +19,8 @@ import {
 export interface CatalogTask {
   id: string;
   category: "academic" | "general";
+  taskPart: "task1" | "task2";
+  imageUrl: string | null; // public Storage URL of the Task 1 visual; null for Task 2
   prompt: string;
   topic: WritingTopic | null;
   taskType: WritingTaskType | null;
@@ -29,6 +32,8 @@ export interface CatalogTask {
 const CATALOG_COLUMNS = {
   id: writingTask.id,
   category: writingTask.category,
+  taskPart: writingTask.taskPart,
+  imagePath: writingTask.imagePath,
   prompt: writingTask.prompt,
   topic: writingTask.topic,
   taskType: writingTask.taskType,
@@ -40,6 +45,8 @@ const CATALOG_COLUMNS = {
 type CatalogRow = {
   id: string;
   category: "academic" | "general";
+  taskPart: "task1" | "task2";
+  imagePath: string | null;
   prompt: string;
   topic: string | null;
   taskType: string | null;
@@ -54,6 +61,8 @@ function toCatalogTask(row: CatalogRow): CatalogTask {
   return {
     id: row.id,
     category: row.category,
+    taskPart: row.taskPart,
+    imageUrl: task1ImageUrl(row.imagePath),
     prompt: row.prompt,
     topic: coerceTopic(row.topic),
     taskType: coerceTaskType(row.taskType),
@@ -86,6 +95,8 @@ export interface FeedbackResult {
   wordCount: number;
   taskPrompt: string;
   category: "academic" | "general";
+  taskPart: "task1" | "task2";
+  imageUrl: string | null;
   createdAt: Date;
   bandLow: number;
   bandHigh: number;
@@ -104,6 +115,8 @@ export async function readFeedbackResult(
       wordCount: writingSubmission.wordCount,
       taskPrompt: writingTask.prompt,
       category: writingTask.category,
+      taskPart: writingTask.taskPart,
+      imagePath: writingTask.imagePath,
       createdAt: writingFeedback.createdAt,
       bandLow: writingFeedback.bandLow,
       bandHigh: writingFeedback.bandHigh,
@@ -125,6 +138,8 @@ export async function readFeedbackResult(
     wordCount: row.wordCount,
     taskPrompt: row.taskPrompt,
     category: row.category,
+    taskPart: row.taskPart,
+    imageUrl: task1ImageUrl(row.imagePath),
     createdAt: row.createdAt,
     bandLow: Number(row.bandLow),
     bandHigh: Number(row.bandHigh),

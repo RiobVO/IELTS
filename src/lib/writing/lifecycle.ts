@@ -2,9 +2,16 @@ import { meetsTier, WRITING_MIN_TIER, type Tier } from "@/lib/tiers";
 
 export const MIN_WORDS = 20; // below this it's not an essay
 export const MAX_WORDS = 1000; // cost guard — IELTS Task 2 is ~250-400 words
-// Official IELTS Task 2 minimum. Distinct from MIN_WORDS (the "is this even an
-// essay" floor): below this the response is penalised for length, not rejected.
+// Official IELTS minimums. Distinct from MIN_WORDS (the "is this even an essay"
+// floor): below these the response is penalised for length, not rejected. Task 1
+// (chart description) is 150; Task 2 (essay) is 250.
 export const TASK2_MIN_WORDS = 250;
+export const TASK1_MIN_WORDS = 150;
+
+/** The official min-word floor for a given part — drives the ring, coach and underlength net. */
+export function minWordsFor(taskPart: "task1" | "task2"): number {
+  return taskPart === "task1" ? TASK1_MIN_WORDS : TASK2_MIN_WORDS;
+}
 // Daily analysis caps bound Gemini spend and form the Premium→Ultra upsell ladder.
 export const WRITING_DAILY_CAP_PREMIUM = 5; // Premium: enough for a real student, caps abuse
 export const WRITING_DAILY_CAP_ULTRA = 20; // Ultra: generous — effectively unlimited for a human

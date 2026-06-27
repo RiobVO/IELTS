@@ -165,14 +165,17 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
 }
 
 function PromptCard({ t }: { t: CatalogTask }) {
+  const isTask1 = t.taskPart === "task1";
   const v = t.topic ? TOPIC[t.topic] : null;
   const stripColor = v ? v.color : "var(--border-strong)";
   const accentBg = v ? v.tint : "var(--surface-inset)";
   const accentInk = v ? v.color : "var(--text-muted)";
   const hoverBorder = v ? v.tintBorder : "var(--border-strong)";
   const hasBand = t.bandLow != null && t.bandHigh != null;
+  // Task 1 ~20 min; Task 2 ~40 min.
+  const minutes = isTask1 ? 20 : MINUTES;
   const meta =
-    (hasBand ? `band ${t.bandLow!.toFixed(1)}${EN_DASH}${t.bandHigh!.toFixed(1)} · ` : "") + `${MINUTES} min`;
+    (hasBand ? `band ${t.bandLow!.toFixed(1)}${EN_DASH}${t.bandHigh!.toFixed(1)} · ` : "") + `${minutes} min`;
 
   const cardStyle = {
     ...S.card,
@@ -183,6 +186,7 @@ function PromptCard({ t }: { t: CatalogTask }) {
   return (
     <Link href={`/app/writing/attempt/${t.id}`} className="wl-card" style={cardStyle}>
       <span style={{ ...S.strip, background: stripColor }} />
+      {isTask1 && t.imageUrl && <img src={t.imageUrl} alt="" style={S.thumb} />}
       <div style={S.body}>
         <div style={S.metaRow}>
           {t.topic && v && (
@@ -213,7 +217,11 @@ function PromptCard({ t }: { t: CatalogTask }) {
 
         <div style={S.footer}>
           <div style={S.footerLeft}>
-            {t.taskType && <span style={S.typeTag}>{writingTaskTypeLabel[t.taskType]}</span>}
+            {t.taskType ? (
+              <span style={S.typeTag}>{writingTaskTypeLabel[t.taskType]}</span>
+            ) : isTask1 ? (
+              <span style={S.typeTag}>Task 1 · Chart</span>
+            ) : null}
             <span style={S.metaLine}>{meta}</span>
           </div>
           <span className="wl-arrow" style={{ ...S.arrow, background: accentBg, color: accentInk }}>
@@ -291,6 +299,8 @@ const S: Record<string, CSSProperties> = {
 
   card: { display: "flex", flexDirection: "column", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow-xs)", textDecoration: "none", color: "inherit", cursor: "pointer" },
   strip: { display: "block", height: 5, width: "100%", flex: "none" },
+  // Task 1 chart thumbnail — contain + white bg so the whole chart shows, uncropped.
+  thumb: { width: "100%", height: 132, objectFit: "contain", background: "white", borderBottom: "1px solid var(--border-subtle)", flex: "none" },
   body: { padding: "20px 20px 16px", flex: 1, display: "flex", flexDirection: "column" },
 
   metaRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 15 },
