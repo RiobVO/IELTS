@@ -14,7 +14,7 @@ export interface PlotRow {
   isBlocker: boolean;
 }
 
-const TICKS = [5, 6, 8, 9];
+const TICKS = [5, 6, 7, 8];
 
 /**
  * The four IELTS criteria as confidence-interval markers on a shared 4.0–9.0 axis,
@@ -23,6 +23,10 @@ const TICKS = [5, 6, 8, 9];
  */
 export function CriteriaPlot({ rows, targetBand }: { rows: PlotRow[]; targetBand: number }) {
   const targetLeft = axisPct(targetBand);
+  // Anchor the TARGET label so it never clips at the panel's right edge, and drop any
+  // axis tick that would collide with it (e.g. tick 9 sitting under TARGET 9).
+  const targetAnchor = targetLeft >= 90 ? "translateX(-100%)" : targetLeft <= 10 ? "translateX(0)" : "translateX(-50%)";
+  const ticks = TICKS.filter((t) => Math.abs(axisPct(t) - targetLeft) > 7);
   return (
     <section>
       <div style={S.headRow}>
@@ -34,12 +38,12 @@ export function CriteriaPlot({ rows, targetBand }: { rows: PlotRow[]; targetBand
         <div className="wf-plotrow" style={S.strip}>
           <div style={S.stripLabel}>Criterion · estimated range</div>
           <div style={S.axis}>
-            {TICKS.map((t) => (
+            {ticks.map((t) => (
               <span key={t} style={{ ...S.tick, left: `${axisPct(t)}%` }}>
                 {t}
               </span>
             ))}
-            <span style={{ ...S.targetMark, left: `${targetLeft}%` }}>TARGET {targetBand.toFixed(1)}</span>
+            <span style={{ ...S.targetMark, left: `${targetLeft}%`, transform: targetAnchor }}>TARGET {targetBand.toFixed(1)}</span>
           </div>
         </div>
 
