@@ -27,11 +27,25 @@ npm test               # vitest (unit tests for pure logic: grading, anti-cheat,
 
 npm run docker:db      # local Postgres:16 on :5432 (for the verify gate)
 npm run verify         # ACCEPTANCE GATE — DB/RLS/migrations/health/auth-trigger
-npm run db:migrate     # apply migrations (up)
+npm run db:migrate     # apply migrations (up) — targets DIRECT_URL (prod on Supabase)
 npm run db:status      # applied / pending
-npm run db:down        # revert all (down) — DESTRUCTIVE, never on real Supabase
+npm run db:down        # revert all (down) — DESTRUCTIVE; host-guarded (see below)
+npm run db:up:local    # apply migrations to the LOCAL throwaway DB (VERIFY_DATABASE_URL)
+npm run db:down:local  # revert all on the LOCAL DB — for round-trips, never touches prod
 npm run import <file>  # parse a test HTML file and persist it (status=draft)
 ```
+
+**Destructive-migration safety (make-it-impossible, not forbidden).** A remote `db:down`
+once wiped prod (the `_migrations`/`public` schema was dropped) because a hand-set
+`$env:DIRECT_URL` override silently emptied and fell through to the prod connection. Two
+structural guards now stand, so a rule in this file is a *complement*, not the barrier:
+- **Host-guard in `migrate.ts`** — `down`/`bootstrap` physically refuse a non-`localhost`
+  target unless `ALLOW_REMOTE_MIGRATE=1` is set consciously (mirrors `verify.ts`). `up`
+  stays unguarded (applying migrations to prod is legitimate).
+- **`db:*:local` scripts** — local round-trips target `VERIFY_DATABASE_URL` via a `--local`
+  flag, so you never hand-edit `DIRECT_URL` again. Use these for any local down/round-trip.
+- **Daily backup** — `.github/workflows/db-backup.yml` (`pg_dump` artifact) turns a wipe
+  into a restore; it is the only backup on Supabase's Free plan.
 
 Verification = `npm run verify` (gate) + `npx tsc --noEmit` + `npm run build` + `npm test` (vitest
 covers pure logic only — no e2e/browser runner). Ad-hoc checks: throwaway `scripts/_*.ts` via

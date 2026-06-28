@@ -98,6 +98,25 @@ export function assertLocalTarget(
   );
 }
 
+const LOCAL_DEFAULT = "postgresql://postgres:postgres@localhost:5432/postgres";
+
+/**
+ * Resolves the migrator's target connection string. `--local` forces the throwaway
+ * local Postgres (VERIFY_DATABASE_URL, else a localhost default) so destructive local
+ * flows (db:down:local, round-trips) never need a hand-set $env:DIRECT_URL — the
+ * fragile override that once silently pointed db:down at prod. Without `--local`,
+ * prefer DIRECT_URL (session pooler) over DATABASE_URL, as before.
+ */
+export function resolveMigrationTarget(opts: {
+  local: boolean;
+  verifyUrl?: string;
+  directUrl?: string;
+  databaseUrl?: string;
+}): string | undefined {
+  if (opts.local) return opts.verifyUrl ?? LOCAL_DEFAULT;
+  return opts.directUrl ?? opts.databaseUrl;
+}
+
 function readSql(name: string, dir: "up" | "down"): string {
   return readFileSync(join(MIGRATIONS_DIR, name, `${dir}.sql`), "utf8");
 }
@@ -163,8 +182,14 @@ if (invokedDirectly) {
   config({ path: join(HERE, "..", ".env.local") });
 
   // Migrations use the session-mode connection (DIRECT_URL) when present; the
-  // transaction pooler (DATABASE_URL) is for the app runtime.
-  const url = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+  // transaction pooler (DATABASE_URL) is for the app runtime. `--local` forces the
+  // throwaway local Postgres so destructive local flows never touch the prod target.
+  const url = resolveMigrationTarget({
+    local: process.argv.includes("--local"),
+    verifyUrl: process.env.VERIFY_DATABASE_URL,
+    directUrl: process.env.DIRECT_URL,
+    databaseUrl: process.env.DATABASE_URL,
+  });
   if (!url || url.trim() === "") {
     console.error(
       "Neither DIRECT_URL nor DATABASE_URL is set. Copy .env.example to .env.local.",

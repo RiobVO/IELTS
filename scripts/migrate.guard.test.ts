@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { isLocalHost, assertLocalTarget } from "./migrate";
+import {
+  isLocalHost,
+  assertLocalTarget,
+  resolveMigrationTarget,
+} from "./migrate";
 
 // Real-shaped connection strings (fake credentials). The Supabase pooler host is
 // what the incident `db:down` actually hit; localhost/127.0.0.1 are the only safe
@@ -31,5 +35,28 @@ describe("migrate host guard", () => {
   it("assertLocalTarget: never blocks a local target", () => {
     expect(() => assertLocalTarget(LOCAL, false)).not.toThrow();
     expect(() => assertLocalTarget(LOOPBACK, false)).not.toThrow();
+  });
+});
+
+describe("resolveMigrationTarget", () => {
+  it("--local: uses VERIFY_DATABASE_URL (the throwaway local DB), never DIRECT_URL", () => {
+    expect(
+      resolveMigrationTarget({ local: true, verifyUrl: LOCAL, directUrl: PROD }),
+    ).toBe(LOCAL);
+  });
+
+  it("--local without VERIFY_DATABASE_URL: falls back to a localhost default", () => {
+    const r = resolveMigrationTarget({ local: true, directUrl: PROD });
+    expect(isLocalHost(r!)).toBe(true);
+  });
+
+  it("default: prefers DIRECT_URL over DATABASE_URL", () => {
+    expect(
+      resolveMigrationTarget({ local: false, directUrl: PROD, databaseUrl: LOCAL }),
+    ).toBe(PROD);
+  });
+
+  it("default: falls back to DATABASE_URL when DIRECT_URL is unset", () => {
+    expect(resolveMigrationTarget({ local: false, databaseUrl: PROD })).toBe(PROD);
   });
 });
