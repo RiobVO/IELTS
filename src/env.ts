@@ -71,6 +71,16 @@ export function writingInternalSecret(): string | null {
 }
 
 /**
+ * Secret guarding the internal /api/speaking/evaluate route. Reuses CRON_SECRET
+ * (same Bearer pattern as the reaper that re-kicks it) so the Speaking backend adds
+ * no new env surface. Fail closed: absent/empty => the route refuses all calls.
+ */
+export function speakingInternalSecret(): string | null {
+  const v = process.env.CRON_SECRET;
+  return v && v.trim() !== "" ? v : null;
+}
+
+/**
  * Канонический публичный origin приложения для absolute-ссылок (invite/referral).
  * OPTIONAL: задан `NEXT_PUBLIC_SITE_URL` → строим ссылки от доверенного origin, а
  * не от входящего `Host` (anti-spoof: при нестандартном proxy/host заголовок
