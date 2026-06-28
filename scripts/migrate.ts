@@ -91,9 +91,9 @@ export function assertLocalTarget(
     host = "(unparseable connection string)";
   }
   throw new Error(
-    `Refusing to run db:down against a non-local host: ${host}. ` +
-      `down reverts ALL migrations and drops the public schema — never do this on ` +
-      `a real Supabase database. Point DIRECT_URL at a local Postgres, or set ` +
+    `Refusing to run a destructive migration command against a non-local host: ${host}. ` +
+      `down drops the public schema and bootstrap overwrites auth primitives — never do ` +
+      `this on a real Supabase database. Point DIRECT_URL at a local Postgres, or set ` +
       `ALLOW_REMOTE_MIGRATE=1 to override this consciously.`,
   );
 }
@@ -175,11 +175,14 @@ if (invokedDirectly) {
   const cmd = process.argv[2] ?? "up";
   const all = process.argv.includes("--all");
 
-  // Destructive-path host guard: `down` reverts ALL migrations (drops the public
-  // schema). Refuse it against a non-local host unless ALLOW_REMOTE_MIGRATE=1 — the
-  // accidental remote `db:down` that wiped prod is exactly what this prevents. Runs
-  // before connecting; `up`/`status`/`bootstrap` are intentionally unguarded.
-  if (cmd === "down") {
+  // Destructive-path host guard. `down` reverts ALL migrations (drops the public
+  // schema); `bootstrap` overwrites Supabase auth primitives (incl. auth.uid()).
+  // Both are catastrophic against the real database, so refuse them on a non-local
+  // host unless ALLOW_REMOTE_MIGRATE=1 — the accidental remote `db:down` that wiped
+  // prod is exactly what this prevents. Runs BEFORE connecting; `up`/`status` (safe
+  // / non-destructive) are intentionally unguarded so prod migrations still apply.
+  const DESTRUCTIVE = new Set(["down", "bootstrap"]);
+  if (DESTRUCTIVE.has(cmd)) {
     try {
       assertLocalTarget(url, process.env.ALLOW_REMOTE_MIGRATE === "1");
     } catch (e) {
