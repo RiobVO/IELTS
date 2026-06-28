@@ -25,6 +25,17 @@ export const BASIC_DAILY_LIMIT = 25;
 export const WRITING_MIN_TIER: Tier = "premium";
 
 /**
+ * AI Speaking (Part 2 feedback) is Ultra-only (BRIEF §4.8; Writing=Premium,
+ * Speaking=Ultra). Free/Premium get a single lifetime preview as a wow-hook —
+ * pricing copy must advertise "1 free Speaking analysis" (Plan 3). The preview is
+ * INDEPENDENT of the Writing preview (counted off speaking_submission completions).
+ */
+export const SPEAKING_MIN_TIER: Tier = "ultra";
+
+/** One lifetime free Speaking preview per account (not per day). */
+export const SPEAKING_PREVIEW_LIMIT = 1;
+
+/**
  * The tier a profile is ACTUALLY entitled to right now. A premium/ultra profile
  * whose `premium_until` has passed counts as basic regardless of the stored tier
  * — the cron downgrade (§11) may lag, so gating must not trust a stale tier. A
