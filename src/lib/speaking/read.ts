@@ -81,10 +81,11 @@ export interface SpeakingFeedbackResult {
   bandLow: number;
   bandHigh: number;
   confidence: "low" | "medium" | "high";
-  // Wiped to "" / [] when the user deletes the recording (verbatim speech is PII) —
-  // the band + criteria + drills stay. The UI swaps the transcript block to "removed".
+  // Wiped to "" / [] only when the USER deletes the recording (verbatim speech is
+  // PII) — the band + criteria + drills stay. Retention deletes the AUDIO after a
+  // successful eval window but KEEPS the transcript, so "removed" is gated on the
+  // transcript being empty, never on audio deletion. The UI swaps to "removed".
   transcript: string;
-  audioDeleted: boolean;
   criteria: SpeakingCriterion[];
   topFixes: string[];
   annotations: SpeakingAnnotation[];
@@ -105,7 +106,6 @@ export async function readFeedbackResult(
       bandHigh: speakingFeedback.bandHigh,
       confidence: speakingFeedback.confidence,
       transcript: speakingFeedback.transcript,
-      audioDeletedAt: speakingSubmission.audioDeletedAt,
       criteria: speakingFeedback.criteria,
       topFixes: speakingFeedback.topFixes,
       annotations: speakingFeedback.annotations,
@@ -125,7 +125,6 @@ export async function readFeedbackResult(
     bandHigh: Number(row.bandHigh),
     confidence: row.confidence,
     transcript: row.transcript,
-    audioDeleted: row.audioDeletedAt != null,
     criteria: row.criteria as SpeakingCriterion[],
     topFixes: row.topFixes as string[],
     annotations: row.annotations as SpeakingAnnotation[],
