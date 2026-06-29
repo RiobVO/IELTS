@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
-import { buildAnnotationSegments } from "@/lib/writing/feedback-view";
+import { buildAnnotationSegments, type AnnoSegment } from "@/lib/writing/feedback-view";
+import type { TranscriptTiming } from "@/lib/speaking/transcript-align";
 import { deleteSpeakingRecording } from "../../actions";
 
 /**
@@ -48,15 +49,23 @@ export function Transcript({
   submissionId,
   transcript,
   annotations,
+  timings,
+  audioUrl,
   removed: removedInitial,
 }: {
   submissionId: string;
   transcript: string;
   annotations: SpeakAnno[];
+  /** Sentence-level sync timings; non-empty + audio present → karaoke mode. */
+  timings: TranscriptTiming[];
+  /** Short-lived signed playback URL (null once audio is deleted). */
+  audioUrl: string | null;
   removed: boolean;
 }) {
   const router = useRouter();
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [active, setActive] = useState<number | null>(null);
+  const [activeSentence, setActiveSentence] = useState(-1);
   const [deleted, setDeleted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -94,6 +103,60 @@ export function Transcript({
   const segments = buildAnnotationSegments(transcript, quotes);
   const words = transcript.trim() ? transcript.trim().split(/\s+/).length : 0;
 
+  // Karaoke mode: accurate Whisper timings aligned onto the Gemini transcript, plus the
+  // take still exists. Highlight the line the audio is on; click a line to jump there.
+  const sync = audioUrl !== null && timings.length > 0;
+
+  function onTimeUpdate() {
+    const t = audioRef.current?.currentTime ?? 0;
+    let found = -1;
+    for (let i = 0; i < timings.length; i++) {
+      if (timings[i].startSec <= t + 0.02) found = i;
+      else break;
+    }
+    setActiveSentence((prev) => (prev === found ? prev : found));
+  }
+
+  function seekTo(i: number) {
+    const a = audioRef.current;
+    if (!a) return;
+    a.currentTime = timings[i].startSec;
+    void a.play().catch(() => {});
+    setActiveSentence(i);
+  }
+
+  // Render annotation segments (shared by sync per-sentence + static whole-transcript).
+  // A mark click selects the note (and must not bubble to the sentence's seek handler).
+  function renderSegments(segs: AnnoSegment[], keyPrefix: string | number) {
+    return segs.map((seg, i) => {
+      if (seg.annIndex === null) return <span key={`${keyPrefix}-${i}`}>{seg.text}</span>;
+      const idx = seg.annIndex;
+      const ts = TYPE_STYLE[annotations[idx].type];
+      const on = active === idx;
+      return (
+        <mark
+          key={`${keyPrefix}-${i}`}
+          onClick={(e) => { e.stopPropagation(); setActive(idx); }}
+          style={{
+            background: ts.tint,
+            color: "inherit",
+            textDecorationLine: "underline",
+            textDecorationStyle: ts.deco,
+            textDecorationColor: ts.accent,
+            textUnderlineOffset: 3,
+            borderRadius: 3,
+            padding: "0 1px",
+            cursor: "pointer",
+            boxShadow: on ? `0 0 0 2px ${ts.accent}` : "none",
+          }}
+        >
+          {seg.text}
+          <sup style={S.sup}>{idx + 1}</sup>
+        </mark>
+      );
+    });
+  }
+
   return (
     <section>
       <style>{CSS}</style>
@@ -102,37 +165,45 @@ export function Transcript({
         <span style={S.annotatedPill}>Annotated</span>
         <span style={S.wordCount}>{words} words</span>
       </div>
-      <p style={S.help}>Tap a highlight or a note — they&apos;re linked. The underline style marks the kind of note.</p>
+      <p style={S.help}>
+        {sync
+          ? "Play your take — the current line lights up. Tap any line to jump there. Tap a highlight or note for feedback."
+          : "Tap a highlight or a note — they’re linked. The underline style marks the kind of note."}
+      </p>
+
+      {sync && (
+        <div style={S.syncPlayer}>
+          <audio
+            ref={audioRef}
+            controls
+            src={audioUrl ?? undefined}
+            onTimeUpdate={onTimeUpdate}
+            style={{ width: "100%" }}
+          />
+        </div>
+      )}
 
       <div className="st-grid" style={S.grid}>
         <div style={S.body}>
-          {segments.map((seg, i) => {
-            if (seg.annIndex === null) return <span key={i}>{seg.text}</span>;
-            const idx = seg.annIndex;
-            const ts = TYPE_STYLE[annotations[idx].type];
-            const on = active === idx;
-            return (
-              <mark
-                key={i}
-                onClick={() => setActive(idx)}
-                style={{
-                  background: ts.tint,
-                  color: "inherit",
-                  textDecorationLine: "underline",
-                  textDecorationStyle: ts.deco,
-                  textDecorationColor: ts.accent,
-                  textUnderlineOffset: 3,
-                  borderRadius: 3,
-                  padding: "0 1px",
-                  cursor: "pointer",
-                  boxShadow: on ? `0 0 0 2px ${ts.accent}` : "none",
-                }}
-              >
-                {seg.text}
-                <sup style={S.sup}>{idx + 1}</sup>
-              </mark>
-            );
-          })}
+          {sync
+            ? timings.map((sent, i) => {
+                const on = activeSentence === i;
+                return (
+                  <span
+                    key={i}
+                    className="st-sentence"
+                    onClick={() => seekTo(i)}
+                    style={{
+                      ...S.sentence,
+                      background: on ? "var(--brand-subtle)" : "transparent",
+                      boxShadow: on ? "inset 0 0 0 1px var(--brand-border)" : "none",
+                    }}
+                  >
+                    {renderSegments(buildAnnotationSegments(sent.text, quotes), i)}
+                  </span>
+                );
+              })
+            : renderSegments(segments, "s")}
         </div>
 
         <div style={S.notes}>
@@ -217,6 +288,7 @@ export function Transcript({
 const CSS = `
 .st-grid{grid-template-columns:1fr}
 @media (min-width:760px){.st-grid{grid-template-columns:1fr 250px}}
+.st-sentence:hover{background:var(--surface-hover)!important}
 `;
 
 const S: Record<string, CSSProperties> = {
@@ -228,7 +300,9 @@ const S: Record<string, CSSProperties> = {
 
   grid: { display: "grid", gap: 16, alignItems: "start", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", background: "var(--surface)", padding: 20 },
   body: { minWidth: 0, fontFamily: "var(--font-reading)", fontSize: 16, lineHeight: 2, color: "var(--text-primary)", whiteSpace: "pre-wrap" },
+  sentence: { cursor: "pointer", borderRadius: 4, padding: "1px 2px", transition: "background var(--transition-base, .15s) ease", WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" },
   sup: { fontSize: 9, fontWeight: 700, marginLeft: 1, verticalAlign: "super", fontFamily: "var(--font-mono)" },
+  syncPlayer: { marginBottom: 14 },
 
   notes: { minWidth: 0, display: "flex", flexDirection: "column", gap: 10 },
   noteCard: { display: "flex", flexDirection: "column", gap: 5, textAlign: "left", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px", cursor: "pointer", fontFamily: "var(--font-ui)" },
