@@ -118,9 +118,12 @@ export function Attempt({ task, hasConsent }: { task: SpeakingCatalogTask; hasCo
         mapError(created.error);
         return;
       }
+      // MediaRecorder tags the blob with a codec param (e.g. "audio/webm;codecs=opus"),
+      // but the bucket's allowed_mime_types is the bare type — send the base mime or
+      // Supabase rejects the signed PUT with 415 invalid_mime_type.
       const put = await fetch(created.uploadUrl, {
         method: "PUT",
-        headers: { "content-type": clip.blob.type },
+        headers: { "content-type": clip.blob.type.split(";")[0].trim() },
         body: clip.blob,
       });
       if (!put.ok) {
