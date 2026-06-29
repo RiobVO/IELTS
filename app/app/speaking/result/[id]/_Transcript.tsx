@@ -226,70 +226,74 @@ export function Transcript({
           : "Tap a highlight or a note — they’re linked. The underline style marks the kind of note."}
       </p>
 
-      {sync && (
-        <div style={S.player}>
-          <audio
-            ref={audioRef}
-            src={audioUrl ?? undefined}
-            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
-            onTimeUpdate={onTimeUpdate}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onEnded={() => setIsPlaying(false)}
-            style={{ display: "none" }}
-          />
-          <button type="button" onClick={togglePlay} aria-label={isPlaying ? "Pause" : "Play"} style={S.playBtn}>
-            {isPlaying ? PAUSE_ICON : PLAY_ICON}
-          </button>
-          <div
-            ref={waveRef}
-            className="st-wave"
-            onClick={seekWave}
-            onKeyDown={onWaveKey}
-            role="slider"
-            aria-label="Seek through your recording"
-            aria-valuemin={0}
-            aria-valuemax={Math.round(duration)}
-            aria-valuenow={Math.round(currentTime)}
-            tabIndex={0}
-            style={S.wave}
-          >
-            {BAR_HEIGHTS.map((h, i) => {
-              const played = duration > 0 && (i + 1) / WAVE_BARS <= currentTime / duration;
-              return (
-                <span
-                  key={i}
-                  className="st-bar"
-                  style={{ height: `${Math.round(h * 100)}%`, background: played ? "var(--brand)" : "var(--border-strong)" }}
-                />
-              );
-            })}
-          </div>
-          <span style={S.ptime}>{fmtTime(currentTime)} / {fmtTime(duration)}</span>
-        </div>
-      )}
-
       <div className="st-grid" style={S.grid}>
-        <div style={S.body}>
-          {sync
-            ? timings.map((sent, i) => {
-                const now = activeSentence === i;
-                const played = activeSentence > i;
-                return (
-                  <span
-                    key={i}
-                    className="st-sentence"
-                    onClick={() => seekTo(i)}
-                    style={{
-                      ...S.sentence,
-                      ...(now ? S.sentNow : played ? S.sentPlayed : null),
-                    }}
-                  >
-                    {renderSegments(buildAnnotationSegments(sent.text, quotes), i)}
-                  </span>
-                );
-              })
-            : renderSegments(segments, "s")}
+        {/* Left column (player + transcript) pins on desktop while the cards scroll —
+            mirrors Writing's .wf-annoessay, killing the empty space a short transcript
+            otherwise leaves. minWidth:0 so a nowrap quote can't blow out the columns. */}
+        <div className="st-left" style={S.left}>
+          {sync && (
+            <div style={S.player}>
+              <audio
+                ref={audioRef}
+                src={audioUrl ?? undefined}
+                onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+                onTimeUpdate={onTimeUpdate}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onEnded={() => setIsPlaying(false)}
+                style={{ display: "none" }}
+              />
+              <button type="button" onClick={togglePlay} aria-label={isPlaying ? "Pause" : "Play"} style={S.playBtn}>
+                {isPlaying ? PAUSE_ICON : PLAY_ICON}
+              </button>
+              <div
+                ref={waveRef}
+                className="st-wave"
+                onClick={seekWave}
+                onKeyDown={onWaveKey}
+                role="slider"
+                aria-label="Seek through your recording"
+                aria-valuemin={0}
+                aria-valuemax={Math.round(duration)}
+                aria-valuenow={Math.round(currentTime)}
+                tabIndex={0}
+                style={S.wave}
+              >
+                {BAR_HEIGHTS.map((h, i) => {
+                  const played = duration > 0 && (i + 1) / WAVE_BARS <= currentTime / duration;
+                  return (
+                    <span
+                      key={i}
+                      className="st-bar"
+                      style={{ height: `${Math.round(h * 100)}%`, background: played ? "var(--brand)" : "var(--border-strong)" }}
+                    />
+                  );
+                })}
+              </div>
+              <span style={S.ptime}>{fmtTime(currentTime)} / {fmtTime(duration)}</span>
+            </div>
+          )}
+          <div style={S.body}>
+            {sync
+              ? timings.map((sent, i) => {
+                  const now = activeSentence === i;
+                  const played = activeSentence > i;
+                  return (
+                    <span
+                      key={i}
+                      className="st-sentence"
+                      onClick={() => seekTo(i)}
+                      style={{
+                        ...S.sentence,
+                        ...(now ? S.sentNow : played ? S.sentPlayed : null),
+                      }}
+                    >
+                      {renderSegments(buildAnnotationSegments(sent.text, quotes), i)}
+                    </span>
+                  );
+                })
+              : renderSegments(segments, "s")}
+          </div>
         </div>
 
         <div style={S.notes}>
@@ -373,7 +377,13 @@ export function Transcript({
 
 const CSS = `
 .st-grid{grid-template-columns:1fr}
-@media (min-width:760px){.st-grid{grid-template-columns:1fr 250px}}
+/* Desktop (>=760px): wider transcript + a card column, and pin the transcript so it
+   stays in view while the cards scroll (matches Writing's annotations layout). On mobile
+   it stacks (transcript above cards), so no sticky. */
+@media (min-width:760px){
+  .st-grid{grid-template-columns:1.45fr 1fr}
+  .st-left{position:sticky;top:88px;align-self:start;max-height:calc(100vh - 104px);overflow:auto}
+}
 .st-sentence:hover{background:var(--surface-hover)}
 .st-wave{cursor:pointer;outline:none}
 .st-wave:focus-visible{box-shadow:0 0 0 2px var(--brand-border);border-radius:6px}
@@ -388,7 +398,10 @@ const S: Record<string, CSSProperties> = {
   wordCount: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" },
   help: { margin: "0 0 14px", fontSize: 13.5, color: "var(--text-muted)" },
 
-  grid: { display: "grid", gap: 16, alignItems: "start", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", background: "var(--surface)", padding: 20 },
+  grid: { display: "grid", gap: 16, alignItems: "start" },
+  // The transcript card (own border) — no longer wraps the note column, so the cards sit
+  // in a tidy column instead of floating inside a shared box. minWidth:0 holds the split.
+  left: { minWidth: 0, border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", background: "var(--surface)", padding: 18 },
   body: { minWidth: 0, fontFamily: "var(--font-reading)", fontSize: 16, lineHeight: 2, color: "var(--text-primary)", whiteSpace: "pre-wrap" },
   sentence: { cursor: "pointer", borderRadius: 4, padding: "1px 2px", transition: "background .15s ease, color .15s ease", WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" },
   sentNow: { background: "var(--brand)", color: "#fff", fontWeight: 700 },
@@ -401,12 +414,13 @@ const S: Record<string, CSSProperties> = {
   ptime: { flex: "none", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
 
   notes: { minWidth: 0, display: "flex", flexDirection: "column", gap: 10 },
-  noteCard: { display: "flex", flexDirection: "column", gap: 5, textAlign: "left", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px", cursor: "pointer", fontFamily: "var(--font-ui)" },
+  noteCard: { display: "flex", flexDirection: "column", gap: 5, textAlign: "left", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", cursor: "pointer", fontFamily: "var(--font-ui)", transition: "background-color .15s ease" },
   noteTop: { display: "flex", alignItems: "center", gap: 8 },
   noteNum: { flex: "none", minWidth: 18, height: 18, padding: "0 4px", borderRadius: 6, display: "grid", placeItems: "center", color: "white", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700 },
   noteType: { fontSize: 10, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase" },
-  noteQuote: { fontFamily: "var(--font-reading)", fontStyle: "italic", fontSize: 13, color: "var(--text-primary)" },
-  noteComment: { fontSize: 13, lineHeight: 1.5, color: "var(--text-secondary)" },
+  // Ellipsis the quote so a long line can't distend the card column (Writing's cardQuote).
+  noteQuote: { fontFamily: "var(--font-reading)", fontStyle: "italic", fontSize: 13.5, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  noteComment: { fontSize: 13.5, lineHeight: 1.5, color: "var(--text-primary)" },
   noNotes: { margin: 0, fontSize: 13, color: "var(--text-muted)" },
 
   legendCard: { marginTop: 16, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 },
