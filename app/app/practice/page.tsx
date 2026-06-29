@@ -200,11 +200,8 @@ export default async function PracticePage({
   // resume (живая in_progress) → recommended (слабый тип) → first (новичок).
   const hero = buildHero({ inProgress, findById, tests, weak, readingTests, listeningTests, userTier });
 
-  const skillMeta = (section: Section, list: Test[]): string => {
-    const n = list.length;
-    const base = `${n} ${n === 1 ? "test" : "tests"}`;
-    return bestBand[section] > 0 ? `${base} · best ${bestBand[section]}` : base;
-  };
+  // Count line per skill (band now lives in the card's BAND block, not the count).
+  const skillCount = (list: Test[]): string => `${list.length} ${list.length === 1 ? "test" : "tests"}`;
 
   // Best single-test band so far (max over R/L). Motivational proxy vs the target
   // — not an official overall band (that needs all four skills). null = no tests yet.
@@ -218,8 +215,10 @@ export default async function PracticePage({
         filterTypes={filterTypes}
         drillWeakest={drillWeakest}
         hero={hero}
-        readingMeta={skillMeta("reading", readingTests)}
-        listeningMeta={skillMeta("listening", listeningTests)}
+        readingCount={skillCount(readingTests)}
+        listeningCount={skillCount(listeningTests)}
+        readingBand={bestBand.reading > 0 ? bestBand.reading : null}
+        listeningBand={bestBand.listening > 0 ? bestBand.listening : null}
         targetBand={targetBand}
         bestBand={bestOverall > 0 ? bestOverall : null}
         writingEnabled={writingEvalConfig() !== null}
