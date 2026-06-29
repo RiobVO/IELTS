@@ -11,6 +11,7 @@ import { BandHero } from "../../../writing/result/[id]/_feedback/BandHero";
 import { TopFixes } from "../../../writing/result/[id]/_feedback/TopFixes";
 import { CriteriaPlot, type PlotRow } from "../../../writing/result/[id]/_feedback/CriteriaPlot";
 import { Transcript, type SpeakAnno } from "./_Transcript";
+import { Rewrites, type Rewrite } from "./_Rewrites";
 
 /**
  * Speaking result. Reuses the Writing band hero + top-fixes + criteria-plot
@@ -74,6 +75,8 @@ export function SpeakingResult({
 
       <TopFixes fixes={data.topFixes} />
       <CriteriaPlot rows={rows} targetBand={targetBand} />
+
+      <Rewrites rewrites={data.rewrites as Rewrite[]} />
 
       {audioUrl && !sync && (
         <section style={S.playerCard}>
