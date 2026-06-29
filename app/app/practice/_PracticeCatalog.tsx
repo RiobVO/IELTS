@@ -123,6 +123,7 @@ export function PracticeCatalog({
   targetBand,
   bestBand,
   writingEnabled = false,
+  speakingEnabled = false,
   initialFilter,
   notice,
 }: {
@@ -139,6 +140,8 @@ export function PracticeCatalog({
   bestBand: number | null;
   /** Writing Lab live (WRITING_EVAL_MODEL set): card → /app/writing, not locked-panel. */
   writingEnabled?: boolean;
+  /** Speaking Lab live (SPEAKING_EVAL_MODEL set): card → /app/speaking, not locked-panel. */
+  speakingEnabled?: boolean;
   /** Предвыбор фильтра из query (переход со старого каталога). undefined = чистый хаб. */
   initialFilter?: InitialFilter;
   /** Почему отбросило в практику: дневной лимит / throttle сабмита. null = без баннера. */
@@ -224,10 +227,13 @@ export function PracticeCatalog({
   const cardBg = (k: Skill, c: string) => (skill === k ? c : "var(--surface)");
   const cardBd = (k: Skill, c: string) => (skill === k ? c : "var(--border)");
 
-  // Живые скиллы (фильтр-карты) vs «Coming soon» (locked-тизеры). Writing живёт в
-  // обеих ролях по флагу ops-гейта: live → ссылка, иначе → coming-полоса.
-  const liveCols = 2 + (writingEnabled ? 1 : 0);
-  const comingSkills: ("writing" | "speaking")[] = writingEnabled ? ["speaking"] : ["writing", "speaking"];
+  // Живые скиллы (фильтр-карты) vs «Coming soon» (locked-тизеры). Writing/Speaking
+  // живут в обеих ролях по флагу ops-гейта: live → ссылка, иначе → coming-полоса.
+  const liveCols = 2 + (writingEnabled ? 1 : 0) + (speakingEnabled ? 1 : 0);
+  const comingSkills: ("writing" | "speaking")[] = [
+    ...(writingEnabled ? [] : (["writing"] as const)),
+    ...(speakingEnabled ? [] : (["speaking"] as const)),
+  ];
 
   return (
     <div className="pc-wrap" style={S.wrap}>
@@ -304,6 +310,19 @@ export function PracticeCatalog({
               tileFg="var(--warn-text)"
               badge={{ tone: "success", text: "Live" }}
               href="/app/writing"
+              bg="var(--surface)"
+              bd="var(--border)"
+            />
+          )}
+          {speakingEnabled && (
+            <SkillCard
+              letter="S"
+              name="Speaking"
+              meta="Live · Part 2"
+              tileBg="var(--success-subtle)"
+              tileFg="var(--success-text)"
+              badge={{ tone: "success", text: "Live" }}
+              href="/app/speaking"
               bg="var(--surface)"
               bd="var(--border)"
             />

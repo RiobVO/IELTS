@@ -1,0 +1,28 @@
+import { redirect } from "next/navigation";
+import { getUser } from "@/lib/auth";
+import { speakingEvalConfig } from "@/env";
+import { listUserHistory } from "@/lib/speaking/read";
+import { AppShell } from "../../_AppShell";
+import { SpeakingHistory } from "./_History";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * Speaking attempt history (`/app/speaking/history`). Owner-scoped grid of completed
+ * analyses; each is an immutable snapshot. Deleting a recording wipes the audio +
+ * transcript (the band/feedback stay) — handled client-side, so the grid is a client
+ * island fed server data. Disabled-safe redirect.
+ */
+export default async function SpeakingHistoryPage() {
+  const user = await getUser();
+  if (!user) redirect("/auth");
+  if (speakingEvalConfig() === null) redirect("/app/practice");
+
+  const rows = await listUserHistory(user.id);
+
+  return (
+    <AppShell active="practice">
+      <SpeakingHistory rows={rows} />
+    </AppShell>
+  );
+}
