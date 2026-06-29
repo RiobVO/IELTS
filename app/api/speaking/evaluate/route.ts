@@ -3,10 +3,10 @@ import { speakingInternalSecret } from "@/env";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { getEvaluator } from "@/lib/speaking/evaluator";
 import { isUnderlength } from "@/lib/speaking/lifecycle";
-import { downloadAudio, deleteAudio } from "@/lib/speaking/storage";
+import { downloadAudio } from "@/lib/speaking/storage";
 import { logAudioEvent } from "@/lib/speaking/events";
 import {
-  claimForEvaluation, loadSubmissionForEval, persistFeedback, markFailed, markAudioDeleted,
+  claimForEvaluation, loadSubmissionForEval, persistFeedback, markFailed,
 } from "@/lib/speaking/store";
 
 export const dynamic = "force-dynamic";
@@ -46,9 +46,9 @@ export async function POST(request: Request) {
       ].slice(0, 3);
     }
     await persistFeedback(submissionId, result); // guarded: throws if reaped/delete-requested
-    // Retention: drop the audio immediately on success (minimise biometric storage).
-    await deleteAudio(loaded.audioPath).catch((e) => console.error("retention delete failed", submissionId, e));
-    await markAudioDeleted(submissionId, null, "retention");
+    // Audio is KEPT after a successful eval so the user can replay their take and work
+    // on it. Cleanup is the 7-day retention reaper (cron) or an explicit user delete —
+    // not an immediate drop here. Privacy: still a private bucket + consent + auto-expiry.
     return NextResponse.json({ ok: true, claimed: true }, { status: 200 });
   } catch (e) {
     console.error("speaking evaluate failed", submissionId, e);
