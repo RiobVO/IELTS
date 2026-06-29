@@ -204,3 +204,14 @@ export function speakingEvalConfig(): { apiKey: string; model: string } | null {
   if (!apiKey || !model) return null;
   return { apiKey, model };
 }
+
+/**
+ * OpenAI key for Whisper STT — used ONLY to fetch accurate word timings for the
+ * Speaking transcript karaoke-sync (#3), never for scoring (Gemini owns that).
+ * OPTIONAL: absent → null → the sync feature degrades to a static transcript, the
+ * rest of the eval is unaffected. SERVER-ONLY secret (mirrors the Gemini key).
+ */
+export function openaiKey(): string | null {
+  const v = process.env.OPENAI_API_KEY;
+  return v && v.trim() !== "" ? v.trim() : null;
+}

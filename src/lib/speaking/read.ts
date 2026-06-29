@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { speakingFeedback, speakingSubmission, speakingTask } from "@/db/schema";
 import type { Tier } from "@/lib/tiers";
 import type { Feedback } from "./evaluator/types";
+import type { TranscriptTiming } from "./transcript-align";
 
 type SpeakingCriterion = Feedback["criteria"][number];
 type SpeakingAnnotation = Feedback["annotations"][number];
@@ -86,6 +87,10 @@ export interface SpeakingFeedbackResult {
   // successful eval window but KEEPS the transcript, so "removed" is gated on the
   // transcript being empty, never on audio deletion. The UI swaps to "removed".
   transcript: string;
+  // Sentence-level sync timings ([] when STT was unconfigured, or wiped with the
+  // transcript on a user delete). The result page karaoke-highlights the transcript
+  // against the <audio> only when this is non-empty AND the audio still exists.
+  transcriptTimings: TranscriptTiming[];
   // Storage key of the take while it still exists (null once audio is deleted — user
   // delete or the 7-day retention reaper). The result page signs a short-lived GET URL
   // from this so the owner can replay; null → no player. Never sent to the client.
@@ -110,6 +115,7 @@ export async function readFeedbackResult(
       bandHigh: speakingFeedback.bandHigh,
       confidence: speakingFeedback.confidence,
       transcript: speakingFeedback.transcript,
+      transcriptTimings: speakingFeedback.transcriptTimings,
       audioPath: speakingSubmission.audioPath,
       audioDeletedAt: speakingSubmission.audioDeletedAt,
       criteria: speakingFeedback.criteria,
@@ -131,6 +137,7 @@ export async function readFeedbackResult(
     bandHigh: Number(row.bandHigh),
     confidence: row.confidence,
     transcript: row.transcript,
+    transcriptTimings: (row.transcriptTimings as TranscriptTiming[] | null) ?? [],
     audioPath: row.audioDeletedAt != null ? null : row.audioPath,
     criteria: row.criteria as SpeakingCriterion[],
     topFixes: row.topFixes as string[],

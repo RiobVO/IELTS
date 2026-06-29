@@ -5,6 +5,7 @@ import { speakingSubmission, speakingFeedback, speakingFeedbackDebug, speakingTa
 import { speakingInternalSecret, publicSiteUrl } from "@/env";
 import { logAudioEvent } from "./events";
 import type { EvaluateResult } from "./evaluator";
+import type { TranscriptTiming } from "./transcript-align";
 
 // Insert an 'uploading' row guarded by the 0028 one-active index. The id is needed
 // to build the audio path BEFORE upload (id-first contract). On conflict → null.
@@ -75,7 +76,9 @@ export async function loadSubmissionForEval(submissionId: string): Promise<
 // Persist snapshot + raw and flip to completed, ONLY if still 'evaluating' AND no
 // delete was requested mid-eval (re-checked in the guarded UPDATE). 0 rows → throw →
 // roll back (reaped or user-deleted in-flight) so no orphan feedback / no transcript.
-export async function persistFeedback(submissionId: string, r: EvaluateResult): Promise<void> {
+export async function persistFeedback(
+  submissionId: string, r: EvaluateResult, timings: TranscriptTiming[] = [],
+): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.insert(speakingFeedback).values({
       submissionId,
@@ -85,6 +88,7 @@ export async function persistFeedback(submissionId: string, r: EvaluateResult): 
       criteria: r.feedback.criteria,
       transcript: r.feedback.transcript,
       annotations: r.feedback.annotations,
+      transcriptTimings: timings,
       topFixes: r.feedback.topFixes,
       drills: r.feedback.drills,
       provider: r.provider,
