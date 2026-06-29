@@ -9,7 +9,7 @@ import { recordConsent } from "../../../app/app/speaking/actions";
 /**
  * Biometric-consent dialog (handoff §3). Voice is biometric data, so we ask once
  * before the first recording — the copy spells out that audio is recorded, stored
- * privately, processed by a third-party AI provider (Google Gemini), and deletable.
+ * privately, processed by third-party AI providers (Google Gemini + OpenAI), and deletable.
  * "I agree" writes the consent server-side (recordConsent, Plan 2) so it covers
  * future attempts; "Not now" returns to the catalog without recording.
  *
@@ -20,7 +20,7 @@ import { recordConsent } from "../../../app/app/speaking/actions";
 const ROWS: { icon: IconName; text: ReactNode }[] = [
   { icon: "mic", text: "We record your voice so we can mark your speaking." },
   { icon: "lock", text: "Stored privately — only you can listen to it." },
-  { icon: "globe", text: "Processed by a third-party AI provider (Google Gemini) to generate your feedback." },
+  { icon: "globe", text: "Processed by third-party AI providers (Google Gemini and OpenAI) to generate your feedback." },
   { icon: "trash", text: "Delete it anytime — audio and transcript go with it." },
 ];
 
