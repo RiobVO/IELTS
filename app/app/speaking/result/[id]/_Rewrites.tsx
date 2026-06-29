@@ -1,15 +1,31 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { buildAnnotationSegments } from "@/lib/writing/feedback-view";
 
 /**
  * "Say it stronger" (#1) — 2–3 of the candidate's OWN lines rephrased to band 7–8 by the
  * evaluator (mirrors the Writing "rewrite delta"). Each pair shows their words (muted,
  * dashed) above the upgrade (success-tinted), turning critique into a model to imitate.
- * Presentational only; the block is hidden when there's nothing to rewrite (short /
- * no-speech answer, or after a user delete wiped the verbatim lines).
+ * When the model supplies phrase-level `replacements`, the changed words are struck through
+ * in "Yours" and green-highlighted in "Stronger" (an inline diff). Legacy rows without
+ * replacements render the plain lines. Presentational only; the block is hidden when there's
+ * nothing to rewrite (short / no-speech answer, or after a user delete wiped the lines).
  */
 export interface Rewrite {
   original: string;
   improved: string;
+  replacements?: { from: string; to: string }[];
+}
+
+// Wrap each matched phrase (located first-match, non-overlapping by buildAnnotationSegments)
+// in the given style; unmatched text stays plain. No phrases → the raw string.
+function diffHighlight(text: string, phrases: string[], matchStyle: CSSProperties): ReactNode {
+  if (phrases.length === 0) return text;
+  const segs = buildAnnotationSegments(text, phrases);
+  return segs.map((s, i) =>
+    s.annIndex === null
+      ? <span key={i}>{s.text}</span>
+      : <span key={i} style={matchStyle}>{s.text}</span>,
+  );
 }
 
 export function Rewrites({ rewrites }: { rewrites: Rewrite[] }) {
@@ -26,18 +42,21 @@ export function Rewrites({ rewrites }: { rewrites: Rewrite[] }) {
       </p>
 
       <div style={S.list}>
-        {rewrites.map((r, i) => (
-          <div key={i} style={S.pair}>
-            <div style={S.yours}>
-              <span style={{ ...S.tag, ...S.tagY }}>Yours</span>
-              <span style={S.yoursText}>{r.original}</span>
+        {rewrites.map((r, i) => {
+          const reps = r.replacements ?? [];
+          return (
+            <div key={i} style={S.pair}>
+              <div style={S.yours}>
+                <span style={{ ...S.tag, ...S.tagY }}>Yours</span>
+                <span style={S.yoursText}>{diffHighlight(r.original, reps.map((p) => p.from), S.strike)}</span>
+              </div>
+              <div style={S.strong}>
+                <span style={{ ...S.tag, ...S.tagS }}>Stronger</span>
+                <span style={S.strongText}>{diffHighlight(r.improved, reps.map((p) => p.to), S.up)}</span>
+              </div>
             </div>
-            <div style={S.strong}>
-              <span style={{ ...S.tag, ...S.tagS }}>Stronger</span>
-              <span style={S.strongText}>{r.improved}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -56,6 +75,8 @@ const S: Record<string, CSSProperties> = {
   strong: { padding: "12px 15px", fontSize: 14, lineHeight: 1.55, background: "color-mix(in oklab, var(--success-subtle) 60%, var(--surface))" },
   yoursText: { fontFamily: "var(--font-reading)" },
   strongText: { fontFamily: "var(--font-reading)", color: "var(--text-primary)", fontWeight: 500 },
+  strike: { color: "var(--text-muted)", textDecorationLine: "line-through", textDecorationColor: "var(--error-text)", textDecorationThickness: 2 },
+  up: { background: "color-mix(in oklab, var(--success) 22%, transparent)", color: "var(--success-text)", fontWeight: 700, borderRadius: 4, padding: "0 3px" },
   tag: { display: "inline-block", fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", padding: "2px 7px", borderRadius: "var(--radius-full)", marginRight: 8, verticalAlign: "middle" },
   tagY: { background: "var(--surface-inset)", color: "var(--text-muted)" },
   tagS: { background: "var(--success)", color: "#fff" },

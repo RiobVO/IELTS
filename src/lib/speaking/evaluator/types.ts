@@ -26,8 +26,14 @@ export const FeedbackSchema = z.object({
   annotations: z.array(z.object({ quote: z.string(), comment: z.string(), type: AnnotationType })),
   drills: z.array(z.string().min(1)),
   // "Say it stronger" (#1): 2–3 of the candidate's OWN weak-but-fixable lines upgraded to
-  // band 7–8. Empty on a short / no-speech answer (nothing worth rewriting).
-  rewrites: z.array(z.object({ original: z.string().min(1), improved: z.string().min(1) })).max(3),
+  // band 7–8. Empty on a short / no-speech answer (nothing worth rewriting). `replacements`
+  // (optional) carries 1–2 phrase-level diffs (from→to substrings) so the UI can strike the
+  // candidate's words and green-highlight the upgrade inline; absent on legacy rows.
+  rewrites: z.array(z.object({
+    original: z.string().min(1),
+    improved: z.string().min(1),
+    replacements: z.array(z.object({ from: z.string().min(1), to: z.string().min(1) })).max(2).optional(),
+  })).max(3),
 });
 export type Feedback = z.infer<typeof FeedbackSchema>;
 
