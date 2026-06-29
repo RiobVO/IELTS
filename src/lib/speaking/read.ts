@@ -132,3 +132,41 @@ export async function readFeedbackResult(
     drills: row.drills as string[],
   };
 }
+
+export interface SpeakingHistoryRow {
+  submissionId: string;
+  prompt: string;
+  createdAt: Date;
+  bandLow: number;
+  bandHigh: number;
+  confidence: "low" | "medium" | "high";
+  audioDeleted: boolean;
+}
+
+/** Owner-scoped completed attempts (a feedback row exists), newest first. */
+export async function listUserHistory(userId: string): Promise<SpeakingHistoryRow[]> {
+  const rows = await db
+    .select({
+      submissionId: speakingFeedback.submissionId,
+      prompt: speakingTask.prompt,
+      createdAt: speakingFeedback.createdAt,
+      bandLow: speakingFeedback.bandLow,
+      bandHigh: speakingFeedback.bandHigh,
+      confidence: speakingFeedback.confidence,
+      audioDeletedAt: speakingSubmission.audioDeletedAt,
+    })
+    .from(speakingFeedback)
+    .innerJoin(speakingSubmission, eq(speakingSubmission.id, speakingFeedback.submissionId))
+    .innerJoin(speakingTask, eq(speakingTask.id, speakingSubmission.taskId))
+    .where(eq(speakingSubmission.userId, userId))
+    .orderBy(desc(speakingFeedback.createdAt));
+  return rows.map((r) => ({
+    submissionId: r.submissionId,
+    prompt: r.prompt,
+    createdAt: r.createdAt,
+    bandLow: Number(r.bandLow),
+    bandHigh: Number(r.bandHigh),
+    confidence: r.confidence,
+    audioDeleted: r.audioDeletedAt != null,
+  }));
+}
