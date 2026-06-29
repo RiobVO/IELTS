@@ -6,7 +6,7 @@ const valid = {
   criteria: ["fluency_coherence", "lexical_resource", "grammar_accuracy", "pronunciation"].map((name) => ({
     name, bandLow: 6, bandHigh: 6.5, strength: "s", mainIssue: "m", nextStep: "n",
   })),
-  topFixes: ["fix one"], annotations: [], drills: ["drill one"],
+  topFixes: ["fix one"], annotations: [], drills: ["drill one"], rewrites: [],
 };
 
 describe("Speaking FeedbackSchema", () => {

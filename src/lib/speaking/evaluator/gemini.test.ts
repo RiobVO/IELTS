@@ -21,6 +21,7 @@ const fb = {
     name, bandLow: 6, bandHigh: 6.5, strength: "s", mainIssue: "m", nextStep: "n",
   })),
   topFixes: ["fix"], annotations: [{ quote: "um", comment: "filled pause", type: "filler" }], drills: ["d"],
+  rewrites: [{ original: "I would like", improved: "I'd like to" }],
 };
 
 beforeEach(() => generateContent.mockReset());

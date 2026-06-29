@@ -89,6 +89,7 @@ export async function persistFeedback(
       transcript: r.feedback.transcript,
       annotations: r.feedback.annotations,
       transcriptTimings: timings,
+      rewrites: r.feedback.rewrites,
       topFixes: r.feedback.topFixes,
       drills: r.feedback.drills,
       provider: r.provider,
