@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/core/Button";
@@ -45,6 +46,28 @@ const TYPE_STYLE: Record<SpeakType, TypeStyle> = {
 
 const LEGEND_ORDER: SpeakType[] = ["pause", "filler", "repair", "grammar", "good"];
 
+// Static waveform: deterministic bar heights (sin-hash, not Math.random → stable across
+// renders and SSR-safe). Purely decorative; the played split is driven by currentTime.
+const WAVE_BARS = 52;
+const BAR_HEIGHTS = Array.from({ length: WAVE_BARS }, (_, i) => {
+  const seed = Math.sin(i * 12.9898) * 43758.5453;
+  return 0.3 + (seed - Math.floor(seed)) * 0.7; // 0.3–1.0 of the track height
+});
+
+function fmtTime(sec: number): string {
+  const s = Number.isFinite(sec) && sec > 0 ? sec : 0;
+  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+}
+
+const PLAY_ICON = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+);
+const PAUSE_ICON = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff" aria-hidden="true">
+    <rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" />
+  </svg>
+);
+
 export function Transcript({
   submissionId,
   transcript,
@@ -64,8 +87,12 @@ export function Transcript({
 }) {
   const router = useRouter();
   const audioRef = useRef<HTMLAudioElement>(null);
+  const waveRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<number | null>(null);
   const [activeSentence, setActiveSentence] = useState(-1);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [deleted, setDeleted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -109,6 +136,7 @@ export function Transcript({
 
   function onTimeUpdate() {
     const t = audioRef.current?.currentTime ?? 0;
+    setCurrentTime(t);
     let found = -1;
     for (let i = 0; i < timings.length; i++) {
       if (timings[i].startSec <= t + 0.02) found = i;
@@ -123,6 +151,33 @@ export function Transcript({
     a.currentTime = timings[i].startSec;
     void a.play().catch(() => {});
     setActiveSentence(i);
+  }
+
+  function togglePlay() {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) void a.play().catch(() => {});
+    else a.pause();
+  }
+
+  // Seek by clicking a point on the waveform (x-fraction × duration).
+  function seekWave(e: React.MouseEvent) {
+    const a = audioRef.current;
+    const w = waveRef.current;
+    if (!a || !w || !duration) return;
+    const rect = w.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    a.currentTime = frac * duration;
+    setCurrentTime(a.currentTime);
+  }
+
+  // Keyboard a11y for the waveform slider: ←/→ scrub ±5s, Space/Enter toggles play.
+  function onWaveKey(e: React.KeyboardEvent) {
+    const a = audioRef.current;
+    if (!a) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); a.currentTime = Math.min(duration, a.currentTime + 5); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); a.currentTime = Math.max(0, a.currentTime - 5); }
+    else if (e.key === " " || e.key === "Enter") { e.preventDefault(); togglePlay(); }
   }
 
   // Render annotation segments (shared by sync per-sentence + static whole-transcript).
@@ -172,14 +227,45 @@ export function Transcript({
       </p>
 
       {sync && (
-        <div style={S.syncPlayer}>
+        <div style={S.player}>
           <audio
             ref={audioRef}
-            controls
             src={audioUrl ?? undefined}
+            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
             onTimeUpdate={onTimeUpdate}
-            style={{ width: "100%" }}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onEnded={() => setIsPlaying(false)}
+            style={{ display: "none" }}
           />
+          <button type="button" onClick={togglePlay} aria-label={isPlaying ? "Pause" : "Play"} style={S.playBtn}>
+            {isPlaying ? PAUSE_ICON : PLAY_ICON}
+          </button>
+          <div
+            ref={waveRef}
+            className="st-wave"
+            onClick={seekWave}
+            onKeyDown={onWaveKey}
+            role="slider"
+            aria-label="Seek through your recording"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(duration)}
+            aria-valuenow={Math.round(currentTime)}
+            tabIndex={0}
+            style={S.wave}
+          >
+            {BAR_HEIGHTS.map((h, i) => {
+              const played = duration > 0 && (i + 1) / WAVE_BARS <= currentTime / duration;
+              return (
+                <span
+                  key={i}
+                  className="st-bar"
+                  style={{ height: `${Math.round(h * 100)}%`, background: played ? "var(--brand)" : "var(--border-strong)" }}
+                />
+              );
+            })}
+          </div>
+          <span style={S.ptime}>{fmtTime(currentTime)} / {fmtTime(duration)}</span>
         </div>
       )}
 
@@ -187,7 +273,8 @@ export function Transcript({
         <div style={S.body}>
           {sync
             ? timings.map((sent, i) => {
-                const on = activeSentence === i;
+                const now = activeSentence === i;
+                const played = activeSentence > i;
                 return (
                   <span
                     key={i}
@@ -195,8 +282,7 @@ export function Transcript({
                     onClick={() => seekTo(i)}
                     style={{
                       ...S.sentence,
-                      background: on ? "var(--brand-subtle)" : "transparent",
-                      boxShadow: on ? "inset 0 0 0 1px var(--brand-border)" : "none",
+                      ...(now ? S.sentNow : played ? S.sentPlayed : null),
                     }}
                   >
                     {renderSegments(buildAnnotationSegments(sent.text, quotes), i)}
@@ -288,7 +374,11 @@ export function Transcript({
 const CSS = `
 .st-grid{grid-template-columns:1fr}
 @media (min-width:760px){.st-grid{grid-template-columns:1fr 250px}}
-.st-sentence:hover{background:var(--surface-hover)!important}
+.st-sentence:hover{background:var(--surface-hover)}
+.st-wave{cursor:pointer;outline:none}
+.st-wave:focus-visible{box-shadow:0 0 0 2px var(--brand-border);border-radius:6px}
+.st-bar{flex:1;border-radius:2px;align-self:center;transition:background .15s,height .15s}
+@media (prefers-reduced-motion:reduce){.st-bar,.st-sentence{transition:none}}
 `;
 
 const S: Record<string, CSSProperties> = {
@@ -300,9 +390,15 @@ const S: Record<string, CSSProperties> = {
 
   grid: { display: "grid", gap: 16, alignItems: "start", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", background: "var(--surface)", padding: 20 },
   body: { minWidth: 0, fontFamily: "var(--font-reading)", fontSize: 16, lineHeight: 2, color: "var(--text-primary)", whiteSpace: "pre-wrap" },
-  sentence: { cursor: "pointer", borderRadius: 4, padding: "1px 2px", transition: "background var(--transition-base, .15s) ease", WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" },
+  sentence: { cursor: "pointer", borderRadius: 4, padding: "1px 2px", transition: "background .15s ease, color .15s ease", WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" },
+  sentNow: { background: "var(--brand)", color: "#fff", fontWeight: 700 },
+  sentPlayed: { color: "var(--text-muted)" },
   sup: { fontSize: 9, fontWeight: 700, marginLeft: 1, verticalAlign: "super", fontFamily: "var(--font-mono)" },
-  syncPlayer: { marginBottom: 14 },
+
+  player: { display: "flex", alignItems: "center", gap: 14, background: "var(--surface-inset)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", marginBottom: 14 },
+  playBtn: { flex: "none", width: 46, height: 46, borderRadius: "var(--radius-full)", background: "var(--brand)", color: "#fff", border: "none", display: "grid", placeItems: "center", boxShadow: "0 3px 0 0 var(--violet-700)", cursor: "pointer" },
+  wave: { flex: 1, display: "flex", alignItems: "center", gap: 2, height: 34, minWidth: 0 },
+  ptime: { flex: "none", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
 
   notes: { minWidth: 0, display: "flex", flexDirection: "column", gap: 10 },
   noteCard: { display: "flex", flexDirection: "column", gap: 5, textAlign: "left", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px", cursor: "pointer", fontFamily: "var(--font-ui)" },
