@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Logo } from "@/components/core/Logo";
 import { findPlan } from "@/lib/payments/plans";
-import { speakingEvalConfig } from "@/env";
+import { speakingFeatureEnabled } from "@/env";
 import PricingScreen from "../app/upgrade/PricingScreen";
 
 export const metadata: Metadata = {
@@ -50,7 +50,7 @@ export default function PricingPage() {
       </header>
 
       <main style={{ flex: 1, width: "100%", maxWidth: 1000, margin: "0 auto" }}>
-        <PricingScreen current="basic" price={price} ctaHref="/auth?next=/app/upgrade" speakingEnabled={speakingEvalConfig() !== null} />
+        <PricingScreen current="basic" price={price} ctaHref="/auth?next=/app/upgrade" speakingEnabled={speakingFeatureEnabled()} />
       </main>
 
       <footer style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
