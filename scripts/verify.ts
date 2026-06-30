@@ -343,6 +343,20 @@ async function main() {
         `noClientPolicy=${snapLock.noClientPolicy}, anonDenied=${snapLock.anonDenied})`,
     );
 
+  // 4c. writing_feedback_debug + speaking_feedback_debug locked the SAME way: they hold
+  // the raw model output (verbatim essay / transcript = PII + calibration data), so a
+  // client read would leak it. Hard-locked like answer_key (migrations 0023 / 0027).
+  for (const t of ["writing_feedback_debug", "speaking_feedback_debug"] as const) {
+    const dbgLock = await tableLock(t);
+    if (dbgLock.rlsEnabled && dbgLock.noClientPolicy && dbgLock.anonDenied)
+      ok(`RLS — anon SELECT on ${t} denied`);
+    else
+      fail(
+        `RLS — ${t} not fully locked (rlsEnabled=${dbgLock.rlsEnabled}, ` +
+          `noClientPolicy=${dbgLock.noClientPolicy}, anonDenied=${dbgLock.anonDenied})`,
+      );
+  }
+
   // 5. auth trigger: a new auth.users row auto-creates a profile
   if (await profileAutoCreated())
     ok("auth trigger — profile auto-created on signup");
