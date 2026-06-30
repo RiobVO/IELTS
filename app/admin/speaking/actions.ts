@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
+import { coerceDifficulty } from "@/lib/speaking/catalog-meta";
 import { deleteSpeakingTask, insertSpeakingTask, setTaskStatus } from "@/lib/speaking/admin";
 import type { Tier } from "@/lib/tiers";
 
@@ -52,6 +53,7 @@ export async function createSpeakingTask(formData: FormData) {
   const tier: Tier = TIERS.includes(tierRaw) ? (tierRaw as Tier) : "ultra";
   const prepSeconds = clampInt(formData.get("prep_seconds"), 60, PREP_MIN, PREP_MAX);
   const maxSpeakSeconds = clampInt(formData.get("max_speak_seconds"), 120, SPEAK_MIN, SPEAK_MAX);
+  const difficulty = coerceDifficulty(formData.get("difficulty"));
   const publish = formData.get("intent") === "publish";
 
   await insertSpeakingTask({
@@ -61,6 +63,7 @@ export async function createSpeakingTask(formData: FormData) {
     prepSeconds,
     maxSpeakSeconds,
     tierRequired: tier,
+    difficulty,
     createdBy: admin.id,
     publish,
   });

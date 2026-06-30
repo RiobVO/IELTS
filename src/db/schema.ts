@@ -746,6 +746,9 @@ export const speakingTask = pgTable("speaking_task", {
   prepSeconds: integer("prep_seconds").notNull().default(60),
   maxSpeakSeconds: integer("max_speak_seconds").notNull().default(120),
   tierRequired: userTier("tier_required").notNull().default("ultra"),
+  // Presentation metadata (0031) — catalog difficulty meter; nullable, CHECK(1,2,3)
+  // lives in SQL. Hidden when null (mirrors writing_task.difficulty).
+  difficulty: smallint("difficulty"),
   status: speakingTaskStatus("status").notNull().default("draft"),
   createdBy: uuid("created_by").references(() => profile.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
