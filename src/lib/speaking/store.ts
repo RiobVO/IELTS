@@ -35,6 +35,20 @@ export async function markUploaded(submissionId: string): Promise<boolean> {
   return rows.length === 1;
 }
 
+// Pre-insert gate read (createSpeakingSubmission): the cue-card must be published and
+// the user's tier must meet task.tier_required. Owner-path — the server action is the
+// trust boundary, not the catalog UI. Null when no task matches the id (callers screen
+// the id with isUuid first so it can't 22P02 the query).
+export async function loadSpeakingTaskForSubmissionGate(
+  taskId: string,
+): Promise<{ status: "draft" | "published"; tierRequired: "basic" | "premium" | "ultra" } | null> {
+  const [row] = await db
+    .select({ status: speakingTask.status, tierRequired: speakingTask.tierRequired })
+    .from(speakingTask)
+    .where(eq(speakingTask.id, taskId));
+  return row ?? null;
+}
+
 // Atomic single-fire claim — only the pending→evaluating winner evaluates.
 export async function claimForEvaluation(submissionId: string): Promise<boolean> {
   const rows = await db
