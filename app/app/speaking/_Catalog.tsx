@@ -22,12 +22,14 @@ import type { SpeakingCatalogTask } from "@/lib/speaking/read";
  */
 
 /** Тема → презентационная палитра (значения из `--topic-*`, переиспользованы ради цвета,
- *  не ради writing-семантики) + глиф. Лейблы — в `catalog-meta`. */
+ *  не ради writing-семантики) + глиф. Лейблы — в `catalog-meta`. Crime-red не берём: на
+ *  нейтральной корзине он читается как alert. "Experience" — catch-all детектора, поэтому
+ *  ей даём графит (как Writing деградирует неизвестную тему), а не громкий цвет. */
 const CAT_META: Record<SpeakingCategory, { color: string; ink: string; tint: string; tintBorder: string; icon: IconName }> = {
   person: { color: "var(--topic-society-color)", ink: "var(--topic-society-ink)", tint: "var(--topic-society-tint)", tintBorder: "var(--topic-society-tint-border)", icon: "users" },
   place: { color: "var(--topic-culture-color)", ink: "var(--topic-culture-ink)", tint: "var(--topic-culture-tint)", tintBorder: "var(--topic-culture-tint-border)", icon: "map-pin" },
-  object: { color: "var(--topic-food-color)", ink: "var(--topic-food-ink)", tint: "var(--topic-food-tint)", tintBorder: "var(--topic-food-tint-border)", icon: "star" },
-  event: { color: "var(--topic-crime-color)", ink: "var(--topic-crime-ink)", tint: "var(--topic-crime-tint)", tintBorder: "var(--topic-crime-tint-border)", icon: "flag" },
+  object: { color: "var(--topic-food-color)", ink: "var(--topic-food-ink)", tint: "var(--topic-food-tint)", tintBorder: "var(--topic-food-tint-border)", icon: "award" },
+  event: { color: "var(--border-strong)", ink: "var(--text-muted)", tint: "var(--surface-inset)", tintBorder: "var(--border-strong)", icon: "flag" },
   activity: { color: "var(--topic-environment-color)", ink: "var(--topic-environment-ink)", tint: "var(--topic-environment-tint)", tintBorder: "var(--topic-environment-tint-border)", icon: "zap" },
   media: { color: "var(--topic-technology-color)", ink: "var(--topic-technology-ink)", tint: "var(--topic-technology-tint)", tintBorder: "var(--topic-technology-tint-border)", icon: "book-open" },
 };
@@ -217,7 +219,7 @@ const CSS = `
 .sc-header{flex-direction:column;align-items:flex-start}
 .sc-controls{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
 .sc-grid{display:grid;grid-template-columns:1fr;gap:16px;list-style:none;margin:0;padding:0}
-.sc-seg{min-height:38px;padding:0 13px;font-size:13px}
+.sc-seg{min-height:44px;padding:0 13px;font-size:13px}
 .sc-seg:hover{color:var(--text-primary)}
 .sc-card{transition:transform .18s cubic-bezier(.2,.7,.3,1),box-shadow .18s ease,border-color .18s ease}
 .sc-card:hover{transform:translateY(-4px);box-shadow:0 18px 36px -20px var(--t-color);border-color:var(--t-border)}
@@ -232,6 +234,9 @@ const CSS = `
 @media (min-width:768px){
   .sc-wrap{padding:32px 28px 72px}
   .sc-h1{font-size:42px}
+  /* Desktop: the 44px touch target only matters on small screens; tighten to match
+     Writing's seg height there. */
+  .sc-seg{min-height:38px}
 }
 @media (prefers-reduced-motion:reduce){
   .sc-card,.sc-arrow{transition:none}
