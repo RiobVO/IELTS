@@ -206,6 +206,33 @@ export function speakingEvalConfig(): { apiKey: string; model: string } | null {
 }
 
 /**
+ * Single source of truth for "is the Writing Lab operationally available". The
+ * evaluator only fires through the internal route, which needs BOTH a public
+ * origin (to build the absolute URL) and the internal secret (Bearer auth). With
+ * either missing, triggerEvaluate() silently no-ops → a created submission would
+ * stay pending and get reaped to failed. So the feature is enabled ONLY when the
+ * model+key are present AND the trigger can actually reach the evaluator. Every
+ * entrypoint that decides the feature is available (create action, feature pages,
+ * practice card) must gate on this — not on writingEvalConfig() alone.
+ */
+export function writingFeatureEnabled(): boolean {
+  return (
+    writingEvalConfig() !== null &&
+    writingInternalSecret() !== null &&
+    publicSiteUrl() !== null
+  );
+}
+
+/** Mirror of writingFeatureEnabled for Speaking (secret reuses CRON_SECRET). */
+export function speakingFeatureEnabled(): boolean {
+  return (
+    speakingEvalConfig() !== null &&
+    speakingInternalSecret() !== null &&
+    publicSiteUrl() !== null
+  );
+}
+
+/**
  * OpenAI key for Whisper STT — used ONLY to fetch accurate word timings for the
  * Speaking transcript karaoke-sync (#3), never for scoring (Gemini owns that).
  * OPTIONAL: absent → null → the sync feature degrades to a static transcript, the

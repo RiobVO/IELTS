@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getProfile, getUser } from "@/lib/auth";
-import { speakingEvalConfig } from "@/env";
+import { speakingFeatureEnabled } from "@/env";
 import { isUuid } from "@/lib/uuid";
 import { readFeedbackResult } from "@/lib/speaking/read";
 import { signedPlaybackUrl } from "@/lib/speaking/storage";
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function SpeakingResultPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getUser();
   if (!user) redirect("/auth");
-  if (speakingEvalConfig() === null) redirect("/app/practice");
+  if (!speakingFeatureEnabled()) redirect("/app/practice");
 
   const { id } = await params;
   if (!isUuid(id)) notFound();

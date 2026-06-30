@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
-import { writingEvalConfig } from "@/env";
+import { writingFeatureEnabled } from "@/env";
 import { listUserHistory } from "@/lib/writing/read";
 import { writingCategoryLabel, confidenceLabel } from "@/lib/writing/labels";
 import { AppShell } from "../../_AppShell";
@@ -37,7 +37,7 @@ const BAND_TONE: Record<BandLevel, CSSProperties> = {
 export default async function WritingHistoryPage() {
   const user = await getUser();
   if (!user) redirect("/auth");
-  if (writingEvalConfig() === null) redirect("/app/practice");
+  if (!writingFeatureEnabled()) redirect("/app/practice");
 
   const rows = await listUserHistory(user.id);
 

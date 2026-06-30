@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getProfile, getUser } from "@/lib/auth";
-import { writingEvalConfig } from "@/env";
+import { writingFeatureEnabled } from "@/env";
 import { isUuid } from "@/lib/uuid";
 import { readFeedbackResult } from "@/lib/writing/read";
 import { AppShell } from "../../../_AppShell";
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function WritingResultPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getUser();
   if (!user) redirect("/auth");
-  if (writingEvalConfig() === null) redirect("/app/practice");
+  if (!writingFeatureEnabled()) redirect("/app/practice");
 
   const { id } = await params;
   if (!isUuid(id)) notFound();

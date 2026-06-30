@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
-import { speakingEvalConfig } from "@/env";
+import { speakingFeatureEnabled } from "@/env";
 import { listPublishedTasks, listUserHistory } from "@/lib/speaking/read";
 import { effectiveTier, meetsTier, SPEAKING_MIN_TIER, type Tier } from "@/lib/tiers";
 import { AppShell } from "../_AppShell";
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function SpeakingCatalogPage() {
   const user = await requireUser();
-  if (speakingEvalConfig() === null) redirect("/app/practice");
+  if (!speakingFeatureEnabled()) redirect("/app/practice");
 
   const [profile, tasks] = await Promise.all([getProfile(), listPublishedTasks()]);
   const tier: Tier = profile
