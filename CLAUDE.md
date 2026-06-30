@@ -211,8 +211,9 @@ exist but are unused. Async eval: store → internal secret-gated API-route → 
 (audio-native for Speaking). Enabled ONLY when model+key+internal-secret+public-origin are all set
 (`writingFeatureEnabled`/`speakingFeatureEnabled`); otherwise the screens `redirect("/app/practice")`.
 Tiers: Writing = Premium, Speaking = Ultra (sub-tier gets one preview). Core R/L stays LLM-free (§4.2).
-Submit gate: task `published` + `meetsTier(user, task.tier_required)` + UUID screen (owner-path); raw
-output (`*_feedback_debug`) hard-locked (RLS + revoke; asserted by `npm run verify`).
+Submit gate: task `published` (all users) + `tier_required` only for at-tier users (sub-tier = the
+free-preview lane) + UUID screen (owner-path); raw output (`*_feedback_debug`) hard-locked (RLS +
+revoke; asserted by `npm run verify`).
 
 > Branch per phase, merge to `main` when a phase is done.
 
