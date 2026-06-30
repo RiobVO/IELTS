@@ -2,7 +2,7 @@
 
 > **Статус:** v0.1 (draft, focus Phase 1)
 > **Один абзац:** Веб-платформа для подготовки к IELTS с ядром на Reading и
-> Listening (Writing/Speaking — AI-фаза заморожена, «coming soon»). Контент загружается админом как
+> Listening (Writing/Speaking — AI-оценка реализована, включается env-флагом). Контент загружается админом как
 > HTML и строго категоризируется по типам вопросов. Цель — не «функциональный
 > сайт», а **продукт №1 в отрасли** по визуальному качеству, скорости и точности
 > симуляции экзамена.
@@ -91,8 +91,8 @@ Listening — это долгая концентрация; визуальный
     /reading/:id        Прохождение теста (exam-режим)
     /reading/:id/result Разбор: ответы, объяснения, разбивка по типам
   /listening            То же для Listening (Part 1–4, Full)
-  /writing              Темы (загружены админом) — AI-оценка: coming soon (заморожено)
-  /speaking             Темы — AI-оценка: coming soon (заморожено)
+  /writing              Темы (загружены админом) — AI-оценка (Phase 3, env-gated)
+  /speaking             Темы — AI-оценка (Phase 3, env-gated)
   /leaderboard          Лидерборд с фильтром по территории
   /badges               Достижения
   /profile              Аккаунт, тариф, рефералы
@@ -206,7 +206,8 @@ HTML по ЕДИНОМУ шаблону (классы `tfng-`/`mcq-`/`inspera-`,
 | Аналитика по типам + история (d/w/m) | 7 дней | полная | полная |
 | Лидерборд (рейтинг, регионы) | просмотр | участие | участие |
 | Бейджи / стрики | ✅ | ✅ | ✅ |
-| AI-оценка Writing/Speaking (Phase 3 — заморожено, coming soon) | — | — | ✅ |
+| AI-оценка Writing (Phase 3 — env-gated) | — | ✅ | ✅ |
+| AI-оценка Speaking (Phase 3 — env-gated) | — | — | ✅ |
 
 - **Оплата:** Payme + Click + Uzum (локальные UZ).
 - Числа лимитов Basic — подберём при запуске (плейсхолдер `N`).
@@ -214,10 +215,19 @@ HTML по ЕДИНОМУ шаблону (классы `tfng-`/`mcq-`/`inspera-`,
 ### 4.9 Рефералы
 - Invite-friends: персональная ссылка, награда за приглашение (бейдж/доступ/срок).
 
-### 4.10 Writing / Speaking (заглушки — AI заморожена, «coming soon»)
-- Админ грузит темы. UI и data-model готовы; AI-оценка — **coming soon**. Phase 3
-  заморожена (сначала набор аудитории; AI — маркетинговый крючок и повод для
-  апсейла Ultra позже). Заглушки не удаляем.
+### 4.10 Writing / Speaking (Phase 3 — active, env-gated)
+- Админ грузит темы; UI, data-model и AI-оценка реализованы (Gemini Flash, async:
+  store → internal secret-gated API-route → poll). Фича видна и работает ТОЛЬКО при
+  полном конфиге: `GEMINI_API_KEY` + `WRITING_EVAL_MODEL`/`SPEAKING_EVAL_MODEL` +
+  internal-secret + публичный origin (`writingFeatureEnabled`/`speakingFeatureEnabled`);
+  иначе экраны делают `redirect("/app/practice")`. Тиры: Writing = Premium,
+  Speaking = Ultra (суб-tier получает 1 пробную оценку).
+- **Acceptance.** *Security:* submit-гейт = задача `published` + `meetsTier(user,
+  task.tier_required)` + UUID-screening (owner-path); raw-вывод (`*_feedback_debug`)
+  hard-locked (RLS + revoke, проверяет `npm run verify`); фича доступна только при
+  полном конфиге (model+key+secret+origin). *Payment:* грант тира — только через
+  webhook (§4.8); дневной кап оценок ограничивает расход. *AI:* evaluator только через
+  internal secret-gated route; ядро Reading/Listening остаётся LLM-free (§4.2).
 
 ---
 
@@ -286,8 +296,9 @@ HTML по ЕДИНОМУ шаблону (классы `tfng-`/`mcq-`/`inspera-`,
 - `user_id`, `period` (weekly|monthly|all_time), `scope` (global | region_id),
   `score`/`rating`, `rank` — обновляется джобой, не считается on-the-fly.
 
-**topic** (Writing/Speaking, Phase 3 — заглушка; AI заморожена / coming soon)
-- `id`, `skill` (writing|speaking), `prompt`, `tier_required`.
+**topic** (Phase 3 — наследие-заглушка, не используется фичей)
+- `id`, `skill` (writing|speaking), `prompt`, `tier_required`. Реальные таблицы Phase 3 —
+  `writing_task` / `speaking_task` (+ submission/feedback/feedback_debug), миграции 0023+.
 
 ### 5.1 Поток проверки (grading)
 1. Сабмит: клиент → `{number: value}` в `attempt.answers`.
@@ -371,10 +382,10 @@ Claude Design; (3) выдать готовый ПРОМТ со всеми реш
   exam-режим Reading + Listening, авто-проверка, результаты+разбивка по типам,
   базовый дашборд. → *Done = студент проходит реальный тест и видит разбор по типам.*
 - **Phase 2 — Engagement:** лидерборд по территориям, бейджи, рефералы, тарифы+оплата.
-- **Phase 3 — AI (ЗАМОРОЖЕНА / «coming soon»):** автооценка Writing и Speaking по
-  загруженным темам. Отложена 2026-06-15: сначала набор аудитории; AI остаётся
-  «coming soon» как маркетинговый крючок и повод для апсейла Ultra. НЕ удаляем
-  (заглушки `topic` остаются). Текущий фокус — доведение ядра (Phase 1) + Phase 2.
+- **Phase 3 — AI (active, env-gated):** автооценка Writing и Speaking по загруженным
+  темам реализована (Gemini Flash, async store→route→poll). Включается env-флагом
+  (model+key+internal-secret+origin); при неполном конфиге скрыта. Тиры: Writing =
+  Premium, Speaking = Ultra. Ядро Reading/Listening остаётся LLM-free (§4.2).
 
 ---
 
@@ -388,9 +399,10 @@ Claude Design; (3) выдать готовый ПРОМТ со всеми реш
 - ~~Band-score~~ → официальная таблица raw→band из файлов (`getBandFor40`).
 - ~~Территории лидерборда~~ → иерархия Узбекистана (страна→вилоят→туман).
 - ~~LLM~~ → в ядре НЕ используется; только Phase 3 (Writing/Speaking AI).
-- ~~Phase 3 (AI)~~ → **заморожена / «coming soon»** (2026-06-15): сначала набор
-  аудитории; AI — маркетинговый крючок + повод для апсейла Ultra позже. НЕ удаляем
-  (заглушки `topic` + enum остаются). Фокус — доведение ядра (Phase 1) + Phase 2.
+- ~~Phase 3 (AI)~~ → **реализована, active / env-gated**: автооценка Writing/Speaking
+  (Gemini Flash, async) включается env-флагом (model+key+secret+origin). Writing =
+  Premium, Speaking = Ultra. Ядро остаётся LLM-free (§4.2). Заглушка `topic` + enum
+  остаются (не используются — фича на `writing_task`/`speaking_task`).
 - ~~Канон-enum типов~~ → зафиксирован (§4.2), маппинг ярлыков.
 - ~~Все файлы один шаблон~~ → подтверждено на 8 файлах → парсер без LLM.
 - ~~Аудит брифа (15 находок)~~ → решения в §11; контент-права на стороне клиента.
