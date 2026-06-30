@@ -32,6 +32,31 @@ export const QTYPE_LABELS: Record<string, string> = {
   short_answer: "Short Answer",
 };
 
+/**
+ * Одно-фразовое объяснение каждого каноничного типа вопроса — инлайн-хелп для
+ * не-носителей при выборе, что тренировать. Контент английский by design (IELTS —
+ * англоязычный экзамен); держим простым и конкретным.
+ */
+export const QTYPE_DESCRIPTIONS: Record<string, string> = {
+  tfng: "Decide if each statement agrees with the text (True), contradicts it (False), or isn't mentioned (Not Given).",
+  ynng: "Decide if each statement matches the writer's views (Yes), goes against them (No), or isn't stated (Not Given).",
+  mcq_single: "Pick the one correct option from a list of choices.",
+  mcq_multi: "Pick several correct options from a longer list.",
+  matching_headings: "Match the right heading to each paragraph or section.",
+  matching_info: "Find which paragraph contains a given piece of information.",
+  matching_features: "Match each statement to the right option — a person, place, or category.",
+  matching_sentence_endings: "Choose the correct ending to complete each sentence.",
+  sentence_completion: "Fill each gap in a sentence with words from the text.",
+  summary_completion: "Complete a short summary by filling in its gaps.",
+  note_completion: "Fill the gaps in a set of notes.",
+  flowchart_completion: "Fill the gaps in a flow-chart of steps.",
+  table_completion: "Fill the gaps in a table.",
+  diagram_label: "Label the parts of a diagram with the right words.",
+  map_labelling: "Label places on a map or plan.",
+  form_completion: "Fill in a form with the details you read or hear.",
+  short_answer: "Answer a question in a few words, within the given word limit.",
+};
+
 export const READING_CATEGORIES = [
   "passage_1",
   "passage_2",
@@ -55,6 +80,9 @@ export const PERIOD_LABELS: Record<string, string> = {
 
 export function qtypeLabel(v: string): string {
   return QTYPE_LABELS[v] ?? v;
+}
+export function qtypeDescription(v: string): string {
+  return QTYPE_DESCRIPTIONS[v] ?? "";
 }
 export function categoryLabel(v: string): string {
   return CATEGORY_LABELS[v] ?? v;
