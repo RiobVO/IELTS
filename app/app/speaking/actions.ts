@@ -4,7 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { speakingSubmission, speakingFeedback, profile } from "@/db/schema";
 import { getUser, getProfile } from "@/lib/auth";
-import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
+import { effectiveTier, meetsTier, SPEAKING_MIN_TIER, type Tier } from "@/lib/tiers";
 import { speakingFeatureEnabled } from "@/env";
 import { isUuid } from "@/lib/uuid";
 import { signedUploadUrl, audioSize, deleteAudio } from "@/lib/speaking/storage";
@@ -54,7 +54,10 @@ export async function createSpeakingSubmission(
   // tier (canEvaluate only enforces the global SPEAKING_MIN_TIER). Opaque single reason.
   if (!isUuid(taskId)) return { error: "unavailable" };
   const task = await loadSpeakingTaskForSubmissionGate(taskId);
-  if (!task || task.status !== "published" || !meetsTier(tier, task.tierRequired)) {
+  if (!task || task.status !== "published") return { error: "unavailable" };
+  // tier_required gates only at-tier users; sub-tier users are in the free-preview lane
+  // (canEvaluate allowed them above) and must not be blocked by the per-task tier.
+  if (meetsTier(tier, SPEAKING_MIN_TIER) && !meetsTier(tier, task.tierRequired)) {
     return { error: "unavailable" };
   }
 

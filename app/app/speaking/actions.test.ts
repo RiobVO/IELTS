@@ -67,22 +67,51 @@ describe("createSpeakingSubmission", () => {
     expect(insertUploading).not.toHaveBeenCalled();
   });
 
-  it("rejects a draft task without insertUploading (#3)", async () => {
+  it("rejects a draft cue-card even for a sub-tier preview user (#3 holds)", async () => {
     getUser.mockResolvedValue({ id: "u1" });
-    getProfile.mockResolvedValue({ recording_consent_at: new Date(), tier: "ultra", premium_until: null });
+    getProfile.mockResolvedValue({ recording_consent_at: new Date(), tier: "premium", premium_until: null });
     counts.mockResolvedValue({ lifetime: 0, today: 0 });
     loadTask.mockResolvedValue({ status: "draft", tierRequired: "ultra" });
     expect(await createSpeakingSubmission(TASK, "webm")).toEqual({ error: "unavailable" });
     expect(insertUploading).not.toHaveBeenCalled();
   });
 
-  it("rejects an ultra-only task for a premium user without insertUploading (#3)", async () => {
+  // #D: Speaking is Ultra-only (SPEAKING_MIN_TIER=ultra); free/premium get one preview
+  // (canEvaluate gates it above). The per-task tier_required must NOT block that preview —
+  // only at-tier (ultra) users are checked against it.
+  it("allows a basic preview on an ultra cue-card (#D — preview revived)", async () => {
+    getUser.mockResolvedValue({ id: "u1" });
+    getProfile.mockResolvedValue({ recording_consent_at: new Date(), tier: "basic", premium_until: null });
+    counts.mockResolvedValue({ lifetime: 0, today: 0 });
+    insertUploading.mockResolvedValue("sub1");
+    dbSelect.mockReturnValue(selectChain([{ audioPath: "u1/sub1.webm" }]));
+    signedUpload.mockResolvedValue({ url: "http://upload" });
+    loadTask.mockResolvedValue({ status: "published", tierRequired: "ultra" });
+    expect(await createSpeakingSubmission(TASK, "webm")).toEqual({ submissionId: "sub1", uploadUrl: "http://upload" });
+    expect(insertUploading).toHaveBeenCalled();
+  });
+
+  it("allows a premium preview on an ultra cue-card (#D — preview revived)", async () => {
     getUser.mockResolvedValue({ id: "u1" });
     getProfile.mockResolvedValue({ recording_consent_at: new Date(), tier: "premium", premium_until: null });
-    counts.mockResolvedValue({ lifetime: 0, today: 0 }); // premium has a free preview, but tier still gates the task
+    counts.mockResolvedValue({ lifetime: 0, today: 0 });
+    insertUploading.mockResolvedValue("sub1");
+    dbSelect.mockReturnValue(selectChain([{ audioPath: "u1/sub1.webm" }]));
+    signedUpload.mockResolvedValue({ url: "http://upload" });
     loadTask.mockResolvedValue({ status: "published", tierRequired: "ultra" });
-    expect(await createSpeakingSubmission(TASK, "webm")).toEqual({ error: "unavailable" });
-    expect(insertUploading).not.toHaveBeenCalled();
+    expect(await createSpeakingSubmission(TASK, "webm")).toEqual({ submissionId: "sub1", uploadUrl: "http://upload" });
+    expect(insertUploading).toHaveBeenCalled();
+  });
+
+  it("allows an ultra user on an ultra cue-card (#D)", async () => {
+    getUser.mockResolvedValue({ id: "u1" });
+    getProfile.mockResolvedValue({ recording_consent_at: new Date(), tier: "ultra", premium_until: null });
+    counts.mockResolvedValue({ lifetime: 0, today: 0 });
+    insertUploading.mockResolvedValue("sub1");
+    dbSelect.mockReturnValue(selectChain([{ audioPath: "u1/sub1.webm" }]));
+    signedUpload.mockResolvedValue({ url: "http://upload" });
+    loadTask.mockResolvedValue({ status: "published", tierRequired: "ultra" });
+    expect(await createSpeakingSubmission(TASK, "webm")).toEqual({ submissionId: "sub1", uploadUrl: "http://upload" });
   });
 
   it("rejects a malformed taskId before any task read (#3)", async () => {
