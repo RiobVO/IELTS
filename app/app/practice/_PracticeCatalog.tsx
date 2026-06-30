@@ -647,7 +647,10 @@ function SkillCard({
         <div style={S.skillName}>{name}</div>
         <div style={S.skillCount}>{count}</div>
       </div>
-      <SkillBand band={band} target={targetBand ?? 7} base={p.base} ink={p.ink} />
+      {/* Band-рейл — только у фильтр-карт (твоё стояние по скиллу). Nav-карты (live
+          W/S) — другой вид: ведут в отдельный инструмент, band там не к месту. Вместе
+          с диагональной стрелкой это разводит «фильтр на месте» и «переход». */}
+      {!href && <SkillBand band={band} target={targetBand ?? 7} base={p.base} ink={p.ink} />}
       {/* Нижний аффорданс — ссылка → Open, тоггл → Filter tests / Showing below. */}
       <div style={S.skillFoot}>
         {href ? (
