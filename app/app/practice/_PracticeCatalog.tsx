@@ -553,12 +553,8 @@ function GoalBar({ target, best }: { target: number | null; best: number | null 
           <span style={S.goalTrack}>
             <span style={{ ...S.goalFill, width: `${pct}%` }} />
           </span>
-          {/* «best single test» явным текстом — а не tooltip'ом: телефонной/клавиатурной
-              аудитории hover недоступен, а число рядом с Target читалось как офиц. band. */}
-          <span style={S.goalLab}>
-            best single test{" "}
-            <b style={{ color: "var(--text-primary)" }}>{best.toFixed(1)}</b>
-          </span>
+          {/* Само число band НЕ дублируем здесь (живёт per-skill на картах) — goal-бар
+              несёт только цель и дельту; gap сам по себе не претендует на офиц. band. */}
           {tail ?? (reached ? (
             <span style={S.goalReached}>Target reached</span>
           ) : (
