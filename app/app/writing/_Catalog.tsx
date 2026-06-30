@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { Icon } from "@/components/core/icons";
 import { Input } from "@/components/core/Input";
 import type { CatalogTask } from "@/lib/writing/read";
 import {
@@ -69,7 +70,15 @@ const TOPIC_ICON: Record<WritingTopic, string> = {
   culture: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M2 12h20 M12 2a14 14 0 0 1 0 20 14 14 0 0 1 0-20Z",
 };
 
-export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; targetBand: number | null }) {
+export function WritingCatalog({
+  tasks,
+  targetBand,
+  locked,
+}: {
+  tasks: CatalogTask[];
+  targetBand: number | null;
+  locked: boolean;
+}) {
   const [cat, setCat] = useState<CatFilter>("all");
   const [part, setPart] = useState<PartFilter>("all");
   const [diff, setDiff] = useState<DiffFilter>("all");
@@ -135,15 +144,31 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
             Pick a Task 1 or Task 2 prompt and get an estimated band range with a concrete plan to lift it — not a verdict.
           </p>
         </div>
-        {targetBand != null && (
-          <div style={S.target}>
-            <span style={S.targetDot} />
-            <span style={S.targetLab}>Target</span>
-            <span style={S.targetVal}>{targetBand.toFixed(1)}</span>
-            <span style={S.targetHint}>band</span>
+        {locked ? (
+          <div style={S.tierPill}>
+            <Icon name="lock" size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} />
+            <span style={S.tierPillText}>Premium feature</span>
           </div>
+        ) : (
+          targetBand != null && (
+            <div style={S.target}>
+              <span style={S.targetDot} />
+              <span style={S.targetLab}>Target</span>
+              <span style={S.targetVal}>{targetBand.toFixed(1)}</span>
+              <span style={S.targetHint}>band</span>
+            </div>
+          )
         )}
       </header>
+
+      {locked && (
+        <div style={S.lockBanner} role="note">
+          <Icon name="sparkles" size={16} strokeWidth={2.3} style={{ color: "var(--text-link)", flex: "none", marginTop: 1 }} />
+          <span>
+            You&apos;ve used your free Writing analysis. Unlock unlimited Task 1 &amp; Task 2 feedback with Premium.
+          </span>
+        </div>
+      )}
 
       {/* Controls — facet filters on top, search + sort + count below. Splitting the rows
           keeps the three segmented groups grouped and lets sort + count sit with search. */}
@@ -253,7 +278,7 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
         <ul className="wl-grid">
           {visible.map((t) => (
             <li key={t.id} style={S.gridItem}>
-              <PromptCard t={t} targetBand={targetBand} />
+              <PromptCard t={t} targetBand={targetBand} locked={locked} />
             </li>
           ))}
         </ul>
@@ -304,17 +329,18 @@ function Segmented({
 
 // memo: with a stable `t` ref (from the server-sent array) and stable targetBand, a
 // search keystroke that only changes which cards are listed won't re-render the rest.
-const PromptCard = memo(function PromptCard({ t, targetBand }: { t: CatalogTask; targetBand: number | null }) {
+const PromptCard = memo(function PromptCard({ t, targetBand, locked }: { t: CatalogTask; targetBand: number | null; locked: boolean }) {
   const isTask1 = t.taskPart === "task1";
   const topic = t.topic;
-  const stripColor = topic ? `var(--topic-${topic}-color)` : "var(--border-strong)";
-  const accentBg = topic ? `var(--topic-${topic}-tint)` : "var(--surface-inset)";
-  const accentInk = topic ? `var(--topic-${topic}-ink)` : "var(--text-muted)";
-  const hoverBorder = topic ? `var(--topic-${topic}-tint-border)` : "var(--border-strong)";
+  // Locked cards neutralise the topic colour so they don't pose as openable prompts.
+  const stripColor = locked ? "var(--border-strong)" : topic ? `var(--topic-${topic}-color)` : "var(--border-strong)";
+  const accentBg = locked ? "var(--surface-inset)" : topic ? `var(--topic-${topic}-tint)` : "var(--surface-inset)";
+  const accentInk = locked ? "var(--text-muted)" : topic ? `var(--topic-${topic}-ink)` : "var(--text-muted)";
+  const hoverBorder = locked ? "var(--border-strong)" : topic ? `var(--topic-${topic}-tint-border)` : "var(--border-strong)";
   const hasBand = t.bandLow != null && t.bandHigh != null;
   // "On target" when the user's target band sits inside this prompt's range — ties the
   // header Target pill to the cards (the core "name your level" principle, not decoration).
-  const onTarget = targetBand != null && hasBand && targetBand >= t.bandLow! && targetBand <= t.bandHigh!;
+  const onTarget = !locked && targetBand != null && hasBand && targetBand >= t.bandLow! && targetBand <= t.bandHigh!;
   // Task 1 ~20 min; Task 2 ~40 min.
   const minutes = isTask1 ? 20 : MINUTES;
   const meta =
@@ -325,9 +351,15 @@ const PromptCard = memo(function PromptCard({ t, targetBand }: { t: CatalogTask;
     "--t-color": stripColor,
     "--t-border": hoverBorder,
   } as CSSProperties;
+  const href = locked ? "/app/upgrade" : `/app/writing/attempt/${t.id}`;
 
   return (
-    <Link href={`/app/writing/attempt/${t.id}`} className="wl-card" style={cardStyle}>
+    <Link
+      href={href}
+      className={`wl-card${locked ? " wl-card--locked" : ""}`}
+      style={cardStyle}
+      aria-label={locked ? `Upgrade to Premium to unlock this prompt: ${t.prompt}` : undefined}
+    >
       <span style={{ ...S.strip, background: stripColor }} />
       {isTask1 && t.imageUrl && (
         // Decorative preview — the chart's data is presented on the attempt page, and the
@@ -342,33 +374,39 @@ const PromptCard = memo(function PromptCard({ t, targetBand }: { t: CatalogTask;
               {writingTopicLabel[topic]}
             </span>
           )}
-          {t.difficulty && (
-            <div
-              style={S.meter}
-              role="img"
-              aria-label={`Difficulty: ${writingDifficultyLabel[t.difficulty]} (${t.difficulty} of 3)`}
-              title={`Difficulty: ${writingDifficultyLabel[t.difficulty]}`}
-            >
-              <span style={S.meterLabel}>{writingDifficultyLabel[t.difficulty]}</span>
-              <span style={S.meterTrack} aria-hidden="true">
-                {[1, 2, 3].map((seg) => (
-                  <span
-                    key={seg}
-                    style={{
-                      ...S.meterSeg,
-                      background: seg <= t.difficulty! ? accentInk : "var(--surface-inset)",
-                    }}
-                  />
-                ))}
-              </span>
-            </div>
+          {locked ? (
+            <span style={S.lockChip} aria-hidden="true">
+              <Icon name="lock" size={12} strokeWidth={2.4} /> Premium
+            </span>
+          ) : (
+            t.difficulty && (
+              <div
+                style={S.meter}
+                role="img"
+                aria-label={`Difficulty: ${writingDifficultyLabel[t.difficulty]} (${t.difficulty} of 3)`}
+                title={`Difficulty: ${writingDifficultyLabel[t.difficulty]}`}
+              >
+                <span style={S.meterLabel}>{writingDifficultyLabel[t.difficulty]}</span>
+                <span style={S.meterTrack} aria-hidden="true">
+                  {[1, 2, 3].map((seg) => (
+                    <span
+                      key={seg}
+                      style={{
+                        ...S.meterSeg,
+                        background: seg <= t.difficulty! ? accentInk : "var(--surface-inset)",
+                      }}
+                    />
+                  ))}
+                </span>
+              </div>
+            )
           )}
         </div>
 
         {/* Not a heading: in a semantic <ul> of card-links the link text is the
             accessible name and the list carries navigation; a heading per long-sentence
             prompt only bloated screen-reader heading nav without aiding it. */}
-        <p style={S.question}>{t.prompt}</p>
+        <p style={{ ...S.question, ...(locked ? { color: "var(--text-muted)" } : null) }}>{t.prompt}</p>
 
         <div style={S.footer}>
           <div style={S.footerLeft}>
@@ -382,13 +420,19 @@ const PromptCard = memo(function PromptCard({ t, targetBand }: { t: CatalogTask;
               {onTarget && <span style={S.onTarget}> · on target</span>}
             </span>
           </div>
-          <span className="wl-arrow" style={{ ...S.arrow, background: accentBg, color: accentInk }} aria-hidden="true">
-            <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14" />
-              <path d="m13 6 6 6-6 6" />
-            </svg>
-          </span>
+          {locked ? (
+            <span style={S.upgrade}>
+              <Icon name="lock" size={13} strokeWidth={2.4} /> Upgrade to unlock
+            </span>
+          ) : (
+            <span className="wl-arrow" style={{ ...S.arrow, background: accentBg, color: accentInk }} aria-hidden="true">
+              <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14" />
+                <path d="m13 6 6 6-6 6" />
+              </svg>
+            </span>
+          )}
         </div>
       </div>
     </Link>
@@ -432,6 +476,7 @@ const CSS = `
 .wl-help summary:hover{color:var(--text-secondary)}
 .wl-card{transition:transform .18s cubic-bezier(.2,.7,.3,1),box-shadow .18s ease,border-color .18s ease}
 .wl-card:hover{transform:translateY(-4px);box-shadow:0 18px 36px -20px var(--t-color);border-color:var(--t-border)}
+.wl-card--locked:hover{transform:none;box-shadow:var(--shadow-xs);border-color:var(--border-strong)}
 .wl-arrow{transition:transform .18s ease}
 .wl-card:hover .wl-arrow{transform:translateX(2px)}
 @media (min-width:680px){
@@ -466,6 +511,13 @@ const S: Record<string, CSSProperties> = {
   targetLab: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600, color: "var(--text-muted)" },
   targetVal: { fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 20, color: "var(--text-primary)" },
   targetHint: { fontSize: 12, color: "var(--text-muted)" },
+
+  // Locked state (surfaces the existing premium gate; mirrors Speaking).
+  tierPill: { display: "inline-flex", alignItems: "center", gap: 8, flex: "none", padding: "10px 16px", borderRadius: 13, border: "1px solid var(--brand-border)", background: "var(--brand-subtle)" },
+  tierPillText: { fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, color: "var(--text-link)" },
+  lockBanner: { display: "flex", gap: 10, alignItems: "flex-start", padding: "14px 16px", background: "var(--brand-subtle)", border: "1px solid var(--brand-border)", borderRadius: "var(--radius-md)", fontSize: 13.5, lineHeight: 1.5, color: "var(--text-secondary)" },
+  lockChip: { display: "inline-flex", alignItems: "center", gap: 4, borderRadius: 7, padding: "3px 8px", border: "1px solid var(--border)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 700 },
+  upgrade: { display: "inline-flex", alignItems: "center", gap: 6, flex: "none", fontFamily: "var(--font-ui)", fontSize: 12.5, fontWeight: 700, color: "var(--text-link)" },
 
   segGroup: { display: "flex", flexDirection: "column", gap: 6, flex: "none" },
   segName: { paddingLeft: 2, fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 600, letterSpacing: "0.01em", color: "var(--text-muted)" },
