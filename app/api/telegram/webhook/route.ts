@@ -1,5 +1,5 @@
 import { revalidateTag } from "next/cache";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { and, desc, eq, exists, isNotNull, not, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { contentItem, passage } from "@/db/schema";
@@ -59,6 +59,16 @@ interface TgUpdate {
 
 const ok = () => NextResponse.json({ ok: true });
 
+function deferTelegramWork(label: string, work: () => Promise<void>): void {
+  after(async () => {
+    try {
+      await work();
+    } catch (e) {
+      console.error(`telegram ${label} failed`, e);
+    }
+  });
+}
+
 export async function POST(request: Request) {
   const cfg = telegramConfig();
   if (!cfg) return ok(); // бот не сконфигурирован — no-op
@@ -82,10 +92,10 @@ export async function POST(request: Request) {
   const cq = update.callback_query;
   if (cq) {
     if (!cfg.adminIds.includes(cq.from.id)) {
-      await answerCallback(cq.id, "Нет доступа");
+      deferTelegramWork("forbidden callback", () => answerCallback(cq.id, "Нет доступа"));
       return ok();
     }
-    await handlePublish(cq);
+    deferTelegramWork("publish callback", () => handlePublish(cq));
     return ok();
   }
 
@@ -103,21 +113,27 @@ export async function POST(request: Request) {
     const name = doc.file_name ?? "file";
     const lower = name.toLowerCase();
     if (lower.endsWith(".html") || doc.mime_type === "text/html") {
-      await handleHtmlUpload(chatId, doc, name);
+      deferTelegramWork("html import", () => handleHtmlUpload(chatId, doc, name));
     } else if (lower.endsWith(".mp3") || (doc.mime_type ?? "").startsWith("audio/")) {
-      await handleAudioUpload(chatId, doc);
+      deferTelegramWork("audio import", () => handleAudioUpload(chatId, doc));
     } else {
-      await sendMessage(
-        chatId,
-        `Не понял файл (${name}). Жду .html (тест) или .mp3 (аудио для Listening).`,
+      deferTelegramWork(
+        "unknown file reply",
+        () => sendMessage(
+          chatId,
+          `Не понял файл (${name}). Жду .html (тест) или .mp3 (аудио для Listening).`,
+        ),
       );
     }
   } else if (audio) {
-    await handleAudioUpload(chatId, audio);
+    deferTelegramWork("audio import", () => handleAudioUpload(chatId, audio));
   } else {
-    await sendMessage(
-      chatId,
-      "Пришли HTML-файл теста или mp3 (аудио для Listening).",
+    deferTelegramWork(
+      "help reply",
+      () => sendMessage(
+        chatId,
+        "Пришли HTML-файл теста или mp3 (аудио для Listening).",
+      ),
     );
   }
 
