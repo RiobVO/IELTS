@@ -7,6 +7,7 @@ import { Icon } from "@/components/core/icons";
 import { Input } from "@/components/core/Input";
 import type { CatalogTask } from "@/lib/writing/read";
 import {
+  WRITING_TOPICS,
   writingDifficultyLabel,
   writingTaskTypeLabel,
   writingTopicLabel,
@@ -29,7 +30,13 @@ import {
 type CatFilter = "all" | "academic" | "general";
 type PartFilter = "all" | "task1" | "task2";
 type DiffFilter = "all" | "1" | "2" | "3";
+type TopicFilter = WritingTopic | "all";
 type Sort = "default" | "difficulty" | "band";
+
+/** Free-preview lifecycle, computed server-side (page.tsx). "available" = the one free
+ *  analysis is unspent (cards open, signpost it); "spent" = gate engaged (cards locked);
+ *  "paid" = Premium+, no paywall here. */
+export type PreviewState = "paid" | "available" | "spent";
 
 const SEGMENTS: { value: CatFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -74,19 +81,29 @@ const TOPIC_ICON: Record<WritingTopic, string> = {
 export function WritingCatalog({
   tasks,
   targetBand,
-  locked,
+  preview,
 }: {
   tasks: CatalogTask[];
   targetBand: number | null;
-  locked: boolean;
+  preview: PreviewState;
 }) {
+  const locked = preview === "spent";
   const [cat, setCat] = useState<CatFilter>("all");
   const [part, setPart] = useState<PartFilter>("all");
   const [diff, setDiff] = useState<DiffFilter>("all");
+  const [topic, setTopic] = useState<TopicFilter>("all");
   const [sort, setSort] = useState<Sort>("default");
   const [q, setQ] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const query = q.trim().toLowerCase();
+
+  // Topic facet options — only the topics actually present in the published set, in the
+  // canonical order. Topic is the loudest signal on each card, so it earns a filter.
+  const topicOptions = useMemo(() => {
+    const present = new Set<WritingTopic>();
+    for (const t of tasks) if (t.topic) present.add(t.topic);
+    return WRITING_TOPICS.filter((k) => present.has(k));
+  }, [tasks]);
 
   // Filter + sort in one memo so a search keystroke doesn't re-scan unless inputs change;
   // paired with the memo()'d card it keeps typing cheap even as the catalog grows.
@@ -96,18 +113,20 @@ export function WritingCatalog({
         (part === "all" || t.taskPart === part) &&
         (cat === "all" || t.category === cat) &&
         (diff === "all" || String(t.difficulty ?? "") === diff) &&
+        (topic === "all" || t.topic === topic) &&
         (!query || t.prompt.toLowerCase().includes(query)),
     );
     if (sort === "difficulty") out.sort((a, b) => (a.difficulty ?? 9) - (b.difficulty ?? 9));
     else if (sort === "band") out.sort((a, b) => (a.bandLow ?? 9) - (b.bandLow ?? 9));
     return out; // "default" keeps the server order (newest first)
-  }, [tasks, part, cat, diff, query, sort]);
+  }, [tasks, part, cat, diff, topic, query, sort]);
 
-  const filtersActive = cat !== "all" || part !== "all" || diff !== "all" || q !== "";
+  const filtersActive = cat !== "all" || part !== "all" || diff !== "all" || topic !== "all" || q !== "";
   const clearFilters = () => {
     setCat("all");
     setPart("all");
     setDiff("all");
+    setTopic("all");
     setQ("");
   };
   const focusSearch = () => (document.getElementById("wl-search-input") as HTMLInputElement | null)?.focus();
@@ -145,10 +164,15 @@ export function WritingCatalog({
             Pick a Task 1 or Task 2 prompt and get an estimated band range with a concrete plan to lift it — not a verdict.
           </p>
         </div>
-        {locked ? (
+        {preview === "spent" ? (
           <div style={S.tierPill}>
             <Icon name="lock" size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} />
             <span style={S.tierPillText}>Premium feature</span>
+          </div>
+        ) : preview === "available" ? (
+          <div style={S.tierPill}>
+            <Icon name="sparkles" size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} />
+            <span style={S.tierPillText}>1 free analysis</span>
           </div>
         ) : (
           targetBand != null && (
@@ -162,11 +186,20 @@ export function WritingCatalog({
         )}
       </header>
 
-      {locked && (
+      {preview === "available" && (
         <div style={S.lockBanner} role="note">
           <Icon name="sparkles" size={16} strokeWidth={2.3} style={{ color: "var(--text-link)", flex: "none", marginTop: 1 }} />
           <span>
-            You&apos;ve used your free Writing analysis. Unlock unlimited Task 1 &amp; Task 2 feedback with Premium.
+            Your first Writing analysis is on us — make it count. Pick the task type you find hardest; you&apos;ll get a full band breakdown and a concrete plan to lift it.
+          </span>
+        </div>
+      )}
+
+      {preview === "spent" && (
+        <div style={S.lockBanner} role="note">
+          <Icon name="sparkles" size={16} strokeWidth={2.3} style={{ color: "var(--text-link)", flex: "none", marginTop: 1 }} />
+          <span>
+            That was your free Writing analysis. Keep the momentum going — Premium gives you unlimited Task 1 &amp; Task 2 feedback.
           </span>
         </div>
       )}
@@ -218,6 +251,25 @@ export function WritingCatalog({
               )
             }
           />
+          {topicOptions.length > 1 && (
+            <span style={S.sortWrap}>
+              <select
+                value={topic}
+                onChange={(e) => setTopic(e.target.value as TopicFilter)}
+                aria-label="Filter by topic"
+                className="wl-sort"
+                style={S.sort}
+              >
+                <option value="all">All topics</option>
+                {topicOptions.map((k) => (
+                  <option key={k} value={k}>
+                    {writingTopicLabel[k]}
+                  </option>
+                ))}
+              </select>
+              <SelectChevron />
+            </span>
+          )}
           <span style={S.sortWrap}>
             <select
               value={sort}
@@ -230,14 +282,18 @@ export function WritingCatalog({
               <option value="difficulty">By difficulty</option>
               <option value="band">By band</option>
             </select>
-            <svg style={S.sortChevron} width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="m6 9 6 6 6-6" />
-            </svg>
+            <SelectChevron />
           </span>
-          <span className="wl-count" style={S.count}>
+          {/* Live region so screen-reader users hear the result count change when they
+              filter or search (WCAG 2.1 AA 4.1.3 Status Messages). */}
+          <span className="wl-count" style={S.count} role="status" aria-live="polite">
             {visible.length} prompts · timed practice
           </span>
+          {filtersActive && (
+            <button type="button" onClick={clearFilters} className="wl-clearinline" style={S.clearInline}>
+              Clear filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -265,7 +321,10 @@ export function WritingCatalog({
       {visible.length === 0 ? (
         <div style={S.empty}>
           {tasks.length === 0 ? (
-            "No prompts yet — check back soon."
+            <>
+              <span style={S.emptyTitle}>No prompts published yet</span>
+              <span>New Task 1 and Task 2 prompts land here as they&apos;re added — each gives you an estimated band range and a plan to lift it. Check back soon.</span>
+            </>
           ) : (
             <>
               <span>No prompts match this filter.</span>
@@ -432,6 +491,16 @@ function TopicGlyph({ d }: { d: string }) {
   );
 }
 
+/** Chevron for the native filter/sort selects (topic + sort share it). */
+function SelectChevron() {
+  return (
+    <svg style={S.sortChevron} width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
 const CSS = `
 .wl-wrap{padding:24px 16px 56px}
 .wl-h1{font-size:30px}
@@ -453,10 +522,12 @@ const CSS = `
 .wl-sort:hover{border-color:var(--border-strong)}
 .wl-sort:focus-visible{border-color:var(--brand)}
 .wl-clearall:hover{background:var(--surface-hover);border-color:var(--brand-border);color:var(--brand)}
+.wl-clearinline:hover{text-decoration:underline}
+.wl-clearinline:focus-visible{text-decoration:underline}
 .wl-help summary{cursor:pointer}
 .wl-help summary::-webkit-details-marker{display:none}
 .wl-help summary::marker{content:""}
-.wl-help summary:hover{color:var(--text-secondary)}
+.wl-help summary:hover{color:var(--text-primary)}
 .wl-card{transition:transform .18s cubic-bezier(.2,.7,.3,1),box-shadow .18s ease,border-color .18s ease}
 .wl-card:hover{transform:translateY(-4px);box-shadow:0 18px 36px -20px var(--t-color);border-color:var(--t-border)}
 .wl-card--locked:hover{transform:none;box-shadow:var(--shadow-xs);border-color:var(--border-strong)}
@@ -509,6 +580,8 @@ const S: Record<string, CSSProperties> = {
   segActive: { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-xs)" },
   // Numeric meta → stays mono (sanctioned for numerals); bumped to 12 for legibility.
   count: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", flex: "none" },
+  // Always-on reset — appears whenever a filter is active, not only when results hit zero.
+  clearInline: { appearance: "none", border: "none", background: "transparent", cursor: "pointer", padding: 0, fontFamily: "var(--font-ui)", fontSize: 12.5, fontWeight: 600, color: "var(--text-link)", flex: "none" },
   // Search clear-X — generous 40px hit area (WCAG 2.5.8) around a 15px glyph, neutral until hover.
   clear: { appearance: "none", border: "none", background: "transparent", width: 40, height: 40, padding: 0, display: "grid", placeItems: "center", cursor: "pointer", flex: "none", borderRadius: "var(--radius-full)" },
   // "/" hint — non-interactive cue that the key focuses search.
@@ -521,13 +594,14 @@ const S: Record<string, CSSProperties> = {
 
   // Help disclosure — quiet, sits between the controls and the grid.
   help: { marginTop: -8 },
-  helpSummary: { display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "var(--text-muted)", userSelect: "none" },
+  helpSummary: { display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", userSelect: "none" },
   helpQ: { display: "grid", placeItems: "center", width: 18, height: 18, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", color: "var(--text-secondary)", fontSize: 12, fontWeight: 700, flex: "none" },
   helpBody: { display: "flex", flexDirection: "column", gap: 6, marginTop: 12, padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", maxWidth: "62ch" },
   helpLine: { margin: 0, fontSize: 13.5, lineHeight: 1.5, color: "var(--text-secondary)" },
   helpKey: { color: "var(--text-primary)", fontWeight: 600 },
 
-  empty: { display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)" },
+  empty: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", maxWidth: "52ch", marginInline: "auto" },
+  emptyTitle: { fontFamily: "var(--font-ui)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
   clearAll: { appearance: "none", cursor: "pointer", padding: "9px 16px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-secondary)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, transition: "var(--transition-colors)" },
 
   gridItem: { listStyle: "none", display: "flex" },
