@@ -94,6 +94,8 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
           return setPhase("in_progress");
         case "not_configured":
           return router.push("/app/practice");
+        case "unavailable":
+          return router.push("/app/writing");
         default:
           return setError("Please write between 20 and 1000 words.");
       }

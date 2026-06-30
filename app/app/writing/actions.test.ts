@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoisted so the vi.mock factories (hoisted above) can reference these eagerly.
-const { getUser, getProfile, counts, insert, trigger, readOwn, markFailed } = vi.hoisted(() => ({
+const { getUser, getProfile, counts, insert, trigger, readOwn, markFailed, featureEnabled, loadTask } = vi.hoisted(() => ({
   getUser: vi.fn(),
   getProfile: vi.fn(),
   counts: vi.fn(),
@@ -8,13 +8,22 @@ const { getUser, getProfile, counts, insert, trigger, readOwn, markFailed } = vi
   trigger: vi.fn(),
   readOwn: vi.fn(),
   markFailed: vi.fn(),
+  featureEnabled: vi.fn(),
+  loadTask: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ getUser, getProfile }));
-vi.mock("@/lib/writing/store", () => ({ completedCounts: counts, insertPendingSubmission: insert, triggerEvaluate: trigger, readOwnSubmission: readOwn, markFailed }));
-vi.mock("@/env", () => ({ writingEvalConfig: () => ({ apiKey: "k", model: "m" }) }));
+vi.mock("@/lib/writing/store", () => ({ completedCounts: counts, insertPendingSubmission: insert, triggerEvaluate: trigger, readOwnSubmission: readOwn, markFailed, loadWritingTaskForSubmissionGate: loadTask }));
+vi.mock("@/env", () => ({ writingFeatureEnabled: featureEnabled }));
 import { createWritingSubmission, getSubmissionStatus } from "./actions";
 import { WRITING_STALE_MS } from "@/lib/writing/lifecycle";
-beforeEach(() => [getUser, getProfile, counts, insert, trigger, readOwn, markFailed].forEach((m) => m.mockReset()));
+
+const TASK = "11111111-1111-1111-1111-111111111111"; // a well-formed task id
+
+beforeEach(() => {
+  [getUser, getProfile, counts, insert, trigger, readOwn, markFailed, featureEnabled, loadTask].forEach((m) => m.mockReset());
+  featureEnabled.mockReturnValue(true); // default: fully configured; #5 cases override
+  loadTask.mockResolvedValue({ status: "published", tierRequired: "basic" }); // default: open task; #2 cases override
+});
 
 describe("createWritingSubmission", () => {
   it("blocks over-preview non-Ultra without insert", async () => {
@@ -29,11 +38,46 @@ describe("createWritingSubmission", () => {
   });
   it("surfaces in_progress when the active-index conflict yields null", async () => {
     getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "ultra", premium_until: null }); counts.mockResolvedValue({ lifetime: 0, today: 0 }); insert.mockResolvedValue(null);
-    expect(await createWritingSubmission({ taskId: "t1", essay: Array(30).fill("w").join(" ") })).toEqual({ ok: false, reason: "in_progress" });
+    expect(await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") })).toEqual({ ok: false, reason: "in_progress" });
   });
   it("inserts + triggers for an allowed user", async () => {
     getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "ultra", premium_until: null }); counts.mockResolvedValue({ lifetime: 5, today: 0 }); insert.mockResolvedValue("sub1");
-    expect(await createWritingSubmission({ taskId: "t1", essay: Array(30).fill("w").join(" ") })).toEqual({ ok: true, submissionId: "sub1" });
+    expect(await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") })).toEqual({ ok: true, submissionId: "sub1" });
+    expect(trigger).toHaveBeenCalledWith("sub1");
+  });
+
+  it("blocks when the feature is not fully configured (origin/secret missing) without insert", async () => {
+    featureEnabled.mockReturnValue(false); // model+key present but no origin/secret → trigger would no-op
+    getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "ultra", premium_until: null }); counts.mockResolvedValue({ lifetime: 0, today: 0 }); insert.mockResolvedValue("sub1");
+    expect(await createWritingSubmission({ taskId: "t1", essay: Array(30).fill("w").join(" ") })).toEqual({ ok: false, reason: "not_configured" });
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects a draft task without insert (#2)", async () => {
+    getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "ultra", premium_until: null }); counts.mockResolvedValue({ lifetime: 0, today: 0 }); insert.mockResolvedValue("sub1");
+    loadTask.mockResolvedValue({ status: "draft", tierRequired: "basic" });
+    expect(await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") })).toEqual({ ok: false, reason: "unavailable" });
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects an ultra-only task for a premium user without insert (#2)", async () => {
+    getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "premium", premium_until: null }); counts.mockResolvedValue({ lifetime: 0, today: 0 }); insert.mockResolvedValue("sub1");
+    loadTask.mockResolvedValue({ status: "published", tierRequired: "ultra" });
+    expect(await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") })).toEqual({ ok: false, reason: "unavailable" });
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed taskId before any task read (#2)", async () => {
+    getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "ultra", premium_until: null }); counts.mockResolvedValue({ lifetime: 0, today: 0 }); insert.mockResolvedValue("sub1");
+    expect(await createWritingSubmission({ taskId: "not-a-uuid", essay: Array(30).fill("w").join(" ") })).toEqual({ ok: false, reason: "unavailable" });
+    expect(loadTask).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("allows a premium task for a premium user (#2)", async () => {
+    getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "premium", premium_until: null }); counts.mockResolvedValue({ lifetime: 0, today: 0 }); insert.mockResolvedValue("sub1");
+    loadTask.mockResolvedValue({ status: "published", tierRequired: "premium" });
+    expect(await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") })).toEqual({ ok: true, submissionId: "sub1" });
     expect(trigger).toHaveBeenCalledWith("sub1");
   });
 });
