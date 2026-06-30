@@ -8,6 +8,7 @@ import { contentItem } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { RegradeRequiredError } from "@/lib/import/persist";
 import { importRunner } from "@/lib/import/runner/import-runner";
+import { publishReviewedContentItem } from "@/lib/content/publish";
 
 function fail(message: string): never {
   redirect(`/admin?error=${encodeURIComponent(message)}`);
@@ -79,23 +80,21 @@ export async function setStatus(formData: FormData) {
   if (!id || (status !== "draft" && status !== "published")) redirect("/admin");
 
   if (status === "published") {
-    const [row] = await db
-      .select({ reviewedAt: contentItem.reviewedAt })
-      .from(contentItem)
-      .where(eq(contentItem.id, id))
-      .limit(1);
-    if (!row) redirect("/admin");
-    if (!row.reviewedAt) {
-      fail("Approve the import (review the key) before publishing.");
+    // Shared chokepoint: publishes only if reviewed_at is set (and revalidates the
+    // catalog tag). Keeps the review gate identical across the admin UI and the bot.
+    const res = await publishReviewedContentItem(id);
+    if (!res.ok) {
+      if (res.reason === "not_reviewed") {
+        fail("Approve the import (review the key) before publishing.");
+      }
+      redirect("/admin"); // not_found
     }
+  } else {
+    // Unpublishing (→ draft) is intentionally unguarded.
+    await db.update(contentItem).set({ status: "draft" }).where(eq(contentItem.id, id));
+    // Catalog's published list is cached by tag — unpublish invalidates it.
+    revalidateTag("content_item");
   }
-
-  await db
-    .update(contentItem)
-    .set({ status })
-    .where(eq(contentItem.id, id));
-  // Catalog's published list is cached by tag — publish/unpublish invalidates it.
-  revalidateTag("content_item");
   revalidatePath("/admin");
   redirect("/admin");
 }
