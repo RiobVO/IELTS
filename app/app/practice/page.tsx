@@ -49,20 +49,35 @@ function countAnswers(answers: Record<string, unknown> | null): number {
 }
 
 /**
- * Предвыбор фильтра из query (переход со старых каталогов /app/reading|listening,
- * свёрнутых в redirect). Невалидные значения отбрасываются по каноничным enum'ам
- * (@/lib/labels), поэтому мусорный q_type/category открывает хаб дефолтным, а не
- * пустым. own-property check защищает от наследованных ключей (`?q_type=toString`).
+ * Предвыбор фильтра из query. Источников два: (1) клиент пишет своё состояние в URL
+ * (types/cats — списки через запятую, sort) для share/bookmark/refresh; (2) старые
+ * каталоги /app/reading|listening слали единичные q_type/category — оставлены как
+ * fallback. Невалидные значения отбрасываются по каноничным enum'ам (@/lib/labels),
+ * own-property check защищает от наследованных ключей (`?q_type=toString`).
  */
-function buildInitialFilter(sp: { skill?: string; q_type?: string; category?: string }): InitialFilter {
+function buildInitialFilter(sp: {
+  skill?: string;
+  types?: string;
+  cats?: string;
+  sort?: string;
+  q_type?: string;
+  category?: string;
+}): InitialFilter {
   const has = (m: Record<string, string>, v?: string) =>
     !!v && Object.prototype.hasOwnProperty.call(m, v);
+  const parseList = (m: Record<string, string>, raw?: string): string[] =>
+    (raw ?? "").split(",").map((s) => s.trim()).filter((v) => has(m, v));
   const skill: Section | null =
     sp.skill === "reading" || sp.skill === "listening" ? sp.skill : null;
+  const types = parseList(QTYPE_LABELS, sp.types);
+  const cats = parseList(CATEGORY_LABELS, sp.cats);
+  const sort: InitialFilter["sort"] =
+    sp.sort === "short" || sp.sort === "questions" ? sp.sort : "default";
   return {
     skill,
-    types: has(QTYPE_LABELS, sp.q_type) ? [sp.q_type!] : [],
-    cats: has(CATEGORY_LABELS, sp.category) ? [sp.category!] : [],
+    types: types.length ? types : has(QTYPE_LABELS, sp.q_type) ? [sp.q_type!] : [],
+    cats: cats.length ? cats : has(CATEGORY_LABELS, sp.category) ? [sp.category!] : [],
+    sort,
   };
 }
 
@@ -71,6 +86,9 @@ export default async function PracticePage({
 }: {
   searchParams: Promise<{
     skill?: string;
+    types?: string;
+    cats?: string;
+    sort?: string;
     q_type?: string;
     category?: string;
     limit?: string;

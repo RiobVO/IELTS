@@ -64,12 +64,13 @@ export interface HeroData {
 }
 export type DrillWeakest = { type: string; label: string; section: Section } | null;
 
-/** Предвыбор фильтра из query (redirect со старых каталогов): секция + тип/категория.
- *  Значения уже провалидированы на сервере (page.tsx) против @/lib/labels. */
+/** Предвыбор фильтра из query: секция + типы/категории + сорт. Значения уже
+ *  провалидированы на сервере (page.tsx) против @/lib/labels и enum'а сорта. */
 export interface InitialFilter {
   skill: Section | null;
   types: string[];
   cats: string[];
+  sort: Sort;
 }
 
 interface SectionVisual {
@@ -156,7 +157,7 @@ export function PracticeCatalog({
   const [selCats, setSelCats] = useState<string[]>(initialFilter?.cats ?? []);
   const [selTypes, setSelTypes] = useState<string[]>(initialFilter?.types ?? []);
   const [skill, setSkill] = useState<Skill | null>(initialFilter?.skill ?? null);
-  const [sort, setSort] = useState<Sort>("default");
+  const [sort, setSort] = useState<Sort>(initialFilter?.sort ?? "default");
   // Мобильный фильтр свёрнут по умолчанию (стена чипов не загораживает список);
   // на десктопе (≥1024) всегда раскрыт. matchMedia — как бургер-паттерн проекта.
   const [filtersOpen, setFiltersOpen] = useState(true);
@@ -167,6 +168,20 @@ export function PracticeCatalog({
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
   }, []);
+
+  // Состояние фильтра → URL (share/bookmark/refresh-safe). replaceState, не router:
+  // URL отражает выбор, но без серверного ре-fetch (фильтрация остаётся клиентской).
+  // Только reading/listening попадают в skill (locked-панель эфемерна). Сервер
+  // (page.tsx) парсит types/cats/sort обратно при загрузке — round-trip замкнут.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (skill === "reading" || skill === "listening") params.set("skill", skill);
+    if (selTypes.length) params.set("types", selTypes.join(","));
+    if (selCats.length) params.set("cats", selCats.join(","));
+    if (sort !== "default") params.set("sort", sort);
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [skill, selCats, selTypes, sort]);
 
   // Фильтр-действие выше сгиба (skill-карта / drill) меняет каталог ниже — ведём
   // пользователя к результату: скролл каталога + фокус на заголовок списка
