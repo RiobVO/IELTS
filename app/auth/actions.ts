@@ -10,6 +10,7 @@ import { signupThrottle } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
 import {
   exceedsSignupRate,
+  isHoneypotTripped,
   SIGNUP_THROTTLE_WINDOW_SECONDS,
 } from "@/lib/anti-cheat";
 import { verifyTurnstile } from "@/lib/anti-bot/turnstile";
@@ -41,6 +42,16 @@ export async function signUp(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const ref = String(formData.get("ref") ?? "").trim();
+
+  // Honeypot (§11 anti-bot, без внешних зависимостей): скрытое поле-приманка,
+  // невидимое живому пользователю. Заполнено → это бот: молча имитируем успех
+  // (аккаунт НЕ создаём, БД не трогаем, ловушку не палим). Первым — дешевле captcha
+  // и throttle, отсекает примитивных ботов до любой работы.
+  if (isHoneypotTripped(formData.get("website"))) {
+    redirect(
+      `/auth?message=${encodeURIComponent("A confirmation email has been sent to your inbox.")}`,
+    );
+  }
 
   // Anti-bot gate (§11). No-op when Turnstile keys aren't configured (fail-open),
   // so signup is unaffected until the keys are added. The token rides in the

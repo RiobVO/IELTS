@@ -70,3 +70,13 @@ export function isTooFastToRate(
   if (totalQuestions <= 0) return false;
   return timeUsedSeconds < totalQuestions * MIN_RATED_SECONDS_PER_QUESTION;
 }
+
+/**
+ * Honeypot (§11 anti-bot, без внешних зависимостей): в signup-форме есть скрытое
+ * поле-приманка, невидимое живому пользователю (offscreen + aria-hidden). Бот,
+ * автозаполняющий все поля, отправит его непустым. true => это бот. Чистая функция —
+ * решение тестируется без формы; заполнение поля читает server action из FormData.
+ */
+export function isHoneypotTripped(value: unknown): boolean {
+  return typeof value === "string" && value.trim() !== "";
+}
