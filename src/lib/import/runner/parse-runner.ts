@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { extractData, extractFunctionTable, extractRangeBuilderTable } from "../extract-js";
-import { canonQuestionType } from "../question-types";
+import { canonQuestionType, unknownTypeWarning, UNKNOWN_TYPE_FALLBACK } from "../question-types";
 import type { ParsedTest, ParsedQuestion, ParsedAnswerKey } from "../types";
 
 export interface RunnerParseResult {
@@ -87,14 +87,14 @@ function parseReadingRunner(html: string): RunnerParseResult {
     // в warnings, чтобы админ увидел fallback перед публикацией.
     const canon = canonQuestionType(types[k] ?? "");
     if (canon.type === null) {
-      warnings.push(`Q${n}: unknown type ${JSON.stringify(types[k] ?? "")} → fell back to short_answer`);
+      warnings.push(unknownTypeWarning(n, types[k] ?? ""));
     } else if (!canon.confident) {
       warnings.push(`Q${n}: low-confidence type ${JSON.stringify(types[k] ?? "")} → ${canon.type}`);
     }
     if (!answer.accept.some((a) => (a ?? "").trim() !== "")) {
       warnings.push(`Q${n}: empty answer key`);
     }
-    return mkQuestion(n, canon.type ?? "short_answer", answer);
+    return mkQuestion(n, canon.type ?? UNKNOWN_TYPE_FALLBACK, answer);
   });
   // Агрегаты-подсказки: отсутствие разбора/доказательства — не блокер, инфо.
   const noExpl = numbers.filter((n) => !expl[String(n)]).length;
@@ -147,14 +147,14 @@ function parseListeningRunner(html: string): RunnerParseResult {
     // Review-gate: поднять неуверенный маппинг типа и пустой ключ в warnings.
     const canon = canonQuestionType(types[String(n)] ?? "");
     if (canon.type === null) {
-      warnings.push(`Q${n}: unknown type ${JSON.stringify(types[String(n)] ?? "")} → fell back to short_answer`);
+      warnings.push(unknownTypeWarning(n, types[String(n)] ?? ""));
     } else if (!canon.confident) {
       warnings.push(`Q${n}: low-confidence type ${JSON.stringify(types[String(n)] ?? "")} → ${canon.type}`);
     }
     if (!answer.accept.some((a) => (a ?? "").trim() !== "")) {
       warnings.push(`Q${n}: empty answer key`);
     }
-    return mkQuestion(n, canon.type ?? "short_answer", answer);
+    return mkQuestion(n, canon.type ?? UNKNOWN_TYPE_FALLBACK, answer);
   });
 
   const $ = cheerio.load(html);

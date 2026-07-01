@@ -98,3 +98,19 @@ export function canonQuestionType(label: string): CanonResult {
   }
   return { type: null, confident: false };
 }
+
+// A source label that maps to no canon type falls back to short_answer. grade.ts routes
+// by answer-key mode, not qtype, so grading is unaffected — but the fallback hides a
+// genuinely unsupported type. The parser records it as a warning; the publish gate (#13)
+// reads it back to refuse publishing until an admin resolves it. Generator and detector
+// share one marker so the warning text and the gate can never drift apart.
+export const UNKNOWN_TYPE_FALLBACK: QuestionType = "short_answer";
+const UNKNOWN_TYPE_MARK = "unknown type";
+
+export function unknownTypeWarning(n: number, rawLabel: string): string {
+  return `Q${n}: ${UNKNOWN_TYPE_MARK} ${JSON.stringify(rawLabel)} → fell back to ${UNKNOWN_TYPE_FALLBACK}`;
+}
+
+export function isUnknownTypeWarning(w: string): boolean {
+  return w.includes(UNKNOWN_TYPE_MARK);
+}

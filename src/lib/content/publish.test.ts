@@ -55,4 +55,44 @@ describe("publishReviewedContentItem", () => {
     expect(res).toEqual({ ok: false, reason: "empty_answer_key" });
     expect(update).not.toHaveBeenCalled();
   });
+
+  it("refuses to publish when a question type didn't resolve (unknown-type fallback) (#13)", async () => {
+    // qtype in the DB is already 'short_answer' (fallback applied), so the only durable
+    // trace of the unresolved type is the persisted import warning — the gate reads it back.
+    select.mockReturnValueOnce(
+      selectChain([
+        {
+          reviewedAt: new Date(),
+          title: "Reading 1",
+          importWarnings: ['Q2: unknown type "Frobnicate" → fell back to short_answer'],
+        },
+      ]),
+    );
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "unresolved_question_type" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("publishes despite informational / low-confidence warnings — only unknown-type blocks (#13)", async () => {
+    // Guard against a false barrier: most real imports carry low-confidence / no-explanation
+    // warnings; those must NOT block publishing (the type is resolved, grading is fine).
+    select
+      .mockReturnValueOnce(
+        selectChain([
+          {
+            reviewedAt: new Date(),
+            title: "Reading 1",
+            importWarnings: [
+              'Q3: low-confidence type "Some Matching" → matching_info',
+              "2 question(s) without explanation",
+            ],
+          },
+        ]),
+      )
+      .mockReturnValueOnce(keysChain([{ accept: ["A"] }]));
+    update.mockReturnValue(updateChain());
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: true, title: "Reading 1" });
+    expect(update).toHaveBeenCalledOnce();
+  });
 });

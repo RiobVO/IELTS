@@ -286,7 +286,9 @@ async function handlePublish(cq: TgCallbackQuery): Promise<void> {
           ? "Сначала подтверди ключ в /admin (review), затем публикуй."
           : res.reason === "empty_answer_key"
             ? "Нельзя опубликовать: у вопроса пустой ключ — почини импорт."
-            : "Тест не найден",
+            : res.reason === "unresolved_question_type"
+              ? "Нельзя опубликовать: тип вопроса не распознан (см. warnings) — почини импорт."
+              : "Тест не найден",
       );
       return;
     }
