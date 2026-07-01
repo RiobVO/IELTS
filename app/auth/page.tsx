@@ -9,6 +9,8 @@ export default async function AuthPage({
     message?: string;
     next?: string;
     ref?: string;
+    mode?: string;
+    email?: string;
   }>;
 }) {
   const sp = await searchParams;
@@ -19,6 +21,8 @@ export default async function AuthPage({
       message={sp.message}
       refCode={sp.ref}
       next={sp.next ?? "/app"}
+      initialMode={sp.mode === "login" ? "login" : "signup"}
+      initialEmail={sp.email}
       turnstileSiteKey={turnstileConfig()?.siteKey}
     />
   );

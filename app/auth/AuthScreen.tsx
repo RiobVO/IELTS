@@ -13,6 +13,10 @@ interface AuthScreenProps {
   message?: string;
   refCode?: string;
   next: string;
+  /** Форма, в которой открыть экран (после серверной ошибки возвращаемся в неё). */
+  initialMode?: "signup" | "login";
+  /** Введённый email, восстановленный после серверной ошибки (пароль — никогда). */
+  initialEmail?: string;
   /** Cloudflare Turnstile site key — when set, the signup form renders the
    *  anti-bot widget. Absent = gate off (the server seam is fail-open too). */
   turnstileSiteKey?: string;
@@ -93,7 +97,7 @@ function Field({ id, label, error, children }: { id: string; label: string; erro
 /** Email с лёгкой on-blur валидацией формата — фидбек до сабмита, не блокирующий.
  *  onBlur вешаем на обёртку (React onBlur = всплывающий focusout), а не на Input:
  *  общий Input разворачивает {...rest} после своего onBlur и перезатёр бы фокус-логику. */
-function EmailField({ id, autoFocus }: { id: string; autoFocus?: boolean }) {
+function EmailField({ id, autoFocus, defaultValue }: { id: string; autoFocus?: boolean; defaultValue?: string }) {
   const [err, setErr] = useState<string | null>(null);
   return (
     <Field id={id} label="Email" error={err}>
@@ -114,6 +118,7 @@ function EmailField({ id, autoFocus }: { id: string; autoFocus?: boolean }) {
           required
           autoComplete="email"
           autoFocus={autoFocus}
+          defaultValue={defaultValue}
           invalid={!!err}
           aria-describedby={err ? `${id}-error` : undefined}
           onChange={() => err && setErr(null)}
@@ -180,8 +185,8 @@ function SubmitButton({ children }: { children: ReactNode }) {
   );
 }
 
-export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: AuthScreenProps) {
-  const [mode, setMode] = useState<"signup" | "login">("signup");
+export function AuthScreen({ error, message, refCode, next, initialMode, initialEmail, turnstileSiteKey }: AuthScreenProps) {
+  const [mode, setMode] = useState<"signup" | "login">(initialMode ?? "signup");
 
   // Load the Turnstile script once when the gate is enabled. The widget renders
   // implicitly from the `.cf-turnstile` element below (signup is the initial
@@ -269,7 +274,7 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
                     </Field>
                   </div>
                   <div className="auth-rise" style={{ animationDelay: "160ms" }}>
-                    <EmailField id="signup-email" />
+                    <EmailField id="signup-email" defaultValue={initialEmail} />
                   </div>
                   <div className="auth-rise" style={{ animationDelay: "230ms" }}>
                     <PasswordField id="signup-password" autoComplete="new-password" />
@@ -333,7 +338,7 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
                 <input type="hidden" name="next" value={next} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div className="auth-rise" style={{ animationDelay: "90ms" }}>
-                    <EmailField id="login-email" autoFocus />
+                    <EmailField id="login-email" autoFocus defaultValue={initialEmail} />
                   </div>
                   <div className="auth-rise" style={{ animationDelay: "160ms" }}>
                     <PasswordField id="login-password" autoComplete="current-password" />
