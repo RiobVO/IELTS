@@ -235,7 +235,6 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
 .tf.on{background:var(--v2);color:#fff;border-color:var(--v2)}
 .tf span{opacity:.6;font-weight:600;margin-left:4px}
 .ti{transition:opacity .3s var(--ease)}
-.final-canvas{position:absolute;inset:0;z-index:1;pointer-events:none}
 .ti{display:flex;align-items:center;gap:14px;padding:15px 0;border-bottom:1px solid var(--rule);break-inside:avoid}
 .ti .tn{font-weight:700;font-size:13px;color:var(--ink-3);width:24px;flex:none}
 .ti .tt{font-weight:600;font-size:17px;flex:1}
@@ -255,18 +254,6 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
   .ti.hot:hover .tx{animation:nudge .4s ease}
   @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 }
-
-/* closing CTA is visible by default; the entrance is transform-only so it can
-   never gate visibility (no JS reveal-class, unlike the .rv sections above). */
-.final{position:relative;overflow:hidden;border-radius:30px;text-align:center;padding:88px 40px;color:#fff;
-  background:linear-gradient(135deg,#6A52DE,#8170EA 60%,#9A7BFF);animation:finalIn .7s var(--ease) both}
-@keyframes finalIn{from{transform:translateY(16px)}to{transform:none}}
-.final .g{position:absolute;width:420px;height:420px;border-radius:50%;background:rgba(255,255,255,.12);top:-170px;left:-50px;filter:blur(40px)}
-.final h2{color:#fff;font-size:clamp(2.3rem,4.8vw,3.8rem);position:relative;z-index:2}
-.final p{color:rgba(255,255,255,.88);font-size:18.5px;margin:18px 0 30px;position:relative;z-index:2}
-.final .btn-w{background:#fff;color:var(--v2);position:relative;z-index:2;box-shadow:0 16px 40px -14px rgba(0,0,0,.4)}
-.final .btn-w:hover{transform:translateY(-2px)}
-.final .fnote{display:inline-block;margin-top:20px;font-size:13.5px;font-weight:600;color:#fff;background:rgba(23,20,43,.42);padding:8px 16px;border-radius:99px;position:relative;z-index:2}
 
 footer{padding:54px 0 42px;border-top:1px solid var(--line);margin-top:96px}
 .foot{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:30px}
@@ -288,15 +275,13 @@ footer{padding:54px 0 42px;border-top:1px solid var(--line);margin-top:96px}
 .ptease .pt-cta{display:flex;gap:12px;flex-wrap:wrap}
 @media(max-width:640px){.ptease{padding:30px 26px}.ptease .pt-cta{width:100%}.ptease .pt-cta .btn{flex:1;justify-content:center}}
 
-/* FAQ — native details, accessible progressive disclosure */
-.faq{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
-.faq details{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh-sm);overflow:hidden;transition:border-color .2s}
-.faq details[open]{border-color:var(--vb)}
-.faq summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;font-weight:700;font-size:16.5px;color:var(--ink)}
-.faq summary::-webkit-details-marker{display:none}
-.faq summary::after{content:"";width:10px;height:10px;border-right:2.5px solid var(--v);border-bottom:2.5px solid var(--v);transform:rotate(45deg);transition:transform .25s var(--ease);flex:none;margin-right:2px}
-.faq details[open] summary::after{transform:rotate(-135deg)}
-.faq details p{padding:0 22px 20px;margin:0;color:var(--ink-2);font-size:15px;line-height:1.6;max-width:64ch}
+/* single closing block — light, no drenched box, visible without JS */
+.close{max-width:640px;margin:0 auto;text-align:center}
+.close h2{font-size:clamp(2rem,3.8vw,2.9rem)}
+.close>p{font-size:18px;color:var(--ink-2);margin:16px auto 0;max-width:42ch}
+.close-pts{list-style:none;display:flex;justify-content:center;flex-wrap:wrap;gap:12px 26px;margin:24px 0 32px}
+.close-pts li{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:var(--ink)}
+.close-pts .ci{width:18px;height:18px;flex:none;color:var(--green)}
 
 /* sticky mobile CTA — appears once the hero is scrolled past */
 .mcta{display:none}
@@ -310,6 +295,6 @@ footer{padding:54px 0 42px;border-top:1px solid var(--line);margin-top:96px}
 @media(pointer:coarse){.bp,.tf{min-height:44px;display:inline-flex;align-items:center}}
 
 .rv{opacity:0;transform:translateY(28px);transition:opacity .8s var(--ease),transform .8s var(--ease)}.rv.in{opacity:1;transform:none}
-@media (max-width:920px){.hero-grid,.pain-grid,.vs,.stband,.quotes,.foot{grid-template-columns:1fr}.types{columns:1}.nav-links{display:none}.hero{padding:50px 0 64px}.pad{padding:68px 0}.pain,.final{padding:50px 28px}.stc{border-right:0;border-bottom:1px solid var(--rule)}
+@media (max-width:920px){.hero-grid,.pain-grid,.vs,.stband,.quotes,.foot{grid-template-columns:1fr}.types{columns:1}.nav-links{display:none}.hero{padding:50px 0 64px}.pad{padding:68px 0}.pain{padding:50px 28px}.stc{border-right:0;border-bottom:1px solid var(--rule)}
   .flow{flex-direction:column}.conn{flex-basis:auto;padding:4px 0;transform:rotate(90deg)}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important}.hl,.lede,.bandsel,.cta-row,.micro,.scene{opacity:1;transform:none}.rv{opacity:1;transform:none}.fill{transition:none}.aurora,.hero-canvas,.final-canvas{display:none}.tbar i{transition:none}.pchart .pline{stroke-dashoffset:0}.pchart .cdot,.pchart .parea,.pchart .cgain{opacity:1}.tmarq-track{animation:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}.hl,.lede,.bandsel,.cta-row,.micro,.scene{opacity:1;transform:none}.rv{opacity:1;transform:none}.fill{transition:none}.aurora,.hero-canvas{display:none}.tbar i{transition:none}.pchart .pline{stroke-dashoffset:0}.pchart .cdot,.pchart .parea,.pchart .cgain{opacity:1}.tmarq-track{animation:none}}
