@@ -1,7 +1,7 @@
 // Юнит-тесты каталога тарифов (BRIEF §4.8). Контракт: поиск по паре (tier, months).
 // Сумму НЕ проверяем — это плейсхолдер-данные, а не поведение функции.
 import { describe, it, expect } from "vitest";
-import { PLANS, findPlan, isPaymentExpired, validateEntitlement } from "./plans";
+import { PLANS, findPlan, isPaymentExpired, validateEntitlement, stacksOnExistingPeriod } from "./plans";
 
 describe("findPlan", () => {
   it("возвращает тариф, совпадающий и по tier, и по months", () => {
@@ -75,6 +75,23 @@ describe("validateEntitlement", () => {
     expect(
       validateEntitlement({ tier: "basic", periodMonths: 1, amount: anyAmount }),
     ).toBe(false);
+  });
+});
+
+// Продление срока: стекать поверх остатка можно только на том же тарифе (#8).
+describe("stacksOnExistingPeriod", () => {
+  it("true только когда покупаемый тариф совпал с текущим", () => {
+    expect(stacksOnExistingPeriod("premium", "premium")).toBe(true);
+    expect(stacksOnExistingPeriod("ultra", "ultra")).toBe(true);
+  });
+  it("false при смене тарифа — блокирует дешёвый Ultra-поверх-Premium и потерю Ultra", () => {
+    expect(stacksOnExistingPeriod("premium", "ultra")).toBe(false); // дешёвый апгрейд
+    expect(stacksOnExistingPeriod("ultra", "premium")).toBe(false); // downgrade не наследует срок
+  });
+  it("false для NULL / basic текущего тарифа (первая покупка)", () => {
+    expect(stacksOnExistingPeriod(null, "premium")).toBe(false);
+    expect(stacksOnExistingPeriod("basic", "premium")).toBe(false);
+    expect(stacksOnExistingPeriod("basic", "ultra")).toBe(false);
   });
 });
 

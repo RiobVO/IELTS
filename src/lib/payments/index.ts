@@ -22,7 +22,7 @@ import { captureError } from "@/lib/monitoring/capture";
 import { db } from "@/db";
 import { payment, profile } from "@/db/schema";
 import { type PaymentProviderKey, paymentSecret } from "@/env";
-import { isPaymentExpired, validateEntitlement } from "./plans";
+import { isPaymentExpired, validateEntitlement, stacksOnExistingPeriod } from "./plans";
 import { hmacHexValid } from "./webhook-signature";
 
 /** true в боевом окружении — там stub-режим вебхука запрещён (fail closed). */
@@ -159,6 +159,23 @@ export async function applyCompletedPayment(
         return "invalid";
       }
 
+      // Продление зависит от смены тарифа: складывать поверх остатка можно только на
+      // ТОМ ЖЕ тарифе; при смене — старт от now() (иначе дешёвый апгрейд Ultra-поверх-
+      // Premium или потеря оплаченного Ultra при Premium-поверх — #8). Читаем текущий
+      // тариф профиля один раз и решаем базу интервала для обеих записей.
+      const [prof] = await tx
+        .select({ tier: profile.tier })
+        .from(profile)
+        .where(eq(profile.id, row.userId))
+        .limit(1);
+      const stack = stacksOnExistingPeriod(prof?.tier ?? null, row.tier);
+      const appliedUntilExpr = stack
+        ? sql`greatest(now(), (select ${profile.premiumUntil} from ${profile} where ${profile.id} = ${row.userId})) + (${row.periodMonths} || ' months')::interval`
+        : sql`now() + (${row.periodMonths} || ' months')::interval`;
+      const premiumUntilExpr = stack
+        ? sql`greatest(now(), ${profile.premiumUntil}) + (${row.periodMonths} || ' months')::interval`
+        : sql`now() + (${row.periodMonths} || ' months')::interval`;
+
       // 3. Атомарный единый-выстрел: только первый перевод pending->completed
       //    выигрывает (WHERE status<>'completed' + RETURNING сериализует
       //    конкурентные ретраи на блокировке строки), остальные -> duplicate.
@@ -166,7 +183,7 @@ export async function applyCompletedPayment(
         .update(payment)
         .set({
           status: "completed",
-          appliedUntil: sql`greatest(now(), (select ${profile.premiumUntil} from ${profile} where ${profile.id} = ${row.userId})) + (${row.periodMonths} || ' months')::interval`,
+          appliedUntil: appliedUntilExpr,
           updatedAt: sql`now()`,
         })
         .where(
@@ -180,14 +197,14 @@ export async function applyCompletedPayment(
 
       if (claimed.length === 0) return "duplicate";
 
-      // 4. Выдаём доступ строго из доверенной строки: tier и срок из неё.
-      //    greatest(now(), premium_until) корректно стартует от now() при
-      //    NULL/истёкшем сроке и наращивает поверх будущего (stacking).
+      // 4. Выдаём доступ строго из доверенной строки: tier и срок из неё. На том же
+      //    тарифе premiumUntilExpr наращивает поверх будущего (stacking), при смене —
+      //    стартует от now() (см. stacksOnExistingPeriod / #8).
       await tx
         .update(profile)
         .set({
           tier: row.tier,
-          premiumUntil: sql`greatest(now(), ${profile.premiumUntil}) + (${row.periodMonths} || ' months')::interval`,
+          premiumUntil: premiumUntilExpr,
         })
         .where(eq(profile.id, row.userId));
 
