@@ -116,16 +116,22 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
 .sec-h p{font-size:18px;color:var(--ink-2);margin-top:16px;max-width:48ch}.sec-h.cn p{margin-inline:auto}
 
 .flow{display:flex;align-items:stretch;gap:0;margin-top:8px}
-.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px;max-width:920px;margin-inline:auto}
-.fcard{display:flex;gap:20px;padding:26px 28px 20px;background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--sh-sm);text-decoration:none;color:inherit;transition:transform .28s var(--ease),box-shadow .28s var(--ease),border-color .28s var(--ease)}
+/* asymmetric feature grid: one full-width lead + three supporting */
+.fgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:18px;margin-top:8px;max-width:980px;margin-inline:auto}
+.fcard{grid-column:span 2;display:flex;flex-direction:column;gap:14px;padding:26px 26px 20px;background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--sh-sm);text-decoration:none;color:inherit;transition:transform .28s var(--ease),box-shadow .28s var(--ease),border-color .28s var(--ease)}
 .fcard:hover{transform:translateY(-4px);box-shadow:var(--sh);border-color:var(--vb)}
-.fcard img{width:72px;height:72px;flex:none;object-fit:contain;display:block}
-.fcard h3{font-size:19px;margin:2px 0 8px;color:var(--ink)}
+.fcard img{width:64px;height:64px;flex:none;object-fit:contain;display:block}
+.fcard h3{font-size:18px;margin:0 0 8px;color:var(--ink)}
 .fcard p{font-size:14px;color:var(--ink-2);line-height:1.55;margin:0}
 .fcard .farr{display:flex;justify-content:flex-end;margin-top:16px;color:var(--ink-3);transition:transform .28s var(--ease),color .2s}
 .fcard .farr svg{width:20px;height:20px}
 .fcard:hover .farr{transform:translateX(4px);color:var(--v)}
-@media(max-width:920px){.fgrid{grid-template-columns:1fr}}
+.fcard.lead{grid-column:span 6;flex-direction:row;align-items:center;gap:28px;padding:30px 34px}
+.fcard.lead img{width:88px;height:88px}
+.fcard.lead>div{flex:1}
+.fcard.lead h3{font-size:22px}
+.fcard.lead p{font-size:15px;max-width:64ch;line-height:1.6}
+@media(max-width:920px){.fgrid{grid-template-columns:1fr}.fcard,.fcard.lead{grid-column:auto;flex-direction:row;align-items:flex-start;gap:18px}.fcard.lead img,.fcard img{width:60px;height:60px}}
 .conn{flex:0 0 44px;display:grid;place-content:center;color:var(--v);opacity:.45}
 .conn .ico{width:22px;height:22px}
 .step{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--sh-sm);padding:24px 22px;display:flex;flex-direction:column;transition:transform .28s var(--ease),box-shadow .28s}
@@ -266,6 +272,40 @@ footer{padding:54px 0 42px;border-top:1px solid var(--line);margin-top:96px}
 .foot a{display:block;color:var(--ink-2);font-size:15px;margin-bottom:10px;font-weight:500}.foot a:hover{color:var(--v2)}
 .foot .ft{color:var(--ink-2);font-size:15px;margin-top:14px;max-width:30ch;line-height:1.5}
 .copy{margin-top:40px;font-size:13px;color:var(--ink-3)}
+
+/* trust band supporting note */
+.stnote{text-align:center;max-width:62ch;margin:22px auto 0;font-size:15px;color:var(--ink-2);line-height:1.6}
+.stnote b{color:var(--ink);font-weight:700}
+
+/* pricing teaser */
+.ptease{display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap;background:var(--bg-2);border:1px solid var(--line);border-radius:26px;padding:44px 46px;max-width:960px;margin:0 auto}
+.ptease .pt-copy{flex:1;min-width:280px}
+.ptease .pt-copy .ek{margin-bottom:8px}
+.ptease .pt-copy h2{font-size:clamp(1.6rem,3vw,2.3rem);max-width:20ch}
+.ptease .pt-copy p{color:var(--ink-2);font-size:16px;margin-top:14px;max-width:48ch;line-height:1.6}
+.ptease .pt-cta{display:flex;gap:12px;flex-wrap:wrap}
+@media(max-width:640px){.ptease{padding:30px 26px}.ptease .pt-cta{width:100%}.ptease .pt-cta .btn{flex:1;justify-content:center}}
+
+/* FAQ — native details, accessible progressive disclosure */
+.faq{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.faq details{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh-sm);overflow:hidden;transition:border-color .2s}
+.faq details[open]{border-color:var(--vb)}
+.faq summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;font-weight:700;font-size:16.5px;color:var(--ink)}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"";width:10px;height:10px;border-right:2.5px solid var(--v);border-bottom:2.5px solid var(--v);transform:rotate(45deg);transition:transform .25s var(--ease);flex:none;margin-right:2px}
+.faq details[open] summary::after{transform:rotate(-135deg)}
+.faq details p{padding:0 22px 20px;margin:0;color:var(--ink-2);font-size:15px;line-height:1.6;max-width:64ch}
+
+/* sticky mobile CTA — appears once the hero is scrolled past */
+.mcta{display:none}
+@media(max-width:920px){
+  .mcta{display:flex;position:fixed;left:14px;right:14px;bottom:14px;z-index:120;align-items:center;justify-content:center;gap:9px;background:var(--v);color:#fff;font-weight:700;font-size:16px;padding:15px 20px;border-radius:14px;box-shadow:0 16px 34px -10px rgba(129,112,234,.7);transform:translateY(160%);transition:transform .32s var(--ease);will-change:transform}
+  .mcta .ico{width:18px;height:18px}
+  .mcta.show{transform:none}
+}
+
+/* touch-friendly hit targets on coarse pointers */
+@media(pointer:coarse){.bp,.tf{min-height:44px;display:inline-flex;align-items:center}}
 
 .rv{opacity:0;transform:translateY(28px);transition:opacity .8s var(--ease),transform .8s var(--ease)}.rv.in{opacity:1;transform:none}
 @media (max-width:920px){.hero-grid,.pain-grid,.vs,.stband,.quotes,.foot{grid-template-columns:1fr}.types{columns:1}.nav-links{display:none}.hero{padding:50px 0 64px}.pad{padding:68px 0}.pain,.final{padding:50px 28px}.stc{border-right:0;border-bottom:1px solid var(--rule)}

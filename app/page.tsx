@@ -164,6 +164,18 @@ export default function Home() {
     window.addEventListener("scroll", onScroll, { passive: true });
     paintProgress();
 
+    // Sticky mobile CTA — reveal once the hero is scrolled past (CSS gates it to <920px)
+    const mcta = document.getElementById("mcta");
+    const heroEl = document.querySelector("header.hero");
+    let mctaObserver: IntersectionObserver | null = null;
+    if (mcta && heroEl && "IntersectionObserver" in window) {
+      mctaObserver = new IntersectionObserver(
+        (es) => { es.forEach(e => { mcta.classList.toggle("show", !e.isIntersecting); }); },
+        { threshold: 0 }
+      );
+      mctaObserver.observe(heroEl);
+    }
+
     // Scroll reveals
     let revealObserver: IntersectionObserver | null = null;
     if ("IntersectionObserver" in window && !reduce) {
@@ -253,7 +265,9 @@ export default function Home() {
     let heroAnimId: number | undefined;
     (function () {
       const cvRaw = document.getElementById("heroCanvas") as HTMLCanvasElement | null;
-      if (!cvRaw || reduce) return;
+      // Particle field is desktop-only: it drains battery and janks on the
+      // low-end phones common in the target region; mobile gets the clean gradient.
+      if (!cvRaw || reduce || !window.matchMedia("(min-width:768px)").matches) return;
       const cv: HTMLCanvasElement = cvRaw;
       const hero = cv.parentElement!;
       const ctx = cv.getContext("2d")!;
@@ -341,11 +355,11 @@ export default function Home() {
       });
     })();
 
-    // ── Final-section canvas (finalCanvas not in markup — gracefully no-ops) ──
+    // ── Final-section canvas (particle field behind the closing CTA) ──
     let finalAnimId: number | undefined;
     (function () {
       const cvRaw = document.getElementById("finalCanvas") as HTMLCanvasElement | null;
-      if (!cvRaw || reduce) return;
+      if (!cvRaw || reduce || !window.matchMedia("(min-width:768px)").matches) return;
       const cv: HTMLCanvasElement = cvRaw;
       const box = cv.parentElement!;
       const ctx = cv.getContext("2d")!;
@@ -411,6 +425,7 @@ export default function Home() {
       cardObserver?.disconnect();
       revealObserver?.disconnect();
       countObserver?.disconnect();
+      mctaObserver?.disconnect();
       if (tiltCardEl) {
         tiltCardEl.removeEventListener("mousemove", onCardMouseMove);
         tiltCardEl.removeEventListener("mouseleave", onCardMouseLeave);
@@ -460,7 +475,7 @@ export default function Home() {
               <span className="hl" style={{ animationDelay: ".3s" }}><em>band.</em></span>
             </h1>
             <p className="lede">
-              The real exam tells you <span className="hx" data-text="6.5">6.5</span> and walks away. bando shows the exact question types <b>costing you points</b> — then drills them.
+              The real exam tells you <span className="hx" data-text="6.5">6.5</span> and walks away. bando shows the exact question types <b>costing you points</b>, then drills them.
             </p>
             <div className="bandsel">
               <span className="bl">Stuck at</span>
@@ -478,8 +493,8 @@ export default function Home() {
                 <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
               </a>
               <a href="#how" className="btn btn-g btn-lg">
-                <svg className="ico" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
-                Watch 60-sec demo
+                See how it works
+                <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
               </a>
             </div>
             <div className="micro"><b>Free</b> full mock · no card · <b>20 min</b> to your weakest type</div>
@@ -511,7 +526,7 @@ export default function Home() {
           <div className="sec-h cn rv" style={{ marginBottom: "48px" }}>
             <span className="ek">The bando difference</span>
             <h2>More tests won&apos;t fix it. <em>Knowing your type will.</em></h2>
-            <p>You don&apos;t have a stamina problem — you have a blind spot, and we name it.</p>
+            <p>You don&apos;t have a stamina problem. You have a blind spot, and we name it.</p>
           </div>
           <div className="vs">
             <div className="vc them rv">
@@ -520,7 +535,7 @@ export default function Home() {
                 Every other app
               </div>
               <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>Hands you a band score</div>
-              <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>A pile of tests — &ldquo;practice more&rdquo;</div>
+              <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>A pile of tests: &ldquo;practice more&rdquo;</div>
               <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>No idea which type is wrong</div>
               <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>You burn weeks guessing</div>
             </div>
@@ -529,9 +544,20 @@ export default function Home() {
               <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Score broken down by question type</div>
               <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Your weakest type, flagged in red</div>
               <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>One tap to drill only that</div>
-              <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>You fix the exact thing — and move</div>
+              <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>You fix the exact thing, then move on</div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="pad" style={{ paddingTop: 0 }}>
+        <div className="wrap">
+          <div className="stband rv">
+            <div className="stc"><div className="n">14</div><div className="l">question types, each scored on its own</div></div>
+            <div className="stc"><div className="n">40Q</div><div className="l">full mocks under real exam timing</div></div>
+            <div className="stc"><div className="n">Free</div><div className="l">first full mock, no card needed</div></div>
+          </div>
+          <p className="stnote rv">Built on real exam-format Reading &amp; Listening papers. Graded on the server, so the band you see is the band we stand behind.</p>
         </div>
       </section>
 
@@ -540,7 +566,7 @@ export default function Home() {
           <div className="sec-h rv" style={{ marginBottom: "10px" }}>
             <span className="ek">No guesswork</span>
             <h2>14 question types. We tell you which one is yours.</h2>
-            <p>In red — where students quietly lose the half-band that costs them everything.</p>
+            <p>In red: where students quietly lose the half-band that costs them everything.</p>
           </div>
           <div className="tfilter rv">
             <button type="button" className="tf on" data-f="all">All <span>14</span></button>
@@ -549,20 +575,20 @@ export default function Home() {
             <button type="button" className="tf" data-f="hot">Hardest <span>4</span></button>
           </div>
           <div className="types rv" id="typeList">
-            <div className="ti hot" data-cat="reading" data-hot="1"><span className="tn">01</span><span className="tt">Matching Headings</span><span className="tx">band-killer</span></div>
-            <div className="ti" data-cat="reading"><span className="tn">02</span><span className="tt">True / False / Not Given</span><span className="tx">Reading</span></div>
-            <div className="ti hot" data-cat="reading" data-hot="1"><span className="tn">03</span><span className="tt">Yes / No / Not Given</span><span className="tx">tricky</span></div>
-            <div className="ti" data-cat="reading"><span className="tn">04</span><span className="tt">Multiple Choice</span><span className="tx">Reading</span></div>
-            <div className="ti" data-cat="reading"><span className="tn">05</span><span className="tt">Matching Information</span><span className="tx">Reading</span></div>
-            <div className="ti" data-cat="reading"><span className="tn">06</span><span className="tt">Matching Features</span><span className="tx">Reading</span></div>
-            <div className="ti hot" data-cat="reading" data-hot="1"><span className="tn">07</span><span className="tt">Matching Sentence Endings</span><span className="tx">tricky</span></div>
-            <div className="ti" data-cat="both"><span className="tn">08</span><span className="tt">Sentence Completion</span><span className="tx">both</span></div>
-            <div className="ti" data-cat="both"><span className="tn">09</span><span className="tt">Summary / Note Completion</span><span className="tx">both</span></div>
-            <div className="ti" data-cat="both"><span className="tn">10</span><span className="tt">Table / Flow-chart Completion</span><span className="tx">both</span></div>
-            <div className="ti" data-cat="reading"><span className="tn">11</span><span className="tt">Diagram Label Completion</span><span className="tx">Reading</span></div>
-            <div className="ti hot" data-cat="listening" data-hot="1"><span className="tn">12</span><span className="tt">Plan / Map / Diagram Labelling</span><span className="tx">band-killer</span></div>
-            <div className="ti" data-cat="listening"><span className="tn">13</span><span className="tt">Form / Note Completion</span><span className="tx">Listening</span></div>
-            <div className="ti" data-cat="both"><span className="tn">14</span><span className="tt">Short Answer</span><span className="tx">both</span></div>
+            <div className="ti hot" data-cat="reading" data-hot="1"><span className="tt">Matching Headings</span><span className="tx">band-killer</span></div>
+            <div className="ti" data-cat="reading"><span className="tt">True / False / Not Given</span><span className="tx">Reading</span></div>
+            <div className="ti hot" data-cat="reading" data-hot="1"><span className="tt">Yes / No / Not Given</span><span className="tx">tricky</span></div>
+            <div className="ti" data-cat="reading"><span className="tt">Multiple Choice</span><span className="tx">Reading</span></div>
+            <div className="ti" data-cat="reading"><span className="tt">Matching Information</span><span className="tx">Reading</span></div>
+            <div className="ti" data-cat="reading"><span className="tt">Matching Features</span><span className="tx">Reading</span></div>
+            <div className="ti hot" data-cat="reading" data-hot="1"><span className="tt">Matching Sentence Endings</span><span className="tx">tricky</span></div>
+            <div className="ti" data-cat="both"><span className="tt">Sentence Completion</span><span className="tx">both</span></div>
+            <div className="ti" data-cat="both"><span className="tt">Summary / Note Completion</span><span className="tx">both</span></div>
+            <div className="ti" data-cat="both"><span className="tt">Table / Flow-chart Completion</span><span className="tx">both</span></div>
+            <div className="ti" data-cat="reading"><span className="tt">Diagram Label Completion</span><span className="tx">Reading</span></div>
+            <div className="ti hot" data-cat="listening" data-hot="1"><span className="tt">Plan / Map / Diagram Labelling</span><span className="tx">band-killer</span></div>
+            <div className="ti" data-cat="listening"><span className="tt">Form / Note Completion</span><span className="tx">Listening</span></div>
+            <div className="ti" data-cat="both"><span className="tt">Short Answer</span><span className="tx">both</span></div>
           </div>
         </div>
       </section>
@@ -663,12 +689,12 @@ export default function Home() {
             <h2>Everything you need to <em>get your band</em>.</h2>
           </div>
           <div className="fgrid">
-            <a className="fcard rv" href="/auth">
+            <a className="fcard lead rv" href="/auth">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/emoji/stopwatch_3d.png" alt="Stopwatch" width={72} height={72} loading="lazy" decoding="async" />
+              <img src="/emoji/stopwatch_3d.png" alt="Stopwatch" width={88} height={88} loading="lazy" decoding="async" />
               <div>
                 <h3>Real exam mode</h3>
-                <p>Computer-delivered IELTS — timer, navigator, mark-for-review, highlight &amp; notes. Reading on calm paper; single-pass Listening, exactly like exam day.</p>
+                <p>Computer-delivered IELTS: timer, navigator, mark-for-review, highlight and notes. Reading on calm paper; single-pass Listening, exactly like exam day.</p>
                 <span className="farr">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                 </span>
@@ -679,7 +705,7 @@ export default function Home() {
               <img src="/emoji/bar_chart_3d.png" alt="Bar chart" width={72} height={72} loading="lazy" decoding="async" />
               <div>
                 <h3>Per-type breakdown</h3>
-                <p>Not just a 6.5 — every question type ranked worst-first, so the one weakness dragging your band down is impossible to miss.</p>
+                <p>Not just a 6.5. Every question type ranked worst-first, so the one weakness dragging your band down is impossible to miss.</p>
                 <span className="farr">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                 </span>
@@ -690,7 +716,7 @@ export default function Home() {
               <img src="/emoji/memo_3d.png" alt="Memo" width={72} height={72} loading="lazy" decoding="async" />
               <div>
                 <h3>Targeted drills</h3>
-                <p>Tap any weak type to practise only that — Matching Headings, TFNG, completion — until it stops costing you points.</p>
+                <p>Tap any weak type to practise only that one: Matching Headings, TFNG, completion, until it stops costing you points.</p>
                 <span className="farr">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                 </span>
@@ -711,13 +737,72 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="pad" style={{ paddingTop: 0 }}>
+        <div className="wrap">
+          <div className="ptease rv">
+            <div className="pt-copy">
+              <span className="ek">Pricing</span>
+              <h2>Free to find your weak spot. Pay only to go further.</h2>
+              <p>Practice tests and your per-type breakdown cost nothing, no card. Upgrade when you want projected full-mock bands and AI Writing &amp; Speaking feedback.</p>
+            </div>
+            <div className="pt-cta">
+              <a href="/auth" className="btn btn-v btn-lg">Start free</a>
+              <a href="/pricing" className="btn btn-g btn-lg">See pricing</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="pad" id="faq" style={{ paddingTop: 0 }}>
+        <div className="wrap">
+          <div className="sec-h cn rv" style={{ marginBottom: "32px" }}>
+            <span className="ek">Before you start</span>
+            <h2>Quick answers.</h2>
+          </div>
+          <div className="faq rv">
+            <details>
+              <summary>Is it really free?</summary>
+              <p>Yes. You can sit practice tests and see your full per-type breakdown without paying or adding a card. Paid plans add projected full-mock bands and AI Writing &amp; Speaking feedback.</p>
+            </details>
+            <details>
+              <summary>How accurate is the band it shows me?</summary>
+              <p>Full mocks are 40-question papers scored on the server against a locked answer key, then mapped to the official IELTS band scale. It is a projection to train against, not an official result.</p>
+            </details>
+            <details>
+              <summary>Which types does it cover?</summary>
+              <p>All 14 Reading and Listening question types. Every mock ranks them worst-first, so the one weakness dragging your band down is impossible to miss.</p>
+            </details>
+            <details>
+              <summary>Do I need to install anything?</summary>
+              <p>No. bando runs in the browser on your phone or laptop, in a computer-delivered exam layout with timer, navigator, highlight and notes.</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section className="pad" style={{ paddingTop: 0 }}>
+        <div className="wrap">
+          <div className="final rv">
+            <canvas className="final-canvas" id="finalCanvas" aria-hidden="true"></canvas>
+            <span className="g"></span>
+            <h2>Stop guessing. See your weakest type.</h2>
+            <p>One free full mock. Your per-type breakdown in 20 minutes. Then drill the type that&apos;s costing you the band.</p>
+            <a href="/auth" className="btn btn-w btn-lg">
+              Take a free test
+              <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </a>
+            <div className="fnote">Free full mock · no card · built on real exam papers</div>
+          </div>
+        </div>
+      </section>
+
       <footer>
         <div className="wrap foot">
           <div>
             <a className="logo" href="/">
               <span className="seal"><i></i><i></i><i></i></span>band<span className="o">o</span>
             </a>
-            <p className="ft">The IELTS trainer that shows you where you lose points — then fixes them.</p>
+            <p className="ft">The IELTS trainer that shows you where you lose points, then fixes them.</p>
           </div>
           <div>
             <h4>Product</h4>
@@ -738,8 +823,13 @@ export default function Home() {
             <a href="/terms">Terms</a>
           </div>
         </div>
-        <div className="wrap copy">© 2026 bando · Stop guessing your band. · *Illustrative — pilot cohort.</div>
+        <div className="wrap copy">© 2026 bando · Stop guessing your band.</div>
       </footer>
+
+      <a href="/auth" className="mcta" id="mcta" aria-hidden="true" tabIndex={-1}>
+        Take a free test
+        <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
     </>
   );
 }
