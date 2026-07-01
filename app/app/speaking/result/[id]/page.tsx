@@ -26,15 +26,18 @@ export default async function SpeakingResultPage({ params }: { params: Promise<{
   if (!data) notFound();
 
   // Sign a short-lived playback URL only while the take still exists (owner-scoped read
-  // above; service-role sign here, server-only). Audio gone → null → no player.
-  const audioUrl = data.audioPath ? await signedPlaybackUrl(data.audioPath) : null;
+  // above; service-role sign here, server-only). Audio gone → null → no player. Then strip
+  // audioPath (a private-bucket key) so it never reaches the client — the client only needs
+  // the signed URL, never the raw path (#19).
+  const { audioPath, ...view } = data;
+  const audioUrl = audioPath ? await signedPlaybackUrl(audioPath) : null;
 
   const rawTarget = (profile as { target_band: string | number | null } | null)?.target_band;
   const targetBand = rawTarget != null ? Number(rawTarget) : 7;
 
   return (
     <AppShell active="practice">
-      <SpeakingResult data={data} targetBand={targetBand} audioUrl={audioUrl} />
+      <SpeakingResult data={view} targetBand={targetBand} audioUrl={audioUrl} />
     </AppShell>
   );
 }
