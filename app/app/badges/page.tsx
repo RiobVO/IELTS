@@ -51,7 +51,7 @@ const TRACK_DEF: { key: string; name: string; icon: IconName; codes: string[] }[
   { key: "rating", name: "Rating", icon: "star", codes: ["rating_1200", "rating_1500", "champion"] },
 ];
 
-const GOAL_TARGET = 5; // tests / week (фикс-дефолт; настройка — позже)
+const DEFAULT_GOAL = 5; // tests / week — стартовый таргет, пока у юзера нет истории недель
 
 interface TrackNode {
   code: string;
@@ -132,6 +132,23 @@ export default async function BadgesPage() {
     return { label, state, isToday };
   });
   const streak = stats.currentStreak;
+
+  // Недельная цель адаптируется под темп юзера (полные недели в 42-дневном окне):
+  // лёгкому — достижимый таргет, активному — осмысленный. Клампим 3..8, +1 к среднему
+  // как ненавязчивый вызов; без истории — DEFAULT_GOAL. Чинит discouragement-риск
+  // фикс-цели «5 для всех» (новичок на 2/нед её никогда не брал).
+  const priorWeeks: number[] = [];
+  for (let w = 1; w <= 5; w++) {
+    let sum = 0;
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() - w * 7 + d);
+      sum += byDay.get(dayKey(day)) ?? 0;
+    }
+    if (sum > 0) priorWeeks.push(sum);
+  }
+  const avgPace = priorWeeks.length ? priorWeeks.reduce((a, b) => a + b, 0) / priorWeeks.length : 0;
+  const GOAL_TARGET = avgPace ? Math.min(8, Math.max(3, Math.round(avgPace) + 1)) : DEFAULT_GOAL;
 
   // ---- Tracks ----
   const byCode = new Map(badges.map((b) => [b.code, b]));
@@ -272,27 +289,36 @@ export default async function BadgesPage() {
                   </>
                 )}
               </div>
+              <details style={S.streakHelp}>
+                <summary style={S.streakHelpS}>How streaks work</summary>
+                <p style={S.streakHelpP}>
+                  Your streak counts consecutive days with at least one submitted test. Miss a day and it resets to zero — a rest day breaks the chain.
+                </p>
+              </details>
             </div>
 
             {/* Momentum heatmap */}
             <div style={S.motCard}>
               <h2 style={S.heatTitle}>Momentum</h2>
               <p style={S.heatSub}>Last 6 weeks · your practice rhythm</p>
-              <div
-                style={S.heatGrid}
-                role="img"
-                aria-label={`Practice heatmap, last 6 weeks. ${activeDays} active ${activeDays === 1 ? "day" : "days"}.`}
-              >
-                {heat.map((h, i) => (
-                  <span
-                    key={i}
-                    data-heat={i}
-                    data-tip={h.label}
-                    aria-hidden="true"
-                    className="bdg-heat-cell"
-                    style={{ aspectRatio: "1", borderRadius: 4, background: heatColor(h.count) }}
-                  />
-                ))}
+              <div style={S.heatGrid} role="group" aria-label="Practice heatmap, last 6 weeks">
+                {heat.map((h, i) => {
+                  const active = h.count > 0;
+                  // Активные дни focusable (тап/клавиатура раскрывают тултип); дни отдыха
+                  // остаются декоративными, чтобы не заваливать таб-порядок пустышками.
+                  return (
+                    <span
+                      key={i}
+                      data-heat={i}
+                      data-tip={h.label}
+                      className="bdg-heat-cell"
+                      {...(active
+                        ? { tabIndex: 0, role: "img", "aria-label": h.label }
+                        : { "aria-hidden": true })}
+                      style={{ aspectRatio: "1", borderRadius: 4, background: heatColor(h.count) }}
+                    />
+                  );
+                })}
               </div>
               <div style={S.heatLegend} aria-hidden="true">
                 <span>Less</span>
@@ -311,30 +337,36 @@ export default async function BadgesPage() {
               </div>
             </div>
 
-            {/* Weekly goal */}
+            {/* Weekly goal — дискретные пипсы (правдивее для малого целого счётчика)
+                + строка-правило, чтобы визуально не сливаться с кольцом в шапке. */}
             <div style={S.motCard}>
-              <div style={S.goalRow}>
-                <div style={S.goalRing}>
-                  <Ring pct={Math.min(1, weeklyDone / GOAL_TARGET)} size={72} color="var(--brand)" sw={5} />
-                  <b style={S.goalRingB}>
-                    {Math.min(weeklyDone, GOAL_TARGET)}/{GOAL_TARGET}
-                  </b>
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <h2 style={S.goalH}>This week&apos;s goal</h2>
-                  <p style={S.goalP}>
-                    {weeklyDone >= GOAL_TARGET ? (
-                      <>
-                        <b style={{ color: "var(--success-text)" }}>Goal hit</b> — {weeklyDone} tests this week. Outstanding.
-                      </>
-                    ) : (
-                      <>
-                        <b style={{ color: "var(--brand-active)" }}>{GOAL_TARGET - weeklyDone} more</b> {GOAL_TARGET - weeklyDone === 1 ? "test" : "tests"} to hit your target. You&apos;ve got this.
-                      </>
-                    )}
-                  </p>
-                </div>
+              <div style={S.goalHeadRow}>
+                <h2 style={S.goalH}>This week&apos;s goal</h2>
+                <span style={S.goalCount}>
+                  {Math.min(weeklyDone, GOAL_TARGET)}/{GOAL_TARGET}
+                </span>
               </div>
+              <div
+                style={S.goalPips}
+                role="img"
+                aria-label={`Weekly goal: ${Math.min(weeklyDone, GOAL_TARGET)} of ${GOAL_TARGET} tests done`}
+              >
+                {Array.from({ length: GOAL_TARGET }).map((_, i) => (
+                  <span key={i} style={{ ...S.goalPip, ...(i < weeklyDone ? S.goalPipDone : null) }} />
+                ))}
+              </div>
+              <p style={S.goalP}>
+                {weeklyDone >= GOAL_TARGET ? (
+                  <>
+                    <b style={{ color: "var(--success-text)" }}>Goal hit</b> — {weeklyDone} tests this week. Outstanding.
+                  </>
+                ) : (
+                  <>
+                    <b style={{ color: "var(--brand-active)" }}>{GOAL_TARGET - weeklyDone} more</b> {GOAL_TARGET - weeklyDone === 1 ? "test" : "tests"} to hit your target. You&apos;ve got this.
+                  </>
+                )}
+              </p>
+              <p style={S.goalDef}>Submitted tests, Mon–Sun · scales to your recent pace.</p>
             </div>
           </aside>
         </div>
@@ -381,13 +413,8 @@ function Node({ n, current }: { n: TrackNode; current: boolean }) {
       : `${n.name} — locked${n.prog?.hint ? ` · ${n.prog.hint}` : ""}`;
   const state = earned ? "earned" : current ? "current" : "locked";
   return (
-    <div className="bdg-node" tabIndex={earned ? 0 : undefined} data-tip={tip} style={S.node}>
+    <div className="bdg-node" tabIndex={0} data-tip={tip} style={S.node}>
       <div style={{ ...S.medal, ...(earned ? S.medalEarned : current ? S.medalCurrent : S.medalLocked) }} data-pop={earned ? "" : undefined}>
-        {current && n.prog && (
-          <div style={{ position: "absolute", inset: -5 }}>
-            <Ring pct={n.prog.pct} size={72} color="var(--brand)" sw={4} />
-          </div>
-        )}
         <Icon name={earned || current ? iconFor(n.code) : "lock"} size={24} strokeWidth={2.2} />
         {earned && (
           <span style={S.check}>
@@ -412,6 +439,12 @@ const BDG_CSS = `
 @keyframes bdg-flicker{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 .bdg-heat-cell{cursor:default;transition:transform .12s}
 .bdg-heat-cell:hover{transform:scale(1.22)}
+.bdg-heat-cell:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 45%,transparent);transform:scale(1.22)}
+.bdg-wrap summary{list-style:none;display:inline-flex;align-items:center;gap:6px}
+.bdg-wrap summary::-webkit-details-marker{display:none}
+.bdg-wrap summary:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--gold-500) 45%,transparent);border-radius:6px}
+.bdg-wrap summary::after{content:"+";font-family:var(--font-mono);opacity:.7}
+.bdg-wrap details[open] summary::after{content:"–"}
 .bdg-node{cursor:default}
 .bdg-node:focus-visible{outline:none;box-shadow:0 0 0 4px color-mix(in oklab,var(--brand) 28%,transparent);border-radius:var(--radius-md)}
 .bdg-tip{position:fixed;z-index:90;pointer-events:none;background:var(--surface-inverse);color:var(--surface-inverse-ink);font-size:var(--text-xs);font-weight:600;line-height:1.4;padding:8px 11px;border-radius:10px;box-shadow:var(--shadow-lg);max-width:240px;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s var(--ease-out)}
@@ -461,8 +494,10 @@ const S: Record<string, React.CSSProperties> = {
   node: { position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: "33.333%", minWidth: 0, textAlign: "center" },
   medal: { width: 62, height: 62, borderRadius: "50%", display: "grid", placeItems: "center", position: "relative" },
   medalEarned: { background: "linear-gradient(165deg, var(--brand), var(--brand-active))", color: "var(--text-on-brand)", boxShadow: "var(--glow-brand)" },
-  medalCurrent: { background: "var(--surface)", color: "var(--brand)" },
-  medalLocked: { background: "var(--surface-inset)", color: "var(--text-disabled)", border: "2px dashed var(--border-strong)" },
+  // Ring убрали — «current» теперь несёт статичный brand-контур + мягкое гало
+  // (boxShadow, чтобы не зависеть от box-sizing и не двигать лейаут).
+  medalCurrent: { background: "var(--surface)", color: "var(--brand)", boxShadow: "inset 0 0 0 2px var(--brand), 0 0 0 4px var(--brand-subtle)" },
+  medalLocked: { background: "var(--surface-inset)", color: "var(--text-muted)", border: "2px dashed var(--border-strong)" },
   check: { position: "absolute", right: -2, bottom: -2, width: 22, height: 22, borderRadius: "50%", background: "var(--success)", display: "grid", placeItems: "center", border: "2px solid var(--surface)" },
   nodeName: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-primary)" },
   nodeTag: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 600 },
@@ -483,6 +518,9 @@ const S: Record<string, React.CSSProperties> = {
   dayL: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "rgba(255,255,255,0.7)", fontWeight: 700 },
   streakNudge: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.92)", position: "relative", zIndex: 1, lineHeight: 1.45 },
   gold: { color: "var(--gold-500)" },
+  streakHelp: { position: "relative", zIndex: 1, marginTop: 14 },
+  streakHelpS: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "rgba(255,255,255,0.72)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "var(--tracking-caps)" },
+  streakHelpP: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "rgba(255,255,255,0.82)", margin: "8px 0 0", lineHeight: 1.5 },
 
   heatTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--text-primary)", margin: "0 0 3px" },
   heatSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-secondary)", margin: "0 0 14px" },
@@ -491,11 +529,14 @@ const S: Record<string, React.CSSProperties> = {
   heatFoot: { display: "flex", alignItems: "center", gap: 8, marginTop: 13, fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.4 },
   heatB: { color: "var(--text-primary)", fontFamily: "var(--font-mono)" },
 
-  goalRow: { display: "flex", alignItems: "center", gap: 16 },
-  goalRing: { position: "relative", width: 72, height: 72, flex: "none", display: "grid", placeItems: "center" },
-  goalRingB: { position: "relative", fontFamily: "var(--font-mono)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--brand)" },
-  goalH: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--text-primary)", margin: "0 0 3px" },
+  goalHeadRow: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 12 },
+  goalCount: { fontFamily: "var(--font-mono)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--brand)", flex: "none" },
+  goalPips: { display: "flex", gap: 6, marginBottom: 12 },
+  goalPip: { flex: 1, height: 8, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", boxShadow: "inset 0 0 0 1px var(--border)" },
+  goalPipDone: { background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", boxShadow: "0 0 8px -2px color-mix(in oklab, var(--brand) 70%, transparent)" },
+  goalH: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--text-primary)", margin: 0 },
   goalP: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", margin: 0, lineHeight: 1.45 },
+  goalDef: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "8px 0 0", lineHeight: 1.4 },
 
   srOnly: { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 },
 };
