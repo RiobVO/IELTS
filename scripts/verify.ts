@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 27; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027)
+const APP_TABLE_COUNT = 28; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034)
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);
@@ -369,6 +369,18 @@ async function main() {
     fail(
       `RLS — leaderboard_entry not anon-locked (rlsEnabled=${lbLock.rlsEnabled}, ` +
         `anonDenied=${lbLock.anonDenied})`,
+    );
+
+  // 4e. error_log locked the SAME way as signup_throttle (#monitoring, migration 0034):
+  // self-hosted error sink holds stack traces + urls (internal detail), owner-read only via
+  // /admin/errors. Full lock — RLS on + no client policy + anon denied.
+  const elLock = await tableLock("error_log");
+  if (elLock.rlsEnabled && elLock.noClientPolicy && elLock.anonDenied)
+    ok("RLS — anon SELECT on error_log denied");
+  else
+    fail(
+      `RLS — error_log not fully locked (rlsEnabled=${elLock.rlsEnabled}, ` +
+        `noClientPolicy=${elLock.noClientPolicy}, anonDenied=${elLock.anonDenied})`,
     );
 
   // 5. auth trigger: a new auth.users row auto-creates a profile

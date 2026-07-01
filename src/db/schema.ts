@@ -809,3 +809,26 @@ export const speakingAudioEvent = pgTable("speaking_audio_event", {
   event: speakingAudioEventKind("event").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("speaking_audio_event_user_idx").on(t.userId, t.createdAt)]);
+
+/* -------------------------------------------------------------------------- */
+/* error_log — self-hosted error sink (§11 monitoring, migration 0034)         */
+/* SERVER-ONLY: written by logError() (client-error endpoint + server catch),   */
+/* read by /admin/errors — owner path. RLS on, grants revoked (like            */
+/* signup_throttle): stacks/urls may carry internal detail, never client-read. */
+/* Own sink so errors are visible in-app without an external service (Sentry    */
+/* stays an optional no-op). source = 'server' | 'client'.                     */
+/* -------------------------------------------------------------------------- */
+export const errorLog = pgTable(
+  "error_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    source: text("source").notNull(),
+    message: text("message").notNull(),
+    stack: text("stack"),
+    url: text("url"),
+    userId: uuid("user_id").references(() => profile.id, { onDelete: "set null" }),
+    context: jsonb("context"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("error_log_created_idx").on(t.createdAt)],
+);
