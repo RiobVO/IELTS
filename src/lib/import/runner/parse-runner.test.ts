@@ -35,6 +35,36 @@ describe("parseRunner — reading", () => {
   });
 });
 
+// #7: Reading "choose TWO/THREE" — mcqGroups keys the members as one mcq_set so the
+// letter-set is graded correctly. Member 4,5 live ONLY in mcqGroups (not correctAnswers)
+// to prove the union pulls them in. Previously they fell to exact/text_accept (wrong grade).
+const readingWithMcqSet = `<!doctype html><html><head><title>MCQ</title></head><body>
+<script>
+var correctAnswers = {"1":"TRUE"};
+var acceptableAnswers = {};
+var questionTypes = {"1":"True/False/Not Given"};
+var mcqGroups = {"4-5": {"qs":[4,5],"correct":["A","C"]}};
+</script></body></html>`;
+
+describe("parseRunner — reading mcq_set (#7)", () => {
+  const r = parseRunner(readingWithMcqSet);
+  const q = (n: number) => r.parsed.questions.find((x) => x.number === n)!;
+  it("члены mcqGroups → mcq_set + mcq_multi + groupKey (даже вне correctAnswers)", () => {
+    expect(q(4).answer).toMatchObject({ mode: "mcq_set", accept: ["A", "C"] });
+    expect(q(4).qtype).toBe("mcq_multi");
+    expect(q(4).groupKey).toBe("4-5");
+    expect(q(5).answer.mode).toBe("mcq_set");
+    expect(q(5).answer.accept).toEqual(["A", "C"]);
+  });
+  it("не-mcq вопросы остаются exact/text_accept", () => {
+    expect(q(1).answer.mode).toBe("exact");
+    expect(q(1).answer.accept).toEqual(["TRUE"]);
+  });
+  it("questionTypes включает mcq_multi", () => {
+    expect(r.parsed.questionTypes).toContain("mcq_multi");
+  });
+});
+
 describe("parseRunner — listening", () => {
   const r = parseRunner(listening);
   it("определяет section listening и внешний audio src", () => {

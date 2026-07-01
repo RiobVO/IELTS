@@ -30,3 +30,13 @@ describe("retargetBridgeOrigin", () => {
     expect(out.match(/window\.location\.origin/g)?.length).toBe(1);
   });
 });
+
+// #7: reading bridge собирает чекбокс-группы (choose TWO/THREE) по [data-mcq-group].
+// DOM-логику без jsdom не гоняем — структурно подтверждаем, что коллектор вшит.
+describe("READING_BRIDGE — checkbox-group collector (#7)", () => {
+  it("несёт __readingMultiFor и селектор data-mcq-group", () => {
+    expect(READING_BRIDGE).toContain("__readingMultiFor");
+    expect(READING_BRIDGE).toContain("data-mcq-group");
+    expect(READING_BRIDGE).toContain('input[type="checkbox"]');
+  });
+});
