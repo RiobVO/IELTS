@@ -1,11 +1,33 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type CSSProperties, type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/core/Button";
 import { Input } from "@/components/core/Input";
 import { Logo } from "@/components/core/Logo";
 import { createClient } from "@/lib/supabase/client";
+
+/** Персистентная подпись поля (htmlFor) — recall + скринридер; плейсхолдер её не заменяет. */
+const labelStyle: CSSProperties = {
+  display: "block",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-xs)",
+  fontWeight: 700,
+  letterSpacing: "var(--tracking-tight)",
+  color: "var(--text-secondary)",
+  marginBottom: 6,
+};
+
+const backLinkStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 44,
+  padding: "0 10px",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-xs)",
+  fontWeight: 600,
+  color: "var(--text-link)",
+};
 
 /**
  * Шаг 2 сброса пароля: пользователь приходит сюда из recovery-ссылки уже с
@@ -53,21 +75,27 @@ export default function UpdatePasswordPage() {
         <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.55, color: "var(--text-muted)", margin: "0 0 22px" }}>Choose a new password for your account. Minimum 6 characters.</p>
 
         {error && (
-          <div style={{ background: "var(--error-subtle)", color: "var(--error-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 12 }}>{error}</div>
+          <div role="alert" style={{ background: "var(--error-subtle)", color: "var(--error-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 12 }}>{error}</div>
         )}
 
         <form onSubmit={onSubmit}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <Input icon="lock" name="password" type="password" placeholder="New password" required minLength={6} autoComplete="new-password" />
-            <Input icon="lock" name="confirm" type="password" placeholder="Confirm new password" required minLength={6} autoComplete="new-password" />
+            <div>
+              <label htmlFor="new-password" style={labelStyle}>New password</label>
+              <Input id="new-password" icon="lock" name="password" type="password" placeholder="At least 6 characters" required minLength={6} autoComplete="new-password" autoFocus />
+            </div>
+            <div>
+              <label htmlFor="confirm-password" style={labelStyle}>Confirm new password</label>
+              <Input id="confirm-password" icon="lock" name="confirm" type="password" placeholder="Re-enter password" required minLength={6} autoComplete="new-password" />
+            </div>
           </div>
           <div style={{ marginTop: 18 }}>
             <Button size="lg" fullWidth trailingIcon="arrow-right" type="submit" loading={status === "saving" || status === "done"}>Update password</Button>
           </div>
         </form>
 
-        <div style={{ marginTop: 20, textAlign: "center" }}>
-          <a href="/auth" style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-link)" }}>Back to log in</a>
+        <div style={{ marginTop: 14, textAlign: "center" }}>
+          <a href="/auth" style={backLinkStyle}>Back to log in</a>
         </div>
       </div>
     </div>
