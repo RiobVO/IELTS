@@ -96,6 +96,8 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
           return router.push("/app/practice");
         case "unavailable":
           return router.push("/app/writing");
+        case "too_fast":
+          return setError("Too many attempts in a row. Wait a minute and try again.");
         default:
           return setError("Please write between 20 and 1000 words.");
       }

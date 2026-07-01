@@ -158,6 +158,18 @@ export async function readOwnSubmission(
   return row ?? null;
 }
 
+// Count this user's submissions in ANY status created since `since` — the rate-limit input
+// for the cost-amp throttle (#21). Includes failed rows on purpose: they don't consume the
+// preview/cap, so they're exactly what a retry loop would re-fire. Uses the
+// writing_submission_user_created_idx (user_id, created_at).
+export async function countRecentSubmissions(userId: string, since: Date): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(writingSubmission)
+    .where(and(eq(writingSubmission.userId, userId), gte(writingSubmission.createdAt, since)));
+  return row?.n ?? 0;
+}
+
 function dayStart(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
