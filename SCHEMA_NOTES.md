@@ -30,7 +30,11 @@ attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
   audio evaluation; `speaking_feedback_debug` SERVER-ONLY, locked like `answer_key`;
   `speaking_audio_event` = biometric audit trail).
 
-So `src/db/schema.ts` defines **27** `pgTable`s; `verify.ts` asserts the same count.
+The DB has **27** tables (`verify.ts` `APP_TABLE_COUNT = 27` asserts the migrated count).
+`src/db/schema.ts` types **26** of them: the legacy `topic` table (migration `0000`, Phase 1)
+is unused since Phase 3 moved to `writing_task`/`speaking_task`, so its Drizzle export +
+`topic_skill` enum were dropped as dead code (#26) while the empty table lingers in the DB
+(no destructive drop). Re-add a typed export only if `topic` is ever revived.
 
 ## `user` → `profile`, keyed to `auth.users.id`
 
