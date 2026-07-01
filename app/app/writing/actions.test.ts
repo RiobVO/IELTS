@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoisted so the vi.mock factories (hoisted above) can reference these eagerly.
-const { getUser, getProfile, counts, insert, trigger, readOwn, markFailed, featureEnabled, loadTask } = vi.hoisted(() => ({
+const { getUser, getProfile, counts, insert, trigger, readOwn, markFailed, failStale, featureEnabled, loadTask } = vi.hoisted(() => ({
   getUser: vi.fn(),
   getProfile: vi.fn(),
   counts: vi.fn(),
@@ -8,11 +8,12 @@ const { getUser, getProfile, counts, insert, trigger, readOwn, markFailed, featu
   trigger: vi.fn(),
   readOwn: vi.fn(),
   markFailed: vi.fn(),
+  failStale: vi.fn(),
   featureEnabled: vi.fn(),
   loadTask: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ getUser, getProfile }));
-vi.mock("@/lib/writing/store", () => ({ completedCounts: counts, insertPendingSubmission: insert, triggerEvaluate: trigger, readOwnSubmission: readOwn, markFailed, loadWritingTaskForSubmissionGate: loadTask }));
+vi.mock("@/lib/writing/store", () => ({ completedCounts: counts, insertPendingSubmission: insert, triggerEvaluate: trigger, readOwnSubmission: readOwn, markFailed, failStaleSubmissions: failStale, loadWritingTaskForSubmissionGate: loadTask }));
 vi.mock("@/env", () => ({ writingFeatureEnabled: featureEnabled }));
 import { createWritingSubmission, getSubmissionStatus } from "./actions";
 import { WRITING_STALE_MS } from "@/lib/writing/lifecycle";
@@ -20,8 +21,9 @@ import { WRITING_STALE_MS } from "@/lib/writing/lifecycle";
 const TASK = "11111111-1111-1111-1111-111111111111"; // a well-formed task id
 
 beforeEach(() => {
-  [getUser, getProfile, counts, insert, trigger, readOwn, markFailed, featureEnabled, loadTask].forEach((m) => m.mockReset());
+  [getUser, getProfile, counts, insert, trigger, readOwn, markFailed, failStale, featureEnabled, loadTask].forEach((m) => m.mockReset());
   featureEnabled.mockReturnValue(true); // default: fully configured; #5 cases override
+  failStale.mockResolvedValue(0); // default: nothing stale to reap
   loadTask.mockResolvedValue({ status: "published", tierRequired: "basic" }); // default: open task; #2 cases override
 });
 
@@ -44,6 +46,13 @@ describe("createWritingSubmission", () => {
     getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "ultra", premium_until: null }); counts.mockResolvedValue({ lifetime: 5, today: 0 }); insert.mockResolvedValue("sub1");
     expect(await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") })).toEqual({ ok: true, submissionId: "sub1" });
     expect(trigger).toHaveBeenCalledWith("sub1");
+  });
+
+  it("reaps the user's own stale row BEFORE insert (#1)", async () => {
+    getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "ultra", premium_until: null }); counts.mockResolvedValue({ lifetime: 0, today: 0 }); insert.mockResolvedValue("sub1");
+    await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") });
+    expect(failStale).toHaveBeenCalledWith(expect.any(Date), "u1"); // user-scoped
+    expect(failStale.mock.invocationCallOrder[0]).toBeLessThan(insert.mock.invocationCallOrder[0]);
   });
 
   it("blocks when the feature is not fully configured (origin/secret missing) without insert", async () => {

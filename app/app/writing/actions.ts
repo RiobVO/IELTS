@@ -12,6 +12,7 @@ import {
   triggerEvaluate,
   readOwnSubmission,
   markFailed,
+  failStaleSubmissions,
 } from "@/lib/writing/store";
 
 type CreateResult =
@@ -64,6 +65,11 @@ export async function createWritingSubmission(input: { taskId: string; essay: st
   if (meetsTier(tier, WRITING_MIN_TIER) && !meetsTier(tier, task.tierRequired)) {
     return { ok: false, reason: "unavailable" };
   }
+
+  // Reap the user's OWN stale in-flight row first, so a lost trigger / dead eval doesn't
+  // block a fresh attempt behind the one-active index (0024) until the daily cron runs.
+  // A genuinely fresh in-flight row is NOT stale → insert still yields in_progress (#1).
+  await failStaleSubmissions(new Date(now.getTime() - WRITING_STALE_MS), user.id);
 
   // 0024 one-active index: null = user already has a pending/evaluating submission.
   const submissionId = await insertPendingSubmission(user.id, input.taskId, input.essay.trim(), essay.wordCount);
