@@ -69,9 +69,23 @@ function deferTelegramWork(label: string, work: () => Promise<void>): void {
   });
 }
 
+/** true в боевом окружении — там webhook без секрета запрещён (fail closed, #4). */
+function isProduction(): boolean {
+  return process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
+}
+
 export async function POST(request: Request) {
   const cfg = telegramConfig();
   if (!cfg) return ok(); // бот не сконфигурирован — no-op
+
+  // Prod fail-closed (#4): без секрета единственный барьер — from.id из JSON
+  // (attacker-controlled) → форж callback_query мог бы опубликовать draft. В production
+  // ТРЕБУЕМ секрет (зеркало payments verifyWebhook). Вне production допускаем работу без
+  // секрета для локального теста. Секрет задан в prod-env — гард лишь страхует от регресса.
+  if (isProduction() && !cfg.webhookSecret) {
+    console.error("telegram webhook: TELEGRAM_WEBHOOK_SECRET missing in production — refusing (fail closed)");
+    return NextResponse.json({ ok: false }, { status: 401 });
+  }
 
   // Secret-token: если задан — обязан совпасть (отсекаем посторонние POST'ы).
   if (cfg.webhookSecret) {
