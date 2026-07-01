@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // create→evaluate desync is closed (no upload/insert when the trigger can't fire).
 const {
   getUser, getProfile, counts, insertUploading, trigger, signedUpload, logEvent, dbSelect, loadTask,
-  readOwn, markDeleted, markDeleteFailed, deleteAudioFn,
+  readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk,
 } = vi.hoisted(() => ({
     getUser: vi.fn(),
     getProfile: vi.fn(),
@@ -21,6 +21,7 @@ const {
     markDeleted: vi.fn(),
     markDeleteFailed: vi.fn(),
     deleteAudioFn: vi.fn(),
+    failStaleSpk: vi.fn(),
   }));
 const featureEnabled = vi.hoisted(() => vi.fn());
 
@@ -35,6 +36,7 @@ vi.mock("@/lib/speaking/store", () => ({
   markFailed: vi.fn(),
   markAudioDeleted: markDeleted,
   markAudioDeleteFailed: markDeleteFailed,
+  failStaleSubmissions: failStaleSpk,
 }));
 vi.mock("@/lib/speaking/storage", () => ({ signedUploadUrl: signedUpload, audioSize: vi.fn(), deleteAudio: deleteAudioFn }));
 vi.mock("@/lib/speaking/events", () => ({ logAudioEvent: logEvent }));
@@ -54,10 +56,11 @@ const TASK = "11111111-1111-1111-1111-111111111111"; // a well-formed task id
 
 beforeEach(() => {
   [getUser, getProfile, counts, insertUploading, trigger, signedUpload, logEvent, dbSelect, featureEnabled, loadTask,
-    readOwn, markDeleted, markDeleteFailed, deleteAudioFn].forEach(
+    readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk].forEach(
     (m) => m.mockReset(),
   );
   featureEnabled.mockReturnValue(true); // default fully configured; #5 case overrides
+  failStaleSpk.mockResolvedValue(0); // default: nothing stale to reap
   loadTask.mockResolvedValue({ status: "published", tierRequired: "basic" }); // default: open task; #3 cases override
 });
 
@@ -135,6 +138,18 @@ describe("createSpeakingSubmission", () => {
     expect(await createSpeakingSubmission("not-a-uuid", "webm")).toEqual({ error: "unavailable" });
     expect(loadTask).not.toHaveBeenCalled();
     expect(insertUploading).not.toHaveBeenCalled();
+  });
+
+  it("reaps the user's own stale row BEFORE insert (#5)", async () => {
+    getUser.mockResolvedValue({ id: "u1" });
+    getProfile.mockResolvedValue({ recording_consent_at: new Date(), tier: "ultra", premium_until: null });
+    counts.mockResolvedValue({ lifetime: 0, today: 0 });
+    insertUploading.mockResolvedValue("sub1");
+    dbSelect.mockReturnValue(selectChain([{ audioPath: "u1/sub1.webm" }]));
+    signedUpload.mockResolvedValue({ url: "http://upload" });
+    await createSpeakingSubmission(TASK, "webm");
+    expect(failStaleSpk).toHaveBeenCalledWith(expect.any(Date), "u1"); // user-scoped
+    expect(failStaleSpk.mock.invocationCallOrder[0]).toBeLessThan(insertUploading.mock.invocationCallOrder[0]);
   });
 });
 

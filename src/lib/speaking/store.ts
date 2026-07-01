@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { and, count, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { speakingSubmission, speakingFeedback, speakingFeedbackDebug, speakingTask } from "@/db/schema";
 import { speakingInternalSecret, publicSiteUrl } from "@/env";
@@ -129,6 +129,25 @@ export async function persistFeedback(
 export async function markFailed(submissionId: string): Promise<void> {
   await db.update(speakingSubmission).set({ status: "failed", updatedAt: new Date() })
     .where(eq(speakingSubmission.id, submissionId));
+}
+
+// Fail transient rows (uploading|pending|evaluating) older than staleBefore so the
+// one-active index (0028) unblocks. userId → reap-own-stale on create (a returning
+// user unblocks immediately instead of waiting up to ~24h for the daily reaper — #5).
+// Audio of the failed row is left for the retention reaper (no cleanup here). Mirrors
+// writing/store.ts failStaleSubmissions.
+export async function failStaleSubmissions(staleBefore: Date, userId?: string): Promise<number> {
+  const active = inArray(speakingSubmission.status, ["uploading", "pending", "evaluating"]);
+  const stale = lt(speakingSubmission.updatedAt, staleBefore);
+  const where = userId
+    ? and(active, stale, eq(speakingSubmission.userId, userId))
+    : and(active, stale);
+  const rows = await db
+    .update(speakingSubmission)
+    .set({ status: "failed", updatedAt: new Date() })
+    .where(where)
+    .returning({ id: speakingSubmission.id });
+  return rows.length;
 }
 
 // A failed audio-object remove (user delete or retention reaper): keep the row
