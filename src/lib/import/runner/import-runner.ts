@@ -1,6 +1,4 @@
-import { eq, and } from "drizzle-orm";
-import { db } from "@/db";
-import { contentItem, passage } from "@/db/schema";
+import { randomUUID } from "node:crypto";
 import { uploadAudio } from "@/lib/telegram/storage";
 import { parseRunner } from "./parse-runner";
 import { fetchExternalAudio } from "./safe-audio-fetch";
@@ -26,23 +24,22 @@ export async function importRunner(
 ): Promise<ImportRunnerResult> {
   const { parsed, externalAudioSrc } = parseRunner(html);
 
-  // 1. Persist ключи/метаданные (получаем id)
-  const contentItemId = await persistTest(parsed, opts);
+  // Mint the id up front so the fallible work (audio fetch/upload + sanitize + anti-leak)
+  // runs BEFORE the DB write. persistTest is then a single all-or-nothing commit — a
+  // mid-import failure leaves NO half-draft (previously it committed content_item with
+  // runner_html=null, then could throw on audio/anti-leak) (#12).
+  const contentItemId = randomUUID();
 
-  // 2. Аудио (listening): скачать внешний mp3 → наш Storage → подменить src
+  // 1. Аудио (listening): SSRF-guarded fetch внешнего mp3 → наш Storage → src.
   let audioUrl: string | undefined;
   if (parsed.section === "listening" && externalAudioSrc) {
-    // SSRF-guarded fetch: raw src from third-party HTML → could point at an internal
-    // endpoint whose bytes would land in the PUBLIC bucket (see safe-audio-fetch.ts).
     const bytes = await fetchExternalAudio(externalAudioSrc);
     audioUrl = await uploadAudio(`${contentItemId}.mp3`, bytes, "audio/mpeg");
-    await db
-      .update(passage)
-      .set({ audioPath: audioUrl })
-      .where(and(eq(passage.contentItemId, contentItemId), eq(passage.order, 1)));
+    const p1 = parsed.passages.find((p) => p.order === 1) ?? parsed.passages[0];
+    if (p1) p1.audioPath = audioUrl; // persisted below, not in a separate post-write
   }
 
-  // 3. Очистить файл и проверить анти-утечку
+  // 2. Очистить файл и проверить анти-утечку (до persist — валидируем перед записью).
   const runnerHtml = sanitizeRunner(html, {
     contentItemId,
     section: parsed.section,
@@ -50,7 +47,7 @@ export async function importRunner(
   });
   assertNoKeyLeak(runnerHtml, parsed);
 
-  // 3b. Бренд-гейт: read-time ребренд опознаёт шапку по якорям текущего источника.
+  // 2b. Бренд-гейт: read-time ребренд опознаёт шапку по якорям текущего источника.
   // Файл из НОВОГО источника может их не иметь → чужой логотип/канал просочится
   // молча. Считаем остаток и возвращаем как предупреждение (импорт не валим — тест
   // валиден, бренд правится отдельно расширением skinRunnerBrand).
@@ -59,8 +56,9 @@ export async function importRunner(
     console.warn(`[import] brand residue in "${parsed.title}":`, brandWarnings);
   }
 
-  // 4. Сохранить runner_html
-  await db.update(contentItem).set({ runnerHtml }).where(eq(contentItem.id, contentItemId));
+  // 3. Единственная атомарная запись: content + passages (incl audioPath) + questions
+  //    + answer_key + runner_html за одну транзакцию.
+  await persistTest(parsed, { ...opts, id: contentItemId, runnerHtml });
 
   return {
     id: contentItemId,

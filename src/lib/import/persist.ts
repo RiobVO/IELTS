@@ -38,7 +38,7 @@ export class RegradeRequiredError extends Error {
  */
 export async function persistTest(
   parsed: ParsedTest,
-  opts: { sourceFilePath?: string; createdBy?: string; runnerHtml?: string } = {},
+  opts: { sourceFilePath?: string; createdBy?: string; runnerHtml?: string; id?: string } = {},
 ): Promise<string> {
   return db.transaction(async (tx) => {
     if (opts.sourceFilePath) {
@@ -69,6 +69,10 @@ export async function persistTest(
     const [ci] = await tx
       .insert(contentItem)
       .values({
+        // Optional pre-generated id: importRunner mints it up front so audio upload +
+        // sanitize run before this atomic write (no half-draft on failure — #12).
+        // undefined → column default (defaultRandom) for callers that don't pass one.
+        id: opts.id,
         section: parsed.section,
         category: parsed.category as ContentInsert["category"],
         title: parsed.title,
