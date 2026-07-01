@@ -430,7 +430,10 @@ Turnstile seam есть, но ключей и полного signup anti-abuse f
 
 ### D5 — AI Phase 3
 
-Статус: frozen, coming soon.
+Статус: LIVE на проде за env-гейтом (обновлено 2026-07-01, doc-drift #25). Writing Lab
+(Task 2 + Task 1) и Speaking Part 2 построены и работают, когда заданы model+key+
+internal-secret+public-origin (`writingFeatureEnabled`/`speakingFeatureEnabled`); иначе
+экраны `redirect("/app/practice")`. Ядро Reading/Listening остаётся LLM-free (§4.2).
 Приоритет пересмотра: низкий до стабилизации Reading/Listening и monetization.
 Усилие: L.
 
