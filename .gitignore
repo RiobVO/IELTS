@@ -41,6 +41,12 @@ npm-debug.log*
 # bando design system handoff — reference only, recreated in src/ + app/, not shipped as-is
 /design-drop/
 
+# throwaway ops / prod-mutator scripts — run via `npx tsx` then discarded, NEVER commit.
+# Committing a prod-mutator (e.g. _restore_prod.ts, _set_tiers.ts) is a footgun: it could
+# be run against the wrong env (cf. the db:down incident). Legit scripts have no leading
+# underscore (verify.ts, migrate.ts, setup-*.ts, smoke-*.ts).
+/scripts/_*
+
 # local tooling worktrees / cache — not project source
 /.claude/
 # impeccable critique snapshots — local design-review archive, not shipped source
