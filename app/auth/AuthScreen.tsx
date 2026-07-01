@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, type ReactNode, type CSSProperties } from "react";
+import { useFormStatus } from "react-dom";
 import { Button } from "@/components/core/Button";
 import { Input } from "@/components/core/Input";
+import { Icon } from "@/components/core/icons";
 import { createClient } from "@/lib/supabase/client";
 import { signIn, signUp } from "./actions";
 
@@ -16,6 +18,21 @@ interface AuthScreenProps {
   turnstileSiteKey?: string;
 }
 
+const PANEL = 46;
+// Панель абсолютна (left:0, width:PANEL%); сдвиг вправо делаем transform'ом, а не
+// анимацией left/width — так закрыта perf-находка layout-transition и слайд идёт по GPU.
+const PANEL_SHIFT = ((100 - PANEL) / PANEL) * 100;
+
+const LABEL_STYLE: CSSProperties = {
+  display: "block",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-xs)",
+  fontWeight: 700,
+  letterSpacing: "var(--tracking-tight)",
+  color: "var(--text-secondary)",
+  marginBottom: 6,
+};
+
 function GoogleG() {
   return (
     <svg width="17" height="17" viewBox="0 0 48 48">
@@ -27,17 +44,58 @@ function GoogleG() {
   );
 }
 
+/** Поле с постоянной подписью, связанной с инпутом по id (htmlFor) — чинит и recall
+ *  (подпись не исчезает при вводе), и скринридер (программное имя поля). */
+function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+  return (
+    <div>
+      <label htmlFor={id} style={LABEL_STYLE}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+/** Пароль с toggle видимости (reveal) в trailing-слоте Input. */
+function PasswordInput({ id, autoComplete }: { id: string; autoComplete: "new-password" | "current-password" }) {
+  const [show, setShow] = useState(false);
+  return (
+    <Input
+      id={id}
+      icon="lock"
+      name="password"
+      type={show ? "text" : "password"}
+      placeholder="At least 6 characters"
+      required
+      minLength={6}
+      autoComplete={autoComplete}
+      trailing={
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          aria-label={show ? "Hide password" : "Show password"}
+          aria-pressed={show}
+          style={{ display: "grid", placeItems: "center", border: "none", background: "none", padding: 0, margin: 0, cursor: "pointer", color: "var(--text-muted)" }}
+        >
+          <Icon name={show ? "eye-off" : "eye"} size={17} />
+        </button>
+      }
+    />
+  );
+}
+
+/** Submit-кнопка с pending-состоянием (useFormStatus): на сабмите блокируется и
+ *  показывает спиннер — visibility of status + защита от двойного клика. */
+function SubmitButton({ children }: { children: ReactNode }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button size="lg" fullWidth trailingIcon="arrow-right" loading={pending} type="submit">
+      {children}
+    </Button>
+  );
+}
+
 export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: AuthScreenProps) {
   const [mode, setMode] = useState<"signup" | "login">("signup");
-  const [phase, setPhase] = useState<"idle" | "cover" | "reveal">("idle");
-  const [reveal, setReveal] = useState(0);
-  const t1 = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const t2 = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (t1.current) clearTimeout(t1.current);
-    if (t2.current) clearTimeout(t2.current);
-  }, []);
 
   // Load the Turnstile script once when the gate is enabled. The widget renders
   // implicitly from the `.cf-turnstile` element below (signup is the initial
@@ -54,17 +112,6 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
     document.head.appendChild(s);
   }, [turnstileSiteKey]);
 
-  const switchTo = (target: "signup" | "login") => {
-    if (target === mode || phase !== "idle") return;
-    setPhase("cover");
-    t1.current = setTimeout(() => {
-      setMode(target);
-      setReveal((r) => r + 1);
-      setPhase("reveal");
-      t2.current = setTimeout(() => setPhase("idle"), 720);
-    }, 430);
-  };
-
   // OAuth-вход через клиентский Supabase: штатный путь, AuthScreen уже client.
   // redirectTo несёт исходный next — callback/route.ts обменяет код и уведёт туда.
   const googleSignIn = async () => {
@@ -76,38 +123,36 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
   };
 
   const signup = mode === "signup";
-  const PANEL = 46;
-
-  let pLeft = signup ? (100 - PANEL) : 0;
-  let pW = PANEL;
-  if (phase === "cover") { pLeft = 0; pW = 100; }
-  const covering = phase === "cover";
-
-  // Suppress unused variable warning — reveal is used to force re-render on switch
-  void reveal;
 
   return (
     <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "32px 20px", background: "var(--bg-base)" }}>
       <style>{`
         @keyframes auth-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
         .auth-rise{animation:auth-rise .5s var(--ease-out) both}
-        @keyframes seal-spin{to{transform:rotate(360deg)}}
-        @keyframes mark-pop{0%{transform:scale(.4);opacity:0}55%{transform:scale(1.12);opacity:1}100%{transform:scale(1);opacity:1}}
-        @media (prefers-reduced-motion:reduce){.auth-rise,.auth-seal,.auth-mark{animation:none!important}}
+        .auth-form input::placeholder{color:var(--text-muted);opacity:1}
+        @media (prefers-reduced-motion:reduce){
+          .auth-rise{animation:none!important}
+          .auth-panel{transition:none!important}
+          .auth-form{transition:opacity 0s!important}
+        }
         /* Мобильный (<760px): раздвижная карта — desktop-метафора. Прячем violet-панель,
-           активная форма занимает всю ширину карты, переключение — текстовым тогглом. */
+           активная форма встаёт в поток на всю ширину (не absolute) и задаёт высоту карты,
+           неактивная скрыта; переключение — текстовым тогглом. Так signup с Turnstile не
+           обрезается фиксированной высотой. */
         .auth-toggle{display:none}
         @media (max-width:759px){
+          .auth-card{height:auto!important;min-height:0!important;overflow:visible!important}
           .auth-panel{display:none}
-          .auth-form{width:100%!important;padding:30px 20px!important}
+          .auth-form{position:static!important;width:100%!important;padding:30px 20px!important;opacity:1!important;pointer-events:auto!important;transform:none!important}
+          .auth-form.is-idle{display:none!important}
           .auth-toggle{display:block}
         }
       `}</style>
 
-      <div style={{ position: "relative", width: 940, maxWidth: "100%", height: 580, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-xl)", overflow: "hidden" }}>
+      <div className="auth-card" style={{ position: "relative", width: 940, maxWidth: "100%", height: 580, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-xl)", overflow: "hidden" }}>
 
         {/* Signup form — LEFT half */}
-        <div className="auth-form" style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: (100 - PANEL) + "%", display: "grid", placeItems: "center", padding: "40px 36px", opacity: signup && phase !== "cover" ? 1 : 0, pointerEvents: signup && phase === "idle" ? "auto" : "none", transition: "opacity .3s var(--ease-out)" }}>
+        <div className={`auth-form ${signup ? "is-active" : "is-idle"}`} style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: (100 - PANEL) + "%", display: "grid", placeItems: "center", padding: "34px 36px", opacity: signup ? 1 : 0, pointerEvents: signup ? "auto" : "none", transition: "opacity .2s var(--ease-out)" }}>
           {signup && (
             <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
               <div className="auth-rise" style={{ animationDelay: "40ms" }}>
@@ -133,13 +178,19 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
                 <input type="hidden" name="ref" value={refCode ?? ""} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div className="auth-rise" style={{ animationDelay: "90ms" }}>
-                    <Input icon="graduation-cap" name="name" placeholder="Your name" />
+                    <Field id="signup-name" label="Name">
+                      <Input id="signup-name" icon="user" name="name" placeholder="Your name" autoComplete="name" autoFocus />
+                    </Field>
                   </div>
                   <div className="auth-rise" style={{ animationDelay: "160ms" }}>
-                    <Input icon="pen-line" name="email" type="email" placeholder="Email" required autoComplete="email" />
+                    <Field id="signup-email" label="Email">
+                      <Input id="signup-email" icon="mail" name="email" type="email" placeholder="you@example.com" required autoComplete="email" />
+                    </Field>
                   </div>
                   <div className="auth-rise" style={{ animationDelay: "230ms" }}>
-                    <Input icon="lock" name="password" type="password" placeholder="Password" required minLength={6} autoComplete="new-password" />
+                    <Field id="signup-password" label="Password">
+                      <PasswordInput id="signup-password" autoComplete="new-password" />
+                    </Field>
                   </div>
                 </div>
                 {turnstileSiteKey && (
@@ -150,7 +201,7 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
                   />
                 )}
                 <div className="auth-rise" style={{ marginTop: 18, animationDelay: "300ms" }}>
-                  <Button size="lg" fullWidth trailingIcon="arrow-right" type="submit">Create account</Button>
+                  <SubmitButton>Create account</SubmitButton>
                 </div>
               </form>
 
@@ -174,7 +225,7 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
         </div>
 
         {/* Login form — RIGHT half */}
-        <div className="auth-form" style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: (100 - PANEL) + "%", display: "grid", placeItems: "center", padding: "40px 36px", opacity: !signup && phase !== "cover" ? 1 : 0, pointerEvents: !signup && phase === "idle" ? "auto" : "none", transition: "opacity .3s var(--ease-out)" }}>
+        <div className={`auth-form ${!signup ? "is-active" : "is-idle"}`} style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: (100 - PANEL) + "%", display: "grid", placeItems: "center", padding: "34px 36px", opacity: !signup ? 1 : 0, pointerEvents: !signup ? "auto" : "none", transition: "opacity .2s var(--ease-out)" }}>
           {!signup && (
             <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
               <div className="auth-rise" style={{ animationDelay: "40ms" }}>
@@ -200,17 +251,21 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
                 <input type="hidden" name="next" value={next} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div className="auth-rise" style={{ animationDelay: "90ms" }}>
-                    <Input icon="pen-line" name="email" type="email" placeholder="Email" required autoComplete="email" />
+                    <Field id="login-email" label="Email">
+                      <Input id="login-email" icon="mail" name="email" type="email" placeholder="you@example.com" required autoComplete="email" autoFocus />
+                    </Field>
                   </div>
                   <div className="auth-rise" style={{ animationDelay: "160ms" }}>
-                    <Input icon="lock" name="password" type="password" placeholder="Password" required minLength={6} autoComplete="current-password" />
+                    <Field id="login-password" label="Password">
+                      <PasswordInput id="login-password" autoComplete="current-password" />
+                    </Field>
                   </div>
                 </div>
                 <div className="auth-rise" style={{ textAlign: "right", marginTop: 10, animationDelay: "260ms" }}>
                   <a href="/auth/reset" style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-link)" }}>Forgot password?</a>
                 </div>
                 <div className="auth-rise" style={{ marginTop: 18, animationDelay: "300ms" }}>
-                  <Button size="lg" fullWidth trailingIcon="arrow-right" type="submit">Log in</Button>
+                  <SubmitButton>Log in</SubmitButton>
                 </div>
               </form>
 
@@ -233,24 +288,14 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
           )}
         </div>
 
-        {/* Sliding violet panel — desktop only (.auth-panel hidden <760px) */}
-        <div className="auth-panel" style={{ position: "absolute", top: 0, bottom: 0, left: pLeft + "%", width: pW + "%", padding: covering ? 0 : 10, zIndex: 5, transition: "left .62s var(--ease-in-out), width .62s var(--ease-in-out), padding .62s var(--ease-in-out)" }}>
-          <div style={{ position: "relative", overflow: "hidden", height: "100%", background: "linear-gradient(165deg, var(--surface-premium), var(--surface-premium-deep))", borderRadius: covering ? "var(--radius-2xl)" : "var(--radius-xl)", display: "flex", flexDirection: "column", justifyContent: "center", padding: "44px 40px", color: "var(--surface-premium-ink)", transition: "border-radius .5s var(--ease-in-out)" }}>
+        {/* Sliding violet panel — desktop only (.auth-panel hidden <760px). Двигается
+            transform'ом (translateX), не left/width — GPU-слайд, без layout-thrash. */}
+        <div className="auth-panel" style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: PANEL + "%", padding: 10, zIndex: 5, transform: `translateX(${signup ? PANEL_SHIFT : 0}%)`, transition: "transform .28s var(--ease-out)" }}>
+          <div style={{ position: "relative", overflow: "hidden", height: "100%", background: "linear-gradient(165deg, var(--surface-premium), var(--surface-premium-deep))", borderRadius: "var(--radius-xl)", display: "flex", flexDirection: "column", justifyContent: "center", padding: "44px 40px", color: "var(--surface-premium-ink)" }}>
             <div aria-hidden="true" style={{ position: "absolute", top: -120, right: -90, width: 340, height: 340, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--brand) 55%, transparent), transparent 65%)", filter: "blur(36px)", opacity: 0.5 }} />
             <div aria-hidden="true" style={{ position: "absolute", bottom: -110, left: -70, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--info) 45%, transparent), transparent 65%)", filter: "blur(40px)", opacity: 0.4 }} />
 
-            {/* COVER state: centered pulsing mark */}
-            <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: covering ? 1 : 0, transition: "opacity .3s var(--ease-out)" }}>
-              <div style={{ position: "relative", width: 96, height: 96 }}>
-                <div className="auth-seal" style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "2px dashed rgba(255,255,255,.4)", animation: covering ? "seal-spin 4s linear infinite" : "none" }} />
-                <div className="auth-mark" style={{ position: "absolute", inset: 16, borderRadius: 20, background: "rgba(255,255,255,.10)", display: "grid", placeItems: "center", animation: covering ? "mark-pop .5s var(--ease-out) both" : "none" }}>
-                  <img src="/bando-mark.svg" width="34" height="34" alt="" />
-                </div>
-              </div>
-            </div>
-
-            {/* IDLE/REVEAL copy */}
-            <div style={{ position: "relative", minHeight: 150, opacity: covering ? 0 : 1, transition: "opacity .35s var(--ease-out) .15s" }}>
+            <div style={{ position: "relative" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 28 }}>
                 <span style={{ width: 36, height: 36, borderRadius: 11, display: "grid", placeItems: "center", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.16)" }}>
                   <img src="/bando-mark.svg" width="20" height="20" alt="" />
@@ -259,7 +304,7 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
               </div>
               <h2 style={{ fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: 26, lineHeight: 1.15, letterSpacing: "-.02em", margin: "0 0 10px", maxWidth: 280 }}>{signup ? "Already with us?" : "New to bando?"}</h2>
               <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,.66)", lineHeight: 1.55, margin: "0 0 22px", maxWidth: 270 }}>{signup ? "Log in and keep your streak, league rank and progress moving." : "Take a free test and see exactly which question types cost you points."}</p>
-              <button onClick={() => switchTo(signup ? "login" : "signup")} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 46, padding: "0 22px", borderRadius: "var(--radius-md)", border: "2px solid rgba(255,255,255,.5)", background: "transparent", color: "var(--surface-premium-ink)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer" }}>
+              <button onClick={() => setMode(signup ? "login" : "signup")} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 46, padding: "0 22px", borderRadius: "var(--radius-md)", border: "2px solid rgba(255,255,255,.5)", background: "transparent", color: "var(--surface-premium-ink)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer" }}>
                 {signup ? "Log in" : "Create account"} <span aria-hidden="true">→</span>
               </button>
             </div>
