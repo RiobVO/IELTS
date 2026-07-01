@@ -9,7 +9,10 @@ vi.mock("@/db", () => ({ db: { select: (...a: unknown[]) => select(...a), update
 vi.mock("next/cache", () => ({ revalidateTag }));
 import { publishReviewedContentItem } from "./publish";
 
+// select #1 (content item): .from().where().limit(); select #2 (#17 answer-key gate):
+// .from().innerJoin().where().
 const selectChain = (rows: unknown[]) => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve(rows) }) }) });
+const keysChain = (rows: unknown[]) => ({ from: () => ({ innerJoin: () => ({ where: () => Promise.resolve(rows) }) }) });
 const updateChain = () => ({ set: () => ({ where: () => Promise.resolve(undefined) }) });
 
 beforeEach(() => {
@@ -33,12 +36,23 @@ describe("publishReviewedContentItem", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it("publishes a reviewed item and returns its title", async () => {
-    select.mockReturnValue(selectChain([{ reviewedAt: new Date(), title: "Reading 1" }]));
+  it("publishes a reviewed item with non-empty keys and returns its title", async () => {
+    select
+      .mockReturnValueOnce(selectChain([{ reviewedAt: new Date(), title: "Reading 1" }]))
+      .mockReturnValueOnce(keysChain([{ accept: ["A"] }, { accept: ["journal", "journals"] }]));
     update.mockReturnValue(updateChain());
     const res = await publishReviewedContentItem("id1");
     expect(res).toEqual({ ok: true, title: "Reading 1" });
     expect(update).toHaveBeenCalledOnce();
     expect(revalidateTag).toHaveBeenCalledWith("content_item");
+  });
+
+  it("refuses to publish when any question has an empty answer key (#17)", async () => {
+    select
+      .mockReturnValueOnce(selectChain([{ reviewedAt: new Date(), title: "Reading 1" }]))
+      .mockReturnValueOnce(keysChain([{ accept: ["A"] }, { accept: [""] }])); // one blank key
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "empty_answer_key" });
+    expect(update).not.toHaveBeenCalled();
   });
 });
