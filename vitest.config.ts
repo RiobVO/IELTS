@@ -15,6 +15,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // `server-only` (Next.js RSC guard) has no plain-node build, so vitest can't resolve
+      // it; stub it to a no-op (matches server semantics) so modules importing it are testable.
+      "server-only": fileURLToPath(new URL("./test/server-only-stub.ts", import.meta.url)),
     },
   },
 });
