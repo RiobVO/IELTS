@@ -275,7 +275,6 @@ function FocusCard({ weakest }: { weakest: Weak | null }) {
   const pct = weakest ? Math.round((weakest.correct / weakest.total) * 100) : 0;
   return (
     <div className="dash-focus" style={S.focus}>
-      <img src="/bando-mark.svg" alt="" aria-hidden="true" style={S.focusMark} />
       <div style={S.focusInner}>
         <div style={S.focusEyebrow}>
           <Icon name="target" size={15} strokeWidth={2.6} /> Today&apos;s focus
@@ -447,6 +446,9 @@ function BandReadout({
   }
 
   const fillPct = (band / 9) * 100;
+  // Value-aware calm: a low band is shown quietly (softer ink, no elevation) —
+  // candid, not punishing; a band worth celebrating keeps the bold raised look.
+  const low = band < 5;
   const caption =
     target == null
       ? "Your latest full-mock band."
@@ -454,11 +456,11 @@ function BandReadout({
         ? `${gap.toFixed(1)} band to go`
         : "Target reached 🎯";
   return (
-    <div style={{ ...S.card, ...S.bandCard, ...S.bandCardFilled }}>
+    <div style={{ ...S.card, ...S.bandCard, ...(low ? null : S.bandCardFilled) }}>
       <div style={{ flex: "none" }}>
         <div style={S.bandLabel}>Your band</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
-          <span className="dash-band-num" style={S.bandNum}>{band}</span>
+          <span className="dash-band-num" style={low ? { ...S.bandNum, color: "var(--text-secondary)" } : S.bandNum}>{band}</span>
           {target != null ? (
             <span style={S.bandTarget}>
               / target <span style={{ fontFamily: "var(--font-mono)", color: "var(--brand)" }}>{target}</span>
@@ -562,7 +564,7 @@ const DASH_CSS = `
 .dash-sect{padding:20px 16px}
 .dash-sect-tight{padding:18px 16px 8px}
 .dash-band{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
-.dash-band-num{font-size:60px}
+.dash-band-num{font-size:50px}
 /* Loss / recent — это ссылки: явный hover-фидбэк подтверждает кликабельность. */
 .dash-loss,.dash-trow{transition:background-color var(--duration-fast) var(--ease-standard)}
 .dash-loss:hover{background:var(--surface-inset)}
@@ -594,7 +596,7 @@ const DASH_CSS = `
   .dash-wrap{padding:32px 28px 56px}
   .dash-hi{font-size:32px;white-space:nowrap}
   .dash-focus-title{font-size:42px}
-  .dash-band-num{font-size:72px}
+  .dash-band-num{font-size:60px}
   .dash-band{flex-direction:row;align-items:center;gap:32px}
   .dash-focus{padding:38px}
   .dash-sect{padding:28px 30px}
@@ -637,13 +639,15 @@ const S: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     // Затемнён до brand-active→deeper: светлейший стоп = violet-700, чтобы белый
     // ink-текст (вкл. body@0.85 / eyebrow@0.92) держал WCAG AA (5.0–5.3:1).
-    background: "linear-gradient(150deg, var(--brand-active), color-mix(in oklab, var(--brand-active) 78%, black))",
+    // Ambient highlight in the text-free top-right corner (replaces the old
+    // 3-bar mark that read as skeleton loaders). Kept off the ink so the hero's
+    // computed AA on white text is unaffected.
+    background: "radial-gradient(620px 420px at 92% -12%, rgba(255,255,255,0.13), transparent 58%), linear-gradient(150deg, var(--brand-active), color-mix(in oklab, var(--brand-active) 78%, black))",
     boxShadow: "var(--shadow-md)",
     display: "flex",
     flexDirection: "column",
   },
   focusInner: { position: "relative", display: "flex", flexDirection: "column", height: "100%" },
-  focusMark: { position: "absolute", right: -30, bottom: -34, width: 220, height: 220, opacity: 0.18, pointerEvents: "none" },
   focusEyebrow: {
     display: "inline-flex",
     alignItems: "center",
