@@ -126,9 +126,17 @@ export async function persistFeedback(
   });
 }
 
+// Status-guarded (#16): only a still-transient row may be failed, so a slow eval that
+// just committed 'completed' isn't overwritten completed→failed by a racing reaper/poll
+// (would lose feedback + undercount the preview). Mirrors persistFeedback's guarded flip.
 export async function markFailed(submissionId: string): Promise<void> {
   await db.update(speakingSubmission).set({ status: "failed", updatedAt: new Date() })
-    .where(eq(speakingSubmission.id, submissionId));
+    .where(
+      and(
+        eq(speakingSubmission.id, submissionId),
+        inArray(speakingSubmission.status, ["uploading", "pending", "evaluating"]),
+      ),
+    );
 }
 
 // Fail transient rows (uploading|pending|evaluating) older than staleBefore so the
