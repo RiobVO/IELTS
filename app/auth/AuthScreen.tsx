@@ -51,9 +51,11 @@ const EYE_BTN_STYLE: CSSProperties = {
   border: "none",
   background: "none",
   padding: 0,
-  margin: 0,
+  margin: "0 -6px 0 0",
   cursor: "pointer",
-  color: "var(--text-muted)",
+  color: "var(--text-secondary)",
+  minWidth: 44,
+  minHeight: 44,
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -111,6 +113,7 @@ function EmailField({ id, autoFocus, defaultValue }: { id: string; autoFocus?: b
       >
         <Input
           id={id}
+          size="lg"
           icon="mail"
           name="email"
           type="email"
@@ -147,6 +150,7 @@ function PasswordField({ id, autoComplete }: { id: string; autoComplete: "new-pa
       >
         <Input
           id={id}
+          size="lg"
           icon="lock"
           name="password"
           type={show ? "text" : "password"}
@@ -220,7 +224,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
       <style>{`
         @keyframes auth-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
         .auth-rise{animation:auth-rise .5s var(--ease-out) both}
-        .auth-form input::placeholder{color:var(--text-muted);opacity:1}
+        .auth-form input::placeholder{color:var(--text-secondary);opacity:1}
         @media (prefers-reduced-motion:reduce){
           .auth-rise{animation:none!important}
           .auth-panel{transition:none!important}
@@ -243,16 +247,16 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
       <div className="auth-card" style={{ position: "relative", width: 940, maxWidth: "100%", height: 580, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-xl)", overflow: "hidden" }}>
 
         {/* Signup form — LEFT half */}
-        <div className={`auth-form ${signup ? "is-active" : "is-idle"}`} style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: (100 - PANEL) + "%", display: "grid", placeItems: "center", padding: "34px 36px", opacity: signup ? 1 : 0, pointerEvents: signup ? "auto" : "none", transition: "opacity .2s var(--ease-out)" }}>
+        <div className={`auth-form ${signup ? "is-active" : "is-idle"}`} style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: (100 - PANEL) + "%", display: "grid", alignItems: "safe center", justifyItems: "center", overflowY: "auto", padding: "34px 36px", opacity: signup ? 1 : 0, pointerEvents: signup ? "auto" : "none", transition: "opacity .2s var(--ease-out)" }}>
           {signup && (
             <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
-              <div className="auth-rise" style={{ animationDelay: "40ms" }}>
+              <div className="auth-rise">
                 <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 4px" }}>Create your account</h1>
-                <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "0 0 22px" }}>Your first full test is free. No card.</p>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "0 0 22px" }}>Your first full test is free. No card.</p>
               </div>
 
               {(error || message || refCode) && (
-                <div className="auth-rise" style={{ animationDelay: "60ms", marginBottom: 12 }}>
+                <div className="auth-rise" style={{ marginBottom: 12 }}>
                   {error && (
                     <div role="alert" style={{ background: "var(--error-subtle)", color: "var(--error-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>{friendlyAuthError(error)}</div>
                   )}
@@ -268,15 +272,15 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
               <form action={signUp}>
                 <input type="hidden" name="ref" value={refCode ?? ""} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div className="auth-rise" style={{ animationDelay: "90ms" }}>
+                  <div className="auth-rise">
                     <Field id="signup-name" label="Name">
-                      <Input id="signup-name" icon="user" name="name" placeholder="Your name" autoComplete="name" autoFocus />
+                      <Input id="signup-name" size="lg" icon="user" name="name" placeholder="Your name" autoComplete="name" autoFocus />
                     </Field>
                   </div>
-                  <div className="auth-rise" style={{ animationDelay: "160ms" }}>
+                  <div className="auth-rise">
                     <EmailField id="signup-email" defaultValue={initialEmail} />
                   </div>
-                  <div className="auth-rise" style={{ animationDelay: "230ms" }}>
+                  <div className="auth-rise">
                     <PasswordField id="signup-password" autoComplete="new-password" />
                   </div>
                 </div>
@@ -284,26 +288,26 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
                   <div
                     className="auth-rise cf-turnstile"
                     data-sitekey={turnstileSiteKey}
-                    style={{ marginTop: 14, animationDelay: "270ms" }}
+                    style={{ marginTop: 14 }}
                   />
                 )}
-                <div className="auth-rise" style={{ marginTop: 18, animationDelay: "300ms" }}>
+                <div className="auth-rise" style={{ marginTop: 18 }}>
                   <SubmitButton>Create account</SubmitButton>
                 </div>
               </form>
 
-              <div className="auth-rise" style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0", animationDelay: "360ms" }}>
+              <div className="auth-rise" style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0" }}>
                 <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
-                <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>or</span>
+                <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>or</span>
                 <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
               </div>
-              <div className="auth-rise" style={{ animationDelay: "410ms" }}>
+              <div className="auth-rise">
                 <button type="button" onClick={googleSignIn} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, width: "100%", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer", boxShadow: "0 3px 0 0 var(--neutral-edge)" }}>
                   <GoogleG /> Continue with Google
                 </button>
               </div>
 
-              <div className="auth-toggle" style={{ textAlign: "center", marginTop: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>
+              <div className="auth-toggle" style={{ textAlign: "center", marginTop: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" }}>
                 Already have an account?{" "}
                 <button type="button" onClick={() => setMode("login")} style={{ border: "none", background: "none", padding: 0, color: "var(--text-link)", fontWeight: 700, fontFamily: "inherit", fontSize: "inherit", cursor: "pointer" }}>Log in</button>
               </div>
@@ -312,16 +316,16 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
         </div>
 
         {/* Login form — RIGHT half */}
-        <div className={`auth-form ${!signup ? "is-active" : "is-idle"}`} style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: (100 - PANEL) + "%", display: "grid", placeItems: "center", padding: "34px 36px", opacity: !signup ? 1 : 0, pointerEvents: !signup ? "auto" : "none", transition: "opacity .2s var(--ease-out)" }}>
+        <div className={`auth-form ${!signup ? "is-active" : "is-idle"}`} style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: (100 - PANEL) + "%", display: "grid", alignItems: "safe center", justifyItems: "center", overflowY: "auto", padding: "34px 36px", opacity: !signup ? 1 : 0, pointerEvents: !signup ? "auto" : "none", transition: "opacity .2s var(--ease-out)" }}>
           {!signup && (
             <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
-              <div className="auth-rise" style={{ animationDelay: "40ms" }}>
+              <div className="auth-rise">
                 <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 4px" }}>Welcome back</h1>
-                <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "0 0 22px" }}>Pick up where you left off.</p>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "0 0 22px" }}>Pick up where you left off.</p>
               </div>
 
               {(error || message || refCode) && (
-                <div className="auth-rise" style={{ animationDelay: "60ms", marginBottom: 12 }}>
+                <div className="auth-rise" style={{ marginBottom: 12 }}>
                   {error && (
                     <div role="alert" style={{ background: "var(--error-subtle)", color: "var(--error-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>{friendlyAuthError(error)}</div>
                   )}
@@ -337,33 +341,33 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
               <form action={signIn}>
                 <input type="hidden" name="next" value={next} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div className="auth-rise" style={{ animationDelay: "90ms" }}>
+                  <div className="auth-rise">
                     <EmailField id="login-email" autoFocus defaultValue={initialEmail} />
                   </div>
-                  <div className="auth-rise" style={{ animationDelay: "160ms" }}>
+                  <div className="auth-rise">
                     <PasswordField id="login-password" autoComplete="current-password" />
                   </div>
                 </div>
-                <div className="auth-rise" style={{ textAlign: "right", marginTop: 10, animationDelay: "260ms" }}>
+                <div className="auth-rise" style={{ textAlign: "right", marginTop: 10 }}>
                   <a href="/auth/reset" style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-link)" }}>Forgot password?</a>
                 </div>
-                <div className="auth-rise" style={{ marginTop: 18, animationDelay: "300ms" }}>
+                <div className="auth-rise" style={{ marginTop: 18 }}>
                   <SubmitButton>Log in</SubmitButton>
                 </div>
               </form>
 
-              <div className="auth-rise" style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0", animationDelay: "360ms" }}>
+              <div className="auth-rise" style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0" }}>
                 <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
-                <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>or</span>
+                <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>or</span>
                 <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
               </div>
-              <div className="auth-rise" style={{ animationDelay: "410ms" }}>
+              <div className="auth-rise">
                 <button type="button" onClick={googleSignIn} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, width: "100%", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer", boxShadow: "0 3px 0 0 var(--neutral-edge)" }}>
                   <GoogleG /> Continue with Google
                 </button>
               </div>
 
-              <div className="auth-toggle" style={{ textAlign: "center", marginTop: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>
+              <div className="auth-toggle" style={{ textAlign: "center", marginTop: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" }}>
                 New to bando?{" "}
                 <button type="button" onClick={() => setMode("signup")} style={{ border: "none", background: "none", padding: 0, color: "var(--text-link)", fontWeight: 700, fontFamily: "inherit", fontSize: "inherit", cursor: "pointer" }}>Create account</button>
               </div>
