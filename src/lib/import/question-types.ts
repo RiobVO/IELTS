@@ -105,10 +105,15 @@ export function canonQuestionType(label: string): CanonResult {
 // reads it back to refuse publishing until an admin resolves it. Generator and detector
 // share one marker so the warning text and the gate can never drift apart.
 export const UNKNOWN_TYPE_FALLBACK: QuestionType = "short_answer";
-const UNKNOWN_TYPE_MARK = "unknown type";
+// Marker = the fallback suffix, not "unknown type": the raw source label rides inside the
+// warning (via JSON.stringify), so a label that itself contains "unknown type" would trip a
+// bare-substring detector — and a low-confidence warning for such a label (ends "→ <type>",
+// never "fell back to") would falsely block a valid publish. Keying off the suffix the
+// generator alone emits removes that false barrier.
+const UNKNOWN_TYPE_MARK = "→ fell back to";
 
 export function unknownTypeWarning(n: number, rawLabel: string): string {
-  return `Q${n}: ${UNKNOWN_TYPE_MARK} ${JSON.stringify(rawLabel)} → fell back to ${UNKNOWN_TYPE_FALLBACK}`;
+  return `Q${n}: unknown type ${JSON.stringify(rawLabel)} ${UNKNOWN_TYPE_MARK} ${UNKNOWN_TYPE_FALLBACK}`;
 }
 
 export function isUnknownTypeWarning(w: string): boolean {
