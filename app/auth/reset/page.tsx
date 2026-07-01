@@ -65,7 +65,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "32px 20px", background: "var(--bg-base)" }}>
+    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "32px 20px", background: "var(--bg-base)" }}>
       <div style={{ width: 420, maxWidth: "100%", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-xl)", padding: "40px 36px" }}>
         <a href="/" style={{ display: "inline-flex", marginBottom: 26, textDecoration: "none" }} aria-label="bando home">
           <Logo size={28} />
@@ -99,6 +99,6 @@ export default function ResetPasswordPage() {
           <a href="/auth" style={backLinkStyle}>Back to log in</a>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

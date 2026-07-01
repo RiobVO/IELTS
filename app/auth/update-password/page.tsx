@@ -29,6 +29,19 @@ const backLinkStyle: CSSProperties = {
   color: "var(--text-link)",
 };
 
+const ERR_TOO_SHORT = "At least 6 characters.";
+const ERR_MISMATCH = "Passwords don't match.";
+
+/** Inline-ошибка под конкретным полем (role=alert, связана aria-describedby) —
+ *  точнее общего алерта: пользователь видит, ЧТО именно поле не так. */
+const fieldErrorStyle: CSSProperties = {
+  margin: "5px 0 0",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-xs)",
+  fontWeight: 600,
+  color: "var(--error-text)",
+};
+
 /**
  * Шаг 2 сброса пароля: пользователь приходит сюда из recovery-ссылки уже с
  * сессией (callback обменял код). updateUser({ password }) меняет пароль, после
@@ -39,21 +52,23 @@ export default function UpdatePasswordPage() {
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "saving" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<{ password?: string; confirm?: string }>({});
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (status === "saving") return;
     const fd = new FormData(e.currentTarget);
-    const password = String(fd.get("password") ?? "");
+    const pw = String(fd.get("password") ?? "");
     const confirm = String(fd.get("confirm") ?? "");
 
-    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
-    if (password !== confirm) { setError("Passwords don't match."); return; }
+    setFieldError({});
+    if (pw.length < 6) { setFieldError({ password: ERR_TOO_SHORT }); return; }
+    if (pw !== confirm) { setFieldError({ confirm: ERR_MISMATCH }); return; }
 
     setStatus("saving");
     setError(null);
     const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await supabase.auth.updateUser({ password: pw });
     if (error) {
       setError(error.message);
       setStatus("idle");
@@ -65,7 +80,7 @@ export default function UpdatePasswordPage() {
   }
 
   return (
-    <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "32px 20px", background: "var(--bg-base)" }}>
+    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "32px 20px", background: "var(--bg-base)" }}>
       <div style={{ width: 420, maxWidth: "100%", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-xl)", padding: "40px 36px" }}>
         <a href="/" style={{ display: "inline-flex", marginBottom: 26, textDecoration: "none" }} aria-label="bando home">
           <Logo size={28} />
@@ -82,11 +97,13 @@ export default function UpdatePasswordPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div>
               <label htmlFor="new-password" style={labelStyle}>New password</label>
-              <Input id="new-password" icon="lock" name="password" type="password" placeholder="At least 6 characters" required minLength={6} autoComplete="new-password" autoFocus />
+              <Input id="new-password" icon="lock" name="password" type="password" placeholder="At least 6 characters" required minLength={6} autoComplete="new-password" autoFocus invalid={!!fieldError.password} aria-describedby={fieldError.password ? "new-password-error" : undefined} onChange={() => fieldError.password && setFieldError((f) => ({ ...f, password: undefined }))} />
+              {fieldError.password && <p id="new-password-error" role="alert" style={fieldErrorStyle}>{fieldError.password}</p>}
             </div>
             <div>
               <label htmlFor="confirm-password" style={labelStyle}>Confirm new password</label>
-              <Input id="confirm-password" icon="lock" name="confirm" type="password" placeholder="Re-enter password" required minLength={6} autoComplete="new-password" />
+              <Input id="confirm-password" icon="lock" name="confirm" type="password" placeholder="Re-enter password" required minLength={6} autoComplete="new-password" invalid={!!fieldError.confirm} aria-describedby={fieldError.confirm ? "confirm-password-error" : undefined} onChange={() => fieldError.confirm && setFieldError((f) => ({ ...f, confirm: undefined }))} />
+              {fieldError.confirm && <p id="confirm-password-error" role="alert" style={fieldErrorStyle}>{fieldError.confirm}</p>}
             </div>
           </div>
           <div style={{ marginTop: 18 }}>
@@ -98,6 +115,6 @@ export default function UpdatePasswordPage() {
           <a href="/auth" style={backLinkStyle}>Back to log in</a>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

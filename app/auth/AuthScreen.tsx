@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { Button } from "@/components/core/Button";
 import { Input } from "@/components/core/Input";
 import { Icon } from "@/components/core/icons";
+import { useInteractive, RING } from "@/components/core/util";
 import { createClient } from "@/lib/supabase/client";
 import { signIn, signUp } from "./actions";
 
@@ -81,6 +82,24 @@ function GoogleG() {
       <path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.3C29.2 35 26.7 36 24 36c-5.3 0-9.7-3.1-11.3-7.6l-6.5 5C9.6 39.6 16.2 44 24 44z" />
       <path fill="#1976D2" d="M43.6 20.5H24v8h11.3c-.8 2.2-2.2 4-4 5.3l6.3 5.3C41.5 36.8 44 31 44 24c0-1.3-.1-2.3-.4-3.5z" />
     </svg>
+  );
+}
+
+/** OAuth-кнопка. Свой focus-ring через useInteractive: инлайн boxShadow (3D-грань)
+ *  по специфичности бьёт глобальный :focus-visible, поэтому кольцо надо
+ *  дорисовывать в тот же boxShadow — иначе клавиатурный фокус тут невидим. */
+function GoogleButton({ onClick }: { onClick: () => void }) {
+  const { focus, handlers } = useInteractive();
+  const edge = "0 3px 0 0 var(--neutral-edge)";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      {...handlers}
+      style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, width: "100%", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer", boxShadow: focus ? `${edge}, ${RING}` : edge }}
+    >
+      <GoogleG /> Continue with Google
+    </button>
   );
 }
 
@@ -220,7 +239,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
   const signup = mode === "signup";
 
   return (
-    <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "32px 20px", background: "var(--bg-base)" }}>
+    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "32px 20px", background: "var(--bg-base)" }}>
       <style>{`
         @keyframes auth-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
         .auth-rise{animation:auth-rise .5s var(--ease-out) both}
@@ -302,9 +321,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
                 <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
               </div>
               <div className="auth-rise">
-                <button type="button" onClick={googleSignIn} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, width: "100%", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer", boxShadow: "0 3px 0 0 var(--neutral-edge)" }}>
-                  <GoogleG /> Continue with Google
-                </button>
+                <GoogleButton onClick={googleSignIn} />
               </div>
 
               <div className="auth-toggle" style={{ textAlign: "center", marginTop: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" }}>
@@ -362,9 +379,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
                 <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
               </div>
               <div className="auth-rise">
-                <button type="button" onClick={googleSignIn} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, width: "100%", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer", boxShadow: "0 3px 0 0 var(--neutral-edge)" }}>
-                  <GoogleG /> Continue with Google
-                </button>
+                <GoogleButton onClick={googleSignIn} />
               </div>
 
               <div className="auth-toggle" style={{ textAlign: "center", marginTop: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" }}>
@@ -403,6 +418,6 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
