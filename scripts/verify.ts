@@ -452,6 +452,32 @@ async function main() {
         `openAllowed=${qLock.openAllowed})`,
     );
 
+  // 4h. Full-lock coverage gaps (N13, AUDIT_2026-07-02): signup_throttle (IP-хэши,
+  // 0022) и leaderboard_snapshot (0014, только service_role) не ассертились — на
+  // проде Supabase раздаёт широкие default-grants новым таблицам, и регресс RLS-off
+  // локальный гейт иначе не поймает.
+  for (const t of ["signup_throttle", "leaderboard_snapshot"] as const) {
+    const l = await tableLock(t);
+    if (l.rlsEnabled && l.noClientPolicy && l.anonDenied)
+      ok(`RLS — anon SELECT on ${t} denied`);
+    else
+      fail(
+        `RLS — ${t} not fully locked (rlsEnabled=${l.rlsEnabled}, ` +
+          `noClientPolicy=${l.noClientPolicy}, anonDenied=${l.anonDenied})`,
+      );
+  }
+
+  // 4i. Owner-read таблицы Writing/Speaking (N13): у них клиентская политика ЕСТЬ
+  // по дизайну (select_own TO authenticated), поэтому ассертим только RLS-on +
+  // anon-deny — против регресса «RLS выключили» или «anon снова granted» (0024/0028).
+  for (const t of ["writing_submission", "writing_feedback", "speaking_submission", "speaking_feedback"] as const) {
+    const l = await tableLock(t);
+    if (l.rlsEnabled && l.anonDenied)
+      ok(`RLS — anon SELECT on ${t} denied (owner-read policy intact)`);
+    else
+      fail(`RLS — ${t} not anon-locked (rlsEnabled=${l.rlsEnabled}, anonDenied=${l.anonDenied})`);
+  }
+
   // 5. auth trigger: a new auth.users row auto-creates a profile
   if (await profileAutoCreated())
     ok("auth trigger — profile auto-created on signup");
