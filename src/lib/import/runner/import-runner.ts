@@ -31,12 +31,23 @@ export async function importRunner(
   const contentItemId = randomUUID();
 
   // 1. Аудио (listening): SSRF-guarded fetch внешнего mp3 → наш Storage → src.
+  // Деградация вместо фейла (handoff 2026-07-02): сбой фетча/аплоада НЕ роняет
+  // импорт — тест сохраняется draft'ом БЕЗ аудио, warning оседает в import_warnings
+  // (review-экран), а mp3 привязывается отдельным файлом (handleAudioUpload).
+  // Атомарность #12 не тронута: persist по-прежнему один, после anti-leak.
   let audioUrl: string | undefined;
   if (parsed.section === "listening" && externalAudioSrc) {
-    const bytes = await fetchExternalAudio(externalAudioSrc);
-    audioUrl = await uploadAudio(`${contentItemId}.mp3`, bytes, "audio/mpeg");
-    const p1 = parsed.passages.find((p) => p.order === 1) ?? parsed.passages[0];
-    if (p1) p1.audioPath = audioUrl; // persisted below, not in a separate post-write
+    try {
+      const bytes = await fetchExternalAudio(externalAudioSrc);
+      audioUrl = await uploadAudio(`${contentItemId}.mp3`, bytes, "audio/mpeg");
+      const p1 = parsed.passages.find((p) => p.order === 1) ?? parsed.passages[0];
+      if (p1) p1.audioPath = audioUrl; // persisted below, not in a separate post-write
+    } catch (e) {
+      const reason = String((e as Error)?.message ?? e).slice(0, 160);
+      parsed.warnings.push(
+        `external audio fetch failed (${reason}) — imported without audio; send the mp3 as a separate file`,
+      );
+    }
   }
 
   // 2. Очистить файл и проверить анти-утечку (до persist — валидируем перед записью).
