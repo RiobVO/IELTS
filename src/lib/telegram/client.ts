@@ -3,7 +3,7 @@
  * (package.json не трогаем). SERVER-ONLY: токен берётся из telegramConfig()
  * (src/env), браузеру не отдаётся. Используется только webhook-роутом импорта.
  */
-import { telegramConfig } from "@/env";
+import { telegramConfig, publicSiteUrl } from "@/env";
 
 const API = "https://api.telegram.org";
 
@@ -51,15 +51,21 @@ export async function sendUploadResult(
   text: string,
   contentItemId: string,
 ): Promise<void> {
+  // Публикацию review-гейт не пустит без Approve в /admin — даём прямую ссылку
+  // с якорем на тест, чтобы весь цикл (upload → review → publish) закрывался
+  // с телефона, без ручной навигации по админке.
+  const origin = publicSiteUrl();
+  const keyboard: Array<Array<Record<string, string>>> = [
+    [{ text: "📢 Опубликовать", callback_data: `publish:${contentItemId}` }],
+  ];
+  if (origin) {
+    keyboard.push([{ text: "🔍 Review в админке", url: `${origin}/admin#${contentItemId}` }]);
+  }
   try {
     await callApi("sendMessage", {
       chat_id: chatId,
       text,
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "📢 Опубликовать", callback_data: `publish:${contentItemId}` }],
-        ],
-      },
+      reply_markup: { inline_keyboard: keyboard },
     });
   } catch (e) {
     console.error("telegram sendUploadResult failed", e);
