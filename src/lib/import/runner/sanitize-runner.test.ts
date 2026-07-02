@@ -34,6 +34,46 @@ describe("sanitizeRunner — reading", () => {
   });
 });
 
+// N1 (AUDIT_2026-07-02): mcq-буквы короче 3 символов проскакивали бэкстоп, а
+// mcqGroups (несёт correct-набор) вообще не вырезался; ключ под нераспознанным
+// именем объекта оставался в published runner_html молча.
+describe("assertNoKeyLeak — N1 hardening", () => {
+  const mcqHtml = `<!doctype html><html><head><title>R</title></head><body><div></div>
+<script>
+var correctAnswers = {"1":"TRUE"};
+var questionTypes = {"1":"True/False/Not Given","4":"MCQ","5":"MCQ"};
+var mcqGroups = {"4-5": {"qs":[4,5],"correct":["A","C"]}};
+</script></body></html>`;
+  const r = parseRunner(mcqHtml);
+
+  it("сырой mcq-файл ловится гейтом (короткие буквы не пропускаются)", () => {
+    expect(() => assertNoKeyLeak(mcqHtml, r.parsed)).toThrow(/key/i);
+  });
+
+  it("sanitize вырезает mcqGroups, после чего гейт чист", () => {
+    const out = sanitizeRunner(mcqHtml, { contentItemId: "cid-3", section: "reading" });
+    expect(out).toMatch(/var mcqGroups\s*=\s*\{\}/);
+    expect(() => assertNoKeyLeak(out, r.parsed)).not.toThrow();
+  });
+
+  it("числовой key-map под нераспознанным именем роняет гейт", () => {
+    const renamed = `<!doctype html><html><head><title>R</title></head><body>
+<script>var ANSWERS = {"1":"mining","2":"C","3":"1985","4":"B"};</script></body></html>`;
+    const rr = parseRunner(renamed); // парсер его не видит — 0 вопросов
+    const out = sanitizeRunner(renamed, { contentItemId: "cid-4", section: "reading" });
+    expect(() => assertNoKeyLeak(out, rr.parsed)).toThrow(/key/i);
+  });
+
+  it("время в строках не даёт ложного срабатывания детектора", () => {
+    const benign = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"1":"TRUE"};
+var ui = { labels: ["12:30","13:45","14:00","15:15"] };</script></body></html>`;
+    const rb = parseRunner(benign);
+    const out = sanitizeRunner(benign, { contentItemId: "cid-5", section: "reading" });
+    expect(() => assertNoKeyLeak(out, rb.parsed)).not.toThrow();
+  });
+});
+
 describe("sanitizeRunner — listening", () => {
   const r = parseRunner(listening);
   const out = sanitizeRunner(listening, {
