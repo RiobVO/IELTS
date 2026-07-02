@@ -200,6 +200,17 @@ export async function completedCounts(userId: string, now: Date): Promise<{ life
   return { lifetime: life?.n ?? 0, today: tod?.n ?? 0 };
 }
 
+// Rate-throttle count (N3, зеркало Writing #21): ВСЕ статусы, включая failed —
+// провал не тратит preview/cap, и именно его гоняет retry-цикл. Использует
+// speaking_submission_user_created_idx (user_id, created_at).
+export async function countRecentSubmissions(userId: string, since: Date): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(speakingSubmission)
+    .where(and(eq(speakingSubmission.userId, userId), gte(speakingSubmission.createdAt, since)));
+  return row?.n ?? 0;
+}
+
 export async function readOwnSubmission(userId: string, submissionId: string): Promise<
   { status: "uploading" | "pending" | "evaluating" | "completed" | "failed"; updatedAt: Date } | null
 > {

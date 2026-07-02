@@ -5,12 +5,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // stay real (pure). featureEnabled is a controllable vi.fn so we can prove the
 // create→evaluate desync is closed (no upload/insert when the trigger can't fire).
 const {
-  getUser, getProfile, counts, insertUploading, trigger, signedUpload, logEvent, dbSelect, loadTask,
+  getUser, getProfile, counts, recentCount, insertUploading, trigger, signedUpload, logEvent, dbSelect, loadTask,
   readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk,
 } = vi.hoisted(() => ({
     getUser: vi.fn(),
     getProfile: vi.fn(),
     counts: vi.fn(),
+    recentCount: vi.fn(),
     insertUploading: vi.fn(),
     trigger: vi.fn(),
     signedUpload: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("@/lib/speaking/store", () => ({
   insertUploadingSubmission: insertUploading,
   triggerEvaluate: trigger,
   completedCounts: counts,
+  countRecentSubmissions: recentCount,
   loadSpeakingTaskForSubmissionGate: loadTask,
   markUploaded: vi.fn(),
   readOwnSubmission: readOwn,
@@ -50,17 +52,19 @@ vi.mock("@/db", () => ({
 vi.mock("@/env", () => ({ speakingFeatureEnabled: featureEnabled }));
 
 import { createSpeakingSubmission, deleteSpeakingRecording } from "./actions";
+import { SPEAKING_RATE_MAX } from "@/lib/speaking/lifecycle";
 
 const selectChain = (rows: unknown[]) => ({ from: () => ({ where: () => Promise.resolve(rows) }) });
 const TASK = "11111111-1111-1111-1111-111111111111"; // a well-formed task id
 
 beforeEach(() => {
-  [getUser, getProfile, counts, insertUploading, trigger, signedUpload, logEvent, dbSelect, featureEnabled, loadTask,
+  [getUser, getProfile, counts, recentCount, insertUploading, trigger, signedUpload, logEvent, dbSelect, featureEnabled, loadTask,
     readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk].forEach(
     (m) => m.mockReset(),
   );
   featureEnabled.mockReturnValue(true); // default fully configured; #5 case overrides
   failStaleSpk.mockResolvedValue(0); // default: nothing stale to reap
+  recentCount.mockResolvedValue(0); // default: under the rate cap; N3 case overrides
   loadTask.mockResolvedValue({ status: "published", tierRequired: "basic" }); // default: open task; #3 cases override
 });
 
@@ -138,6 +142,18 @@ describe("createSpeakingSubmission", () => {
     expect(await createSpeakingSubmission("not-a-uuid", "webm")).toEqual({ error: "unavailable" });
     expect(loadTask).not.toHaveBeenCalled();
     expect(insertUploading).not.toHaveBeenCalled();
+  });
+
+  // N3 (зеркало Writing #21): провал оценки не тратит preview/cap, поэтому цикл
+  // create→upload→fail крутил бы платные Gemini-AUDIO вызовы без ограничения.
+  it("throttles a submission burst over the rate cap without insert (N3)", async () => {
+    getUser.mockResolvedValue({ id: "u1" });
+    getProfile.mockResolvedValue({ recording_consent_at: new Date(), tier: "ultra", premium_until: null });
+    counts.mockResolvedValue({ lifetime: 0, today: 0 });
+    recentCount.mockResolvedValue(SPEAKING_RATE_MAX); // window already at the cap
+    expect(await createSpeakingSubmission(TASK, "webm")).toEqual({ error: "too_fast" });
+    expect(insertUploading).not.toHaveBeenCalled();
+    expect(signedUpload).not.toHaveBeenCalled();
   });
 
   it("reaps the user's own stale row BEFORE insert (#5)", async () => {

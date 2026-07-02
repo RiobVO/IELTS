@@ -9,6 +9,16 @@ export const MIN_TRANSCRIPT_WORDS = 40;
 export const SPEAKING_DAILY_CAP_ULTRA = 10;
 export const SPEAKING_STALE_MS_DEFAULT = 2 * 60 * 1000;
 
+// Cost-amp throttle (N3, зеркало Writing #21): провал оценки не тратит preview/cap,
+// поэтому цикл create→upload→fail крутил бы платные Gemini-AUDIO вызовы без предела.
+// Порог жёстче Writing (5): запись Part 2 занимает минуты, а аудио-вызов дороже
+// текстового. Чистый порог; COUNT в store (индекс speaking_submission_user_created_idx).
+export const SPEAKING_RATE_WINDOW_SECONDS = 60;
+export const SPEAKING_RATE_MAX = 3; // submissions per window per user; >= threshold → reject
+export function exceedsSpeakingRate(recentInWindow: number): boolean {
+  return recentInWindow >= SPEAKING_RATE_MAX;
+}
+
 export interface EvalGateInput {
   configured: boolean;
   tier: Tier;
