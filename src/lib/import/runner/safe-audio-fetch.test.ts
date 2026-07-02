@@ -54,9 +54,13 @@ describe("fetchExternalAudio", () => {
     requestMock.mockReset();
   });
 
-  /** Фейковый node:http(s).request: req-эмиттер + res-эмиттер с заданным ответом. */
-  const arm = (init: { status?: number; ct?: string; len?: string; bytes?: number[] }) => {
+  type ResInit = { status?: number; ct?: string; len?: string; bytes?: number[]; location?: string };
+
+  /** Фейковый node:http(s).request: последовательность ответов (redirect-цепочки). */
+  const armSeq = (inits: ResInit[]) => {
+    let call = 0;
     requestMock.mockImplementation((_url: unknown, _opts: unknown, cb: (r: unknown) => void) => {
+      const init = inits[Math.min(call++, inits.length - 1)]!;
       const req = Object.assign(new EventEmitter(), {
         end: () => {
           queueMicrotask(() => {
@@ -65,6 +69,7 @@ describe("fetchExternalAudio", () => {
               headers: {
                 ...(init.ct ? { "content-type": init.ct } : {}),
                 ...(init.len ? { "content-length": init.len } : {}),
+                ...(init.location ? { location: init.location } : {}),
               },
               resume: () => {},
             });
@@ -82,6 +87,7 @@ describe("fetchExternalAudio", () => {
       return req;
     });
   };
+  const arm = (init: ResInit) => armSeq([init]);
 
   it("rejects a non-http(s) scheme before any network call", async () => {
     await expect(fetchExternalAudio("file:///etc/passwd")).rejects.toThrow(/http\(s\)/);
@@ -106,13 +112,46 @@ describe("fetchExternalAudio", () => {
     await expect(fetchExternalAudio("http://cdn.example/x.mp3")).rejects.toThrow(/not audio/);
   });
 
-  it("rejects an oversized declared content-length", async () => {
+  it("rejects an oversized declared content-length (cap 50MiB)", async () => {
     lookupFn.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
-    arm({ ct: "audio/mpeg", len: String(40 * 1024 * 1024) });
+    arm({ ct: "audio/mpeg", len: String(60 * 1024 * 1024) });
     await expect(fetchExternalAudio("http://cdn.example/x.mp3")).rejects.toThrow(/exceeds/);
   });
 
-  it("отклоняет редирект (public→internal bounce не следуем)", async () => {
+  // Handoff 2026-07-02: archive.org/download всегда 302 → ia*.archive.org; глухой
+  // отказ от редиректов ронял каждый listening-импорт. Следуем ≤3 хопов, но КАЖДЫЙ
+  // хоп проходит полную SSRF-валидацию (резолв → isPublicIp → pinned connect).
+  it("следует 302 на публичный хост: оба хопа валидируются, байты приходят", async () => {
+    lookupFn.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+    armSeq([
+      { status: 302, location: "https://ia1.example/f.mp3" },
+      { ct: "audio/mpeg", bytes: [7, 7] },
+    ]);
+    const buf = await fetchExternalAudio("http://cdn.example/x.mp3");
+    expect(new Uint8Array(buf)).toEqual(new Uint8Array([7, 7]));
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    expect(lookupFn).toHaveBeenCalledWith("cdn.example", { all: true });
+    expect(lookupFn).toHaveBeenCalledWith("ia1.example", { all: true });
+  });
+
+  it("режет 302 на хост с приватным резолвом (rebound-редирект)", async () => {
+    lookupFn.mockImplementation(async (host: string) =>
+      host === "cdn.example"
+        ? [{ address: "93.184.216.34", family: 4 }]
+        : [{ address: "169.254.169.254", family: 4 }],
+    );
+    armSeq([{ status: 302, location: "http://evil.example/meta" }]);
+    await expect(fetchExternalAudio("http://cdn.example/x.mp3")).rejects.toThrow(/SSRF blocked/);
+    expect(requestMock).toHaveBeenCalledTimes(1); // до второго connect не дошло
+  });
+
+  it("обрывает цепочку из >3 редиректов", async () => {
+    lookupFn.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+    armSeq([{ status: 302, location: "http://cdn.example/loop.mp3" }]);
+    await expect(fetchExternalAudio("http://cdn.example/x.mp3")).rejects.toThrow(/redirect/i);
+  });
+
+  it("3xx без Location — ошибка, не зависание", async () => {
     lookupFn.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
     arm({ status: 302 });
     await expect(fetchExternalAudio("http://cdn.example/x.mp3")).rejects.toThrow(/redirect/i);
