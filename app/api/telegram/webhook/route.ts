@@ -194,9 +194,12 @@ async function handleHtmlUpload(
       );
     } else {
       console.error("telegram html import failed", e);
+      // Причина в ответе (handoff 2026-07-02): generic-ответ прятал реальную ошибку
+      // в Vercel-логах — QA-цикл вслепую. Чат admin-only, message не несёт секретов.
+      const reason = String((e as Error)?.message ?? e).slice(0, 200);
       await sendMessage(
         chatId,
-        "Не удалось обработать файл (парсинг или сохранение). Проверь, что это корректный HTML-тест.",
+        `Не удалось обработать «${name}» (парсинг или сохранение).\nПричина: ${reason}`,
       );
     }
   }
