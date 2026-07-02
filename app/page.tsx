@@ -761,14 +761,31 @@ export default function Home() {
       <section className="pad" style={{ paddingTop: 0 }}>
         <div className="wrap">
           <div className="ptease rv">
-            <div className="pt-copy">
+            <div className="pt-head">
               <span className="ek">Pricing</span>
               <h2>Free to find your weak spot. Pay only to go further.</h2>
-              <p>Practice tests and your per-type breakdown cost nothing, no card. Upgrade when you want projected full-mock bands and AI Writing &amp; Speaking feedback.</p>
             </div>
-            <div className="pt-cta">
-              {/* в pricing-секции главное действие — смотреть тарифы; free-test CTA есть в hero и close */}
-              <a href="/pricing" className="btn btn-v btn-lg">See pricing</a>
+            <div className="pt-tiers">
+              <div className="tier free">
+                <div className="tier-h"><b>Free</b><span className="tier-p">0 UZS · forever</span></div>
+                <ul>
+                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Unlimited Reading &amp; Listening practice</li>
+                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Per-type breakdown — what you miss</li>
+                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Answer explanations &amp; evidence</li>
+                </ul>
+                <span className="tier-note">Yours the moment you sign up. No card.</span>
+              </div>
+              <div className="tier prem">
+                <div className="tier-h"><b>Premium</b><span className="tier-p">from 40,833 UZS/mo</span></div>
+                <ul>
+                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Full 40-question mocks + your real band</li>
+                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Real exam timing, end to end</li>
+                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>AI Writing feedback — Task 1 &amp; 2</li>
+                </ul>
+                <div className="tier-cta">
+                  <a href="/pricing" className="btn btn-v">See pricing <svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+                </div>
+              </div>
             </div>
             {/* честные цифры вместо вырезанных отзывов; обновлять при росте контента */}
             <div className="proofline">
@@ -836,7 +853,7 @@ export default function Home() {
       </footer>
 
       <a href="/auth" className="mcta" id="mcta">
-        Take a free test
+        Free test
         <svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </a>
     </>
