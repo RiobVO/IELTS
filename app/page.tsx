@@ -4,22 +4,32 @@ import { useEffect } from "react";
 import "./landing.css";
 
 // Exam-sheet: 14 сегментов типов, в сумме ровно 40 вопросов полного мока.
-// [кол-во, slug для intent=drill, имя, цвет ячейки]
+// Цвет — не 14 случайных оттенков, а 4 осмысленные группы (лист читается как
+// документ): weakest (красный, тянет нить hero) · Reading (v) · Listening (green)
+// · Both (amber). [кол-во, slug для intent=drill, имя, цвет ячейки]
+const C_WEAK = "#F0506A", C_READ = "#8170EA", C_LISTEN = "#1FBE86", C_BOTH = "#F2A93B";
 const SHEET_SEGS: [number, string, string, string][] = [
-  [3, "matching-headings", "Matching Headings", "#F0506A"],
-  [4, "tfng", "True / False / Not Given", "#F2A93B"],
-  [3, "ynng", "Yes / No / Not Given", "#1FBE86"],
-  [3, "multiple-choice", "Multiple Choice", "#8170EA"],
-  [3, "matching-information", "Matching Information", "#6A52DE"],
-  [2, "matching-features", "Matching Features", "#D63554"],
-  [2, "matching-sentence-endings", "Matching Sentence Endings", "#B27512"],
-  [3, "sentence-completion", "Sentence Completion", "#138A5E"],
-  [3, "summary-note-completion", "Summary / Note Completion", "#F0506A"],
-  [3, "table-flowchart-completion", "Table / Flow-chart Completion", "#F2A93B"],
-  [3, "diagram-label-completion", "Diagram Label Completion", "#1FBE86"],
-  [3, "map-labelling", "Plan / Map / Diagram Labelling", "#8170EA"],
-  [3, "form-note-completion", "Form / Note Completion", "#6A52DE"],
-  [2, "short-answer", "Short Answer", "#D63554"],
+  [3, "matching-headings", "Matching Headings", C_WEAK],
+  [4, "tfng", "True / False / Not Given", C_READ],
+  [3, "ynng", "Yes / No / Not Given", C_READ],
+  [3, "multiple-choice", "Multiple Choice", C_READ],
+  [3, "matching-information", "Matching Information", C_READ],
+  [2, "matching-features", "Matching Features", C_READ],
+  [2, "matching-sentence-endings", "Matching Sentence Endings", C_READ],
+  [3, "sentence-completion", "Sentence Completion", C_BOTH],
+  [3, "summary-note-completion", "Summary / Note Completion", C_BOTH],
+  [3, "table-flowchart-completion", "Table / Flow-chart Completion", C_BOTH],
+  [3, "diagram-label-completion", "Diagram Label Completion", C_READ],
+  [3, "map-labelling", "Plan / Map / Diagram Labelling", C_LISTEN],
+  [3, "form-note-completion", "Form / Note Completion", C_LISTEN],
+  [2, "short-answer", "Short Answer", C_BOTH],
+];
+// легенда — 4 группы, а не 7 имён типов
+const SHEET_LEGEND: [string, string, string][] = [
+  [C_WEAK, "Your weakest, flagged", "#types"],
+  [C_READ, "Reading", "/app/reading"],
+  [C_LISTEN, "Listening", "/app/listening"],
+  [C_BOTH, "Both skills", "#types"],
 ];
 
 export default function Home() {
@@ -619,10 +629,9 @@ export default function Home() {
                 })); })()}
             </div>
             <div className="sheet-legend">
-              {SHEET_SEGS.slice(0, 7).map(([, slug, name, color]) => (
-                <a key={slug} className="lg" href={`/auth?intent=drill&type=${slug}`}><i style={{ background: color }}></i>{name}</a>
+              {SHEET_LEGEND.map(([color, label, href]) => (
+                <a key={label} className="lg" href={href}><i style={{ background: color }}></i>{label}</a>
               ))}
-              <a className="lg" href="#types"><i style={{ background: "#E3E1EE" }}></i>+7 more</a>
             </div>
             <div className="stamp in" id="sheetStamp" aria-hidden="true">Free<small>first mock · no card</small></div>
           </div>
@@ -671,52 +680,11 @@ export default function Home() {
       <section className="pad" style={{ paddingTop: 0 }}>
         <div className="wrap">
           <div className="sec-h cn rv" style={{ marginBottom: "34px" }}>
-            <span className="ek">Every question type</span>
-            <h2>If it&apos;s on the test, it&apos;s in <em>bando</em>.</h2>
+            <span className="ek">The questions in your head</span>
+            <h2>Each one points to a type. <em>We find it.</em></h2>
           </div>
         </div>
         <div className="tmarq rv">
-          <div className="tmarq-row">
-            <div className="tmarq-track" style={{ "--d": "58s" } as React.CSSProperties}>
-              <span className="qpill"><span className="qd" style={{ background: "var(--red)" }}></span>Matching Headings</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>True / False / Not Given</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--v)" }}></span>Multiple Choice</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--green)" }}></span>Sentence Completion</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--v)" }}></span>Matching Information</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>Short Answer</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--red)" }}></span>Yes / No / Not Given</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--green)" }}></span>Map / Diagram Labelling</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--v)" }}></span>Matching Features</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>Table Completion</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--red)" }}></span>Flow-chart Completion</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--green)" }}></span>Note Completion</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--v)" }}></span>Summary Completion</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>Diagram Labels</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--red)" }}></span>Matching Sentence Endings</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--green)" }}></span>Classification</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--v)" }}></span>Pick from a list</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>Multiple Choice (multi)</span>
-              {/* duplicate set for seamless loop */}
-              <span className="qpill"><span className="qd" style={{ background: "var(--red)" }}></span>Matching Headings</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>True / False / Not Given</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--v)" }}></span>Multiple Choice</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--green)" }}></span>Sentence Completion</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--v)" }}></span>Matching Information</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>Short Answer</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--red)" }}></span>Yes / No / Not Given</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--green)" }}></span>Map / Diagram Labelling</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--v)" }}></span>Matching Features</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>Table Completion</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--red)" }}></span>Flow-chart Completion</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--green)" }}></span>Note Completion</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--v)" }}></span>Summary Completion</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>Diagram Labels</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--red)" }}></span>Matching Sentence Endings</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--green)" }}></span>Classification</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--v)" }}></span>Pick from a list</span>
-              <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>Multiple Choice (multi)</span>
-            </div>
-          </div>
           <div className="tmarq-row">
             <div className="tmarq-track rev" style={{ "--d": "64s" } as React.CSSProperties}>
               <span className="qpill ask">Why am I stuck at 6.5?</span>
