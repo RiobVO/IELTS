@@ -760,59 +760,14 @@ export default function Home() {
 
       <section className="pad" style={{ paddingTop: 0 }}>
         <div className="wrap">
-          <div className="ptease rv">
-            <div className="pt-head">
-              <span className="ek">Pricing</span>
-              <h2>Free to find your weak spot. Pay only to go further.</h2>
-            </div>
-            <div className="pt-tiers">
-              <div className="tier free">
-                <div className="tier-h"><b>Free</b><span className="tier-p">0 UZS · forever</span></div>
-                <ul>
-                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Unlimited Reading &amp; Listening practice</li>
-                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Per-type breakdown — what you miss</li>
-                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Answer explanations &amp; evidence</li>
-                </ul>
-                <span className="tier-note">Yours the moment you sign up. No card.</span>
-              </div>
-              <div className="tier prem">
-                <div className="tier-h"><b>Premium</b><span className="tier-p">from 40,833 UZS/mo</span></div>
-                <ul>
-                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Full 40-question mocks + your real band</li>
-                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Real exam timing, end to end</li>
-                  <li><svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>AI Writing feedback — Task 1 &amp; 2</li>
-                </ul>
-                <div className="tier-cta">
-                  <a href="/pricing" className="btn btn-v">See pricing <svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-                </div>
-              </div>
-            </div>
-            {/* честные цифры вместо вырезанных отзывов; обновлять при росте контента */}
-            <div className="proofline">
-              <span className="pi"><b>6</b> full exam papers</span>
-              <span className="pi"><b>240+</b> real questions</span>
-              <span className="pi"><b>Server-graded</b> — the band we stand behind</span>
-            </div>
-            <div className="payrow">
-              <span className="lab">Local cards:</span>
-              <span className="paychip">Uzcard</span>
-              <span className="paychip">Humo</span>
-              <span className="paychip">Visa</span>
-              <span className="lab">· UZS pricing</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="pad" style={{ paddingTop: 0 }}>
-        <div className="wrap">
           <div className="close">
             <h2>Sit your first mock free.</h2>
             <p>Your per-type breakdown in 20 minutes, and an honest band to train against.</p>
+            {/* честные цифры (бывший proofline) — соцдоказательство в момент решения */}
             <ul className="close-pts">
               <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>No card</li>
-              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Real exam papers</li>
-              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Runs in your browser</li>
+              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>6 real papers · 240+ questions</li>
+              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Server-graded band</li>
             </ul>
             <a href="/auth" className="btn btn-v btn-lg">
               Take a free test
