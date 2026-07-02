@@ -54,6 +54,31 @@ const acceptableVariants = { 1: ['raindrops','raindrop'] };
   });
 });
 
+// Listening Mock (QA 2026-07-02): listening-файл без KEY — ключ в reading-контейнерах
+// (correctAnswers + acceptableVariants). Fallback приводит их к форме KEY.
+describe("parseRunner — listening fallback на reading-контейнеры", () => {
+  const html = `<!doctype html><html><head><title>Listening Mock</title></head><body><audio></audio>
+<script>
+const correctAnswers = { 1: 'light', 2: 'manager', 11: 'B' };
+const acceptableVariants = { 2: ['manager','managers'] };
+const questionTypes = {"1":"Note completion","2":"Note completion","11":"MCQ"};
+</script></body></html>`;
+  const r = parseRunner(html);
+  it("вопросы распознаны, варианты подхвачены", () => {
+    expect(r.parsed.section).toBe("listening");
+    expect(r.parsed.questions).toHaveLength(3);
+    const q1 = r.parsed.questions.find((q) => q.number === 1)!;
+    expect(q1.answer.accept).toEqual(["light"]);
+    const q2 = r.parsed.questions.find((q) => q.number === 2)!;
+    expect(q2.answer.mode).toBe("text_accept");
+    expect(q2.answer.accept).toEqual(["manager", "managers"]);
+  });
+  it("типы берутся из questionTypes, когда QTYPE отсутствует", () => {
+    const q1 = r.parsed.questions.find((q) => q.number === 1)!;
+    expect(q1.qtype).toBe("note_completion");
+  });
+});
+
 // #7: Reading "choose TWO/THREE" — mcqGroups keys the members as one mcq_set so the
 // letter-set is graded correctly. Member 4,5 live ONLY in mcqGroups (not correctAnswers)
 // to prove the union pulls them in. Previously they fell to exact/text_accept (wrong grade).

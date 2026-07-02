@@ -55,6 +55,13 @@ describe("importRunner atomicity (#12)", () => {
     expect(res.warnings).toBe(1);
   });
 
+  // Пустой парс = нераспознанный источник; молчаливый 0-вопросный драфт хуже отказа.
+  it("НЕ вызывает persist при 0 распознанных вопросов", async () => {
+    parseRunner.mockReturnValue({ parsed: { ...listeningParsed(), questions: [] }, externalAudioSrc: null });
+    await expect(importRunner("<html/>", {})).rejects.toThrow(/no questions/i);
+    expect(persist).not.toHaveBeenCalled();
+  });
+
   it("НЕ вызывает persist при провале anti-leak", async () => {
     parseRunner.mockReturnValue({ parsed: { ...listeningParsed(), section: "reading" }, externalAudioSrc: null });
     assertNoLeak.mockImplementation(() => { throw new Error("answer key leaked"); });

@@ -129,14 +129,33 @@ function parseReadingRunner(html: string): RunnerParseResult {
 function parseListeningRunner(html: string): RunnerParseResult {
   const src = scriptText(html);
   const key = extractData<Record<string, string[]>>(src, "KEY") ?? {};
+  // Fallback (Listening Mock, QA 2026-07-02): часть listening-файлов хранит ключ в
+  // READING-контейнерах (correctAnswers + acceptableVariants/acceptableAnswers).
+  // Приводим их к форме KEY {номер: [варианты]}; при наличии KEY fallback не трогаем.
+  if (Object.keys(key).length === 0) {
+    const correct = extractData<Record<string, string>>(src, "correctAnswers") ?? {};
+    const accept: Record<string, string[]> = {
+      ...(extractData<Record<string, string[]>>(src, "acceptableAnswers") ?? {}),
+      ...(extractData<Record<string, string[]>>(src, "acceptableVariants") ?? {}),
+    };
+    for (const [k, v] of Object.entries(correct)) {
+      key[k] = accept[k]?.length ? accept[k]! : [String(v)];
+    }
+    for (const [k, v] of Object.entries(accept)) {
+      if (!key[k]) key[k] = v;
+    }
+  }
   // QTYPE может быть статичным литералом ИЛИ наполняться range-builder'ом в IIFE
   // (тогда литерал на момент объявления пуст). Литерал имеет приоритет; если он
-  // пуст/отсутствует — восстанавливаем типы из вызовов-наполнителей.
+  // пуст/отсутствует — восстанавливаем типы из вызовов-наполнителей, затем из
+  // reading-имени questionTypes (тот же fallback-источник, что и ключ).
   const literalTypes = extractData<Record<string, string>>(src, "QTYPE");
   const types =
     literalTypes && Object.keys(literalTypes).length > 0
       ? literalTypes
-      : extractRangeBuilderTable(src, "QTYPE") ?? {};
+      : extractRangeBuilderTable(src, "QTYPE")
+        ?? extractData<Record<string, string>>(src, "questionTypes")
+        ?? {};
   const bandScale = extractFunctionTable(src, "band", 0, 40);
 
   const numbers = Object.keys(key).map(Number).sort((a, b) => a - b);

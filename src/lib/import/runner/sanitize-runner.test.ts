@@ -78,6 +78,19 @@ const acceptableVariants = { 1: ['raindrops','raindrop'], 5: ['frogs','frog'], 7
     expect(() => assertNoKeyLeak(out, rr.parsed)).not.toThrow();
   });
 
+  // Listening Mock (QA 2026-07-02): listening-файл хранит ключ в READING-контейнере
+  // correctAnswers — пер-секционные списки вырезания пропускали его целиком.
+  // Вырезается объединение всех известных контейнеров независимо от секции.
+  it("вырезает reading-контейнеры и в listening-файле (union)", () => {
+    const html = `<!doctype html><html><head><title>L</title></head><body><audio></audio>
+<script>const correctAnswers = { 1: 'light', 2: 'manager', 3: 'automatic', 4: 'tires' };</script>
+</body></html>`;
+    const rr = parseRunner(html);
+    const out = sanitizeRunner(html, { contentItemId: "cid-9", section: "listening" });
+    expect(out).toMatch(/const correctAnswers\s*=\s*\{\}/);
+    expect(() => assertNoKeyLeak(out, rr.parsed)).not.toThrow();
+  });
+
   // partConfig-кейс (Listening Mock 1): числовые ключи с ОБЪЕКТАМИ-значениями —
   // это UI-конфиг секций, не карта ответов; детектор не должен его ронять.
   it("числовой конфиг с объектами-значениями не даёт ложного срабатывания", () => {
