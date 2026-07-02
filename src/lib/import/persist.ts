@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import {
   answerKey,
@@ -7,6 +7,7 @@ import {
   passage as passageT,
   question as questionT,
 } from "../../db/schema";
+import { testFingerprint } from "./fingerprint";
 import type { ParsedTest } from "./types";
 
 type ContentInsert = typeof contentItem.$inferInsert;
@@ -27,6 +28,65 @@ export class RegradeRequiredError extends Error {
     );
     this.name = "RegradeRequiredError";
   }
+}
+
+/**
+ * Дубль по СОДЕРЖИМОМУ: тот же тест пришёл под другим именем файла — replace по
+ * sourceFilePath его не поймает, легла бы вторая строка (QA 2026-07-02: Vol7 T3).
+ * Переимпорт того же теста обязан идти под тем же именем файла.
+ */
+export class DuplicateTestError extends Error {
+  constructor(
+    public readonly existing: { id: string; title: string; status: string; sourceFilePath: string | null },
+  ) {
+    super(
+      `Duplicate test content: matches "${existing.title}" (${existing.status}` +
+        (existing.sourceFilePath ? `, file ${existing.sourceFilePath}` : "") +
+        `). Re-import the same test under the SAME file name, or check the new file.`,
+    );
+    this.name = "DuplicateTestError";
+  }
+}
+
+/**
+ * Ищет уже сохранённый тест с тем же отпечатком ключа ответов под ДРУГИМ именем
+ * файла. Кандидаты сужены секцией и числом вопросов (их единицы), ключи читаются
+ * owner-путём. Совпадение имени файла — легальный replace, не дубль.
+ */
+export async function findDuplicateTest(
+  parsed: ParsedTest,
+  sourceFilePath?: string,
+): Promise<{ id: string; title: string; status: string; sourceFilePath: string | null } | null> {
+  const target = testFingerprint(
+    parsed.questions.map((q) => ({ number: q.number, accept: q.answer.accept })),
+  );
+  const candidates = await db
+    .select({
+      id: contentItem.id,
+      title: contentItem.title,
+      status: contentItem.status,
+      sourceFilePath: contentItem.sourceFilePath,
+    })
+    .from(contentItem)
+    .where(
+      and(
+        eq(contentItem.section, parsed.section),
+        // Внешняя ссылка текстом (content_item.id): drizzle рендерит колонку в
+        // raw-sql неквалифицированно — внутри подзапроса она била бы в question.
+        sql`(SELECT count(*) FROM question q WHERE q.content_item_id = content_item.id) = ${parsed.questions.length}`,
+      ),
+    );
+  for (const c of candidates) {
+    if (sourceFilePath && c.sourceFilePath === sourceFilePath) continue;
+    const keys = await db
+      .select({ number: questionT.number, accept: answerKey.accept })
+      .from(answerKey)
+      .innerJoin(questionT, eq(questionT.id, answerKey.questionId))
+      .where(eq(questionT.contentItemId, c.id));
+    if (keys.length !== parsed.questions.length) continue;
+    if (testFingerprint(keys) === target) return { ...c, status: String(c.status) };
+  }
+  return null;
 }
 
 /**

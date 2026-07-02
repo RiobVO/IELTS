@@ -4,7 +4,7 @@ import { parseRunner } from "./parse-runner";
 import { fetchExternalAudio } from "./safe-audio-fetch";
 import { sanitizeRunner, assertNoKeyLeak } from "./sanitize-runner";
 import { runnerBrandResidue } from "./skin-runner";
-import { persistTest } from "../persist";
+import { persistTest, findDuplicateTest, DuplicateTestError } from "../persist";
 
 export interface ImportRunnerResult {
   id: string;
@@ -28,6 +28,11 @@ export async function importRunner(
   if (parsed.questions.length === 0) {
     throw new Error("no questions parsed — unrecognized key container(s) in this source; extend the parser");
   }
+
+  // Дубль-гвард по содержимому (QA 2026-07-02): тот же тест под другим именем файла
+  // ложился второй строкой. Проверка ДО аудио-фетча — минуты скачивания не тратятся.
+  const dup = await findDuplicateTest(parsed, opts.sourceFilePath);
+  if (dup) throw new DuplicateTestError(dup);
 
   // Mint the id up front so the fallible work (audio fetch/upload + sanitize + anti-leak)
   // runs BEFORE the DB write. persistTest is then a single all-or-nothing commit — a
