@@ -64,6 +64,44 @@ var mcqGroups = {"4-5": {"qs":[4,5],"correct":["A","C"]}};
     expect(() => assertNoKeyLeak(out, rr.parsed)).toThrow(/key/i);
   });
 
+  // QA-партия 2026-07-02: у источника Vol7/Mock варианты ответов лежат в
+  // acceptableVariants — парсер знал только acceptableAnswers, санитайзер не
+  // вырезал объект, детектор (по делу) ронял импорт. Теперь объект вырезается.
+  it("вырезает acceptableVariants (альтернативное имя контейнера вариантов)", () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>const correctAnswers = {"1":"raindrops"};
+const acceptableVariants = { 1: ['raindrops','raindrop'], 5: ['frogs','frog'], 7: ['x-ray'], 9: ['a b'] };</script>
+</body></html>`;
+    const rr = parseRunner(html);
+    const out = sanitizeRunner(html, { contentItemId: "cid-6", section: "reading" });
+    expect(out).toMatch(/const acceptableVariants\s*=\s*\{\}/);
+    expect(() => assertNoKeyLeak(out, rr.parsed)).not.toThrow();
+  });
+
+  // partConfig-кейс (Listening Mock 1): числовые ключи с ОБЪЕКТАМИ-значениями —
+  // это UI-конфиг секций, не карта ответов; детектор не должен его ронять.
+  it("числовой конфиг с объектами-значениями не даёт ложного срабатывания", () => {
+    const html = `<!doctype html><html><head><title>L</title></head><body><audio src="x.mp3"></audio>
+<script>const KEY = {"1":["cat"],"2":["dog"],"3":["sun"],"4":["sky"]};
+const partConfig = { 1:{title:"Section 1"}, 2:{title:"Section 2"}, 3:{title:"Section 3"}, 4:{title:"Section 4"} };</script>
+</body></html>`;
+    const rr = parseRunner(html);
+    const out = sanitizeRunner(html, { contentItemId: "cid-7", section: "listening" });
+    expect(() => assertNoKeyLeak(out, rr.parsed)).not.toThrow();
+  });
+
+  // Vol5 T10-кейс: UI-строка ' Evidence' (лейбл кнопки) не должна матчиться как
+  // литерал ответа "evidence" — \s*-паддинг в проверке давал ложный key leak.
+  it("UI-строка с паддингом не матчится как литерал ответа", () => {
+    const html = `<!doctype html><html><head><title>L</title></head><body><audio src="x.mp3"></audio>
+<script>const KEY = {"31":["evidence"],"32":["method"],"33":["theory"],"34":["result"]};
+function ui(){ const btn = { html: 'Q31' + ' Evidence' }; return btn; }</script>
+</body></html>`;
+    const rr = parseRunner(html);
+    const out = sanitizeRunner(html, { contentItemId: "cid-8", section: "listening" });
+    expect(() => assertNoKeyLeak(out, rr.parsed)).not.toThrow();
+  });
+
   it("время в строках не даёт ложного срабатывания детектора", () => {
     const benign = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"1":"TRUE"};

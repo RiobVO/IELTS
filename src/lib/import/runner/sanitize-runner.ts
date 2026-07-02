@@ -11,8 +11,9 @@ export interface SanitizeOpts {
 }
 
 // mcqGroups несёт correct-набор букв (#7) — буквы короче 3 символов бэкстоп
-// пропускает, поэтому объект обязан вырезаться целиком (N1).
-const READING_KEYS = ["correctAnswers", "acceptableAnswers", "mcqGroups", "explanations", "evidence", "questionTypes"];
+// пропускает, поэтому объект обязан вырезаться целиком (N1). acceptableVariants —
+// альтернативное имя контейнера вариантов у источника Vol7/Mock (QA 2026-07-02).
+const READING_KEYS = ["correctAnswers", "acceptableAnswers", "acceptableVariants", "mcqGroups", "explanations", "evidence", "questionTypes"];
 // listening evidence.text перефразирует/содержит ответ — вырезаем его тоже (иначе утечка).
 const LISTENING_KEYS = ["KEY", "QTYPE", "evidence"];
 
@@ -109,7 +110,9 @@ const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const MIN_NUMERIC_KEYS = 4; // реальные key-map ≥7 записей; ниже — не карта ответов
 // Ключ-«номер вопроса»: 1-3 цифры или диапазон "8-12", в кавычках или без.
 // Кавычка требует пары ДО двоеточия — иначе время в строках ("12:30") ложно матчится.
-const NUM_KEY_RE = /(?:^|[{,\s])(?:(["'])\d{1,3}(?:-\d{1,3})?\1|\d{1,3})\s*:/g;
+// Значение обязано быть строкой/массивом (форма ответа): числовой ключ с ОБЪЕКТОМ-
+// значением — это UI-конфиг секций (partConfig, QA 2026-07-02), не карта ответов.
+const NUM_KEY_RE = /(?:^|[{,\s])(?:(["'])\d{1,3}(?:-\d{1,3})?\1|\d{1,3})\s*:\s*["'`\[]/g;
 
 export function assertNoKeyLeak(out: string, parsed: ParsedTest): void {
   const $ = cheerio.load(out);
@@ -155,8 +158,10 @@ export function assertNoKeyLeak(out: string, parsed: ParsedTest): void {
       if (low.length < 3) continue; // одиночные буквы / короткие числа
       if (FIXED_CHOICE.test(low)) continue; // фиксированные опции — видимы и так
       if (/^\d+$/.test(low)) continue; // чистые числа — видимы / тривиальны
-      // ответ как точный строковый литерал ("x" / 'x' / `x`) => объект-ключ не вырезан
-      const re = new RegExp(`(["'\`])\\s*${escapeRegex(needle)}\\s*\\1`, "i");
+      // Ответ как ТОЧНЫЙ строковый литерал ("x" / 'x' / `x`) => объект-ключ не вырезан.
+      // Без \s*-паддинга: UI-строка ' Evidence' (лейбл) ложно матчилась как ответ
+      // "evidence" (Vol5 T10, QA 2026-07-02); ключи в объектах паддинга не несут.
+      const re = new RegExp(`(["'\`])${escapeRegex(needle)}\\1`, "i");
       if (re.test(script)) {
         throw new Error(`Key leak: answer "${a}" (q${q.number}) found as a string literal in runner_html script`);
       }
