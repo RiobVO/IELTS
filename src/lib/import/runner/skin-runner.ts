@@ -72,29 +72,42 @@ const BRAND_STYLE = `<style id="bando-brand-skin">
 const BANDO_BRAND = `<span class="bando-brand" aria-label="bando"><svg class="bm" width="30" height="30" viewBox="0 0 64 64" fill="none" role="img" aria-hidden="true"><rect class="r1" x="9" y="18" width="34" height="9" rx="4.5"/><rect class="r2" x="9" y="31" width="46" height="9" rx="4.5"/><rect class="r3" x="9" y="44" width="22" height="9" rx="4.5"/></svg><span class="bw">band<i>o</i></span></span>`;
 
 const RE_TELEGRAM = /<a\b[^>]*class=["'][^"']*brand-telegram[^"']*["'][^>]*>[\s\S]*?<\/a>/gi;
+// Любой якорь, уводящий в t.me — целиком (иначе остаётся мёртвая ссылка-огрызок).
+const RE_TME_ANCHOR = /<a\b[^>]*href=["'][^"']*t\.me\/[^"']*["'][^>]*>[\s\S]*?<\/a>/gi;
 const RE_LOGO_IMG = /<img\b[^>]*class=["'][^"']*brand-logo[^"']*["'][^>]*>/gi;
-const RE_LOGO_TEXT = /<span\s+class=["']logo["']>[\s\S]*?<\/span>/i;
+// Вордмарк: span.logo (первый источник), span.ielts-logo (CDI) или div.ielts-logo
+// (ReadinMarathons/Mock) — QA 2026-07-02. class обязан быть РОВНО (ielts-)logo,
+// чтобы обёртка div.header__logo не матчилась.
+const RE_LOGO_TEXT = /<(span|div)\b[^>]*class=["'](?:ielts-)?logo["'][^>]*>[\s\S]*?<\/\1>/i;
 
 /**
  * Заменяет чужой брендинг шапки раннера на bando + удаляет чужой telegram-канал.
- * No-op, если шаблон не распознан (нет span.logo и img.brand-logo) или нет `</head>`.
- * Идемпотентно: повторный вызов исключён маркером `bando-brand-skin`.
+ * Срез чужого ТРАФИКА (t.me-якоря/URL, CHANNEL-переменные share-карточки) идёт
+ * ВСЕГДА — увод студентов в сторонний канал не зависит от вёрстки шапки (QA
+ * 2026-07-02: у CDI-файлов нераспознанная шапка уносила t.me на прод нетронутым).
+ * Замена ЛОГОТИПА — только на распознанной шапке (span.logo / span.ielts-logo /
+ * img.brand-logo): незнакомую вёрстку не калечим.
+ * Идемпотентно: ребренд исключён маркером `bando-brand-skin`; повторная
+ * трафик-очистка — no-op (резать уже нечего).
  */
 export function skinRunnerBrand(html: string): string {
   if (html.includes("bando-brand-skin")) return html; // уже ребрендировано
-  const hasText = RE_LOGO_TEXT.test(html);
-  const hasImg = /class=["'][^"']*brand-logo[^"']*["']/i.test(html);
-  if (!hasText && !hasImg) return html; // незнакомая шапка — не трогаем
-  if (!/<\/head>/i.test(html)) return html; // нет безопасной точки инжекта
 
   let out = html.replace(RE_TELEGRAM, ""); // тег чужого канала в шапке
+  out = out.replace(RE_TME_ANCHOR, "");
   // Чужой канал живёт ещё и в JS «share-result card» (CHANNEL/CHANNEL_URL =
   // '@chan'/'t.me/chan') + любых остаточных t.me-ссылках. Вычищаем везде, иначе
-  // карточка «поделиться» рекламировала бы чужой канал. В exam-раннере свой
-  // t.me-ссылки нет → срезаем любую.
+  // карточка «поделиться» рекламировала бы чужой канал. В exam-раннере своих
+  // t.me-ссылок нет → срезаем любую.
   out = out.replace(/((?:const|let|var)\s+CHANNEL(?:_URL)?\s*=\s*)(["'])[^"']*\2/g, "$1$2$2");
   out = out.replace(/https?:\/\/t\.me\/[A-Za-z0-9_+]+/gi, "");
   out = out.replace(/\bt\.me\/[A-Za-z0-9_+]+/gi, "");
+
+  const hasText = RE_LOGO_TEXT.test(out);
+  const hasImg = /class=["'][^"']*brand-logo[^"']*["']/i.test(out);
+  if (!hasText && !hasImg) return out; // незнакомая шапка — логотип не трогаем
+  if (!/<\/head>/i.test(out)) return out; // нет безопасной точки инжекта
+
   if (hasText) {
     out = out.replace(RE_LOGO_IMG, ""); // картинку убираем, bando-знак ставим вместо текста
     out = out.replace(RE_LOGO_TEXT, BANDO_BRAND);
