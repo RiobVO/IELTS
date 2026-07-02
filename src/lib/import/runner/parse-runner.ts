@@ -110,7 +110,10 @@ function parseReadingRunner(html: string): RunnerParseResult {
   // Full Reading (40Q) несёт getBandFor40 → bandScale; одиночный пассаж — нет.
   // По этому признаку разводим категорию/длительность (иначе 13Q-пассаж покажется
   // в каталоге как «Full Reading · 60m»). Номер пассажа из файла не известен → passage_1.
-  const isFull = bandScale != null;
+  // Страховка счётом вопросов (Vol7/Mock, QA 2026-07-02): источник без band-функции
+  // ронял 40-вопросный мок в passage_1 · 20m. Одиночный пассаж — это 13-14 вопросов,
+  // полный тест — 40; порог 30 разделяет их с запасом.
+  const isFull = bandScale != null || questions.length >= 30;
   const parsed: ParsedTest = {
     title: extractTitle(html, "Reading"),
     section: "reading",
@@ -185,7 +188,8 @@ function parseListeningRunner(html: string): RunnerParseResult {
   const externalAudioSrc = $("audio").attr("src") ?? null;
 
   // Full Listening (40Q) несёт band() → bandScale; одиночная часть — нет.
-  const isFull = bandScale != null;
+  // Страховка счётом вопросов (Mock, QA 2026-07-02): часть 10-11 вопросов, полный — 40.
+  const isFull = bandScale != null || questions.length >= 30;
   const parsed: ParsedTest = {
     title: extractTitle(html, "Listening"),
     section: "listening",

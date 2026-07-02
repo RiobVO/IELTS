@@ -54,6 +54,34 @@ const acceptableVariants = { 1: ['raindrops','raindrop'] };
   });
 });
 
+// Vol7/Mock (QA 2026-07-02): источник без band-функции ронял 40-вопросный тест в
+// passage_1/part_1 (20/10 мин) — категорию страхует счёт вопросов.
+describe("parseRunner — full-категория по числу вопросов (без band-функции)", () => {
+  it("reading 40q без getBandFor40 → full_reading / 60m", () => {
+    const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":"TRUE"`).join(",");
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>const correctAnswers = {${entries}};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    expect(parsed.category).toBe("full_reading");
+    expect(parsed.durationSeconds).toBe(60 * 60);
+  });
+  it("listening 40q без band() → full_listening / 30m", () => {
+    const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":["w${i}"]`).join(",");
+    const html = `<!doctype html><html><head><title>L</title></head><body><audio></audio>
+<script>const KEY = {${entries}};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    expect(parsed.category).toBe("full_listening");
+    expect(parsed.durationSeconds).toBe(30 * 60);
+  });
+  it("одиночный пассаж 13q остаётся passage_1", () => {
+    const entries = Array.from({ length: 13 }, (_, i) => `"${i + 1}":"TRUE"`).join(",");
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>const correctAnswers = {${entries}};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    expect(parsed.category).toBe("passage_1");
+  });
+});
+
 // Listening Mock (QA 2026-07-02): listening-файл без KEY — ключ в reading-контейнерах
 // (correctAnswers + acceptableVariants). Fallback приводит их к форме KEY.
 describe("parseRunner — listening fallback на reading-контейнеры", () => {
