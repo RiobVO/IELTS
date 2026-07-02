@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // stay real (pure). featureEnabled is a controllable vi.fn so we can prove the
 // create→evaluate desync is closed (no upload/insert when the trigger can't fire).
 const {
-  getUser, getProfile, counts, recentCount, insertUploading, trigger, signedUpload, logEvent, dbSelect, loadTask,
+  getUser, getProfile, counts, recentCount, insertUploading, trigger, signedUpload, logEvent, dbSelect, dbUpdate, loadTask,
   readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk,
 } = vi.hoisted(() => ({
     getUser: vi.fn(),
@@ -17,6 +17,7 @@ const {
     signedUpload: vi.fn(),
     logEvent: vi.fn(),
     dbSelect: vi.fn(),
+    dbUpdate: vi.fn(),
     loadTask: vi.fn(),
     readOwn: vi.fn(),
     markDeleted: vi.fn(),
@@ -43,22 +44,27 @@ vi.mock("@/lib/speaking/store", () => ({
 vi.mock("@/lib/speaking/storage", () => ({ signedUploadUrl: signedUpload, audioSize: vi.fn(), deleteAudio: deleteAudioFn }));
 vi.mock("@/lib/speaking/events", () => ({ logAudioEvent: logEvent }));
 // db.update is chainable so deleteSpeakingRecording's intent + transcript-wipe updates resolve.
+// dbUpdate captures the TABLE argument — N6 asserts the debug-строка wipe by table identity.
 vi.mock("@/db", () => ({
   db: {
     select: (...a: unknown[]) => dbSelect(...a),
-    update: () => ({ set: () => ({ where: () => Promise.resolve() }) }),
+    update: (t: unknown) => {
+      dbUpdate(t);
+      return { set: () => ({ where: () => Promise.resolve() }) };
+    },
   },
 }));
 vi.mock("@/env", () => ({ speakingFeatureEnabled: featureEnabled }));
 
 import { createSpeakingSubmission, deleteSpeakingRecording } from "./actions";
 import { SPEAKING_RATE_MAX } from "@/lib/speaking/lifecycle";
+import { speakingFeedbackDebug } from "@/db/schema";
 
 const selectChain = (rows: unknown[]) => ({ from: () => ({ where: () => Promise.resolve(rows) }) });
 const TASK = "11111111-1111-1111-1111-111111111111"; // a well-formed task id
 
 beforeEach(() => {
-  [getUser, getProfile, counts, recentCount, insertUploading, trigger, signedUpload, logEvent, dbSelect, featureEnabled, loadTask,
+  [getUser, getProfile, counts, recentCount, insertUploading, trigger, signedUpload, logEvent, dbSelect, dbUpdate, featureEnabled, loadTask,
     readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk].forEach(
     (m) => m.mockReset(),
   );
@@ -191,5 +197,25 @@ describe("deleteSpeakingRecording (#2)", () => {
     expect(await deleteSpeakingRecording("sub1")).toEqual({ ok: true });
     expect(markDeleted).toHaveBeenCalledWith("sub1", "u1", "user");
     expect(markDeleteFailed).not.toHaveBeenCalled();
+  });
+
+  // N6: raw_output в speaking_feedback_debug — эхо речи (PII). Hard-lock (RLS+REVOKE)
+  // прячет её от клиента, но обещание «удалить запись» обязано чистить и её.
+  it("чистит speaking_feedback_debug при user-delete", async () => {
+    getUser.mockResolvedValue({ id: "u1" });
+    readOwn.mockResolvedValue({ status: "completed", updatedAt: new Date() });
+    dbSelect.mockReturnValue(selectChain([{ audioPath: "u1/sub1.webm" }]));
+    deleteAudioFn.mockResolvedValue(undefined);
+    await deleteSpeakingRecording("sub1");
+    expect(dbUpdate).toHaveBeenCalledWith(speakingFeedbackDebug);
+  });
+
+  it("чистит debug-строку ДО remove — PII уходит даже при сбое storage", async () => {
+    getUser.mockResolvedValue({ id: "u1" });
+    readOwn.mockResolvedValue({ status: "completed", updatedAt: new Date() });
+    dbSelect.mockReturnValue(selectChain([{ audioPath: "u1/sub1.webm" }]));
+    deleteAudioFn.mockRejectedValue(new Error("storage down"));
+    expect(await deleteSpeakingRecording("sub1")).toEqual({ ok: false });
+    expect(dbUpdate).toHaveBeenCalledWith(speakingFeedbackDebug);
   });
 });
