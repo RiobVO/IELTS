@@ -121,7 +121,7 @@ a.bar:hover{background:var(--vtint)}
 .minishot .mv{display:block;font-size:19px;font-weight:800;color:var(--v2);line-height:1.15;margin:3px 0 8px}
 .minishot .mv.sm{font-size:12px;color:var(--red-d)}
 .minishot .mv.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.minishot .mb{height:4px;border-radius:3px;background:#EFEDF7;margin-top:5px;overflow:hidden}
+.minishot .mb{display:block;height:4px;border-radius:3px;background:#EFEDF7;margin-top:5px;overflow:hidden}
 .minishot .mb i{display:block;height:100%;border-radius:3px}
 .minishot .mdots{display:flex;gap:3px;margin-top:2px}
 .minishot .mdots i{width:8px;height:8px;border-radius:3px;background:#E3E1EE}
