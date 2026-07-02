@@ -12,6 +12,7 @@ import {
   sendMessage,
   sendUploadResult,
 } from "@/lib/telegram/client";
+import { webhookSecretValid } from "@/lib/telegram/auth";
 import { uploadAudio } from "@/lib/telegram/storage";
 import { importRunner } from "@/lib/import/runner/import-runner";
 import { setRunnerAudioSrc } from "@/lib/import/runner/sanitize-runner";
@@ -88,9 +89,10 @@ export async function POST(request: Request) {
   }
 
   // Secret-token: если задан — обязан совпасть (отсекаем посторонние POST'ы).
+  // Constant-time (N12): `!==` давал тайминг-оракул по длине совпавшего префикса.
   if (cfg.webhookSecret) {
     const sent = request.headers.get("x-telegram-bot-api-secret-token");
-    if (sent !== cfg.webhookSecret) {
+    if (!webhookSecretValid(sent, cfg.webhookSecret)) {
       return NextResponse.json({ ok: false }, { status: 401 });
     }
   }
