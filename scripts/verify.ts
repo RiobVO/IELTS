@@ -436,6 +436,22 @@ async function main() {
         `openAllowed=${ciLock.openAllowed})`,
     );
 
+  // 4g. question.evidence_ref column-lock (N4, 0036): id абзаца-доказательства =
+  // подсказка к ответу, до сабмита клиенту не отдаётся. Остальные колонки вопроса
+  // остаются читаемыми (published-политика).
+  const qLock = await columnLock(
+    "question",
+    ["evidence_ref"],
+    ["id", "content_item_id", "number", "qtype", "prompt_html", "options", "group_key", "passage_id"],
+  );
+  if (qLock.lockedDenied && qLock.openAllowed)
+    ok("grants — anon SELECT on question.evidence_ref denied; prompt columns readable");
+  else
+    fail(
+      `grants — question column-lock broken (leaked=[${qLock.leaked.join(", ")}], ` +
+        `openAllowed=${qLock.openAllowed})`,
+    );
+
   // 5. auth trigger: a new auth.users row auto-creates a profile
   if (await profileAutoCreated())
     ok("auth trigger — profile auto-created on signup");
