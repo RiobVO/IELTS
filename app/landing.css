@@ -169,10 +169,30 @@ a.bar:hover{background:var(--vtint)}
 .vc.them .vr{color:var(--ink-2)}.vc.them .m{color:var(--ink-3)}
 .vc.us .vr{color:var(--ink);font-weight:600}.vc.us .m{color:var(--v)}
 
-.stband{display:grid;grid-template-columns:repeat(3,1fr);gap:0;background:var(--card);border:1px solid var(--line);border-radius:24px;box-shadow:var(--sh-sm);overflow:hidden}
-.stc{padding:42px 28px;text-align:center;border-right:1px solid var(--rule)}.stc:last-child{border:0}
-.stc .n{font-weight:800;font-size:clamp(2.6rem,5vw,3.8rem);line-height:1;color:var(--ink);font-variant-numeric:tabular-nums}
-.stc .l{font-size:13.5px;color:var(--ink-3);margin-top:12px;font-weight:600}
+/* exam-sheet stats: лист Q1–40, волна цветов типов, штамп FREE; каждая ячейка — ссылка в дрилл */
+.sheet{position:relative;background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:var(--sh);max-width:760px;margin:0 auto;padding:28px 32px}
+.sheet-top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.sheet-title{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.sheet-timer{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--v2);background:var(--vsoft);border-radius:8px;padding:4px 10px;font-variant-numeric:tabular-nums}
+.qgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:8px}
+.q{aspect-ratio:1;border-radius:7px;display:grid;place-content:center;transition:transform .4s var(--ease),opacity .35s,background .3s}
+.q span{font-family:var(--mono);font-size:9px;font-weight:600;color:#fff}
+.q.pre{transform:scale(.6);opacity:0}
+.q.dim{opacity:.3}
+.q:hover{transform:scale(1.14)}
+.sheet-legend{display:flex;gap:8px 16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)}
+.lg{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--ink-2);transition:color .2s}
+.lg:hover{color:var(--v2)}
+.lg i{width:9px;height:9px;border-radius:3px;flex:none}
+.stamp{position:absolute;right:-12px;bottom:-14px;transform:rotate(-9deg);font-weight:800;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-d);border:3px solid var(--green-d);border-radius:10px;padding:7px 14px;background:rgba(255,255,255,.88);box-shadow:var(--sh-sm);transition:transform .35s cubic-bezier(.34,1.3,.5,1),opacity .25s}
+.stamp:not(.in){transform:rotate(12deg) scale(2.2);opacity:0}
+.stamp small{display:block;font-size:8.5px;letter-spacing:.08em;font-weight:700}
+.sheet-stats{display:flex;gap:14px 44px;flex-wrap:wrap;justify-content:center;margin-top:28px}
+.sst{text-align:center}
+.sst .n{font-weight:800;font-size:clamp(1.9rem,4vw,2.6rem);line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+.sst .n.acc,.sst .acc{color:var(--v2)}
+.sst .l{font-size:12.5px;color:var(--ink-3);font-weight:600;margin-top:6px;max-width:24ch}
+@media(max-width:640px){.sheet{padding:20px 18px}.qgrid{grid-template-columns:repeat(8,1fr);gap:6px}.q span{font-size:8px}.stamp{right:-6px;bottom:-10px;font-size:13px;padding:6px 11px}}
 
 .types{columns:2;column-gap:56px;margin-top:8px}
 .tfilter{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 24px}
@@ -235,5 +255,5 @@ footer{padding:54px 0 42px;border-top:1px solid var(--line);margin-top:96px}
 @media(pointer:coarse){.bp,.tf{min-height:44px;display:inline-flex;align-items:center}}
 
 .rv{opacity:0;transform:translateY(28px);transition:opacity .8s var(--ease),transform .8s var(--ease)}.rv.in{opacity:1;transform:none}
-@media (max-width:920px){.hero-grid,.vs,.stband,.foot{grid-template-columns:1fr}.types{columns:1}.nav-links{display:none}.hero{padding:50px 0 64px}.pad{padding:68px 0}.stc{border-right:0;border-bottom:1px solid var(--rule)}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important}.hl,.lede,.bandsel,.cta-row,.micro,.scene{opacity:1;transform:none}.rv{opacity:1;transform:none}.fill{transition:none}.hero-canvas{display:none}.tbar i{transition:none}.tmarq-track{animation:none}.ndrawer{transition:none}}
+@media (max-width:920px){.hero-grid,.vs,.foot{grid-template-columns:1fr}.types{columns:1}.nav-links{display:none}.hero{padding:50px 0 64px}.pad{padding:68px 0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}.hl,.lede,.bandsel,.cta-row,.micro,.scene{opacity:1;transform:none}.rv{opacity:1;transform:none}.fill{transition:none}.hero-canvas{display:none}.tbar i{transition:none}.tmarq-track{animation:none}.ndrawer{transition:none}.q,.stamp{transition:none}}

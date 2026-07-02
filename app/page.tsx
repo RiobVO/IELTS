@@ -3,6 +3,25 @@
 import { useEffect } from "react";
 import "./landing.css";
 
+// Exam-sheet: 14 сегментов типов, в сумме ровно 40 вопросов полного мока.
+// [кол-во, slug для intent=drill, имя, цвет ячейки]
+const SHEET_SEGS: [number, string, string, string][] = [
+  [3, "matching-headings", "Matching Headings", "#F0506A"],
+  [4, "tfng", "True / False / Not Given", "#F2A93B"],
+  [3, "ynng", "Yes / No / Not Given", "#1FBE86"],
+  [3, "multiple-choice", "Multiple Choice", "#8170EA"],
+  [3, "matching-information", "Matching Information", "#6A52DE"],
+  [2, "matching-features", "Matching Features", "#D63554"],
+  [2, "matching-sentence-endings", "Matching Sentence Endings", "#B27512"],
+  [3, "sentence-completion", "Sentence Completion", "#138A5E"],
+  [3, "summary-note-completion", "Summary / Note Completion", "#F0506A"],
+  [3, "table-flowchart-completion", "Table / Flow-chart Completion", "#F2A93B"],
+  [3, "diagram-label-completion", "Diagram Label Completion", "#1FBE86"],
+  [3, "map-labelling", "Plan / Map / Diagram Labelling", "#8170EA"],
+  [3, "form-note-completion", "Form / Note Completion", "#6A52DE"],
+  [2, "short-answer", "Short Answer", "#D63554"],
+];
+
 export default function Home() {
   useEffect(() => {
     // ── shared reduced-motion flag ──────────────────────────────────────────
@@ -221,36 +240,56 @@ export default function Home() {
       document.querySelectorAll(".rv").forEach(el => el.classList.add("in"));
     }
 
-    // Count-up
-    function countUp(el: HTMLElement) {
-      const t = parseFloat(el.dataset.count ?? "0");
-      const dec = parseInt(el.dataset.dec ?? "0");
-      const pre = el.dataset.pre ?? "";
-      const suf = el.dataset.suf ?? "";
-      let t0: number | null = null;
-      function step(ts: number) {
-        if (!t0) t0 = ts;
-        const pr = Math.min((ts - t0) / 1500, 1);
-        const e = 1 - Math.pow(1 - pr, 3);
-        const v = t * e;
-        el.textContent = pre + (dec ? v.toFixed(dec) : Math.round(v).toLocaleString()) + suf;
-        if (pr < 1) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-    }
-
-    let countObserver: IntersectionObserver | null = null;
-    if (reduce) {
-      document.querySelectorAll<HTMLElement>("[data-count]").forEach(el => {
-        const d = parseInt(el.dataset.dec ?? "0");
-        el.textContent = (el.dataset.pre ?? "") + (d ? parseFloat(el.dataset.count ?? "0").toFixed(d) : parseInt(el.dataset.count ?? "0").toLocaleString()) + (el.dataset.suf ?? "");
+    // ── Exam-sheet: волна заполнения листа при появлении ────────────────────
+    const sheetEl = document.getElementById("sheet");
+    const sheetCells = Array.from(document.querySelectorAll<HTMLElement>("#qgrid .q"));
+    const sheetTimer = document.getElementById("sheetTimer");
+    const sheetTypes = document.getElementById("sheetTypes");
+    const sheetQEl = document.getElementById("sheetQ");
+    const sheetStamp = document.getElementById("sheetStamp");
+    let sheetTimeouts: number[] = [];
+    function playSheet() {
+      sheetTimeouts.forEach(clearTimeout); sheetTimeouts = [];
+      sheetStamp?.classList.remove("in");
+      sheetCells.forEach(c => { c.classList.add("pre"); c.style.background = "#EFEDF7"; });
+      if (sheetTypes) sheetTypes.textContent = "0";
+      if (sheetQEl) sheetQEl.textContent = "0";
+      if (sheetTimer) sheetTimer.textContent = "60:00";
+      requestAnimationFrame(() => {
+        sheetCells.forEach((c, i) => {
+          sheetTimeouts.push(window.setTimeout(() => { c.classList.remove("pre"); }, i * 20));
+          sheetTimeouts.push(window.setTimeout(() => {
+            c.style.background = c.dataset.c ?? "";
+            const done = i + 1;
+            if (sheetQEl) sheetQEl.textContent = String(done);
+            if (sheetTypes) sheetTypes.textContent = String(Math.min(Number(c.dataset.t) + 1, 14));
+            // 90 сек на вопрос: лист «проживает» весь экзамен за волну
+            if (sheetTimer) {
+              const left = (sheetCells.length - done) * 90;
+              sheetTimer.textContent = String(Math.floor(left / 60)).padStart(2, "0") + ":" + String(left % 60).padStart(2, "0");
+            }
+          }, 850 + i * 36));
+        });
+        sheetTimeouts.push(window.setTimeout(() => { sheetStamp?.classList.add("in"); }, 850 + sheetCells.length * 36 + 320));
       });
-    } else {
-      countObserver = new IntersectionObserver((es) => {
-        es.forEach(e => { if (e.isIntersecting) { countUp(e.target as HTMLElement); countObserver?.unobserve(e.target); } });
-      }, { threshold: 0.6 });
-      document.querySelectorAll<HTMLElement>("[data-count]").forEach(el => countObserver!.observe(el));
     }
+    let sheetObserver: IntersectionObserver | null = null;
+    if (sheetEl && sheetCells.length && !reduce && "IntersectionObserver" in window) {
+      sheetObserver = new IntersectionObserver((es) => {
+        es.forEach(e => { if (e.isIntersecting) { playSheet(); sheetObserver?.disconnect(); } });
+      }, { threshold: 0.35 });
+      sheetObserver.observe(sheetEl);
+    }
+    // hover: подсветить все вопросы того же типа, остальные приглушить
+    const qgridEl = document.getElementById("qgrid");
+    function onSheetOver(e: Event) {
+      const t = (e.target as HTMLElement).closest<HTMLElement>(".q")?.dataset.t;
+      if (t === undefined) return;
+      sheetCells.forEach(c => c.classList.toggle("dim", c.dataset.t !== t));
+    }
+    function onSheetOut() { sheetCells.forEach(c => c.classList.remove("dim")); }
+    qgridEl?.addEventListener("mouseover", onSheetOver);
+    qgridEl?.addEventListener("mouseleave", onSheetOut);
 
     // 3D tilt + magnetic CTA (pointer: fine only)
     let tiltRaf: number | undefined;
@@ -401,7 +440,10 @@ export default function Home() {
       if (tiltRaf !== undefined) cancelAnimationFrame(tiltRaf);
       cardObserver?.disconnect();
       revealObserver?.disconnect();
-      countObserver?.disconnect();
+      sheetObserver?.disconnect();
+      sheetTimeouts.forEach(clearTimeout);
+      qgridEl?.removeEventListener("mouseover", onSheetOver);
+      qgridEl?.removeEventListener("mouseleave", onSheetOut);
       mctaObserver?.disconnect();
       if (tiltCardEl) {
         tiltCardEl.removeEventListener("mousemove", onCardMouseMove);
@@ -558,10 +600,36 @@ export default function Home() {
 
       <section className="pad" style={{ paddingTop: 0 }}>
         <div className="wrap">
-          <div className="stband rv">
-            <div className="stc"><div className="n">14</div><div className="l">question types, each scored on its own</div></div>
-            <div className="stc"><div className="n">40Q</div><div className="l">full mocks under real exam timing</div></div>
-            <div className="stc"><div className="n">Free</div><div className="l">first full mock, no card needed</div></div>
+          {/* Exam-sheet: SSR — финальное состояние (цвета/цифры/штамп); JS при появлении
+              проигрывает волну заполнения и тикающие счётчики (playSheet) */}
+          <div className="sheet rv" id="sheet">
+            <div className="sheet-top">
+              <span className="sheet-title">Full mock · Reading &amp; Listening</span>
+              <span className="sheet-timer" id="sheetTimer">60:00</span>
+            </div>
+            <div className="qgrid" id="qgrid" aria-label="40 questions across 14 question types — click any to drill that type">
+              {(() => { let q = 1; return SHEET_SEGS.flatMap(([count, slug, name, color], ti) =>
+                Array.from({ length: count }, () => {
+                  const n = q++;
+                  return (
+                    <a key={n} className="q" href={`/auth?intent=drill&type=${slug}`} tabIndex={-1} data-t={ti} data-c={color} style={{ background: color }} aria-label={`Q${n} · ${name} — drill this type`} title={`${name} — drill it`}>
+                      <span aria-hidden="true">{n}</span>
+                    </a>
+                  );
+                })); })()}
+            </div>
+            <div className="sheet-legend">
+              {SHEET_SEGS.slice(0, 7).map(([, slug, name, color]) => (
+                <a key={slug} className="lg" href={`/auth?intent=drill&type=${slug}`}><i style={{ background: color }}></i>{name}</a>
+              ))}
+              <a className="lg" href="#types"><i style={{ background: "#E3E1EE" }}></i>+7 more</a>
+            </div>
+            <div className="stamp in" id="sheetStamp" aria-hidden="true">Free<small>first mock · no card</small></div>
+          </div>
+          <div className="sheet-stats">
+            <div className="sst"><div className="n acc" id="sheetTypes">14</div><div className="l">question types, each scored on its own</div></div>
+            <div className="sst"><div className="n" id="sheetQ">40</div><div className="l">questions under real exam timing</div></div>
+            <div className="sst"><div className="n"><span className="acc">1</span>st</div><div className="l">full mock free — watch the sheet get stamped</div></div>
           </div>
           <p className="stnote rv">Built on real exam-format Reading &amp; Listening papers. Graded on the server, so the band you see is the band we stand behind.</p>
         </div>
