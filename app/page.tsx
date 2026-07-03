@@ -51,11 +51,11 @@ export default function Home() {
     const targLab = document.getElementById("targLab");
     const tfill = document.getElementById("tfill");
 
-    // текст ↔ бар разводим по парам: светлый тон заливке, тёмный (AA) — цифрам
+    // бар и цифры — одна тёмная AA-пара: текст ≥4.5:1 на белом, заливка ≥3:1 на треке
     function colFor(p: number) {
-      return p < 45 ? { bar: "var(--red)", txt: "var(--red-d)" }
-        : p < 70 ? { bar: "var(--amber)", txt: "var(--amber-d)" }
-        : { bar: "var(--green)", txt: "var(--green-d)" };
+      return p < 45 ? { bar: "var(--red-d)", txt: "var(--red-d)" }
+        : p < 70 ? { bar: "var(--amber-d)", txt: "var(--amber-d)" }
+        : { bar: "var(--green-d)", txt: "var(--green-d)" };
     }
 
     // slug типа для deep-link в дрилл после signup
@@ -555,19 +555,19 @@ export default function Home() {
               <div id="rows">
                 <a className="bar" href="/auth?intent=drill&type=matching-headings">
                   <div className="bar-h"><span className="bar-n">Matching Headings <span className="weakt">weakest</span></span><span className="bar-s" style={{ color: "var(--red-d)" }}>2/6</span></div>
-                  <div className="track"><div className="fill" style={{ background: "var(--red)", transform: "scaleX(0.33)" }} data-w="0.33"></div></div>
+                  <div className="track"><div className="fill" style={{ background: "var(--red-d)", transform: "scaleX(0.33)" }} data-w="0.33"></div></div>
                 </a>
                 <a className="bar" href="/auth?intent=drill&type=tfng">
                   <div className="bar-h"><span className="bar-n">True / False / Not Given</span><span className="bar-s" style={{ color: "var(--amber-d)" }}>5/9</span></div>
-                  <div className="track"><div className="fill" style={{ background: "var(--amber)", transform: "scaleX(0.56)" }} data-w="0.56"></div></div>
+                  <div className="track"><div className="fill" style={{ background: "var(--amber-d)", transform: "scaleX(0.56)" }} data-w="0.56"></div></div>
                 </a>
                 <a className="bar" href="/auth?intent=drill&type=multiple-choice">
                   <div className="bar-h"><span className="bar-n">Multiple Choice</span><span className="bar-s" style={{ color: "var(--amber-d)" }}>6/9</span></div>
-                  <div className="track"><div className="fill" style={{ background: "var(--amber)", transform: "scaleX(0.67)" }} data-w="0.67"></div></div>
+                  <div className="track"><div className="fill" style={{ background: "var(--amber-d)", transform: "scaleX(0.67)" }} data-w="0.67"></div></div>
                 </a>
                 <a className="bar" href="/auth?intent=drill&type=matching-information">
                   <div className="bar-h"><span className="bar-n">Matching Information</span><span className="bar-s" style={{ color: "var(--green-d)" }}>6/8</span></div>
-                  <div className="track"><div className="fill" style={{ background: "var(--green)", transform: "scaleX(0.75)" }} data-w="0.75"></div></div>
+                  <div className="track"><div className="fill" style={{ background: "var(--green-d)", transform: "scaleX(0.75)" }} data-w="0.75"></div></div>
                 </a>
               </div>
               <div className="card-foot">
@@ -622,7 +622,7 @@ export default function Home() {
                 Array.from({ length: count }, () => {
                   const n = q++;
                   return (
-                    <a key={n} className="q" href={`/auth?intent=drill&type=${slug}`} tabIndex={-1} data-t={ti} data-c={color} style={{ background: color }} aria-label={`Q${n} · ${name} — drill this type`} title={`${name} — drill it`}>
+                    <a key={n} className="q" href={`/auth?intent=drill&type=${slug}`} data-t={ti} data-c={color} style={{ background: color }} aria-label={`Q${n} · ${name} — drill this type`} title={`${name} — drill it`}>
                       <span aria-hidden="true">{n}</span>
                     </a>
                   );
@@ -750,9 +750,9 @@ export default function Home() {
               <span className="minishot" aria-hidden="true">
                 <span className="mk">Weakest</span>
                 <span className="mv sm">Match. Headings</span>
-                <span className="mb"><i style={{ width: "33%", background: "var(--red)" }}></i></span>
-                <span className="mb"><i style={{ width: "56%", background: "var(--amber)" }}></i></span>
-                <span className="mb"><i style={{ width: "75%", background: "var(--green)" }}></i></span>
+                <span className="mb"><i style={{ width: "33%", background: "var(--red-d)" }}></i></span>
+                <span className="mb"><i style={{ width: "56%", background: "var(--amber-d)" }}></i></span>
+                <span className="mb"><i style={{ width: "75%", background: "var(--green-d)" }}></i></span>
               </span>
               <div>
                 <h3>Per-type breakdown</h3>
@@ -766,7 +766,7 @@ export default function Home() {
               <span className="minishot" aria-hidden="true">
                 <span className="mk">Drill · TFNG</span>
                 <span className="mv num">7/9</span>
-                <span className="mb"><i style={{ width: "78%", background: "var(--green)" }}></i></span>
+                <span className="mb"><i style={{ width: "78%", background: "var(--green-d)" }}></i></span>
               </span>
               <div>
                 <h3>Targeted drills</h3>
