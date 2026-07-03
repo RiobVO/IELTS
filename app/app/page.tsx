@@ -152,6 +152,10 @@ export default async function Dashboard() {
   // Последняя попытка с band (single-passage тесты band не имеют).
   const banded = attempts.find((a) => a.band_score != null);
   const bandLatest = banded?.band_score != null ? Number(banded.band_score) : null;
+  // Тултип «откуда band»: тест-источник, raw-счёт, давность (hover/focus на цифре).
+  const bandSrc = banded
+    ? `${cleanTitle(banded.content_item?.title ?? "Full mock")} · ${banded.raw_score ?? "—"}/${total(banded.per_type_breakdown) || 40}${banded.submitted_at ? ` · ${relTime(banded.submitted_at)}` : ""}`
+    : null;
 
   // Week-dots — реальная активность за последние 7 дней (из submitted_at). Считаем
   // НЕ только факт практики, но и число тестов за день — для hover-подсказки столбца.
@@ -343,7 +347,7 @@ export default async function Dashboard() {
           <div className="dash-sect-tight" style={S.card}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
               <h2 style={{ ...S.sectionTitle, fontSize: "var(--text-lg)" }}>Recent tests</h2>
-              <Link href="/app/reading" style={S.viewAll}>
+              <Link href="/app/reading" style={S.drillAny}>
                 View all →
               </Link>
             </div>
@@ -360,7 +364,7 @@ export default async function Dashboard() {
 
         <div className="dash-col-rail">
           {/* Band readout */}
-          <BandReadout band={bandLatest} target={bandTarget} hasAttempts={hasAttempts} />
+          <BandReadout band={bandLatest} target={bandTarget} source={bandSrc} hasAttempts={hasAttempts} />
 
           {/* This week — тонкая полоса momentum под диагностикой, не co-hero */}
           <WeekCard streak={streak} xp={xp} rating={rating} rank={globalRank} week={week} resume={resume} leagueTotal={leagueTotal} />
@@ -552,10 +556,12 @@ function WeekCard({
 function BandReadout({
   band,
   target,
+  source,
   hasAttempts,
 }: {
   band: number | null;
   target: number | null;
+  source: string | null;
   hasAttempts: boolean;
 }) {
   // Нет band → не рисуем фейковую шкалу: честный CTA в зависимости от истории.
@@ -592,8 +598,8 @@ function BandReadout({
   const caption = reached
     ? "Target reached 🎯"
     : nextStop === target
-      ? `Next stop: ${target} — your target, one clean mock away`
-      : `Next stop: ${nextStop.toFixed(1)} — usually 1–2 fixed types away`;
+      ? `Next stop: ${target} — your target, one mock away`
+      : `Next stop: ${nextStop.toFixed(1)} — 1–2 types away`;
   const ariaLabel =
     target != null
       ? reached
@@ -605,7 +611,10 @@ function BandReadout({
       <div style={{ flex: "none" }}>
         <div style={S.bandLabel}>Your band</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
-          <span className="dash-band-num" style={low ? { ...S.bandNum, color: "var(--text-secondary)" } : S.bandNum}>{band}</span>
+          <span className="dash-bandnum-wrap" tabIndex={0} aria-label={source ? `From ${source}` : undefined}>
+            <span className="dash-band-num" style={low ? { ...S.bandNum, color: "var(--text-secondary)" } : S.bandNum}>{band}</span>
+            {source && <span aria-hidden="true" className="daytip">{source}</span>}
+          </span>
           {target != null ? (
             <span style={S.bandTarget}>
               / target <span style={{ fontFamily: "var(--font-mono)", color: "var(--brand)" }}>{target}</span>
@@ -736,6 +745,9 @@ const DASH_CSS = `
 .weekday:focus-visible .daytip{opacity:1;visibility:visible;transform:translate(-50%,0)}
 .dash-week-dots .weekday:first-child:focus-visible .daytip{transform:translate(0,0)}
 .dash-week-dots .weekday:last-child:focus-visible .daytip{transform:translate(0,0)}
+.dash-bandnum-wrap{position:relative;display:inline-flex;cursor:help}
+.dash-bandnum-wrap:hover .daytip,.dash-bandnum-wrap:focus-visible .daytip{opacity:1;visibility:visible;transform:translate(-50%,0)}
+.dash-bandnum-wrap:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:8px}
 @media (min-width:768px){
   .dash-wrap{padding:32px 28px 56px}
   .dash-hi{font-size:32px;white-space:nowrap}
