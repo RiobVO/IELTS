@@ -39,7 +39,7 @@ nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 80%,
 .nburger i{display:block;width:16px;height:2px;border-radius:2px;background:var(--ink)}
 .ndrawer{display:none}
 @media(max-width:920px){
-  .nav-login{display:none}
+  .nav-login,.nav-cta{display:none}
   .nburger{display:grid}
   .ndrawer{display:block;max-height:0;overflow:hidden;transition:max-height .3s var(--ease);background:var(--bg)}
   .ndrawer.open{max-height:300px;border-top:1px solid var(--rule)}

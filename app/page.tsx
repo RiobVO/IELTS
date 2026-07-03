@@ -493,7 +493,7 @@ export default function Home() {
           </div>
           <div className="nav-r">
             <a href="/auth" className="nav-login" style={{ color: "var(--ink-2)" }}>Log in</a>
-            <a href="/auth" className="btn btn-v">Take a free test</a>
+            <a href="/auth" className="btn btn-v nav-cta">Take a free test</a>
             <button type="button" className="nburger" id="nburger" aria-label="Menu" aria-expanded="false" aria-controls="ndrawer">
               <i></i><i></i><i></i>
             </button>
