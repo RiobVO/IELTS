@@ -54,3 +54,7 @@ npm-debug.log*
 
 # QA-партии импорта: исходные HTML с ключами ответов — не для гита
 .qa-import/
+
+# session scratch
+.codex-tmp/
+/photo_*.jpg
