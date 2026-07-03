@@ -502,7 +502,7 @@ export default function Home() {
         <canvas className="hero-canvas" id="heroCanvas" aria-hidden="true"></canvas>
         <div className="wrap hero-grid">
           <div>
-            <span className="pill" style={{ animation: "rise .8s var(--ease) forwards", opacity: 0 }}>
+            <span className="pill">
               <svg className="ico" viewBox="0 0 24 24"><path d="M3 9l9-5 9 5-9 5z"/><path d="M7 11v5c0 1 2.5 2.5 5 2.5s5-1.5 5-2.5v-5"/></svg>
               IELTS Reading &amp; Listening
             </span>
