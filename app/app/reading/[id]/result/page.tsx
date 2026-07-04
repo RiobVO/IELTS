@@ -7,6 +7,7 @@ import { getProfile, getUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import type { ReviewSnapshot } from "@/lib/exam/review-snapshot";
+import { computeBlindSpot, computeGrowth, computeNearMiss, type DebriefData } from "@/lib/result/debrief";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import { categoryLabel, qtypeLabel } from "@/lib/labels";
@@ -162,6 +163,9 @@ export default async function ResultPage({
         // Только флаг наличия раннера для маршрутизации «Try again» — НЕ сам
         // runner_html (~200КБ); как в каталоге (getPublishedTests).
         hasRunner: sql<boolean>`${contentItem.runnerHtml} IS NOT NULL`,
+        // Debrief near-miss (S1): шкала raw→band для computeNearMiss. Только
+        // Full-тесты (40Q) её имеют; одиночный passage/part -> null (только %).
+        bandScale: contentItem.bandScale,
       })
       .from(contentItem)
       .where(eq(contentItem.id, id))
@@ -175,10 +179,18 @@ export default async function ResultPage({
         below: sql<number>`count(*) filter (where ${otherFirsts.rawScore} < (select sub.raw_score from ${attempt} sub where sub.id = ${attemptId}))::int`,
       })
       .from(otherFirsts),
-    // Предыдущая submitted-попытка на этом тесте (дельта «since last test»). Граница
-    // по времени = att.submitted_at коррелированным подзапросом по attemptId.
+    // История ПРЕДЫДУЩИХ submitted-попыток на этом тесте, самая свежая первой.
+    // prevRows[0] остаётся «прошлая попытка» для дельт («Band since last» /
+    // «Since last test» ниже) — раньше это был limit(1); теперь читаем всю
+    // историю (+ per_type_breakdown) одним тем же запросом, чтобы computeGrowth
+    // (S4 «1st/2nd/now») не открывал отдельный round-trip. Граница по времени =
+    // att.submitted_at коррелированным подзапросом по attemptId.
     db
-      .select({ rawScore: attempt.rawScore, bandScore: attempt.bandScore })
+      .select({
+        rawScore: attempt.rawScore,
+        bandScore: attempt.bandScore,
+        perTypeBreakdown: attempt.perTypeBreakdown,
+      })
       .from(attempt)
       .where(
         and(
@@ -191,8 +203,7 @@ export default async function ResultPage({
           ),
         ),
       )
-      .orderBy(desc(attempt.submittedAt))
-      .limit(1),
+      .orderBy(desc(attempt.submittedAt)),
     // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
     getHeaderData(),
   ]);
@@ -348,6 +359,73 @@ export default async function ResultPage({
       evidence: ev?.snippet ?? null,
     };
   });
+
+  // Debrief data layer (S1-S5 «дебриф», wired into the page in a later commit).
+  // Every field below is a plain derivation of data already fetched/graded
+  // above — no new queries. answer/explanation/evidence are never attached
+  // here (that only happens in the S3 replay assembly, gated by fullReview).
+  const bandScale = (ci[0]?.bandScale as Record<string, number> | null) ?? null;
+  const nearMiss = computeNearMiss(bandScale, result.rawScore);
+  const blindSpot: DebriefData["blindSpot"] =
+    computeBlindSpot(result.perQuestion, meta) ??
+    (weakest
+      ? {
+          label: qtypeLabel(weakest[0]),
+          weakBucket: { correct: weakest[1].correct, total: weakest[1].total },
+          strongBucket: null,
+          costMarks: weakest[1].total - weakest[1].correct,
+        }
+      : null);
+  // Хронологический ряд для computeGrowth: prevRows приходит most-recent-first
+  // (нужен для метрик выше) — переворачиваем и дописываем текущую попытку
+  // последней («now»), её breakdown ещё не в БД на момент чтения /result.
+  const growthHistory = [...prevRows]
+    .reverse()
+    .map((r) => ({ perTypeBreakdown: (r.perTypeBreakdown as Record<string, { correct: number; total: number }> | null) ?? null }))
+    .concat([{ perTypeBreakdown: result.perType }]);
+  const growth = computeGrowth(growthHistory, weakest ? weakest[0] : null);
+  const levelRows: DebriefData["level"]["rows"] = perType.map(([type, s], i) => ({
+    type,
+    label: qtypeLabel(type),
+    correct: s.correct,
+    total: s.total,
+    weak: i === 0,
+    practiseHref: `${catalogBase}?q_type=${encodeURIComponent(type)}`,
+  }));
+  const missed: DebriefData["missed"] = result.perQuestion
+    .filter((q) => !q.correct)
+    .map((q) => ({ number: q.number, qtype: q.qtype, label: qtypeLabel(q.qtype) }));
+
+  const debriefData: DebriefData = {
+    title,
+    category,
+    totalQuestions: result.total,
+    catalogBase,
+    retryHref,
+    score: {
+      raw: result.rawScore,
+      total: result.total,
+      correctPct,
+      banded,
+      band: banded ? Number(att.bandScore) : null,
+      nextBand: banded ? nearMiss.nextBand : null,
+      marksToNext: banded ? nearMiss.marksToNext : null,
+    },
+    metrics,
+    blindSpot,
+    missed,
+    replayLocked: !fullReview,
+    level: { rows: levelRows, avgPct: correctPct, growth },
+    plan: {
+      weakLabel: weakest ? qtypeLabel(weakest[0]) : null,
+      drillHref: weakest ? `${catalogBase}?q_type=${encodeURIComponent(weakest[0])}` : null,
+      retryHref,
+    },
+    share: profile?.referral_code
+      ? { refCode: profile.referral_code, headline: shareHeadline, value: banded ? String(att.bandScore) : `${result.percent}%` }
+      : null,
+  };
+  void debriefData; // consumed starting the next commit ("feat(result): debrief scroll shell")
 
   return (
     <AppShell active={section}>
