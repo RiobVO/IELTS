@@ -33,15 +33,19 @@ export function Dial({
   pct,
   size = 158,
   strokeWidth = 13,
+  // Not derived from size/strokeWidth — the source prototype's ring leaves a
+  // deliberate ~5.5px breathing margin inside the box (r=67 at size=158),
+  // it isn't a tight (size-strokeWidth)/2 fit.
+  r = 67,
   center,
 }: {
   /** Raw correctness ratio (0..1) driving the arc — independent of what the centre shows. */
   pct: number;
   size?: number;
   strokeWidth?: number;
+  r?: number;
   center: { kind: "band"; value: number } | { kind: "pct"; value: number };
 }) {
-  const r = (size - strokeWidth) / 2;
   const c = size / 2;
   const C = 2 * Math.PI * r;
   const p = Math.max(0.02, Math.min(1, pct));
