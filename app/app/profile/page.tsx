@@ -330,7 +330,7 @@ export default async function ProfilePage() {
             <div style={S.payEmpty}>No payments yet.</div>
           ) : (
             payments.map((p, i) => (
-              <div key={p.id} style={{ ...S.payRow, ...(i < payments.length - 1 ? S.payDivide : {}) }}>
+              <div key={p.id} className="pf-payrow" style={{ ...S.payRow, ...(i < payments.length - 1 ? S.payDivide : {}) }}>
                 <div>
                   <div style={S.payTitle}>{(TIER_LABEL[p.tier as Tier] ?? p.tier)} · {p.period_months} mo.</div>
                   <div style={S.payMeta}>{p.provider} · {formatDate(p.created_at)}</div>
@@ -374,7 +374,8 @@ function QuietRow({ icon, label, value, last }: { icon: IconName; label: string;
         <Icon name={icon} size={16} strokeWidth={2.1} />
       </span>
       <span style={{ flex: 1, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600 }}>{label}</span>
-      <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", fontWeight: 600 }}>{value}</span>
+      {/* Длинный email не должен клиппиться/вылезать за карту на узких экранах. */}
+      <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", fontWeight: 600, overflowWrap: "anywhere" }}>{value}</span>
     </div>
   );
 }
@@ -398,6 +399,11 @@ const PF_CSS = `
   .pf-stat{flex:1;border-bottom:none}
   .pf-stat:nth-child(2n){border-right:1px solid var(--border-subtle)}
   .pf-stat:last-child{border-right:none}
+}
+/* Узкие телефоны (≤430px): строка платежа (тариф+дата слева, сумма+статус справа)
+   без переноса вылезает за карту — разрешаем wrap. */
+@media (max-width:430px){
+  .pf-payrow{flex-wrap:wrap;row-gap:6px}
 }
 `;
 

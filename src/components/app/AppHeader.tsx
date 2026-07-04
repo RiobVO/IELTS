@@ -71,6 +71,12 @@ const HEADER_CSS = `
 }
 .ah-tap{width:40px;height:40px}
 @media (pointer:coarse){ .ah-tap{width:44px;height:44px} }
+/* Профильный аватар — единственный тап-таргет шапки без бампа (36×36). Визуальный
+   кружок не трогаем — расширяем хит-зону до 44×44 псевдоэлементом на узких экранах. */
+.ah-avatar{position:relative}
+@media (max-width:430px){
+  .ah-avatar::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
+}
 `;
 
 function NavLink({ link, active }: { link: (typeof LINKS)[number]; active: boolean }) {
@@ -274,6 +280,7 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
             href="/app/profile"
             aria-label="Profile"
             title="Profile"
+            className="ah-avatar"
             style={{
               width: 36,
               height: 36,
