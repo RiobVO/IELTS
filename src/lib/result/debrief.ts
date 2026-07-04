@@ -62,8 +62,10 @@ export interface BlindSpot {
  * Бакетизация True/False/Yes-No вопросов на "Not Given" против "есть значение"
  * (True/False или Yes/No) — классическая слепая зона IELTS Reading/Listening.
  * Возвращает null, если в попытке нет tfng/ynng вопросов, ИЛИ один из бакетов
- * пуст (не с чем сравнивать) — тогда S2 на вызывающей стороне генерализуется
- * до слабейшего типа (там уже есть perType/weakest, второй источник не нужен).
+ * пуст (не с чем сравнивать), ИЛИ бакеты равны по проценту (perfect/all-miss/
+ * ровный профиль — реальной слепой зоны нет, диагноз был бы произвольным) —
+ * тогда S2 на вызывающей стороне генерализуется до слабейшего типа (там уже
+ * есть perType/weakest, второй источник не нужен).
  */
 export function computeBlindSpot(
   perQuestion: PerQuestionResult[],
@@ -96,8 +98,9 @@ export function computeBlindSpot(
 
   const ngPct = ngCorrect / ngTotal;
   const valPct = valCorrect / valTotal;
+  if (ngPct === valPct) return null;
   const [weak, strong, label]: [BlindSpotBucket, BlindSpotBucket, string] =
-    ngPct <= valPct ? [ngBucket, valBucket, "Not Given"] : [valBucket, ngBucket, valueLabel];
+    ngPct < valPct ? [ngBucket, valBucket, "Not Given"] : [valBucket, ngBucket, valueLabel];
 
   return { label, weakBucket: weak, strongBucket: strong, costMarks: weak.total - weak.correct };
 }
@@ -137,10 +140,13 @@ export function computeGrowth(
 
   const first = points[0];
   const now = points[points.length - 1];
+  // "2nd" — это реально вторая попытка (points[1]), а не предпоследняя: при
+  // 4+ попытках points[length-2] указывал бы на какую-то среднюю попытку под
+  // неверным лейблом "2nd".
   const series: GrowthBar[] =
     points.length === 2
       ? [{ tag: "1st", ...first }, { tag: "now", ...now }]
-      : [{ tag: "1st", ...first }, { tag: "2nd", ...points[points.length - 2] }, { tag: "now", ...now }];
+      : [{ tag: "1st", ...first }, { tag: "2nd", ...points[1] }, { tag: "now", ...now }];
 
   return { label: qtypeLabel(weakType), series, deltaType: now.correct - first.correct };
 }

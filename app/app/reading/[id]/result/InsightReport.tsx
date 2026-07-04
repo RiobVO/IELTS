@@ -93,6 +93,7 @@ export function AnswerKeyFilter({ items, types }: { items: AKItem[]; types: AKTy
 
   return (
     <div>
+      <style>{IR_CSS}</style>
       <div className="ir-chips" style={S.chips} role="group" aria-label="Filter answers">
         {chips.map((c) => (
           <button

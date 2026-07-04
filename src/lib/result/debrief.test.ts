@@ -83,6 +83,42 @@ describe("computeBlindSpot", () => {
     ]);
     expect(computeBlindSpot(perQuestion, meta)).toBeNull();
   });
+
+  it("returns null when both buckets score the same non-trivial percentage (a tie, no real blind spot)", () => {
+    const perQuestion = [
+      q(1, "tfng", true),
+      q(2, "tfng", false), // Not Given, missed
+      q(3, "tfng", true),
+      q(4, "tfng", false), // True/False, missed
+    ];
+    const meta = new Map([
+      [1, { accept: ["NOT GIVEN"] }],
+      [2, { accept: ["NOT GIVEN"] }],
+      [3, { accept: ["TRUE"] }],
+      [4, { accept: ["FALSE"] }],
+    ]);
+    expect(computeBlindSpot(perQuestion, meta)).toBeNull();
+  });
+
+  it("returns null on a perfect score (both buckets 100%)", () => {
+    const perQuestion = [q(1, "tfng", true), q(2, "tfng", true), q(3, "tfng", true)];
+    const meta = new Map([
+      [1, { accept: ["NOT GIVEN"] }],
+      [2, { accept: ["TRUE"] }],
+      [3, { accept: ["FALSE"] }],
+    ]);
+    expect(computeBlindSpot(perQuestion, meta)).toBeNull();
+  });
+
+  it("returns null on an all-miss attempt (both buckets 0%)", () => {
+    const perQuestion = [q(1, "tfng", false), q(2, "tfng", false), q(3, "tfng", false)];
+    const meta = new Map([
+      [1, { accept: ["NOT GIVEN"] }],
+      [2, { accept: ["TRUE"] }],
+      [3, { accept: ["FALSE"] }],
+    ]);
+    expect(computeBlindSpot(perQuestion, meta)).toBeNull();
+  });
 });
 
 describe("computeGrowth", () => {
@@ -114,7 +150,7 @@ describe("computeGrowth", () => {
     });
   });
 
-  it("caps at 1st/2nd/now with three or more previous attempts", () => {
+  it("caps at 1st/2nd/now with three or more previous attempts, '2nd' being the actual second attempt", () => {
     const history = [
       { perTypeBreakdown: { tfng: { correct: 1, total: 6 } } },
       { perTypeBreakdown: { tfng: { correct: 2, total: 6 } } },
@@ -123,7 +159,9 @@ describe("computeGrowth", () => {
     ];
     const result = computeGrowth(history, "tfng");
     expect(result?.series.map((s) => s.tag)).toEqual(["1st", "2nd", "now"]);
-    expect(result?.series[1]).toEqual({ tag: "2nd", correct: 3, total: 6 });
+    // "2nd" is points[1] (the real second attempt), NOT points[length - 2]
+    // (the second-to-last, which here would wrongly be the third attempt).
+    expect(result?.series[1]).toEqual({ tag: "2nd", correct: 2, total: 6 });
     expect(result?.deltaType).toBe(4);
   });
 

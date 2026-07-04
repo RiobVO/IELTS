@@ -26,8 +26,12 @@ function prefersReduced(): boolean {
 
 const easeOutCubic = (k: number) => 1 - Math.pow(1 - k, 3);
 
-/** Donut — дуга рисуется 0→pct, % в центре тикает синхронно под одним rAF. */
-export function AnimatedDonut({ pct }: { pct: number }) {
+/**
+ * Donut — дуга рисуется 0→pct, raw-счёт в центре тикает синхронно под одним
+ * rAF. Центр показывает "raw/total" (точь-в-точь с прототипом result-ideal.html
+ * — "23/40", не процент); pct остаётся только приводом для дуги и тайминга.
+ */
+export function AnimatedDonut({ pct, raw, total }: { pct: number; raw: number; total: number }) {
   const size = 120;
   const sw = 18;
   const r = (size - sw) / 2;
@@ -54,7 +58,7 @@ export function AnimatedDonut({ pct }: { pct: number }) {
       if (!start) start = now;
       const k = Math.min(1, (now - start) / dur);
       if (txtRef.current) {
-        txtRef.current.textContent = `${Math.round(easeOutCubic(k) * p * 100)}%`;
+        txtRef.current.textContent = `${Math.round(easeOutCubic(k) * raw)}`;
       }
       if (k < 1) raf = requestAnimationFrame(tick);
     };
@@ -63,7 +67,7 @@ export function AnimatedDonut({ pct }: { pct: number }) {
       cancelAnimationFrame(raf);
       anim.cancel();
     };
-  }, [C, finalOffset, p]);
+  }, [C, finalOffset, p, raw]);
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flex: "none" }}>
@@ -82,10 +86,10 @@ export function AnimatedDonut({ pct }: { pct: number }) {
         transform={`rotate(-90 ${cx} ${cx})`}
       />
       <text ref={txtRef} x={cx} y={cx - 2} textAnchor="middle" fontFamily="var(--font-mono)" fontSize="26" fontWeight="600" fill="var(--text-primary)">
-        {Math.round(p * 100)}%
+        {raw}
       </text>
       <text x={cx} y={cx + 16} textAnchor="middle" fontFamily="var(--font-ui)" fontSize="10" fontWeight="600" fill="var(--text-muted)">
-        correct
+        /{total}
       </text>
     </svg>
   );
