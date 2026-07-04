@@ -394,6 +394,9 @@ const PF_CSS = `
 .pf-stat{border-bottom:1px solid var(--border-subtle);border-right:1px solid var(--border-subtle)}
 .pf-stat:nth-child(2n){border-right:none}
 .pf-stat:nth-child(n+3){border-bottom:none}
+/* База: путь назад скрыт; медиа-override ниже показывает его на ≤430px. Правило
+   должно стоять ДО @media — при равной специфичности выигрывает последнее в каскаде. */
+.mob-back{display:none}
 @media (min-width:640px){
   .pf-wrap{padding:28px 28px 48px}
   .pf-hero{flex-direction:row;align-items:center;gap:30px;padding:26px 30px}
@@ -416,7 +419,6 @@ const PF_CSS = `
   /* Путь назад — виден только на узких телефонах (бургер иначе единственный выход). */
   .mob-back{display:block;margin-bottom:10px}
 }
-.mob-back{display:none}
 `;
 
 const S: Record<string, React.CSSProperties> = {
