@@ -337,6 +337,7 @@ function PrepPanel({
           value={scratch}
           onChange={(e) => setScratch(e.target.value)}
           placeholder="Jot a few keywords to structure your answer…"
+          className="sa-scratch"
           style={S.scratch}
         />
       </div>
@@ -604,6 +605,10 @@ const CSS = `
   .sa-eqbar{animation:none!important;transform:scaleY(.6)}
   .sa-recdot{animation:none!important}
   .sa-spin{animation-duration:2s}
+}
+/* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
+@media (max-width:430px){
+  .sa-scratch{font-size:16px!important}
 }
 `;
 

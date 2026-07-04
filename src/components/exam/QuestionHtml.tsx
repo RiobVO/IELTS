@@ -188,7 +188,8 @@ const Q_CSS = `
 @media (max-width:430px){
   .q-verbatim table{display:block;overflow-x:auto}
   .q-verbatim td[nowrap],.q-verbatim th[nowrap]{white-space:normal}
-  .q-verbatim .q-text{min-width:80px!important;max-width:100%!important;min-height:44px!important}
+  /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
+  .q-verbatim .q-text{min-width:80px!important;max-width:100%!important;min-height:44px!important;font-size:16px!important}
   .q-verbatim .q-hit{position:relative}
   .q-verbatim .q-hit::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
 }

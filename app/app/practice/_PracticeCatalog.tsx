@@ -930,6 +930,8 @@ const CSS = `
 @keyframes pc-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes pc-fade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
 @media (pointer:coarse){.pc-showall{min-height:44px}.pc-goalsel{min-height:44px}}
+/* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
+@media (max-width:430px){.pc-goalsel{font-size:16px!important}}
 @media (prefers-reduced-motion:reduce){
   .pc-bars span{animation:none!important;transform:none!important}
   .pc-goalsaved{animation:none!important}
