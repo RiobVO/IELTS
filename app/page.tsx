@@ -213,19 +213,41 @@ export default function Home() {
     // Mobile burger drawer (<920px; CSS прячет кнопку на десктопе)
     const nburger = document.getElementById("nburger");
     const ndrawer = document.getElementById("ndrawer");
+    // Scroll-lock while open (сохраняем прежнее inline-значение, чтобы вернуть как было).
+    let drawerPrevOverflow = "";
     function toggleDrawer() {
       if (!nburger || !ndrawer) return;
       const open = !ndrawer.classList.contains("open");
       ndrawer.classList.toggle("open", open);
       nburger.setAttribute("aria-expanded", String(open));
+      if (open) {
+        drawerPrevOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+      } else {
+        document.body.style.overflow = drawerPrevOverflow;
+      }
     }
     function closeDrawer() {
       if (!nburger || !ndrawer) return;
+      const wasOpen = ndrawer.classList.contains("open");
       ndrawer.classList.remove("open");
       nburger.setAttribute("aria-expanded", "false");
+      if (wasOpen) document.body.style.overflow = drawerPrevOverflow;
+    }
+    function onDrawerKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closeDrawer();
+    }
+    // Тап/клик вне drawer'а и бургера закрывает меню (WCAG 2.1.2 / ожидаемое поведение).
+    function onDrawerOutside(e: PointerEvent) {
+      if (!ndrawer || !ndrawer.classList.contains("open")) return;
+      const t = e.target as Node;
+      if (ndrawer.contains(t) || nburger?.contains(t)) return;
+      closeDrawer();
     }
     nburger?.addEventListener("click", toggleDrawer);
     ndrawer?.querySelectorAll("a").forEach(a => a.addEventListener("click", closeDrawer));
+    document.addEventListener("keydown", onDrawerKey);
+    document.addEventListener("pointerdown", onDrawerOutside);
 
     // Sticky mobile CTA — reveal once the hero is scrolled past (CSS gates it to <920px)
     const mcta = document.getElementById("mcta");
@@ -456,6 +478,10 @@ export default function Home() {
       window.removeEventListener("scroll", onScroll);
       nburger?.removeEventListener("click", toggleDrawer);
       ndrawer?.querySelectorAll("a").forEach(a => a.removeEventListener("click", closeDrawer));
+      document.removeEventListener("keydown", onDrawerKey);
+      document.removeEventListener("pointerdown", onDrawerOutside);
+      // Не оставляем body заблокированным, если размонтируемся при открытом drawer'е.
+      if (ndrawer?.classList.contains("open")) document.body.style.overflow = drawerPrevOverflow;
       if (heroAnimId !== undefined) cancelAnimationFrame(heroAnimId);
       if (tiltRaf !== undefined) cancelAnimationFrame(tiltRaf);
       cardObserver?.disconnect();
