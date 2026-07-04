@@ -37,6 +37,10 @@ const NB_CSS = `
 @media (max-width:1023px){
   .nb-panel{position:fixed;top:58px;left:12px;right:12px;width:auto;max-width:380px;margin-left:auto}
 }
+/* Тап-таргет 44px на узких телефонах — "Mark all read" был обычным текстом без высоты. */
+@media (max-width:430px){
+  .nb-markall{display:inline-flex;align-items:center;min-height:44px}
+}
 `;
 
 function relTime(iso: string): string {
@@ -164,6 +168,7 @@ export function NotificationsBell({
                 type="button"
                 onClick={handleMarkAll}
                 disabled={pending}
+                className="nb-markall"
                 style={{ marginLeft: "auto", border: "none", background: "transparent", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, cursor: pending ? "default" : "pointer", opacity: pending ? 0.5 : 1 }}
               >
                 Mark all read

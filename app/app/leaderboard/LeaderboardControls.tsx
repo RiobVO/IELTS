@@ -27,6 +27,8 @@ export default function LeaderboardControls({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 4 }}>
+      {/* Тап-таргет чипов 8px 15px (~32px) < 44px на узких телефонах. */}
+      <style>{"@media (max-width:430px){.lc-tab{min-height:44px}}"}</style>
       <div style={ROW}>
         {periodOptions.map((o) => (
           <Tab key={o.value} href={href(o.value, scope)} active={period === o.value} label={o.label} />
@@ -61,7 +63,7 @@ function Tab({
   icon?: IconName;
 }) {
   return (
-    <Link href={href} style={{ ...TAB, ...(active ? TAB_ON : null) }}>
+    <Link href={href} className="lc-tab" style={{ ...TAB, ...(active ? TAB_ON : null) }}>
       {icon && <Icon name={icon} size={14} strokeWidth={2.3} />}
       {label}
     </Link>

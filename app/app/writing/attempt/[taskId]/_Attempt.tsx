@@ -518,6 +518,11 @@ const CSS = `
   .ct-spark1{animation:ct-spark .9s ease-out both}
   .ct-spark2{animation:ct-spark 1.1s ease-out .15s both}
 }
+/* Тап-таргеты ≥44px на узких телефонах: "Back to catalog" (padding:4) и таймер (height:40). */
+@media (max-width:430px){
+  .wa-back{min-height:44px}
+  .wa-timer{min-height:44px}
+}
 `;
 
 const FLOW_CSS = `

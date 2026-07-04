@@ -85,6 +85,10 @@ const CSS = `
   .wf-annogrid{grid-template-columns:1.45fr 1fr}
   .wf-plotrow{grid-template-columns:1fr 240px}
 }
+/* Тап-таргет пилюли истории 38px < 44px на узких телефонах. */
+@media (max-width:430px){
+  .wf-pill{min-height:44px}
+}
 `;
 
 const S: Record<string, CSSProperties> = {

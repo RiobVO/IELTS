@@ -366,7 +366,7 @@ export function Transcript({
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>Cancel</Button>
           </span>
         ) : (
-          <button type="button" onClick={() => setConfirming(true)} style={S.deleteBtn}>
+          <button type="button" onClick={() => setConfirming(true)} className="st-delete" style={S.deleteBtn}>
             <Icon name="trash" size={14} strokeWidth={2.2} /> Delete recording
           </button>
         )}
@@ -385,10 +385,16 @@ const CSS = `
   .st-left{position:sticky;top:88px;align-self:start;max-height:calc(100vh - 104px);overflow:auto}
 }
 .st-sentence:hover{background:var(--surface-hover)}
-.st-wave{cursor:pointer;outline:none}
+.st-wave{cursor:pointer;outline:none;position:relative}
 .st-wave:focus-visible{box-shadow:0 0 0 2px var(--brand-border);border-radius:6px}
 .st-bar{flex:1;border-radius:2px;align-self:center;transition:background .15s,height .15s}
 @media (prefers-reduced-motion:reduce){.st-bar,.st-sentence{transition:none}}
+/* Тап-таргеты ≥44px на узких телефонах: волна (role=slider, 34px) растит хит-зону
+   псевдоэлементом — визуал волны не трогаем; "Delete recording" был padding:4. */
+@media (max-width:430px){
+  .st-wave::before{content:"";position:absolute;top:50%;left:0;transform:translateY(-50%);width:100%;height:44px}
+  .st-delete{min-height:44px}
+}
 `;
 
 const S: Record<string, CSSProperties> = {

@@ -115,7 +115,7 @@ export default function PricingScreen({
 
   return (
     <div className="pricing-wrap" style={S.wrap}>
-      <style>{`.pricing-wrap{padding:28px 16px 48px}@media(min-width:768px){.pricing-wrap{padding:38px 28px 56px}}`}</style>
+      <style>{`.pricing-wrap{padding:28px 16px 48px}@media(min-width:768px){.pricing-wrap{padding:38px 28px 56px}}@media(max-width:430px){.pricing-togglebtn{min-height:44px}}`}</style>
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: 8 }}>
         <span style={S.eyebrow}>
@@ -133,7 +133,7 @@ export default function PricingScreen({
           {([["monthly", "Monthly"], ["annual", "Annual"]] as const).map(([v, l]) => {
             const on = (v === "annual") === annual;
             return (
-              <button key={v} onClick={() => setAnnual(v === "annual")} style={{ ...S.toggleBtn, background: on ? "var(--surface)" : "transparent", color: on ? "var(--text-primary)" : "var(--text-muted)", boxShadow: on ? "var(--shadow-sm)" : "none" }}>
+              <button key={v} onClick={() => setAnnual(v === "annual")} className="pricing-togglebtn" style={{ ...S.toggleBtn, background: on ? "var(--surface)" : "transparent", color: on ? "var(--text-primary)" : "var(--text-muted)", boxShadow: on ? "var(--shadow-sm)" : "none" }}>
                 {l}
                 {v === "annual" && <span style={S.saveTag}>2 mo free</span>}
               </button>
