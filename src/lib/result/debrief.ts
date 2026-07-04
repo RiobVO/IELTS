@@ -194,11 +194,11 @@ export function stripHtml(html: string): string {
 }
 
 /**
- * Сериализуемый пропс клиентского Debrief (/result). Собирается целиком на
+ * Сериализуемый пропс клиентского ResultCoach (/result). Собирается целиком на
  * сервере (page.tsx) — answer/explanation/evidence в `replay` присутствуют
  * ТОЛЬКО когда `replayLocked === false` (fullReview); `missed` безопасен всегда
- * (только number/qtype, без ключа) — используется и как gated-фоллбэк S3, и
- * как список для степпера, когда `replay` ещё не заполнен.
+ * (только number/qtype, без ключа) — используется и как gated-фоллбэк Review
+ * Room, и как список для степпера, когда `replay` ещё не заполнен.
  */
 export interface DebriefData {
   title: string;
