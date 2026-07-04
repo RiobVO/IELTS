@@ -230,8 +230,8 @@ function Shell({ children, onClose }: { children: ReactNode; onClose: () => void
   return (
     <div style={S.wrap}>
       <style>{CSS}</style>
-      <div style={S.shell}>
-        <div style={S.headbar}>
+      <div className="sa-shell" style={S.shell}>
+        <div className="sa-headbar" style={S.headbar}>
           <span style={S.logoBars} aria-hidden="true">
             <span style={{ ...S.logoBar, height: 18, background: "var(--brand)" }} />
             <span style={{ ...S.logoBar, height: 13, background: "var(--slate-400)" }} />
@@ -620,6 +620,13 @@ const CSS = `
    под ней, DOM-порядок не трогаем. */
 @media (max-width:430px){
   .sa-recpanel{position:sticky;bottom:0;z-index:5;background:var(--bg-base);padding-top:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+  /* shell{overflow:hidden} — ближайший (не скроллящийся) scroll-контейнер для
+     sticky-панели выше, поэтому она не липнет к вьюпорту. Открываем overflow и
+     компенсируем клиппинг угла: headbar — первый ребёнок с прямыми верхними
+     углами, упиравшимися в скругление shell (28px); bodyPad фона не задаёт,
+     recpanel уже совпадает с фоном shell — других швов нет. */
+  .sa-shell{overflow:visible!important}
+  .sa-headbar{border-radius:27px 27px 0 0}
 }
 `;
 
