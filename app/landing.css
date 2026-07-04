@@ -244,7 +244,7 @@ footer{padding:54px 0 42px;border-top:1px solid var(--line);margin-top:96px}
 /* sticky mobile CTA — appears once the hero is scrolled past */
 .mcta{display:none}
 @media(max-width:920px){
-  .mcta{display:flex;position:fixed;left:14px;right:14px;bottom:14px;z-index:120;align-items:center;justify-content:center;gap:9px;background:var(--v2);color:#fff;font-weight:700;font-size:16px;padding:15px 20px;border-radius:14px;box-shadow:0 16px 34px -10px rgba(129,112,234,.7);transform:translateY(160%);transition:transform .32s var(--ease);will-change:transform}
+  .mcta{display:flex;position:fixed;left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:120;align-items:center;justify-content:center;gap:9px;background:var(--v2);color:#fff;font-weight:700;font-size:16px;padding:15px 20px;border-radius:14px;box-shadow:0 16px 34px -10px rgba(129,112,234,.7);transform:translateY(160%);transition:transform .32s var(--ease);will-change:transform}
   .mcta .ico{width:18px;height:18px}
   .mcta.show{transform:none}
 }

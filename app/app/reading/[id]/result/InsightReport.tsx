@@ -240,15 +240,15 @@ function ReviewCard({ q }: { q: AKItem }) {
         <span style={S.revNum}>Q{q.number}</span>
         <span style={S.revType}>{q.label}</span>
       </div>
-      <div style={S.revLines}>
-        <div>
+      <div className="ir-revlines" style={S.revLines}>
+        <div style={{ minWidth: 0 }}>
           <span style={S.revLabel}>You </span>
-          <b style={{ color: q.correct ? "var(--success-text)" : "var(--error-text)" }}>{q.given}</b>
+          <b style={{ color: q.correct ? "var(--success-text)" : "var(--error-text)", overflowWrap: "anywhere" }}>{q.given}</b>
         </div>
         {!q.correct && q.answer != null && (
-          <div>
+          <div style={{ minWidth: 0 }}>
             <span style={S.revLabel}>Answer </span>
-            <b style={{ color: "var(--text-primary)" }}>{q.answer}</b>
+            <b style={{ color: "var(--text-primary)", overflowWrap: "anywhere" }}>{q.answer}</b>
           </div>
         )}
       </div>
@@ -294,6 +294,11 @@ const IR_CSS = `
 }
 @media (prefers-reduced-motion:reduce){
   .ir-chev,.ir-panel,.ir-panel>div{transition:none}
+}
+/* Длинный ответ без пробелов может распереть ряд "You / Answer" даже с overflow-wrap
+   на узких телефонах — разрешаем перенос строк как последнюю страховку. */
+@media (max-width:430px){
+  .ir-revlines{flex-wrap:wrap}
 }
 `;
 
