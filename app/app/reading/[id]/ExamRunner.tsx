@@ -468,10 +468,10 @@ export default function ExamRunner({
           <span style={S.clock}>
             <Icon name={paused ? "pause" : "clock"} size={18} style={{ color: "var(--text-muted)" }} /> {fmt(practiceSeconds)}
           </span>
-          <button type="button" onClick={togglePause} aria-label={paused ? "Resume timer" : "Pause timer"} title={paused ? "Resume" : "Pause"} style={S.ctrlBtn}>
+          <button type="button" onClick={togglePause} aria-label={paused ? "Resume timer" : "Pause timer"} title={paused ? "Resume" : "Pause"} className="exam-ctrl" style={S.ctrlBtn}>
             <Icon name={paused ? "play" : "pause"} size={16} />
           </button>
-          <button type="button" onClick={restart} aria-label="Restart test" title="Restart test" style={S.ctrlBtnText}>
+          <button type="button" onClick={restart} aria-label="Restart test" title="Restart test" className="exam-ctrl-text" style={S.ctrlBtnText}>
             Restart
           </button>
         </>
@@ -522,7 +522,7 @@ export default function ExamRunner({
           <div style={S.topTitle}>{title}</div>
           <div style={S.topMeta}>{meta}</div>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
+        <div className="exam-top-right" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
           {timerArea}
           <Button trailingIcon="arrow-right" onClick={submit} loading={pending}>
             Submit
@@ -817,6 +817,7 @@ const QuestionBlock = memo(function QuestionBlock({
                   onChange={(e) => onAnswer(q.number, e.target.value)}
                   aria-label={`Answer for question ${q.number}`}
                   autoComplete="off"
+                  className="exam-gap-input"
                   style={inlineGapInput(!!single)}
                 />
                 {gapParts![1]}
@@ -848,6 +849,7 @@ const QuestionBlock = memo(function QuestionBlock({
                     role="checkbox"
                     aria-checked={sel}
                     onClick={() => onToggle(q.number, o.value)}
+                    className="exam-opt"
                     style={optBtn(sel)}
                   >
                     <span style={{ width: 18, height: 18, borderRadius: 5, flex: "none", border: `2px solid ${sel ? "var(--brand)" : "var(--border-strong)"}`, background: sel ? "var(--brand)" : "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
@@ -873,6 +875,7 @@ const QuestionBlock = memo(function QuestionBlock({
                     tabIndex={i === radioTabStop ? 0 : -1}
                     onClick={() => onAnswer(q.number, o.value)}
                     onKeyDown={(e) => onRadioKey(e, i)}
+                    className="exam-opt"
                     style={optBtn(sel)}
                   >
                     <span style={{ width: 18, height: 18, borderRadius: "50%", flex: "none", border: `2px solid ${sel ? "var(--brand)" : "var(--border-strong)"}`, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
@@ -922,12 +925,12 @@ function StartScreen({
 }) {
   const [minutes, setMinutes] = useState(defaultMinutes);
   return (
-    <div style={SS.overlay} role="dialog" aria-modal="true" aria-label="Choose how to take this test">
+    <div className="exam-overlay" style={SS.overlay} role="dialog" aria-modal="true" aria-label="Choose how to take this test">
       <div style={SS.panel}>
         <span style={SS.kicker}>Ready to begin</span>
         <h1 style={SS.startTitle}>{title}</h1>
         <p style={SS.startMeta}>{meta}</p>
-        <div style={SS.cards}>
+        <div className="exam-start-cards" style={SS.cards}>
           <div style={SS.card}>
             <span style={SS.cardIcon}>
               <Icon name="pencil-check" size={22} />
@@ -944,7 +947,7 @@ function StartScreen({
             </span>
             <div style={SS.cardTitle}>Mock exam</div>
             <p style={SS.cardDesc}>Timed countdown that auto-submits at zero — just like the real test.</p>
-            <div style={SS.presets} role="group" aria-label="Time limit in minutes">
+            <div className="exam-presets" style={SS.presets} role="group" aria-label="Time limit in minutes">
               {presets.map((m) => {
                 const sel = m === minutes;
                 return (
@@ -981,7 +984,7 @@ function ListeningGate({
   onPlay: () => void;
 }) {
   return (
-    <div style={SS.overlay} role="dialog" aria-modal="true" aria-label="Listening recording">
+    <div className="exam-overlay" style={SS.overlay} role="dialog" aria-modal="true" aria-label="Listening recording">
       <div style={{ ...SS.panel, maxWidth: 460, textAlign: "center" }}>
         <span style={{ ...SS.cardIcon, width: 52, height: 52, margin: "0 auto 14px", background: "var(--brand-subtle)", color: "var(--brand)" }}>
           <Icon name="headphones" size={26} />
@@ -1005,7 +1008,7 @@ function ListeningGate({
 }
 
 const SS: Record<string, React.CSSProperties> = {
-  overlay: { position: "fixed", inset: 0, zIndex: 50, display: "grid", placeItems: "center", padding: 20, background: "color-mix(in oklab, var(--bg-base) 82%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" },
+  overlay: { position: "fixed", inset: 0, zIndex: 50, display: "grid", placeItems: "center", overflowY: "auto", padding: 20, background: "color-mix(in oklab, var(--bg-base) 82%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" },
   panel: { width: "100%", maxWidth: 620, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-lg)", padding: "28px 26px" },
   kicker: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" },
   startTitle: { margin: "8px 0 4px", fontFamily: "var(--font-reading)", fontSize: "var(--text-2xl)", fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.15 },
@@ -1053,6 +1056,22 @@ const READING_CSS = `
   .exam-pane-q{flex:none;width:460px}
   .exam-split[data-pane="passage"] .exam-pane-q,
   .exam-split[data-pane="questions"] .exam-pane-p{display:flex}
+}
+
+/* Мобильный проход (≤430px): правый кластер шапки переносится (иначе Submit клиппит
+   overflow:hidden shell), оверлеи прижаты к верху и скроллятся при высокой панели,
+   тап-таргеты ≥44px. Планшет/десктоп (>430px) не затрагиваются. */
+@media (max-width:430px){
+  .exam-top-right{flex-wrap:wrap;justify-content:flex-end;gap:8px!important}
+  .exam-tabs button{height:44px!important}
+  .exam-exit{width:44px!important;height:44px!important}
+  .exam-ctrl{width:44px!important;height:44px!important}
+  .exam-ctrl-text{height:44px!important}
+  .exam-opt{min-height:44px!important}
+  .exam-gap-input{min-width:80px!important;max-width:100%!important;min-height:44px!important}
+  .exam-overlay{align-items:start!important}
+  .exam-start-cards{grid-template-columns:1fr!important}
+  .exam-presets{flex-wrap:wrap!important}
 }
 
 /* === Cambridge skin (шаг 4): бело-сине-графитовый вид реального computer-IELTS.
