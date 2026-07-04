@@ -106,6 +106,35 @@ export function computeBlindSpot(
 }
 
 /**
+ * Генерализованный фоллбэк blindSpot — для попыток без ternary-вопросов вовсе,
+ * или где computeBlindSpot не нашёл настоящей NG/value слепой зоны. Раньше
+ * page.tsx подставлял сюда просто "слабейший тип" (perType[0]) без гейта — на
+ * all-miss или ровной ничьей это давало произвольный "диагноз" (hero
+ * утверждал "the rest of your answers average much higher", хотя остальные
+ * типы были ровно так же плохи). Гейт: генерализация валидна ТОЛЬКО когда
+ * слабейший тип строго хуже среднего по всем остальным типам — иначе null
+ * (hero уходит в свой собственный null-фоллбэк).
+ */
+export function computeGeneralizedBlindSpot(
+  perType: [string, { correct: number; total: number }][],
+): BlindSpot | null {
+  if (perType.length < 2) return null;
+  const sorted = [...perType].sort((a, b) => a[1].correct / a[1].total - b[1].correct / b[1].total);
+  const [weakType, weakStats] = sorted[0];
+  const rest = sorted.slice(1);
+  const restAvgPct = rest.reduce((sum, [, s]) => sum + s.correct / s.total, 0) / rest.length;
+  const weakPct = weakStats.correct / weakStats.total;
+  const costMarks = weakStats.total - weakStats.correct;
+  if (costMarks === 0 || weakPct >= restAvgPct) return null;
+  return {
+    label: qtypeLabel(weakType),
+    weakBucket: { correct: weakStats.correct, total: weakStats.total },
+    strongBucket: null,
+    costMarks,
+  };
+}
+
+/**
  * Тег вопроса для guided-replay чипа (Review Room, derive-добавка §e-1):
  * помечает, принадлежит ли ИМЕННО ЭТОТ вопрос диагностированному blindSpot —
  * "your blind spot" для настоящей Not-Given слепой зоны, "common trap" для
@@ -127,15 +156,50 @@ export function blindSpotTag(
 }
 
 /**
+ * Единая цель коучинга (P1 fix — унификация hero/dock/By-type): какой ИМЕННО
+ * qtype считать "тем самым типом" для drill-CTA (plan.weakLabel/drillHref) и
+ * для focus-подсветки строки в By-type. Раньше hero (blindSpot) и dock/
+ * таблица (weakest = perType[0]) могли расходиться — hero говорил "Not
+ * Given", а дрилл предлагал совсем другой тип. Источник — реальный blindSpot,
+ * если он есть: берём qtype вопросов, которые blindSpotTag реально относит к
+ * нему (при разночтении tfng/ynng внутри одного ternary-бакета побеждает
+ * большинство). Без blindSpot — просто fallback (обычно perType[0]).
+ */
+export function resolveFocusQType(
+  perQuestion: { number: number; qtype: string }[],
+  meta: Map<number, { accept: string[] }>,
+  blindSpot: BlindSpot | null,
+  fallback: string | null,
+): string | null {
+  if (!blindSpot) return fallback;
+  const counts = new Map<string, number>();
+  for (const q of perQuestion) {
+    const accept = meta.get(q.number)?.accept ?? [];
+    if (blindSpotTag({ qtype: q.qtype, accept }, blindSpot) == null) continue;
+    counts.set(q.qtype, (counts.get(q.qtype) ?? 0) + 1);
+  }
+  if (counts.size === 0) return fallback;
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+/**
  * Shareable one-liner (Telegram viral loop, W1-5) — first-person, без
  * завершающего двоеточия (coach-редизайн: старый вариант звучал как заголовок
  * поста, не как реплика от лица игрока). Вынесено из page.tsx в чистую
- * функцию, чтобы формулировку можно было проверить юнит-тестом.
+ * функцию, чтобы формулировку можно было проверить юнит-тестом. `section` —
+ * роут /result общий для reading и listening (P1 fix), раньше оба сценария
+ * хардкодили "IELTS Reading".
  */
-export function buildShareHeadline(banded: boolean, band: number | null, pct: number): string {
+export function buildShareHeadline(
+  banded: boolean,
+  band: number | null,
+  pct: number,
+  section: "reading" | "listening",
+): string {
+  const sectionLabel = section === "listening" ? "IELTS Listening" : "IELTS Reading";
   return banded
-    ? `I just hit Band ${band} on IELTS Reading with bando — and finally found the one habit costing me marks.`
-    : `I scored ${pct}% on IELTS Reading with bando and pinned down exactly which question type is costing me marks.`;
+    ? `I just hit Band ${band} on ${sectionLabel} with bando — and finally found the one habit costing me marks.`
+    : `I scored ${pct}% on ${sectionLabel} with bando and pinned down exactly which question type is costing me marks.`;
 }
 
 export interface GrowthBar {

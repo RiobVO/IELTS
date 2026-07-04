@@ -7,7 +7,17 @@ import { getProfile, getUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import type { ReviewSnapshot } from "@/lib/exam/review-snapshot";
-import { blindSpotTag, buildShareHeadline, computeBlindSpot, computeGrowth, computeNearMiss, stripHtml, type DebriefData } from "@/lib/result/debrief";
+import {
+  blindSpotTag,
+  buildShareHeadline,
+  computeBlindSpot,
+  computeGeneralizedBlindSpot,
+  computeGrowth,
+  computeNearMiss,
+  resolveFocusQType,
+  stripHtml,
+  type DebriefData,
+} from "@/lib/result/debrief";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import { qtypeDescription, qtypeLabel } from "@/lib/labels";
@@ -318,7 +328,7 @@ export default async function ResultPage({
       : [];
 
   // Shareable one-liner for the Telegram viral loop (W1-5).
-  const shareHeadline = buildShareHeadline(banded, banded ? Number(att.bandScore) : null, result.percent);
+  const shareHeadline = buildShareHeadline(banded, banded ? Number(att.bandScore) : null, result.percent, section);
 
   // Answer-key appendix data (Variant A), built from the already-loaded grade
   // result (no extra queries, perf-safe). The answer_key fields are attached
@@ -354,20 +364,17 @@ export default async function ResultPage({
   // built ONLY when fullReview, mirroring the akItems gate above.
   const bandScale = (ci[0]?.bandScale as Record<string, number> | null) ?? null;
   const nearMiss = computeNearMiss(bandScale, result.rawScore);
-  // На идеальной/ровной попытке weakest всё равно указывает на какой-то тип
-  // (perType всегда непусто), но там нечего чинить — costMarks === 0. Гейт на
-  // реальную потерю баллов, иначе S2/S5 придумывают "слабый тип" из воздуха.
-  const weakestCostMarks = weakest ? weakest[1].total - weakest[1].correct : 0;
+  // computeGeneralizedBlindSpot гейтит генерализацию средним по остальным
+  // типам (P1 fix) — на all-miss/ровной ничьей результат null, а не
+  // выдуманный "слабый тип" (hero уходит в свой собственный null-фоллбэк).
   const blindSpot: DebriefData["blindSpot"] =
-    computeBlindSpot(result.perQuestion, meta) ??
-    (weakest && weakestCostMarks > 0
-      ? {
-          label: qtypeLabel(weakest[0]),
-          weakBucket: { correct: weakest[1].correct, total: weakest[1].total },
-          strongBucket: null,
-          costMarks: weakestCostMarks,
-        }
-      : null);
+    computeBlindSpot(result.perQuestion, meta) ?? computeGeneralizedBlindSpot(perType);
+  // Единая цель коучинга (P1 fix): hero (blindSpot), dock drill-CTA и By-type
+  // "start here" указывают на ОДИН и тот же qtype — раньше hero мог говорить
+  // "Not Given", а дрилл предлагал совсем другой тип.
+  const focusQType = resolveFocusQType(result.perQuestion, meta, blindSpot, weakest ? weakest[0] : null);
+  const focusStats = focusQType ? perType.find(([t]) => t === focusQType)?.[1] : null;
+  const focusCostMarks = focusStats ? focusStats.total - focusStats.correct : 0;
   // Хронологический ряд для computeGrowth: prevRows приходит most-recent-first
   // (нужен для метрик выше) — переворачиваем и дописываем текущую попытку
   // последней («now»), её breakdown ещё не в БД на момент чтения /result.
@@ -376,12 +383,12 @@ export default async function ResultPage({
     .map((r) => ({ perTypeBreakdown: (r.perTypeBreakdown as Record<string, { correct: number; total: number }> | null) ?? null }))
     .concat([{ perTypeBreakdown: result.perType }]);
   const growth = computeGrowth(growthHistory, weakest ? weakest[0] : null);
-  const levelRows: DebriefData["level"]["rows"] = perType.map(([type, s], i) => ({
+  const levelRows: DebriefData["level"]["rows"] = perType.map(([type, s]) => ({
     type,
     label: qtypeLabel(type),
     correct: s.correct,
     total: s.total,
-    weak: i === 0,
+    weak: type === focusQType,
     practiseHref: `${catalogBase}?q_type=${encodeURIComponent(type)}`,
   }));
   const missed: DebriefData["missed"] = result.perQuestion
@@ -396,7 +403,7 @@ export default async function ResultPage({
   // promptHtml уже загружен в liveRows (безусловный запрос выше, не зависит от
   // snapshot) — переиспользуем вместо нового round-trip.
   const promptByNumber = new Map(liveRows.map((r) => [r.number, r.promptHtml]));
-  const replay: DebriefData["replay"] = !fullReview
+  const replayCandidates: DebriefData["replay"] = !fullReview
     ? []
     : result.perQuestion
         .filter((q) => !q.correct)
@@ -415,6 +422,20 @@ export default async function ResultPage({
             tag: blindSpotTag({ qtype: q.qtype, accept: m.accept }, blindSpot),
           };
         });
+  // Куратируем guided replay до топ-6 (прототип result-coach.html тоже
+  // показывал 6 из 39 промахов, не все подряд) — приоритет вопросам из
+  // диагностированного blindSpot (tag != null), затем остальные по порядку
+  // номеров. Полный список промахов остаётся доступен в Answer key (фильтр
+  // Wrong) — это фокус guided-степпера на самых ценных вопросах, не потеря
+  // данных.
+  const REPLAY_LIMIT = 6;
+  const replay: DebriefData["replay"] =
+    replayCandidates.length <= REPLAY_LIMIT
+      ? replayCandidates
+      : [
+          ...replayCandidates.filter((r) => r.tag != null),
+          ...replayCandidates.filter((r) => r.tag == null),
+        ].slice(0, REPLAY_LIMIT);
 
   const debriefData: DebriefData = {
     title,
@@ -438,8 +459,8 @@ export default async function ResultPage({
     replay,
     level: { rows: levelRows, avgPct: correctPct, growth },
     plan: {
-      weakLabel: weakest && weakestCostMarks > 0 ? qtypeLabel(weakest[0]) : null,
-      drillHref: weakest && weakestCostMarks > 0 ? `${catalogBase}?q_type=${encodeURIComponent(weakest[0])}` : null,
+      weakLabel: focusQType && focusCostMarks > 0 ? qtypeLabel(focusQType) : null,
+      drillHref: focusQType && focusCostMarks > 0 ? `${catalogBase}?q_type=${encodeURIComponent(focusQType)}` : null,
       retryHref,
     },
     share: profile?.referral_code ? { refCode: profile.referral_code, headline: shareHeadline } : null,
