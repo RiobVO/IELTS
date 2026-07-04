@@ -3,6 +3,7 @@
 // здесь только бизнес-правила поверх них: near-miss к следующему band, слепая
 // зона (Not Given и симметричные типы), рост по слабому типу между попытками.
 
+import * as cheerio from "cheerio";
 import { bandForScore } from "@/lib/grading/band";
 import type { PerQuestionResult } from "@/lib/grading/grade";
 import { qtypeLabel } from "@/lib/labels";
@@ -145,6 +146,15 @@ export function computeGrowth(
 }
 
 /**
+ * question.prompt_html → чистый текст (S3 replay stem). cheerio уже зависимость
+ * проекта (src/lib/import/parse-test.ts) — режем тегами через него, а не regex,
+ * чтобы вложенная разметка и HTML-entities (&amp; и т.п.) декодировались верно.
+ */
+export function stripHtml(html: string): string {
+  return cheerio.load(html).root().text().replace(/\s+/g, " ").trim();
+}
+
+/**
  * Сериализуемый пропс клиентского Debrief (/result). Собирается целиком на
  * сервере (page.tsx) — answer/explanation/evidence в `replay` присутствуют
  * ТОЛЬКО когда `replayLocked === false` (fullReview); `missed` безопасен всегда
@@ -175,6 +185,23 @@ export interface DebriefData {
   missed: { number: number; qtype: string; label: string }[];
   /** true когда review закрыт Premium-гейтом — S3 показывает upsell, не степпер. */
   replayLocked: boolean;
+  /**
+   * Полные данные для guided-replay степпера — ТОЛЬКО пропущенные вопросы, и
+   * ТОЛЬКО когда replayLocked === false (answer/why/evidence никогда не
+   * сериализуются иначе — тот же гейт, что у answer_key). `options` задан
+   * только для tfng/ynng (re-pick интерактивен); у прочих типов null —
+   * reveal-only (decision §3).
+   */
+  replay: {
+    number: number;
+    type: string;
+    stem: string;
+    options: string[] | null;
+    given: string;
+    answer: string;
+    why: string | null;
+    evidence: string | null;
+  }[];
 
   level: {
     rows: { type: string; label: string; correct: number; total: number; weak: boolean; practiseHref: string }[];
