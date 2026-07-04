@@ -10,15 +10,13 @@ import type { ReviewSnapshot } from "@/lib/exam/review-snapshot";
 import { computeBlindSpot, computeGrowth, computeNearMiss, type DebriefData } from "@/lib/result/debrief";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
-import { categoryLabel, qtypeLabel } from "@/lib/labels";
+import { qtypeLabel } from "@/lib/labels";
 import { AppShell } from "../../../_AppShell";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
 import { Icon } from "@/components/core/icons";
-import BadgeUnlock from "./BadgeUnlock";
-import { ShareResult } from "./ShareResult";
-import { AnimatedDonut, CountUp, FadeUp } from "./reveal";
-import { AccuracyByType, AnswerKeyFilter, type AccRow, type AKItem, type AKType } from "./InsightReport";
+import Debrief from "./Debrief";
+import { AnswerKeyFilter, type AKItem, type AKType } from "./InsightReport";
 
 export const dynamic = "force-dynamic";
 
@@ -326,19 +324,9 @@ export default async function ResultPage({
   const weakestType = weakest ? qtypeLabel(weakest[0]) : null;
   const shareHeadline = `I scored ${shareScore} on bando${weakestType ? ` — weakest type: ${weakestType}` : ""}. Train your IELTS Reading & Listening:`;
 
-  // Variant A — interactive insight data, built from the already-loaded grade
+  // Answer-key appendix data (Variant A), built from the already-loaded grade
   // result (no extra queries, perf-safe). The answer_key fields are attached
   // ONLY when fullReview, so a gated user's HTML never carries them.
-  const accRows: AccRow[] = perType.map(([type, s], i) => ({
-    type,
-    label: qtypeLabel(type),
-    correct: s.correct,
-    total: s.total,
-    weak: i === 0,
-    missed: result.perQuestion.filter((q) => q.qtype === type && !q.correct).map((q) => q.number),
-    got: result.perQuestion.filter((q) => q.qtype === type && q.correct).map((q) => q.number),
-    practiseHref: `${catalogBase}?q_type=${encodeURIComponent(type)}`,
-  }));
   const akTypes: AKType[] = perType.map(([type]) => ({ type, label: qtypeLabel(type) }));
   const akItems: AKItem[] = result.perQuestion.map((q) => {
     const m = meta.get(q.number)!;
@@ -360,10 +348,11 @@ export default async function ResultPage({
     };
   });
 
-  // Debrief data layer (S1-S5 «дебриф», wired into the page in a later commit).
-  // Every field below is a plain derivation of data already fetched/graded
-  // above — no new queries. answer/explanation/evidence are never attached
-  // here (that only happens in the S3 replay assembly, gated by fullReview).
+  // Debrief data layer (S1-S5 «дебриф», rendered by <Debrief/> below). Every
+  // field is a plain derivation of data already fetched/graded above — no new
+  // queries. S3's full replay (answer/explanation/evidence, gated by
+  // fullReview) lands in a follow-up commit; `missed` here is the safe subset
+  // (number/qtype only, no answer key) used for the current S3 placeholder.
   const bandScale = (ci[0]?.bandScale as Record<string, number> | null) ?? null;
   const nearMiss = computeNearMiss(bandScale, result.rawScore);
   const blindSpot: DebriefData["blindSpot"] =
@@ -425,7 +414,6 @@ export default async function ResultPage({
       ? { refCode: profile.referral_code, headline: shareHeadline, value: banded ? String(att.bandScore) : `${result.percent}%` }
       : null,
   };
-  void debriefData; // consumed starting the next commit ("feat(result): debrief scroll shell")
 
   return (
     <AppShell active={section}>
@@ -437,113 +425,7 @@ export default async function ResultPage({
           </Button>
         </div>
 
-        {/* Report header */}
-        <div style={S.repHead}>
-          <div style={{ minWidth: 0 }}>
-            <h1 style={S.h1}>Your report</h1>
-            <div style={S.repSub}>
-              {title}
-              {category ? ` · ${categoryLabel(category)}` : ""} · {result.total} questions
-            </div>
-          </div>
-          {fullReview && (
-            <Badge tone="success">
-              <Icon name="book-open" size={12} /> Full report free
-            </Badge>
-          )}
-        </div>
-
-        {unlockedBadges.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <BadgeUnlock badges={unlockedBadges} />
-          </div>
-        )}
-
-        {/* Insight hero — the verdict: what's costing you the most, with score */}
-        <div style={S.hero}>
-          <div className="res-herogrid" style={S.heroGrid}>
-            <div style={S.scoreStack}>
-              <AnimatedDonut pct={correctPct} />
-              <div style={{ textAlign: "center" }}>
-                <div style={S.metricEyebrow}>{banded ? "Band score" : "Score"}</div>
-                <div style={S.bandBig}>
-                  <CountUp
-                    value={banded ? Number(att.bandScore) : result.percent}
-                    decimals={banded ? 1 : 0}
-                    suffix={banded ? "" : "%"}
-                  />
-                </div>
-                <div style={S.rawLine}>
-                  {result.rawScore}/{result.total} correct
-                </div>
-              </div>
-            </div>
-            <div style={{ minWidth: 0 }}>
-              {weakest ? (
-                <>
-                  <div style={S.verdictEy}>Your biggest gap</div>
-                  <h2 className="res-verdict" style={S.verdict}>
-                    <span style={S.verdictEm}>{qtypeLabel(weakest[0])}</span> is where you lose
-                    the most — {weakest[1].correct} of {weakest[1].total} right.
-                  </h2>
-                  <p style={S.verdictSub}>
-                    Closing one weak type lifts your score faster than grinding full tests.
-                    Start here, then re-test.
-                  </p>
-                  <div style={S.verdictCta}>
-                    <Button href={`${catalogBase}?q_type=${encodeURIComponent(weakest[0])}`} trailingIcon="arrow-right">
-                      Drill {qtypeLabel(weakest[0])}
-                    </Button>
-                    <Button variant="ghost" href="#answer-key">
-                      See all answers
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={S.verdictEy}>Your result</div>
-                  <h2 className="res-verdict" style={S.verdict}>
-                    You got {result.rawScore} of {result.total} right.
-                  </h2>
-                  <p style={S.verdictSub}>
-                    Review every question below to see exactly where your points went.
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-          {metrics.length > 0 && (
-            <div className="res-herometrics" style={S.heroMetrics}>
-              {metrics.map((m) => (
-                <div key={m.label} style={S.metricTile}>
-                  <div style={{ ...S.metricValue, color: m.color }}>{m.value}</div>
-                  <div style={S.metricLabel}>{m.label}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Accuracy by type — tap a type to reveal which questions you missed */}
-        {accRows.length > 0 && <AccuracyByType rows={accRows} />}
-
-        {/* Recommendation */}
-        {weakest && (
-          <FadeUp delayMs={620}>
-            <div style={S.recoCard}>
-              <span style={S.recoIcon}>
-                <Icon name="target" size={20} strokeWidth={2.3} />
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <b style={{ color: "var(--text-primary)" }}>Recommended:</b> start with{" "}
-                {qtypeLabel(weakest[0])} — your weakest type and the fastest band gain.
-              </div>
-              <Button href={`${catalogBase}?q_type=${encodeURIComponent(weakest[0])}`} trailingIcon="arrow-right" style={{ flex: "none" }}>
-                Start
-              </Button>
-            </div>
-          </FadeUp>
-        )}
+        <Debrief data={debriefData} unlockedBadges={unlockedBadges} />
 
         {/* Answer key. Everyone sees right/wrong per question. The correct answer,
             explanation and text evidence are revealed only when `fullReview` is
@@ -563,27 +445,6 @@ export default async function ResultPage({
           <AnswerKeyFilter items={akItems} types={akTypes} />
         </section>
 
-        {/* Gated path (flag closed): weak types + right/wrong are free above;
-            Premium reveals the answers, the why, and the evidence. */}
-        {!fullReview && (
-          <div style={S.upsell}>
-            <div style={S.upsellTitle}>See the answers and why</div>
-            <p style={S.upsellText}>
-              You can see your weakest types and which questions you missed. Premium reveals the
-              correct answers, the explanation behind each, and the exact text evidence.
-            </p>
-            <Button href="/app/upgrade" trailingIcon="arrow-right">
-              Go Premium
-            </Button>
-          </div>
-        )}
-
-        {profile?.referral_code && (
-          <div style={{ marginTop: 18 }}>
-            <ShareResult refCode={profile.referral_code} headline={shareHeadline} />
-          </div>
-        )}
-
         <div className="res-footer" style={S.footer}>
           <Button variant="secondary" fullWidth href={catalogBase}>
             Back to catalog
@@ -597,17 +458,10 @@ export default async function ResultPage({
   );
 }
 
-// Адаптив result-героя. База = мобильный (донат-стек над вердиктом); ≥620px =
-// две колонки. Переключаемые grid-свойства живут в классах, не inline (иначе
-// inline перебивает media-query — responsive-inline-class invariant).
+// Два fullWidth-Button (Back to catalog / Try again) в ряд теснятся на узких
+// телефонах — переключаемое свойство живёт в классе, не inline (иначе inline
+// перебивает media-query — responsive-inline-class invariant).
 const RESULT_CSS = `
-.res-herogrid{grid-template-columns:1fr;gap:18px}
-.res-herometrics{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
-.res-verdict{text-wrap:balance}
-@media (min-width:620px){
-  .res-herogrid{grid-template-columns:auto 1fr;gap:26px}
-}
-/* Два fullWidth-Button (Back to catalog / Try again) в ряд теснятся на узких телефонах. */
 @media (max-width:430px){
   .res-footer{flex-direction:column}
 }
@@ -617,37 +471,8 @@ const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 760, margin: "0 auto", padding: "16px 18px 40px", display: "flex", flexDirection: "column" },
   backRow: { display: "flex", alignItems: "center", marginBottom: 4 },
 
-  repHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 14 },
-  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
-  repSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-
-  // Insight hero
-  hero: { position: "relative", overflow: "hidden", background: "radial-gradient(120% 140% at 0% 0%, var(--violet-100), transparent 55%), var(--surface)", border: "1px solid var(--brand-border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-md)", padding: 24, marginBottom: 14 },
-  heroGrid: { display: "grid", alignItems: "center" },
-  scoreStack: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10 },
-  verdictEy: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand)", marginBottom: 8 },
-  verdict: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", lineHeight: 1.16, margin: "0 0 8px", color: "var(--text-primary)" },
-  verdictEm: { color: "var(--brand)" },
-  verdictSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", maxWidth: "46ch", margin: "0 0 16px", lineHeight: 1.5 },
-  verdictCta: { display: "flex", gap: 10, flexWrap: "wrap" },
-  heroMetrics: { display: "grid", gap: 10, marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border-subtle)" },
-
-  metricEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
-  bandBig: { fontFamily: "var(--font-mono)", fontSize: 46, fontWeight: 600, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.02em" },
-  rawLine: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 2 },
-  metricTile: { background: "var(--surface-inset)", borderRadius: 12, padding: "12px 14px" },
-  metricValue: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xl)", fontWeight: 600 },
-  metricLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", fontWeight: 600, marginTop: 2 },
-
-  recoCard: { display: "flex", alignItems: "center", gap: 14, border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", borderRadius: "var(--radius-xl)", padding: "16px 20px", boxShadow: "var(--shadow-solid)", marginBottom: 14, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
-  recoIcon: { flex: "none", color: "var(--brand)" },
-
   reviewHead: { display: "flex", alignItems: "center", gap: 8, margin: "0 0 12px" },
   h2: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 800, margin: 0, color: "var(--text-primary)" },
-
-  upsell: { marginTop: 18, border: "1px solid var(--brand-border)", background: "var(--brand-subtle)", borderRadius: "var(--radius-xl)", padding: "1.4rem 1.3rem", textAlign: "center" },
-  upsellTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 800, color: "var(--text-link)" },
-  upsellText: { fontFamily: "var(--font-ui)", color: "var(--text-secondary)", fontSize: "var(--text-sm)", margin: ".5rem auto 1rem", maxWidth: 440, lineHeight: 1.5 },
 
   footer: { marginTop: 24, display: "flex", gap: 10 },
 };
