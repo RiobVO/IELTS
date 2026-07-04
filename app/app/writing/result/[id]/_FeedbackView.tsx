@@ -37,6 +37,11 @@ export function FeedbackView({ data, targetBand }: { data: FeedbackResult; targe
     <div style={S.wrap}>
       <style>{CSS}</style>
 
+      {/* Мобильный путь назад — на &le;430px бургер единственный выход (в дополнение к history-pill). */}
+      <div className="mob-back">
+        <Button variant="ghost" size="sm" icon="arrow-left" href="/app/writing">Writing</Button>
+      </div>
+
       <header style={S.header}>
         <div>
           <div style={S.overline}>Feedback · {taskPart === "task1" ? "Task 1" : "Task 2"}</div>
@@ -79,6 +84,7 @@ const CSS = `
 .wf-plotrow{grid-template-columns:1fr}
 .wf-pill:hover{background:var(--surface-hover)!important}
 .wf-check:hover{background:var(--surface-hover)!important}
+.mob-back{display:none}
 @media (min-width:760px){
   .wf-herogrid{grid-template-columns:330px 1fr}
   .wf-fixgrid{grid-template-columns:repeat(3,1fr)}
@@ -94,6 +100,7 @@ const CSS = `
   .wf-plot-targetmark{font-size:12px!important}
   .wf-plot-linelabel{font-size:12px!important}
   .wf-blocker-badge{font-size:12px!important}
+  .mob-back{display:block}
 }
 `;
 
