@@ -53,6 +53,10 @@ export function SpeakingHistory({ rows }: { rows: SpeakingHistoryRow[] }) {
   return (
     <div style={S.wrap}>
       <style>{CSS}</style>
+      {/* Мобильный путь назад — на &le;430px бургер единственный выход. */}
+      <div className="mob-back">
+        <Button variant="ghost" size="sm" icon="arrow-left" href="/app/speaking">Speaking</Button>
+      </div>
       <header style={S.header}>
         <div>
           <h1 style={S.h1}>Speaking history</h1>
@@ -115,6 +119,8 @@ const CSS = `
 .sh-del:hover{color:var(--error-text)!important}
 /* Тап-таргет 44px на узких телефонах — кнопка была padding:4. */
 @media (max-width:430px){.sh-del{min-height:44px}}
+.mob-back{display:none}
+@media (max-width:430px){ .mob-back{display:block} }
 `;
 
 const S: Record<string, CSSProperties> = {

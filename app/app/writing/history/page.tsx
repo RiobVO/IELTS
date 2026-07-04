@@ -6,6 +6,7 @@ import { writingFeatureEnabled } from "@/env";
 import { listUserHistory } from "@/lib/writing/read";
 import { writingCategoryLabel, confidenceLabel } from "@/lib/writing/labels";
 import { AppShell } from "../../_AppShell";
+import { Button } from "@/components/core/Button";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,10 @@ export default async function WritingHistoryPage() {
     <AppShell active="practice">
       <div style={S.wrap}>
         <style>{CSS}</style>
+        {/* Мобильный путь назад — на &le;430px бургер единственный выход. */}
+        <div className="mob-back">
+          <Button variant="ghost" size="sm" icon="arrow-left" href="/app/writing">Writing</Button>
+        </div>
         <header>
           <h1 style={S.h1}>Attempt history</h1>
           <p style={S.sub}>Every analysis is saved as a snapshot — reopen any one and it never re-scores.</p>
@@ -82,6 +87,8 @@ const CSS = `
 .wh-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 @media (max-width:640px){.wh-grid{grid-template-columns:1fr}}
 .wh-card:hover{transform:translateY(-2px);border-color:var(--brand-border)!important;box-shadow:var(--shadow-solid-lg)}
+.mob-back{display:none}
+@media (max-width:430px){ .mob-back{display:block} }
 `;
 
 const S: Record<string, CSSProperties> = {

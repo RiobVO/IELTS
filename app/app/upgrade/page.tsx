@@ -4,6 +4,7 @@ import { effectiveTier, type Tier } from "@/lib/tiers";
 import { findPlan } from "@/lib/payments/plans";
 import { speakingFeatureEnabled } from "@/env";
 import { AppShell } from "../_AppShell";
+import { Button } from "@/components/core/Button";
 import PricingScreen from "./PricingScreen";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,12 @@ export default async function UpgradePage() {
 
   return (
     <AppShell active="pricing">
+      {/* Мобильный путь назад — тут, а не в PricingScreen: тот же компонент рендерит
+          публичную /pricing, куда back-ссылка в приложение попадать не должна. */}
+      <style>{`.mob-back{display:none}@media(max-width:430px){.mob-back{display:block;padding:16px 16px 0}}`}</style>
+      <div className="mob-back">
+        <Button variant="ghost" size="sm" icon="arrow-left" href="/app">Home</Button>
+      </div>
       <PricingScreen current={current} price={price} speakingEnabled={speakingFeatureEnabled()} />
     </AppShell>
   );

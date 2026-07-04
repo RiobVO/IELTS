@@ -36,8 +36,12 @@ export default async function CheckoutPage({
 
   return (
     <AppShell active="pricing">
-      <style>{`.co-wrap{padding:22px 16px 40px}@media(min-width:560px){.co-wrap{padding:30px 28px 48px}}`}</style>
+      <style>{`.co-wrap{padding:22px 16px 40px}@media(min-width:560px){.co-wrap{padding:30px 28px 48px}}.mob-back{display:none}@media(max-width:430px){.mob-back{display:block;margin-bottom:10px}}`}</style>
       <div className="co-wrap" style={S.wrap}>
+        {/* Мобильный путь назад — на &le;430px бургер единственный выход. */}
+        <div className="mob-back">
+          <Button variant="ghost" size="sm" icon="arrow-left" href="/app/upgrade">Pricing</Button>
+        </div>
         <h1 style={S.h1}>Checkout (sandbox)</h1>
 
         {!valid ? (
