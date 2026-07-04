@@ -204,6 +204,7 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
   }, [open]);
 
   return (
+    <>
     <div
       style={{
         position: "sticky",
@@ -333,10 +334,14 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
           </button>
         </div>
       </div>
+      </div>
 
-      {/* Scrim + drawer — только мобильный, рендерятся пока open (slide-in через
-          @keyframes; при закрытии элемент исчезает → нет off-screen overflow).
-          Класс .ah-drawer/.ah-scrim гасит их на десктопе на случай open при ресайзе. */}
+      {/* Scrim + drawer — вне sticky-обёртки шапки: fixed-потомок внутри предка с
+          transform/backdrop-filter контейнится его коробкой (предок становится
+          containing block), иначе inset:0/top:0 считались бы от шапки, а не вьюпорта.
+          Только мобильный, рендерятся пока open (slide-in через @keyframes; при
+          закрытии элемент исчезает → нет off-screen overflow). Класс
+          .ah-drawer/.ah-scrim гасит их на десктопе на случай open при ресайзе. */}
       {open && (
         <>
           <div
@@ -406,6 +411,6 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
           </nav>
         </>
       )}
-    </div>
+    </>
   );
 }
