@@ -276,7 +276,8 @@ export default async function Dashboard() {
   const resume = ip
     ? {
         href: ip.hasRunner ? `/app/exam/${ip.contentItemId}` : `/app/reading/${ip.contentItemId}`,
-        title: cleanTitle(ip.title),
+        // Full-reading титулы = «Пассаж / Пассаж / Пассаж» — для кнопки хватает первого.
+      title: cleanTitle(ip.title).split(" / ")[0],
         // Курсора в схеме нет → номер = отвеченных + 1 (приблизительно, для подсказки).
         q:
           Object.values((ip.answers ?? {}) as Record<string, unknown>).filter((v) =>
@@ -542,8 +543,9 @@ function WeekCard({
         {resume && (
           <div className="dash-week-cta">
             <Button variant="secondary" icon="play" href={resume.href}
-              style={{ justifyContent: "center", background: "var(--surface-inset)", color: "var(--brand-active)" }}>
-              Resume · {resume.title} — Q{resume.q}
+              style={{ justifyContent: "center", background: "var(--surface-inset)", color: "var(--brand-active)", width: "100%", minWidth: 0 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>Resume · {resume.title}</span>
+              <span style={{ flex: "none" }}>— Q{resume.q}</span>
             </Button>
           </div>
         )}
