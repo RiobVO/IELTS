@@ -521,7 +521,7 @@ function NextMoveCard({ data }: { data: DebriefData }) {
               className="db-share-donut"
               style={{ background: `conic-gradient(#fff ${Math.round(score.correctPct * 100)}%, rgba(255,255,255,.25) 0)` }}
             >
-              <b>{share.value}</b>
+              <b>{score.banded && score.band != null ? score.band : `${Math.round(score.correctPct * 100)}%`}</b>
             </span>
             <span className="db-share-text">&ldquo;{share.headline}&rdquo;</span>
           </div>

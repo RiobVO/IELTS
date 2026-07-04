@@ -1,6 +1,6 @@
 // Unit tests for the pure /result "debrief" derivations (no DB, no React).
 import { describe, it, expect } from "vitest";
-import { computeNearMiss, computeBlindSpot, computeGrowth, stripHtml } from "./debrief";
+import { computeNearMiss, computeBlindSpot, computeGrowth, stripHtml, blindSpotTag, buildShareHeadline } from "./debrief";
 import type { PerQuestionResult } from "@/lib/grading/grade";
 
 describe("computeNearMiss", () => {
@@ -176,6 +176,59 @@ describe("computeGrowth", () => {
       { tag: "1st", correct: 1, total: 6 },
       { tag: "now", correct: 4, total: 6 },
     ]);
+  });
+});
+
+describe("blindSpotTag", () => {
+  const ngBlindSpot = { label: "Not Given", weakBucket: { correct: 0, total: 2 }, strongBucket: { correct: 2, total: 2 }, costMarks: 2 };
+  const valueBlindSpot = { label: "Yes / No", weakBucket: { correct: 0, total: 1 }, strongBucket: { correct: 2, total: 2 }, costMarks: 1 };
+  const generalBlindSpot = { label: "Matching Headings", weakBucket: { correct: 1, total: 4 }, strongBucket: null, costMarks: 3 };
+
+  it("returns null when there is no blind spot", () => {
+    expect(blindSpotTag({ qtype: "tfng", accept: ["NOT GIVEN"] }, null)).toBeNull();
+  });
+
+  it("tags a Not-Given question as 'your blind spot' when NG is the weak bucket", () => {
+    expect(blindSpotTag({ qtype: "tfng", accept: ["NOT GIVEN"] }, ngBlindSpot)).toBe("your blind spot");
+  });
+
+  it("returns null for a value (True/False) question when NG is the weak bucket — it's in the strong bucket", () => {
+    expect(blindSpotTag({ qtype: "tfng", accept: ["TRUE"] }, ngBlindSpot)).toBeNull();
+  });
+
+  it("tags a value question as 'common trap' when the value bucket is weak", () => {
+    expect(blindSpotTag({ qtype: "ynng", accept: ["YES"] }, valueBlindSpot)).toBe("common trap");
+  });
+
+  it("returns null for Not Given when the value bucket is weak", () => {
+    expect(blindSpotTag({ qtype: "ynng", accept: ["NOT GIVEN"] }, valueBlindSpot)).toBeNull();
+  });
+
+  it("tags a matching type as 'common trap' under a generalized (non-ternary) blind spot", () => {
+    expect(blindSpotTag({ qtype: "matching_headings", accept: ["B"] }, generalBlindSpot)).toBe("common trap");
+  });
+
+  it("returns null for an unrelated type under a generalized blind spot", () => {
+    expect(blindSpotTag({ qtype: "mcq_single", accept: ["A"] }, generalBlindSpot)).toBeNull();
+  });
+});
+
+describe("buildShareHeadline", () => {
+  it("has no trailing colon in either branch", () => {
+    expect(buildShareHeadline(true, 6.5, 78)).not.toMatch(/:$/);
+    expect(buildShareHeadline(false, null, 42)).not.toMatch(/:$/);
+  });
+
+  it("uses the banded copy when a band score is present", () => {
+    expect(buildShareHeadline(true, 6.5, 78)).toBe(
+      "I just hit Band 6.5 on IELTS Reading with bando — and finally found the one habit costing me marks.",
+    );
+  });
+
+  it("uses the percentage copy when there is no band", () => {
+    expect(buildShareHeadline(false, null, 42)).toBe(
+      "I scored 42% on IELTS Reading with bando and pinned down exactly which question type is costing me marks.",
+    );
   });
 });
 
