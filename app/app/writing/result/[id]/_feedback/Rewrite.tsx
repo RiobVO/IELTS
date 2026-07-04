@@ -40,14 +40,15 @@ export function Rewrite({ rewrite }: { rewrite: RewriteData }) {
 
   return (
     <section>
+      <style>{CSS}</style>
       <h2 style={S.h2}>A partial rewrite to learn from</h2>
       <div style={S.stack}>
         {/* 1. Stronger thesis */}
         <div style={S.card}>
           <div style={S.cardTitle}>Stronger thesis</div>
-          <div style={S.yoursLabel}>Yours</div>
+          <div className="wf-rw-label" style={S.yoursLabel}>Yours</div>
           <p style={S.yours}>{rewrite.thesisOld}</p>
-          <div style={S.strongerLabel}>Stronger</div>
+          <div className="wf-rw-label" style={S.strongerLabel}>Stronger</div>
           <p style={S.stronger}>
             {thesisSegments
               ? thesisSegments.map((seg, i) =>
@@ -123,6 +124,13 @@ export function Rewrite({ rewrite }: { rewrite: RewriteData }) {
     </section>
   );
 }
+
+// "Yours"/"Stronger" — смысловые uppercase-лейблы, поднимаем до 12px на узком экране.
+const CSS = `
+@media (max-width:430px){
+  .wf-rw-label{font-size:12px!important}
+}
+`;
 
 const S: Record<string, CSSProperties> = {
   h2: { margin: "0 0 12px", fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },

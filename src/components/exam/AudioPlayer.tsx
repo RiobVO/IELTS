@@ -24,6 +24,8 @@ const WAVE_CSS = `
 .ap-wave-fill{clip-path:inset(0 100% 0 0);transition:clip-path 120ms linear}
 .ap-wave-fill .ap-bar{background:var(--brand)}
 @media (prefers-reduced-motion:reduce){.ap-wave-fill{transition:none}}
+/* Мелкие подписи ("of N", "Plays once") — смысловой текст, поднимаем до 12px. */
+@media (max-width:430px){.ap-of-parts{font-size:12px!important}.ap-plays-once{font-size:12px!important}}
 `;
 
 interface AudioPlayerProps {
@@ -106,12 +108,12 @@ export function AudioPlayer({
           {hasParts ? (
             <>
               <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-primary)" }}>Part {part}</span>
-              <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)" }}>of {totalParts}</span>
+              <span className="ap-of-parts" style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)" }}>of {totalParts}</span>
             </>
           ) : (
             <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-primary)" }}>Listening</span>
           )}
-          <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--warn-text)", background: "var(--warn-subtle)", borderRadius: "var(--radius-full)", padding: "2px 9px" }}>
+          <span className="ap-plays-once" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--warn-text)", background: "var(--warn-subtle)", borderRadius: "var(--radius-full)", padding: "2px 9px" }}>
             <Icon name="headphones" size={12} /> Plays once
           </span>
         </div>

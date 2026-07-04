@@ -46,7 +46,7 @@ export function BandHero({
       </div>
 
       <div style={S.right}>
-        <span style={S.blockerBadge}>Biggest blocker</span>
+        <span className="wf-blocker-badge" style={S.blockerBadge}>Biggest blocker</span>
         <div style={S.blockerName}>{blockerName}</div>
         <p style={S.blockerNote}>{blockerNote}</p>
         <p style={S.blockerCta}>Fix this one first — it moves your band the most.</p>

@@ -124,6 +124,10 @@ const CSS = `
   .wf-tfstep{width:100%}
   .wf-tfconn{display:none}
 }
+/* Lead-лейбл ("Do this first"/"Then"/"And finally") — смысловой текст, 12px. */
+@media (max-width:430px){
+  .wf-tflead{font-size:12px!important}
+}
 @media (prefers-reduced-motion:reduce){
   .wf-tfplay .wf-tfstep .wf-tfcard,.wf-tfplay .wf-tfdot,.wf-tfplay .wf-tfring,.wf-tfplay .wf-tffill,.wf-tfplay .wf-tfarrow{animation:none!important;opacity:1!important;transform:none!important}
   .wf-tffill{transform:translateY(-50%) scaleX(1)!important}

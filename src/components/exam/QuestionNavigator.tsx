@@ -85,7 +85,7 @@ export const QuestionNavigator = memo(function QuestionNavigator({ parts, curren
         {parts.map((p, i) => (
           <div key={i} style={S.group}>
             {i > 0 && <span aria-hidden="true" style={S.divider} />}
-            {multi && <span style={S.partLabel}>{p.label}</span>}
+            {multi && <span className="nav-partlabel" style={S.partLabel}>{p.label}</span>}
             <div style={S.cells}>
               {p.items.map((q) => (
                 <NavCell key={q.number} q={q} active={q.number === current} onJump={onJump} />
@@ -102,7 +102,8 @@ export const QuestionNavigator = memo(function QuestionNavigator({ parts, curren
 });
 
 // Тап-таргет: ячейки навигатора 32px → ≥44px на узком экране (горизонтальный скроллер уже есть).
-const NAV_CSS = `@media (max-width:430px){.nav-cell{width:44px!important;height:44px!important}}`;
+// partLabel ("Part 1"/"Part 2") — смысловой лейбл, поднимаем до 12px на узком экране.
+const NAV_CSS = `@media (max-width:430px){.nav-cell{width:44px!important;height:44px!important}.nav-partlabel{font-size:12px!important}}`;
 
 const S: Record<string, CSSProperties> = {
   bar: {

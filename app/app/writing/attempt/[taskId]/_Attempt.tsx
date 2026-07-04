@@ -522,6 +522,8 @@ const CSS = `
 @media (max-width:430px){
   .wa-back{min-height:44px}
   .wa-timer{min-height:44px}
+  /* Криterion-чип в live-коуче — смысловой uppercase-лейбл, 12px. */
+  .ct-chip{font-size:12px!important}
 }
 `;
 
