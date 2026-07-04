@@ -18,7 +18,7 @@ import { categoryLabel } from "@/lib/labels";
 import type { DebriefData } from "@/lib/result/debrief";
 import BadgeUnlock from "./BadgeUnlock";
 import { ShareResult } from "./ShareResult";
-import { AnimatedDonut, CountUp } from "./reveal";
+import { Dial, CountUp } from "./reveal";
 
 const EASE_OUT = "cubic-bezier(0.16, 1, 0.3, 1)";
 
@@ -202,7 +202,7 @@ function ScoreReveal({ data, onContinue }: { data: DebriefData; onContinue: () =
         Your debrief · {data.title}
         {data.category ? ` · ${categoryLabel(data.category)}` : ""} · {data.totalQuestions} questions
       </div>
-      <AnimatedDonut pct={score.correctPct} raw={score.raw} total={score.total} />
+      <Dial pct={score.correctPct} size={120} strokeWidth={18} center={bandValue != null ? { kind: "band", value: bandValue } : { kind: "pct", value: pct }} />
       <div className="db-rv-band">
         <div className="db-rv-eyebrow">{bandValue != null ? "Band score" : "Score"}</div>
         <div className="db-rv-n">

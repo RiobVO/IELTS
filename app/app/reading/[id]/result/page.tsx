@@ -335,8 +335,9 @@ export default async function ResultPage({
       label: qtypeLabel(q.qtype),
       correct: q.correct,
       given: given && given !== "" ? given : "—",
-      // Ungated (derive-добавка §e-2) — generic per-type reference, unlike the
-      // gated per-question `explanation` below.
+      // Ungated (derive-добавка §e-2) — generic per-type reference. The old
+      // gated per-question `explanation` is superseded by this in the ak-list;
+      // the real per-question explanation still lives in `replay.why` below.
       strategy: qtypeDescription(q.qtype),
     };
     if (!fullReview) return base;
@@ -344,7 +345,6 @@ export default async function ResultPage({
     return {
       ...base,
       answer: (m.accept as string[]).join(" / "),
-      explanation: m.explanation,
       evidence: ev?.snippet ?? null,
     };
   });
