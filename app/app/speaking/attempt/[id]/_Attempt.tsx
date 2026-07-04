@@ -381,7 +381,7 @@ function RecordingPanel({
         : { text: "We can barely hear you — speak up", color: "var(--warn-text)" };
 
   return (
-    <section style={S.col}>
+    <section className="sa-recpanel" style={S.col}>
       <div style={S.recCard}>
         <div style={S.recTopRow}>
           <span className="sa-recdot" style={S.recDot} aria-hidden="true" />
@@ -614,6 +614,12 @@ const CSS = `
 .sa-close{position:relative}
 @media (max-width:430px){
   .sa-close::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
+}
+/* Таймер+Stop уезжают под фолд ниже высокой cue-карточки (колонки стекаются на
+   мобиле) — прижимаем панель к низу вьюпорта, непрозрачный фон поверх контента
+   под ней, DOM-порядок не трогаем. */
+@media (max-width:430px){
+  .sa-recpanel{position:sticky;bottom:0;z-index:5;background:var(--bg-base);padding-top:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
 }
 `;
 
