@@ -45,7 +45,15 @@ export async function AppShell({
         markAllRead={markAllRead}
         signOut={signOut}
       />
-      <main id="content" style={{ flex: 1, minHeight: 0 }}>{children}</main>
+      {/* overflow-x:clip на контейнере контента — страховка мобильного бургер-drawer.
+          Drawer шапки — position:fixed;right:0 (AppHeader). Любой горизонтальный
+          overflow контента расширяет initial containing block на телефоне, и right:0
+          якорится к правому краю РАЗЪЕХАВШЕГОСЯ документа, а не вьюпорта — панель
+          уезжает за правый край (кнопки Upgrade/Sign out срезаны). clip (не hidden и
+          не auto) не создаёт scroll-container: sticky-шапка и body-scroll-lock drawer
+          не ломаются, а overflow-y остаётся visible (страницу скроллит корень). main —
+          сосед шапки и drawer, поэтому клип не задевает их fixed-позиционирование. */}
+      <main id="content" style={{ flex: 1, minHeight: 0, overflowX: "clip" }}>{children}</main>
     </div>
   );
 }
