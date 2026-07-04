@@ -57,13 +57,15 @@ export function AnswerKeyFilter({
   types: AKType[];
   /**
    * Controlled active chip — lets another tab (coach "By type") jump straight
-   * into a pre-filtered view. Uncontrolled (internal state, default "all")
-   * when omitted — the props/gate contract of items/types is unchanged.
+   * into a pre-filtered view. Uncontrolled (internal state, default "wrong" —
+   * screen is built around misses, matches result-coach.html:484 — falling
+   * back to "all" only when there are none) when omitted — the props/gate
+   * contract of items/types is unchanged.
    */
   filter?: string;
   onFilterChange?: (filter: string) => void;
 }) {
-  const [internalFilter, setInternalFilter] = useState("all");
+  const [internalFilter, setInternalFilter] = useState(() => (items.some((q) => !q.correct) ? "wrong" : "all"));
   const filter = filterProp ?? internalFilter;
   const setFilter = (f: string) => (onFilterChange ? onFilterChange(f) : setInternalFilter(f));
   const [open, setOpen] = useState<Set<number>>(new Set());
@@ -228,9 +230,12 @@ function AKRow({ q, isOpen, onToggle }: { q: AKItem; isOpen: boolean; onToggle: 
    Sticky offsets clear the app header + coach tab bar (top:60/88 header pattern,
    see Annotations.tsx/_Transcript.tsx "top:88 clears the sticky header"). */
 const AK_CSS = `
-.ak-filter{position:sticky;top:114px;z-index:19;display:flex;gap:7px;overflow-x:auto;padding:6px 0 12px;scrollbar-width:none;background:color-mix(in oklab, var(--bg-base) 92%, transparent);backdrop-filter:blur(6px)}
+/* top клирит rc-tabs (coach tab bar) под ним — значение зависит от метрик
+   шрифта/паддингов таб-бара, финальная сверка визуально на проде после
+   деплоя (coach ui pass, ~134/162 против прежних 114/142). */
+.ak-filter{position:sticky;top:134px;z-index:19;display:flex;gap:7px;overflow-x:auto;padding:6px 0 12px;scrollbar-width:none;background:color-mix(in oklab, var(--bg-base) 92%, transparent);backdrop-filter:blur(6px)}
 .ak-filter::-webkit-scrollbar{display:none}
-@media (min-width:1024px){ .ak-filter{top:142px} }
+@media (min-width:1024px){ .ak-filter{top:162px} }
 .chip{flex:none;font-family:var(--font-ui);font-size:12.5px;font-weight:700;color:var(--text-secondary);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:8px 15px;cursor:pointer;white-space:nowrap;transition:var(--transition-colors);min-height:36px}
 .chip .c{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);margin-left:5px}
 .chip:hover{border-color:var(--brand-border)}
@@ -268,7 +273,9 @@ div[data-n]:first-child > .ak-row{border-top:0}
 .ak-strat{display:flex;gap:10px;font-family:var(--font-ui);font-size:13.5px;color:var(--text-secondary);line-height:1.55}
 .ak-strat b{color:var(--text-primary)}
 .ev{display:flex;gap:11px;font-family:var(--font-reading);font-size:14px;color:var(--reading-text);background:var(--reading-surface);border:1px solid var(--reading-rule);border-radius:12px;padding:14px 16px;line-height:1.6}
-.ev mark{background:var(--reading-mark);border-radius:3px;padding:1px 3px;box-decoration-break:clone}
+/* .ev mark сознательно не портирован из прототипа: evidence рендерится как
+   плоский текст (React text child, не dangerouslySetInnerHTML) — <mark> в
+   данных нет и не может отрендериться, правило было бы мёртвым CSS. */
 .ak-evstub{font-family:var(--font-ui);font-size:12.5px;color:var(--text-muted);font-style:italic;padding:11px 13px;border:1px dashed var(--border);border-radius:10px;line-height:1.5}
 
 @media (pointer:coarse){
@@ -278,5 +285,8 @@ div[data-n]:first-child > .ak-row{border-top:0}
   .ak-row{grid-template-columns:28px 1fr}
   .ak-chev{grid-column:3;grid-row:1}
   .ak-detail{padding-left:18px}
+}
+@media (prefers-reduced-motion:reduce){
+  .chip,.ak-row,.ak-chev{transition:none}
 }
 `;
