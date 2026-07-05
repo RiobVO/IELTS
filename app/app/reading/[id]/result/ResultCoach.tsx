@@ -443,13 +443,17 @@ function ReviewRoom({
                   : "✕ Still slips — here's why:"
                 : `The answer is «${item.answer}».`}
             </div>
-            {(item.why || item.tag) && (
+            {(item.why || item.strategy || item.tag) && (
               <div className="rc-rev-why">
-                {item.why && <>💡 <span>{item.why}</span></>}
+                {(item.why || item.strategy) && <>💡 <span>{item.why || item.strategy}</span></>}
                 {item.tag && <span className="rc-rev-tag">{item.tag}</span>}
               </div>
             )}
-            {item.evidence && <div className="rc-ev">📖 <span>{item.evidence}</span></div>}
+            {item.evidence ? (
+              <div className="rc-ev">📖 <span>{item.evidence}</span></div>
+            ) : (
+              <div className="rc-evstub">The passage line that proves this is shown here in your real result, highlighted in the reading view.</div>
+            )}
             <div className="rc-rr-foot">
               <button type="button" className="rc-rr-skip" onClick={onSkipToKey}>Skip to answer key →</button>
               <button type="button" className="rc-rr-next" onClick={next}>
@@ -699,6 +703,7 @@ const COACH_CSS = `
 /* .rc-ev mark сознательно не портирован из прототипа: evidence рендерится как
    плоский текст (React text child, не dangerouslySetInnerHTML) — <mark> в
    данных нет и не может отрендериться, правило было бы мёртвым CSS. */
+.rc-evstub{font-family:var(--font-ui);font-size:12.5px;color:var(--text-muted);font-style:italic;padding:11px 13px;border:1px dashed var(--border);border-radius:10px;line-height:1.5}
 .rc-rr-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px}
 .rc-rr-skip{font-family:var(--font-ui);font-size:13px;font-weight:600;color:var(--text-muted);background:0;border:0;cursor:pointer;min-height:44px}
 .rc-rr-next{display:inline-flex;align-items:center;gap:8px;background:var(--brand);color:#fff;font-family:var(--font-ui);font-weight:700;font-size:14px;border:0;border-radius:12px;padding:12px 20px;cursor:pointer;box-shadow:0 2px 0 var(--brand-active);transition:var(--transition-transform);min-height:44px}
