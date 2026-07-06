@@ -88,6 +88,8 @@ export async function countNewCardsToday(userId: string, now: Date): Promise<num
 export type VocabReviewGate =
   | {
       ok: true;
+      /** Слово карты (для quiz-режима «type the answer») — уже прочитано гейтом, без доп. round-trip. */
+      word: string;
       /** Текущий SM-2 стейт карты (null = новая) — экшен считает по нему, не перечитывая. */
       currentState: SrsState | null;
       /** true = у карты нет строки прогресса. */
@@ -112,7 +114,7 @@ export async function enforceVocabReview(
   // читаем одним параллельным слоем.
   const [[card], [prof], progressRows] = await Promise.all([
     db
-      .select({ deckTier: vocabDeck.tierRequired })
+      .select({ deckTier: vocabDeck.tierRequired, word: vocabCard.word })
       .from(vocabCard)
       .innerJoin(vocabDeck, eq(vocabDeck.id, vocabCard.deckId))
       .where(and(eq(vocabCard.id, cardId), eq(vocabDeck.status, "published"))),
@@ -157,5 +159,5 @@ export async function enforceVocabReview(
   const decision = decideNewCardCap({ tier, isNewCard: isNew, newTodayCount });
   if (!decision.ok) return { ok: false, reason: "daily_cap" };
 
-  return { ok: true, currentState, isNew, newRemainingToday: decision.newRemainingToday };
+  return { ok: true, word: card.word, currentState, isNew, newRemainingToday: decision.newRemainingToday };
 }
