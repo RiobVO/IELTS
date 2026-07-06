@@ -769,6 +769,10 @@ const DASH_CSS = `
 @media (min-width:1024px){
   .dash-wrap{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:18px;align-items:start}
   .dash-grid-span{grid-column:1 / -1}
+  /* В узкой правой колонке (1fr) карточка тесная — сбрасываем tablet-раскладку
+     ряда (width:auto;margin-left:auto), где cta размерится по контенту и
+     вылезает. Пин к 100% даёт кнопке жёсткую ширину, и label обрезается. */
+  .dash-week-cta{width:100%;margin-left:0}
 }
 /* Узкие телефоны (≤430px): значок+заголовок не помещаются в один ряд с band/chip/score
    → разрешаем перенос хвоста (badge/chip/score) на вторую строку вместо клиппинга. */
