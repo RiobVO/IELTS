@@ -17,6 +17,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  real,
   smallint,
   text,
   timestamp,
@@ -831,4 +832,86 @@ export const errorLog = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("error_log_created_idx").on(t.createdAt)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Vocabulary (интервальные флеш-карточки, план 2026-07-06; migration 0037)     */
+/* Три additive-таблицы. status/tier_required переиспользуют content_status /    */
+/* user_tier — каталожная семантика идентична content_item. RLS: vocab_deck      */
+/* published-гейт (как content_item), vocab_card published через дек (EXISTS,     */
+/* как passage→content_item), vocab_progress owner-read (запись только owner-path */
+/* серверным экшеном — авторитетный SM-2 + дневной cap, клиентских writes нет).   */
+/* -------------------------------------------------------------------------- */
+export const vocabDeck = pgTable("vocab_deck", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  level: text("level"),
+  // Ключ идемпотентности импорта (как content_item.source_file_path), здесь
+  // NOT NULL UNIQUE — реимпорт апсертит дек по этому пути на уровне БД.
+  sourceFilePath: text("source_file_path").notNull().unique(),
+  tierRequired: userTier("tier_required").notNull().default("basic"),
+  status: contentStatus("status").notNull().default("draft"),
+  // Денормализация для каталога (число карточек), пересчёт при (ре)импорте.
+  wordCount: integer("word_count").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const vocabCard = pgTable(
+  "vocab_card",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    deckId: uuid("deck_id")
+      .notNull()
+      .references(() => vocabDeck.id, { onDelete: "cascade" }),
+    order: integer("order").notNull(),
+    word: text("word").notNull(),
+    definition: text("definition").notNull(),
+    example: text("example"),
+    translation: text("translation"),
+    partOfSpeech: text("part_of_speech"),
+    ipa: text("ipa"),
+  },
+  (t) => [
+    // Фундамент идемпотентного upsert-реимпорта: слово уникально в пределах дека.
+    unique("vocab_card_deck_word_key").on(t.deckId, t.word),
+    // Упорядоченное чтение дека; leftmost deck_id покрывает FK + cascade-delete.
+    index("vocab_card_deck_order_idx").on(t.deckId, t.order),
+  ],
+);
+
+export const vocabProgress = pgTable(
+  "vocab_progress",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profile.id, { onDelete: "cascade" }),
+    cardId: uuid("card_id")
+      .notNull()
+      .references(() => vocabCard.id, { onDelete: "cascade" }),
+    // SM-2 стейт. ease — фактор лёгкости (float), стартовый 2.5.
+    ease: real("ease").notNull().default(2.5),
+    intervalDays: integer("interval_days").notNull().default(0),
+    repetitions: integer("repetitions").notNull().default(0),
+    lapses: integer("lapses").notNull().default(0),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull().defaultNow(),
+    lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("vocab_progress_user_card_key").on(t.userId, t.cardId),
+    // Due-очередь: карточки пользователя по сроку повтора.
+    index("vocab_progress_user_due_idx").on(t.userId, t.dueAt),
+    // FK-индекс card_id: cascade-delete прогресса при реимпорте карточек
+    // (user_id уже покрыт unique-констрейнтом слева).
+    index("vocab_progress_card_id_idx").on(t.cardId),
+  ],
 );
