@@ -58,7 +58,6 @@ export interface VocabDeckCard {
  * агрегат мерджится в память (деки без прогресса → 0/0).
  */
 export async function getVocabCatalog(userId: string): Promise<VocabDeckCard[]> {
-  const now = new Date();
   const [decks, [prof], progressAgg] = await Promise.all([
     db
       .select({
@@ -82,7 +81,9 @@ export async function getVocabCatalog(userId: string): Promise<VocabDeckCard[]> 
       .select({
         deckId: vocabCard.deckId,
         learned: sql<number>`count(*)::int`,
-        due: sql<number>`(count(*) filter (where ${vocabProgress.dueAt} <= ${now}))::int`,
+        // now() БД вместо JS-Date: Date-параметр внутри raw sql`` не типизирован Drizzle,
+        // и postgres-js на прод-клиенте (prepare:false) падает в Buffer.byteLength(Date).
+        due: sql<number>`(count(*) filter (where ${vocabProgress.dueAt} <= now()))::int`,
       })
       .from(vocabProgress)
       .innerJoin(vocabCard, eq(vocabCard.id, vocabProgress.cardId))
