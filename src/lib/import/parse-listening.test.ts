@@ -70,6 +70,60 @@ describe("parseListening — inline part", () => {
 
 // --- реальный образец (skip без gitignored-файла) ---
 
+const LISTENING_MAP_MULTI_HTML = `<!doctype html><html><head><title>IELTS Listening Map</title></head>
+<body>
+  <audio src="audio/map.mp3"></audio>
+  <section class="part" data-part="2">
+    <div class="part-banner">Part 2: A tour</div>
+    <p class="q-instruction">Choose TWO letters, A-E.</p>
+    <div class="mcq multi" data-qs="11,12">
+      <div class="stem"><span class="qnum">11-12</span><span>Which TWO pieces of advice are given?</span></div>
+      <label><input type="checkbox" value="A"><span class="opt-letter">A</span> Stop for lunch.</label>
+      <label><input type="checkbox" value="B"><span class="opt-letter">B</span> Bring a coat.</label>
+      <label><input type="checkbox" value="C"><span class="opt-letter">C</span> Book early.</label>
+    </div>
+    <p class="q-instruction">Label the map below.</p>
+    <div class="map-dd">
+      <div class="map-stage">
+        <div class="map-dz" data-letter="A" aria-label="Building A"></div>
+        <div class="map-dz" data-letter="B" aria-label="Building B"></div>
+      </div>
+      <div class="place-bank">
+        <div class="place-chip" data-q="15"><span class="pc-num">15</span><span class="pc-text">Exhibition</span></div>
+        <div class="place-chip" data-q="16"><span class="pc-num">16</span><span class="pc-text">Baths</span></div>
+      </div>
+    </div>
+  </section>
+  <script>
+    const KEY = { "11": ["A"], "12": ["C"], "15": ["B"], "16": ["A"] };
+    function band(r){ return r >= 4 ? 9 : 0; }
+  </script>
+</body></html>`;
+
+describe("parseListening gap fixtures", () => {
+  const t = parseTest(LISTENING_MAP_MULTI_HTML);
+  const q = (n: number) => t.questions.find((x) => x.number === n)!;
+
+  it("atomizes bare checkbox choose-TWO groups as mcq_multi", () => {
+    expect(q(11).qtype).toBe("mcq_multi");
+    expect(q(11).groupKey).toBe("11-12");
+    expect(q(11).answer).toMatchObject({ mode: "mcq_set", accept: ["A", "C"] });
+    expect(q(12).answer.mode).toBe("mcq_set");
+    expect(q(11).options).toHaveLength(3);
+  });
+
+  it("atomizes place-chip map labelling questions", () => {
+    expect(q(15).qtype).toBe("map_labelling");
+    expect(q(15).promptHtml).toBe("Exhibition");
+    expect(q(15).options).toEqual([
+      { value: "A", label: "Building A" },
+      { value: "B", label: "Building B" },
+    ]);
+    expect(q(15).answer).toMatchObject({ mode: "exact", accept: ["B"] });
+    expect(t.warnings).toHaveLength(0);
+  });
+});
+
 const listening = sample("listening-test.html");
 describe.skipIf(!listening)("real sample — listening-test (40Q)", () => {
   it("4 части / 40 вопросов с аудио и band-шкалой, без предупреждений", () => {

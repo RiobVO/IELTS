@@ -101,6 +101,68 @@ describe("parseTest — single passage", () => {
 
 // --- реальные образцы (skip, если gitignored-файла нет: чистый клон / CI) ---
 
+const DD_BLANK_HTML = `<!doctype html><html><head><title>Reading - Drag</title></head>
+<body>
+  <div class="sectionRubric">Reading Passage 3. You should spend about 20 minutes on the Questions.</div>
+  <div id="passageContent"><h1>Drag Summary</h1><p>Passage text.</p></div>
+  <div class="question" id="question-group-31-32">
+    <div class="question-rubric"><p>Complete the summary using the list of words below.</p></div>
+    <div class="question-content">
+      <p class="notes-item">Sugar depended on <span class="blank-wrapper"><span class="dd-blank" id="question-31" data-q="31"><span class="placeholder">31</span></span><button class="review-flag" data-q="31"></button></span>.</p>
+      <p class="notes-item">Traditional methods <span class="blank-wrapper"><span class="dd-blank" id="question-32" data-q="32"><span class="placeholder">32</span></span><button class="review-flag" data-q="32"></button></span> continued.</p>
+    </div>
+  </div>
+  <script>
+    const correctAnswers = { "31": "H", "32": "E" };
+    const acceptableAnswers = {};
+    const mcqGroups = {};
+    const questionTypes = { "31": "Summary Completion", "32": "Summary Completion" };
+  </script>
+</body></html>`;
+
+describe("parseTest gap fixtures", () => {
+  it("atomizes drag-and-drop completion blanks rendered as .dd-blank spans", () => {
+    const t = parseTest(DD_BLANK_HTML);
+    const q31 = t.questions.find((q) => q.number === 31)!;
+
+    expect(t.questions).toHaveLength(2);
+    expect(q31.qtype).toBe("summary_completion");
+    expect(q31.promptHtml).toBe("Sugar depended on ____ .");
+    expect(q31.answer).toMatchObject({ mode: "exact", accept: ["H"] });
+    expect(t.warnings).toHaveLength(0);
+  });
+
+  it("uses .stmt-text as the prompt for matching-table rows", () => {
+    const html = `<!doctype html><html><head><title>Reading - Matching</title></head>
+    <body>
+      <div class="sectionRubric">Reading Passage 2. You should spend about 20 minutes on the Questions.</div>
+      <div id="passageContent"><h1>Quiet Places</h1><p>Passage text.</p></div>
+      <div class="question" id="question-group-14">
+        <table class="matching-table">
+          <tr id="question-14">
+            <td class="statement-cell"><span class="match-num">14</span><span class="stmt-text">examples of strategies to decrease noise</span></td>
+            <td><input type="radio" name="q14" value="A"></td>
+            <td><input type="radio" name="q14" value="B"></td>
+          </tr>
+        </table>
+      </div>
+      <script>
+        const correctAnswers = { "14": "A" };
+        const acceptableAnswers = {};
+        const mcqGroups = {};
+        const questionTypes = { "14": "Matching Information" };
+      </script>
+    </body></html>`;
+    const t = parseTest(html);
+    const q14 = t.questions.find((q) => q.number === 14)!;
+
+    expect(q14.promptHtml).toBe("examples of strategies to decrease noise");
+    expect(q14.qtype).toBe("matching_info");
+    expect(q14.answer).toMatchObject({ mode: "exact", accept: ["A"] });
+    expect(t.warnings).toHaveLength(0);
+  });
+});
+
 const tuatara = sample("P3 Tuatara.html");
 describe.skipIf(!tuatara)("real sample — P3 Tuatara", () => {
   it("чисто разбирает 14 вопросов, каждый с ключом, без band-шкалы", () => {

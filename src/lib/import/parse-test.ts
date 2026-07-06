@@ -98,9 +98,27 @@ export function parseTest(html: string): ParsedTest {
     const num = Number.parseInt(name.slice(1), 10);
     if (!Number.isFinite(num)) return;
     const stem = $(el).closest('[id^="question-"]');
-    const clone = $(stem).clone();
+    const ctx = stem.hasClass("blank-wrapper")
+      ? $(el).closest(".flow-row, .flow-box, .notes-item, li, p, td, .form-row")
+      : stem;
+    const clone = (ctx.length ? ctx : $(el).parent()).clone();
     clone.find(".blank-wrapper").replaceWith(" ____ ");
     clone.find(".review-flag, .cdi-placeholder").remove();
+    const prompt = clone.text().replace(/\s+/g, " ").trim();
+    byNumber.set(
+      num,
+      blank(num, prompt, null, grpKey($(el).closest(".question").attr("id"))),
+    );
+  });
+
+  // drag-and-drop completion blanks use spans instead of text inputs.
+  $(".dd-blank[data-q]").each((_, el) => {
+    const num = Number.parseInt($(el).attr("data-q") ?? "", 10);
+    if (!Number.isFinite(num) || byNumber.has(num)) return;
+    const ctx = $(el).closest(".notes-item, li, p, td, .flow-box");
+    const clone = (ctx.length ? ctx : $(el).parent()).clone();
+    clone.find(".blank-wrapper").replaceWith(" ____ ");
+    clone.find(".dd-blank, .review-flag, .placeholder").remove();
     const prompt = clone.text().replace(/\s+/g, " ").trim();
     byNumber.set(
       num,
@@ -201,7 +219,7 @@ export function parseTest(html: string): ParsedTest {
     const $el = $(el);
     const num = Number.parseInt(($el.attr("id") ?? "").replace(/\D+/g, ""), 10);
     if (!Number.isFinite(num) || byNumber.has(num)) return;
-    const prompt = $el.find(".q-text").text().trim();
+    const prompt = $el.find(".q-text, .stmt-text").first().text().trim();
     const options = $el
       .find('input[type="radio"]')
       .toArray()
@@ -297,13 +315,19 @@ export function parseTest(html: string): ParsedTest {
 /** Listening template marker: an <audio> element plus part sections. */
 function isListening(html: string): boolean {
   const $ = cheerio.load(html);
-  return $("audio").length > 0 && $(".part[data-part]").length > 0;
+  return (
+    $("audio").length > 0 &&
+    ($(".part[data-part]").length > 0 || $(".part-content[id^='part']").length > 0)
+  );
 }
 
 /** Full Reading marker: multiple passage sections (single uses one #passageContent). */
 function isFullReading(html: string): boolean {
   const $ = cheerio.load(html);
-  return $(".passage-section[data-part]").length >= 2;
+  return (
+    $(".passage-section[data-part]").length >= 2 ||
+    $(".passage-part[data-part]").length >= 2
+  );
 }
 
 function blank(

@@ -107,6 +107,172 @@ describe("parseFullReading — inline (2 passages)", () => {
 
 // --- реальный образец (skip без gitignored-файла) ---
 
+const FULL_UNGROUPED_MCQ_HTML = `<!doctype html><html><head><title>Full Reading - MCQ</title></head>
+<body>
+  <section class="passage-section" data-part="1">
+    <div class="sectionRubric"><h2>Reading Passage 1</h2></div>
+    <div class="passage-content"><p>Body one.</p></div>
+  </section>
+  <section class="passage-section" data-part="2">
+    <div class="sectionRubric"><h2>Reading Passage 2</h2></div>
+    <div class="passage-content"><p>Body two.</p></div>
+  </section>
+  <div class="questions-section" data-part="2">
+    <div class="mc-question" id="question-32">
+      <div class="mc-statement-wrapper">
+        <span class="tfng-number">32</span>
+        <div class="tfng-statement-text">What is the writer's main point?</div>
+      </div>
+      <div class="mc-vertical">
+        <label class="mc-radio-label"><input type="radio" name="q32" value="A"> <strong>A</strong> First option.</label>
+        <label class="mc-radio-label"><input type="radio" name="q32" value="B"> <strong>B</strong> Second option.</label>
+        <label class="mc-radio-label"><input type="radio" name="q32" value="C"> <strong>C</strong> Third option.</label>
+      </div>
+    </div>
+  </div>
+  <script>
+    const correctAnswers = { "32": "C" };
+    const questionTypes = { "32": "Multiple Choice" };
+    function getBand(s){ return s >= 1 ? 9 : 0; }
+  </script>
+</body></html>`;
+
+const FULL_RADIO_CHOOSE_TWO_HTML = `<!doctype html><html><head><title>Full Reading - Choose Two</title></head>
+<body>
+  <section class="passage-section" data-part="1">
+    <div class="sectionRubric"><h2>Reading Passage 1</h2></div>
+    <div class="passage-content"><p>Body one.</p></div>
+  </section>
+  <section class="passage-section" data-part="2">
+    <div class="sectionRubric"><h2>Reading Passage 2</h2></div>
+    <div class="passage-content"><p>Body two.</p></div>
+  </section>
+  <div class="questions-section" data-part="2">
+    <div class="question">
+      <div class="question-rubric">
+        <h3>Questions 21 and 22</h3>
+        <p>Choose <strong>TWO</strong> letters, <strong>A-E</strong>.</p>
+        <p>Which TWO reasons are given?</p>
+      </div>
+      <div class="question-content">
+        <div class="mc-question" id="question-21">
+          <div class="mc-statement-wrapper">
+            <span class="tfng-number">21</span>
+            <div class="tfng-statement-text">First answer</div>
+          </div>
+          <div class="mc-vertical">
+            <label class="mc-radio-label"><input type="radio" name="q21" value="A"> A Alpha.</label>
+            <label class="mc-radio-label"><input type="radio" name="q21" value="B"> B Beta.</label>
+            <label class="mc-radio-label"><input type="radio" name="q21" value="C"> C Gamma.</label>
+          </div>
+        </div>
+        <div class="mc-question" id="question-22">
+          <div class="mc-statement-wrapper">
+            <span class="tfng-number">22</span>
+            <div class="tfng-statement-text">Second answer</div>
+          </div>
+          <div class="mc-vertical">
+            <label class="mc-radio-label"><input type="radio" name="q22" value="A"> A Alpha.</label>
+            <label class="mc-radio-label"><input type="radio" name="q22" value="B"> B Beta.</label>
+            <label class="mc-radio-label"><input type="radio" name="q22" value="C"> C Gamma.</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const correctAnswers = { "21": "A", "22": "C" };
+    const acceptableVariants = { "21": ["A", "C"], "22": ["A", "C"] };
+    const questionTypes = { "21": "Multiple Choice (Two Answers)", "22": "Multiple Choice (Two Answers)" };
+    function getBand(s){ return s >= 2 ? 9 : 0; }
+  </script>
+</body></html>`;
+
+const FULL_ONE_PAGE_HTML = `<!doctype html><html><head><title>Cambridge Style Full Reading</title></head>
+<body>
+  <section class="passage-container">
+    <div id="passageContent">
+      <div class="passage-part active" data-part="1"><div class="sectionRubric"><h2>Reading Passage 1</h2></div><h1>One</h1><p>Body one.</p></div>
+      <div class="passage-part" data-part="2"><div class="sectionRubric"><h2>Reading Passage 2</h2></div><h1>Two</h1><p>Body two.</p></div>
+      <div class="passage-part" data-part="3"><div class="sectionRubric"><h2>Reading Passage 3</h2></div><h1>Three</h1><p>Body three.</p></div>
+    </div>
+  </section>
+  <section class="questions-container">
+    <div class="questions-part active" data-part="1">
+      <div class="question" id="question-group-1">
+        <p>The animal is <span id="question-1" class="blank-wrapper"><input type="text" name="q1"><span class="cdi-placeholder">1</span></span>.</p>
+      </div>
+    </div>
+    <div class="questions-part" data-part="2">
+      <div class="tfng-question" id="question-14">
+        <p class="tfng-statement-text">Statement fourteen.</p>
+        <label><input type="radio" name="q14" value="TRUE">True</label>
+        <label><input type="radio" name="q14" value="FALSE">False</label>
+      </div>
+    </div>
+    <div class="questions-part" data-part="3">
+      <div class="mcq-block" id="question-27">
+        <div class="mcq-stem-row"><span class="mcq-q-num-box">27</span><p class="mcq-stem">What is the writer doing?</p></div>
+        <div class="mcq-single">
+          <label class="mcq-row"><input type="radio" name="q27" value="A"><span class="mcq-letter">A</span><span>Predicting.</span></label>
+          <label class="mcq-row"><input type="radio" name="q27" value="B"><span class="mcq-letter">B</span><span>Describing.</span></label>
+        </div>
+      </div>
+    </div>
+  </section>
+  <script>
+    const correctAnswers = { "1": "rats", "14": "TRUE", "27": "B" };
+    const acceptableAnswers = { "1": ["rats", "rat"] };
+    const questionTypes = { "1": "Table Completion", "14": "TRUE / FALSE / NOT GIVEN", "27": "Multiple Choice" };
+    function getBandFor40(s){ return s >= 3 ? 9 : 0; }
+  </script>
+</body></html>`;
+
+describe("parseFullReading gap fixtures", () => {
+  it("atomizes ungrouped .mc-question radio MCQ blocks", () => {
+    const t = parseTest(FULL_UNGROUPED_MCQ_HTML);
+    const q32 = t.questions.find((q) => q.number === 32)!;
+
+    expect(t.category).toBe("full_reading");
+    expect(q32.passageOrder).toBe(2);
+    expect(q32.qtype).toBe("mcq_single");
+    expect(q32.promptHtml).toBe("What is the writer's main point?");
+    expect(q32.options).toHaveLength(3);
+    expect(q32.answer).toMatchObject({ mode: "exact", accept: ["C"] });
+    expect(t.warnings).toHaveLength(0);
+  });
+
+  it("maps radio-rendered choose-TWO MCQ pairs to mcq_multi", () => {
+    const t = parseTest(FULL_RADIO_CHOOSE_TWO_HTML);
+    const q21 = t.questions.find((q) => q.number === 21)!;
+    const q22 = t.questions.find((q) => q.number === 22)!;
+
+    expect(q21.qtype).toBe("mcq_multi");
+    expect(q22.qtype).toBe("mcq_multi");
+    expect(q21.groupKey).toBe("21-22");
+    expect(q21.promptHtml).toBe("Which TWO reasons are given?");
+    expect(q21.answer).toMatchObject({ mode: "mcq_set", accept: ["A", "C"] });
+    expect(q22.answer.mode).toBe("mcq_set");
+    expect(t.warnings).toHaveLength(0);
+  });
+
+  it("routes one-page .passage-part full reading through the full parser", () => {
+    const t = parseTest(FULL_ONE_PAGE_HTML);
+
+    expect(t.category).toBe("full_reading");
+    expect(t.passages).toHaveLength(3);
+    expect(t.passages.every((p) => p.bodyHtml.trim().length > 0)).toBe(true);
+    expect(t.questions.map((q) => q.passageOrder)).toEqual([1, 2, 3]);
+    expect(t.questions.every((q) => q.promptHtml.trim().length > 0)).toBe(true);
+    expect(t.questions.find((q) => q.number === 1)?.answer).toMatchObject({
+      mode: "text_accept",
+      accept: ["rats", "rat"],
+    });
+    expect(t.bandScale).not.toBeNull();
+    expect(t.warnings).toHaveLength(0);
+  });
+});
+
 const fullTemplate = sample("Full Test Template.html");
 describe.skipIf(!fullTemplate)("real sample — Full Test Template (40Q / 3 passages)", () => {
   it("3 пассажа / 40 вопросов с band-шкалой, каждый вопрос с ключом", () => {
