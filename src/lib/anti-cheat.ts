@@ -72,6 +72,29 @@ export function isTooFastToRate(
 }
 
 /**
+ * P0 Practice/Mock: рейтингуется ТОЛЬКО mock-попытка, и только когда она —
+ * АБСОЛЮТНО первая сданная попытка этого теста (в любом режиме, §4.6
+ * first-attempt-only). Practice-прогон «сжигает» рейтингуемость теста: иначе
+ * будущие practice-фичи (проверка/разбор до сдачи) превращали бы последующий
+ * «первый mock» в накрутку Elo. Floor-guard по темпу сохраняется. Чистая
+ * функция — форк-условие рейтинга тестируется без БД.
+ */
+export function shouldRateAttempt(input: {
+  mode: "practice" | "mock";
+  /** Сданные попытки этого (user, test) ВКЛЮЧАЯ текущую. */
+  submittedCountForTest: number;
+  /** Серверное время (submit − start), не клиентское. */
+  timeUsedSeconds: number;
+  totalQuestions: number;
+}): boolean {
+  return (
+    input.mode === "mock" &&
+    input.submittedCountForTest === 1 &&
+    !isTooFastToRate(input.timeUsedSeconds, input.totalQuestions)
+  );
+}
+
+/**
  * Honeypot (§11 anti-bot, без внешних зависимостей): в signup-форме есть скрытое
  * поле-приманка, невидимое живому пользователю (offscreen + aria-hidden). Бот,
  * автозаполняющий все поля, отправит его непустым. true => это бот. Чистая функция —
