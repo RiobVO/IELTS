@@ -15,6 +15,12 @@ export interface VocabCardRow {
   translation: string | null;
   partOfSpeech: string | null;
   ipa: string | null;
+  // Enrichment (0038): пробрасываются в insert/update как есть (null = поле отсутствовало).
+  synonyms: string[] | null;
+  collocations: string[] | null;
+  wordFamily: string[] | null;
+  quizPrompt: string | null;
+  acceptedAnswers: string[] | null;
 }
 
 /**
@@ -34,6 +40,11 @@ export function buildCardRows(
     translation: c.translation,
     partOfSpeech: c.partOfSpeech,
     ipa: c.ipa,
+    synonyms: c.synonyms,
+    collocations: c.collocations,
+    wordFamily: c.wordFamily,
+    quizPrompt: c.quizPrompt,
+    acceptedAnswers: c.acceptedAnswers,
   }));
 }
 

@@ -624,3 +624,40 @@ Feature Vocabulary (spaced-repetition flashcards; product plan 2026-07-06). Thre
 **Verification.** `verify` gate green on local docker (31 tables; up→down→up clean +
 idempotent; `vocab_progress` RLS on + anon denied + authenticated INSERT denied).
 Supabase application follows the plan's deploy sequencing.
+
+## 0038 — Vocabulary enrichment (additive columns on vocab_card / vocab_deck)
+
+Additive column-only migration (product plan V7/V9/V10 — richer cards + an optional
+quiz mode). **No new tables, no table-count change (stays 31), no new enums, no RLS
+or grant changes.** All columns are **nullable, no DEFAULT** — existing rows are
+untouched and a re-import fills them through the additive upsert (`vocab_progress`
+never touched).
+
+- **`vocab_card` new columns:**
+  - `synonyms text[]`, `collocations text[]`, `word_family text[]` — learning
+    semantics for a card. Parser caps: ≤20 items each, ≤200 chars per item.
+  - `quiz_prompt text` — a fill-in-the-blank sentence for the quiz mode; the parser
+    requires it to contain the blank marker `___` when present (≤500 chars).
+  - `accepted_answers text[]` — answers accepted for that blank (≤10 items, ≤200
+    chars each). Absent when `quiz_prompt` is set = valid (the fallback answer is the
+    card's `word`); an explicitly-empty array is a parse error (a typo, not "no
+    answers").
+- **`vocab_deck` new column:**
+  - `question_types text[]` — canon question-type slugs the deck's quiz can draw from
+    (validated by the parser against `QUESTION_TYPES` in `question-types.ts`; an
+    unknown slug is a `VocabParseError`, ≤10 items). Mirrors
+    `content_item.question_types` (a plain `text[]` of slugs).
+
+- **Why NO answer_key-style lock on the new columns (RLS posture unchanged):**
+  `vocab_card` stays the same secure-by-default published-read content row as in 0037
+  (self-graded study material — see the 0037 note). `quiz_prompt`/`accepted_answers`
+  are the **same data class**: the answer to the blank is the card's own `word`, which
+  the user already sees on a published card — there is no *hidden* graded key to
+  protect (unlike `answer_key`, whose leak would let a client pre-grade a scored test).
+  So the new columns inherit their tables' posture; no lock table, no column-grant
+  carve-out. `vocab_deck.question_types` is public catalog metadata (like
+  `content_item.question_types`).
+
+**Verification.** `tsc` clean; vitest green (parser + upsert enrichment cases);
+`verify` gate green on local docker (still 31 tables; up→down→up clean + idempotent;
+RLS asserts unchanged). Supabase application follows the plan's deploy sequencing.

@@ -7,12 +7,17 @@
  * покрывается юнит-тестами напрямую.
  *
  * Канонический формат файла:
- *   { "title", "description"?, "level"?, "tier_required"?,
+ *   { "title", "description"?, "level"?, "tier_required"?, "question_types"?,
  *     "cards": [{ "word", "definition", "example"?, "translation"?,
- *                 "part_of_speech"?, "ipa"? }] }
+ *                 "part_of_speech"?, "ipa"?, "synonyms"?, "collocations"?,
+ *                 "word_family"?, "quiz_prompt"?, "accepted_answers"? }] }
+ *
+ * Enrichment-поля (0038) опциональны и обратносовместимы: старые файлы без них
+ * парсятся как прежде (все new-поля → null).
  *
  * Инварианты: no LLM, no eval, no vm, без новых зависимостей.
  */
+import { QUESTION_TYPES, type QuestionType } from "../question-types";
 
 export type VocabTier = "basic" | "premium" | "ultra";
 
@@ -23,6 +28,14 @@ export interface ParsedVocabCard {
   translation: string | null;
   partOfSpeech: string | null;
   ipa: string | null;
+  // Enrichment (0038): обучающая семантика; null = поле отсутствовало в файле.
+  synonyms: string[] | null;
+  collocations: string[] | null;
+  wordFamily: string[] | null;
+  // Quiz-режим (0038): промт с маркером пропуска "___" + принимаемые ответы.
+  // acceptedAnswers=null при заданном quizPrompt = fallback-ответ = само слово.
+  quizPrompt: string | null;
+  acceptedAnswers: string[] | null;
   /** Позиция в файле (0..n-1) — стабильный порядок показа карточек. */
   order: number;
 }
@@ -32,6 +45,8 @@ export interface ParsedVocabDeck {
   description: string | null;
   level: string | null;
   tierRequired: VocabTier;
+  // Enrichment (0038): канон-слаги типов вопросов quiz-режима; null = не заданы.
+  questionTypes: QuestionType[] | null;
   cards: ParsedVocabCard[];
 }
 
@@ -62,6 +77,16 @@ const MAX_EXAMPLE_LEN = 2000;
 const MAX_TRANSLATION_LEN = 500;
 const MAX_POS_LEN = 60;
 const MAX_IPA_LEN = 200;
+// Enrichment (0038): лимиты в духе существующих — пропорциональные границы против
+// раздувания импорта, с большим запасом относительно реальных колод.
+const MAX_ENRICH_ITEMS = 20; // synonyms/collocations/word_family
+const MAX_ENRICH_ITEM_LEN = 200;
+const MAX_QUIZ_PROMPT_LEN = 500;
+const MAX_ACCEPTED_ANSWERS = 10;
+const MAX_ACCEPTED_ANSWER_LEN = 200;
+const MAX_QUESTION_TYPES = 10;
+/** Маркер пропуска в quiz_prompt (fill-in-the-blank): ровно три подчёркивания. */
+const BLANK_MARKER = "___";
 
 const TIERS: readonly VocabTier[] = ["basic", "premium", "ultra"];
 
@@ -95,6 +120,38 @@ function optionalString(value: unknown, field: string, maxLen: number): string |
 }
 
 /**
+ * Необязательный массив непустых строк (enrichment 0038). absent/null → null.
+ * Каждый элемент — непустая строка после trim с лимитом длины (переиспользует
+ * requiredString). `emptyIsError=false`: пустой массив → null (нет обогащения).
+ * `emptyIsError=true`: пустой массив → ошибка — для accepted_answers, где заданный,
+ * но пустой список бессмыслен (нет ключа = fallback-ответ = слово, а `[]` = опечатка).
+ */
+function optionalStringArray(
+  value: unknown,
+  field: string,
+  maxItems: number,
+  maxItemLen: number,
+  emptyIsError = false,
+): string[] | null {
+  if (value == null) return null;
+  if (!Array.isArray(value)) {
+    throw new VocabParseError(`${field} must be an array when present.`);
+  }
+  if (value.length === 0) {
+    if (emptyIsError) {
+      throw new VocabParseError(`${field} must not be empty when present.`);
+    }
+    return null;
+  }
+  if (value.length > maxItems) {
+    throw new VocabParseError(
+      `${field} has too many items (${value.length} > ${maxItems}).`,
+    );
+  }
+  return value.map((item, i) => requiredString(item, `${field}[${i}]`, maxItemLen));
+}
+
+/**
  * Короткий предпросмотр сырого значения для сообщений об ошибке. Обрезает до
  * ~80 символов: битый файл с мегабайтным значением иначе даёт мегабайтное
  * сообщение (а оно уходит в query-string redirect админки → битый Location).
@@ -118,6 +175,41 @@ function parseTier(value: unknown): VocabTier {
     );
   }
   return value as VocabTier;
+}
+
+/**
+ * question_types (enrichment 0038) — массив КАНОН-слагов quiz-режима. absent/null
+ * или пустой массив → null. Валидируем строгим членством в QUESTION_TYPES (после
+ * trim, регистрозависимо): это уже канонические слаги, а не сырые лейблы, поэтому
+ * fuzzy-нормализация canonQuestionType здесь не нужна — неизвестный слаг = ошибка.
+ */
+function parseQuestionTypes(value: unknown): QuestionType[] | null {
+  if (value == null) return null;
+  if (!Array.isArray(value)) {
+    throw new VocabParseError("question_types must be an array when present.");
+  }
+  if (value.length === 0) return null;
+  if (value.length > MAX_QUESTION_TYPES) {
+    throw new VocabParseError(
+      `question_types has too many items (${value.length} > ${MAX_QUESTION_TYPES}).`,
+    );
+  }
+  const canon = new Set<string>(QUESTION_TYPES);
+  return value.map((raw) => {
+    if (typeof raw !== "string") {
+      throw new VocabParseError(
+        `question_types entries must be strings (got ${preview(raw)}).`,
+      );
+    }
+    const slug = raw.trim();
+    if (!canon.has(slug)) {
+      throw new VocabParseError(
+        `unknown question type ${preview(raw)} — must be a canon slug ` +
+          `(${QUESTION_TYPES.join(", ")}).`,
+      );
+    }
+    return slug as QuestionType;
+  });
 }
 
 export function parseVocab(fileContent: string): ParsedVocabDeck {
@@ -144,6 +236,7 @@ export function parseVocab(fileContent: string): ParsedVocabDeck {
   const description = optionalString(obj.description, "description", MAX_DESCRIPTION_LEN);
   const level = optionalString(obj.level, "level", MAX_LEVEL_LEN);
   const tierRequired = parseTier(obj.tier_required);
+  const questionTypes = parseQuestionTypes(obj.question_types);
 
   if (!Array.isArray(obj.cards)) {
     throw new VocabParseError("cards must be an array.");
@@ -179,6 +272,16 @@ export function parseVocab(fileContent: string): ParsedVocabDeck {
     }
     seen.set(norm, pos);
 
+    // Quiz-режим: quiz_prompt (если задан) обязан нести маркер пропуска "___".
+    // accepted_answers — заданный, но пустой массив = ошибка; отсутствие ключа при
+    // наличии quiz_prompt валидно (fallback-ответ = word, разрешается на слое показа).
+    const quizPrompt = optionalString(c.quiz_prompt, `card ${pos} "quiz_prompt"`, MAX_QUIZ_PROMPT_LEN);
+    if (quizPrompt != null && !quizPrompt.includes(BLANK_MARKER)) {
+      throw new VocabParseError(
+        `card ${pos} "quiz_prompt" must contain a blank marker "${BLANK_MARKER}".`,
+      );
+    }
+
     cards.push({
       word,
       definition,
@@ -186,9 +289,20 @@ export function parseVocab(fileContent: string): ParsedVocabDeck {
       translation: optionalString(c.translation, `card ${pos} "translation"`, MAX_TRANSLATION_LEN),
       partOfSpeech: optionalString(c.part_of_speech, `card ${pos} "part_of_speech"`, MAX_POS_LEN),
       ipa: optionalString(c.ipa, `card ${pos} "ipa"`, MAX_IPA_LEN),
+      synonyms: optionalStringArray(c.synonyms, `card ${pos} "synonyms"`, MAX_ENRICH_ITEMS, MAX_ENRICH_ITEM_LEN),
+      collocations: optionalStringArray(c.collocations, `card ${pos} "collocations"`, MAX_ENRICH_ITEMS, MAX_ENRICH_ITEM_LEN),
+      wordFamily: optionalStringArray(c.word_family, `card ${pos} "word_family"`, MAX_ENRICH_ITEMS, MAX_ENRICH_ITEM_LEN),
+      quizPrompt,
+      acceptedAnswers: optionalStringArray(
+        c.accepted_answers,
+        `card ${pos} "accepted_answers"`,
+        MAX_ACCEPTED_ANSWERS,
+        MAX_ACCEPTED_ANSWER_LEN,
+        true, // заданный, но пустой массив = ошибка
+      ),
       order: i,
     });
   });
 
-  return { title, description, level, tierRequired, cards };
+  return { title, description, level, tierRequired, questionTypes, cards };
 }
