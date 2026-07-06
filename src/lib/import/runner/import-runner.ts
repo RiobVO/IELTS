@@ -5,6 +5,7 @@ import { fetchExternalAudio } from "./safe-audio-fetch";
 import { sanitizeRunner, assertNoKeyLeak } from "./sanitize-runner";
 import { runnerBrandResidue } from "./skin-runner";
 import { persistTest, findDuplicateTest, DuplicateTestError } from "../persist";
+import { uploadSourceHtml } from "../source-html-storage";
 
 export interface ImportRunnerResult {
   id: string;
@@ -80,6 +81,15 @@ export async function importRunner(
   // 3. Единственная атомарная запись: content + passages (incl audioPath) + questions
   //    + answer_key + runner_html за одну транзакцию.
   await persistTest(parsed, { ...opts, id: contentItemId, runnerHtml });
+
+  // 4. Бэкап необрезанного оригинала (с ключами) в приватный Storage — воспроизводимость
+  // (без него исходник восстановить неоткуда). После persist, т.к. нужен готовый id.
+  // Best-effort: сбой бэкапа не должен ронять уже успешный импорт.
+  try {
+    await uploadSourceHtml(contentItemId, html);
+  } catch (e) {
+    console.error(`[import] source HTML backup failed for content_item ${contentItemId}`, e);
+  }
 
   return {
     id: contentItemId,
