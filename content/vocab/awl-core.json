@@ -2,6 +2,7 @@
   "title": "Academic Word List — Core",
   "description": "High-frequency general academic vocabulary in the spirit of the Academic Word List (AWL) — the process, reasoning, and argument words that recur across IELTS Reading, Writing, and academic texts.",
   "level": "B2-C1",
+  "level_band": "C1",
   "tier_required": "basic",
   "cards": [
     { "word": "analyse", "definition": "to examine something in detail in order to understand or explain it", "example": "The researchers analysed the survey data to identify emerging trends.", "part_of_speech": "verb", "ipa": "/ˈænəlaɪz/", "synonyms": ["examine", "study", "investigate"], "word_family": ["analysis", "analytical", "analyst"], "quiz_prompt": "The researchers ___ the survey data to identify emerging trends.", "accepted_answers": ["analysed", "analyzed"] },

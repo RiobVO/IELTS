@@ -2,6 +2,7 @@
   "title": "IELTS Reading — High-Frequency",
   "description": "Content and description vocabulary that appears again and again in IELTS Academic Reading passages — words for trends, evidence, comparison, and scientific explanation.",
   "level": "B2",
+  "level_band": "B2",
   "tier_required": "basic",
   "question_types": ["tfng", "ynng", "matching_headings", "matching_info"],
   "cards": [
