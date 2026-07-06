@@ -228,10 +228,15 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
     try {
       const result = await reviewCardAction(card.id, grade);
       if (result.ok) {
-        setRemaining(result.newRemainingToday);
-        // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
-        // тот же баннер, что сидируется на старте сессии, идемпотентно.
-        if (result.newRemainingToday === 0) setDailyCapHit(true);
+        // Rescue-сессия новых карт не содержит: сервер всё равно возвращает остаток
+        // тира для НАЧАТЫХ карт — адаптировать его здесь значит показать посреди
+        // rescue вводящий в заблуждение бейдж/баннер дневного лимита. Игнорируем.
+        if (!rescueSession) {
+          setRemaining(result.newRemainingToday);
+          // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
+          // тот же баннер, что сидируется на старте сессии, идемпотентно.
+          if (result.newRemainingToday === 0) setDailyCapHit(true);
+        }
         // Easy — успех «знал сразу»: в сессионной статистике учитываем как good (карта
         // покидает сессию так же); отдельного счётчика Easy в итоге нет.
         const statKey: "again" | "good" = grade === "again" ? "again" : "good";
@@ -269,10 +274,13 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
     try {
       const result = await answerAction(card.id, answer);
       if (result.ok) {
-        setRemaining(result.newRemainingToday);
-        // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
-        // тот же баннер, что сидируется на старте сессии, идемпотентно.
-        if (result.newRemainingToday === 0) setDailyCapHit(true);
+        // См. комментарий в submitGrade: в rescue-сессии остаток лимита не адаптируем.
+        if (!rescueSession) {
+          setRemaining(result.newRemainingToday);
+          // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
+          // тот же баннер, что сидируется на старте сессии, идемпотентно.
+          if (result.newRemainingToday === 0) setDailyCapHit(true);
+        }
         if (result.correct) {
           setTransientMsg("Correct!");
           setCorrectFlash(true);
