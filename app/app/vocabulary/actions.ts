@@ -65,7 +65,12 @@ async function applyReview(
   grade: Grade,
   now: Date,
 ): Promise<{ dueAt: Date; intervalDays: number; newRemainingToday: number | null } | null> {
-  const { state, dueAt } = reviewCard(gate.currentState, grade, now);
+  // Easy валиден ТОЛЬКО для новой карты (нет строки прогресса). Лапснутая карта имеет
+  // repetitions=0 и по одному SM-2-стейту неотличима от новой, поэтому «новизну» берём из
+  // авторитетного gate.isNew (наличие строки прогресса), а не из стейта. Не-новую карту с
+  // grade="easy" тихо даунгрейдим до "good" — недельный «знал сразу» дают только новым.
+  const effectiveGrade: Grade = grade === "easy" && !gate.isNew ? "good" : grade;
+  const { state, dueAt } = reviewCard(gate.currentState, effectiveGrade, now);
 
   try {
     // Авторитетная запись SM-2 owner-path. ON CONFLICT (user_id, card_id) DO UPDATE —
@@ -130,8 +135,8 @@ export async function reviewCardAction(cardId: string, grade: string): Promise<R
 
   // Валидация входа ДО запросов.
   if (!isUuid(cardId)) return { ok: false, reason: "not_found" };
-  if (grade !== "again" && grade !== "good") return { ok: false, reason: "invalid" };
-  // grade сужен до "again" | "good" (= Grade).
+  if (grade !== "again" && grade !== "good" && grade !== "easy") return { ok: false, reason: "invalid" };
+  // grade сужен до "again" | "good" | "easy" (= Grade).
 
   const gate = await enforceVocabReview(user.id, cardId);
   if (!gate.ok) return { ok: false, reason: gate.reason };

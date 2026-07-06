@@ -67,6 +67,8 @@ export interface VocabCardView {
   collocations: string[] | null;
   wordFamily: string[] | null;
   quizPrompt: string | null;
+  /** Нет строки прогресса пользователя (добор новых) → true. Разрешает grade "easy" в UI (C2); сервер авторитетен по gate.isNew. */
+  isNew: boolean;
 }
 
 export interface VocabDeckCard {
@@ -231,7 +233,7 @@ export async function getReviewQueue(
 
   let newCards: VocabCardView[] = [];
   if (newFetch > 0) {
-    newCards = await db
+    const newRows = await db
       .select(cardViewColumns)
       .from(vocabCard)
       .innerJoin(vocabDeck, and(eq(vocabDeck.id, vocabCard.deckId), eq(vocabDeck.status, "published")))
@@ -243,9 +245,13 @@ export async function getReviewQueue(
       .where(and(eq(vocabCard.deckId, deckId), isNull(vocabProgress.id)))
       .orderBy(vocabCard.order)
       .limit(newFetch);
+    // Добор новых карт (нет прогресса) → isNew:true: только они разрешают Easy в UI.
+    newCards = newRows.map((c) => ({ ...c, isNew: true }));
   }
 
-  return { cards: [...dueCards, ...newCards], dueCount, newRemainingToday: remaining };
+  // due-карты уже имеют прогресс → isNew:false; порядок очереди (due → new) сохраняем.
+  const cards: VocabCardView[] = [...dueCards.map((c) => ({ ...c, isNew: false })), ...newCards];
+  return { cards, dueCount, newRemainingToday: remaining };
 }
 
 export interface VocabDeckBrowseCard {
@@ -335,7 +341,7 @@ export async function getRescueQueue(userId: string): Promise<VocabCardView[]> {
     : "basic";
   const allowedTiers = TIER_ORDER.filter((t) => meetsTier(tier, t));
 
-  return db
+  const rows = await db
     .select(cardViewColumns)
     .from(vocabProgress)
     .innerJoin(vocabCard, eq(vocabCard.id, vocabProgress.cardId))
@@ -350,6 +356,8 @@ export async function getRescueQueue(userId: string): Promise<VocabCardView[]> {
     .where(and(eq(vocabProgress.userId, userId), rescueCardCondition()))
     .orderBy(desc(vocabProgress.lapses), asc(vocabProgress.ease))
     .limit(RESCUE_QUEUE_LIMIT);
+  // Rescue — только уже начатые карты (есть прогресс) → isNew:false, Easy не предлагаем.
+  return rows.map((c) => ({ ...c, isNew: false }));
 }
 
 /** Банк слов пользователя по доступным декам (mastered/learning/new + всего). */

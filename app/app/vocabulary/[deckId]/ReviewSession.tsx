@@ -25,7 +25,7 @@ import { answerCardAction, answerCompletionAction, reviewCardAction } from "../a
  * структурно совместимые с ней.
  */
 
-type Grade = "again" | "good";
+type Grade = "again" | "good" | "easy";
 type Mode = "flashcards" | "type" | "paraphrase" | "completion";
 type AnswerAction = typeof answerCardAction;
 
@@ -42,6 +42,8 @@ export interface ReviewCard {
   collocations: string[] | null;
   wordFamily: string[] | null;
   quizPrompt: string | null;
+  /** Нет строки прогресса (добор новых) → показываем grade "easy" (C2). Сервер авторитетен по gate.isNew. */
+  isNew: boolean;
 }
 
 interface ReviewSessionProps {
@@ -230,10 +232,15 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
         // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
         // тот же баннер, что сидируется на старте сессии, идемпотентно.
         if (result.newRemainingToday === 0) setDailyCapHit(true);
-        setStats((s) => ({ ...s, [grade]: s[grade] + 1 }));
+        // Easy — успех «знал сразу»: в сессионной статистике учитываем как good (карта
+        // покидает сессию так же); отдельного счётчика Easy в итоге нет.
+        const statKey: "again" | "good" = grade === "again" ? "again" : "good";
+        setStats((s) => ({ ...s, [statKey]: s[statKey] + 1 }));
         // "again" — в конец локальной очереди (interval 0, due немедленно, как задумано
-        // SM-2 на сервере); "good" — карта покидает сессию.
-        setQueue((q) => (grade === "again" ? [...q.slice(1), card] : q.slice(1)));
+        // SM-2 на сервере); "good"/"easy" — карта покидает сессию. Вернувшуюся карту
+        // помечаем isNew:false → при повторной встрече Easy не предлагаем (сервер всё
+        // равно даунгрейдит, но UI не должен врать).
+        setQueue((q) => (grade === "again" ? [...q.slice(1), { ...card, isNew: false }] : q.slice(1)));
         setFlipped(false);
       } else if (result.reason === "daily_cap") {
         setDailyCapHit(true);
@@ -310,7 +317,9 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
     if (!card || !wrongState || continueConsumedRef.current) return;
     continueConsumedRef.current = true;
     setStats((s) => ({ ...s, again: s.again + 1 }));
-    setQueue((q) => [...q.slice(1), card]);
+    // Карта возвращается в хвост уже НЕ новой (сервер записал прогресс) → isNew:false,
+    // чтобы при повторной встрече в flashcards Easy не предлагался.
+    setQueue((q) => [...q.slice(1), { ...card, isNew: false }]);
     setWrongState(null);
     setTypedValue("");
   }
@@ -437,27 +446,51 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
         </div>
 
         {flipped && (
-          <div style={S.actions}>
-            <Button
-              id="rs-again-btn"
-              variant="secondary"
-              size="lg"
-              disabled={pending}
-              onClick={() => submitGrade("again")}
-              style={{ flex: 1 }}
-            >
-              Again
-            </Button>
-            <Button
-              variant="success"
-              size="lg"
-              disabled={pending}
-              onClick={() => submitGrade("good")}
-              style={{ flex: 1 }}
-            >
-              Good
-            </Button>
-          </div>
+          <>
+            <div style={S.actions}>
+              <Button
+                id="rs-again-btn"
+                variant="secondary"
+                size="lg"
+                disabled={pending}
+                onClick={() => submitGrade("again")}
+                style={{ flex: 1 }}
+              >
+                Again
+              </Button>
+              <Button
+                variant="success"
+                size="lg"
+                disabled={pending}
+                onClick={() => submitGrade("good")}
+                style={{ flex: 1 }}
+              >
+                Good
+              </Button>
+              {/* Easy (V14) — только для новой карты. Ghost-brand по референсу; NEW-бейдж
+                  сиблингом в relative-обёртке, т.к. children Button клиппятся overflow:hidden. */}
+              {current.isNew && (
+                <div style={S.easyWrap}>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    disabled={pending}
+                    onClick={() => submitGrade("easy")}
+                    style={S.easyBtn}
+                  >
+                    Easy
+                  </Button>
+                  <span aria-hidden={true} style={S.newDot}>NEW</span>
+                </div>
+              )}
+            </div>
+            {/* Hint показываем только когда кнопка Easy видна (новая карта). */}
+            {current.isNew && (
+              <p style={S.easyHint}>
+                Easy — new cards only: skips the 1d/3d ladder with a one-week first interval.
+              </p>
+            )}
+          </>
         )}
       </>
     );
@@ -795,6 +828,13 @@ const S: Record<string, CSSProperties> = {
 
   actions: { display: "flex", gap: 12 },
   errorHint: { textAlign: "center", fontSize: 13, fontWeight: 700, color: "var(--error-text)" },
+
+  // Easy (V14) — ghost-brand третий грейд для новых карт: brand-subtle фон, brand-border,
+  // text-link (тот же паттерн, что flipBtn). NEW-бейдж — абсолютный сиблинг в relative-обёртке.
+  easyWrap: { flex: 1, position: "relative", display: "flex" },
+  easyBtn: { flex: 1, boxSizing: "border-box", background: "var(--brand-subtle)", color: "var(--text-link)", border: "2px solid var(--brand-border)" },
+  newDot: { position: "absolute", top: -9, right: -6, background: "var(--brand)", color: "#fff", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "2px 7px", borderRadius: "var(--radius-full)", pointerEvents: "none" },
+  easyHint: { textAlign: "center", marginTop: 10, fontSize: 12.5, color: "var(--text-muted)" },
 
   // Type-the-answer mode
   typeForm: { display: "flex", flexDirection: "column", gap: 14 },
