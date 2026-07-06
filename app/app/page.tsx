@@ -767,7 +767,7 @@ const DASH_CSS = `
   .dash-week-cta{width:auto;margin-left:auto}
 }
 @media (min-width:1024px){
-  .dash-wrap{display:grid;grid-template-columns:2fr 1fr;gap:18px;align-items:start}
+  .dash-wrap{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:18px;align-items:start}
   .dash-grid-span{grid-column:1 / -1}
 }
 /* Узкие телефоны (≤430px): значок+заголовок не помещаются в один ряд с band/chip/score
