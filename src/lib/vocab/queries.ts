@@ -9,11 +9,19 @@
  * answer_key). Лимит новых карт и дневной счётчик берутся из access.ts (не дублируем).
  */
 import "server-only";
-import { and, count, desc, eq, isNull, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { profile, vocabCard, vocabDeck, vocabProgress } from "@/db/schema";
-import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
+import {
+  effectiveTier,
+  meetsTier,
+  VOCAB_DAILY_GOAL,
+  VOCAB_DAILY_NEW_LIMIT,
+  VOCAB_MASTERED_INTERVAL_DAYS,
+  type Tier,
+} from "@/lib/tiers";
 import { countNewCardsToday, newCardsRemaining } from "@/lib/vocab/access";
+import { computeStreak } from "@/lib/vocab/streak";
 
 /** Колонки карточки для UI (общие для due- и new-выборок). Скрытых полей нет. */
 const cardViewColumns = {
@@ -46,6 +54,8 @@ export interface VocabDeckCard {
   totalCards: number;
   /** Сколько карточек пользователь уже начал (есть строка прогресса). */
   learnedCards: number;
+  /** Сколько карточек освоено (SM-2 interval_days ≥ порога) — для mastery-состояния. */
+  masteredCards: number;
   /** Сколько карточек к повтору прямо сейчас (due_at <= now). */
   dueCount: number;
   /** Дек недоступен по тиру пользователя (!meetsTier). */
@@ -84,6 +94,8 @@ export async function getVocabCatalog(userId: string): Promise<VocabDeckCard[]> 
         // now() БД вместо JS-Date: Date-параметр внутри raw sql`` не типизирован Drizzle,
         // и postgres-js на прод-клиенте (prepare:false) падает в Buffer.byteLength(Date).
         due: sql<number>`(count(*) filter (where ${vocabProgress.dueAt} <= now()))::int`,
+        // Освоенные карты (interval_days ≥ порога) — в том же агрегате, без доп. round-trip.
+        mastered: sql<number>`(count(*) filter (where ${vocabProgress.intervalDays} >= ${VOCAB_MASTERED_INTERVAL_DAYS}))::int`,
       })
       .from(vocabProgress)
       .innerJoin(vocabCard, eq(vocabCard.id, vocabProgress.cardId))
@@ -108,6 +120,7 @@ export async function getVocabCatalog(userId: string): Promise<VocabDeckCard[]> 
       tierRequired: d.tierRequired,
       totalCards: d.totalCards,
       learnedCards: agg?.learned ?? 0,
+      masteredCards: agg?.mastered ?? 0,
       dueCount: agg?.due ?? 0,
       locked: !meetsTier(tier, d.tierRequired),
     };
@@ -208,4 +221,164 @@ export async function getReviewQueue(
   }
 
   return { cards: [...dueCards, ...newCards], dueCount, newRemainingToday: remaining };
+}
+
+/** Банк слов пользователя по доступным декам (mastered/learning/new + всего). */
+export interface VocabBank {
+  /** interval_days ≥ порога. */
+  mastered: number;
+  /** Есть прогресс, но interval_days < порога. */
+  learning: number;
+  /** Карты без строки прогресса в доступных деках (total − mastered − learning). */
+  newCount: number;
+  /** Всего карт в доступных деках (сумма денормализованных word_count). */
+  total: number;
+}
+
+/** Дневной план vocab: нагрузка, прогноз, банк слов и приватный стрик. */
+export interface VocabOverview {
+  /** Карт к повтору прямо сейчас (due_at ≤ now) по доступным декам. */
+  dueToday: number;
+  /** Карт к повтору завтра (UTC-день +1). */
+  dueTomorrow: number;
+  /** Прогноз due по UTC-дням на 7 дней вперёд: [0]=сегодня (вкл. бэклог)…[6]. */
+  forecast7: number[];
+  /** Остаток новых карт на сегодня (null = безлимит premium/ultra). */
+  newRemainingToday: number | null;
+  /** Банк слов по доступным декам. */
+  bank: VocabBank;
+  /** Детерминированная оценка длительности сессии в минутах (≥1). */
+  sessionMinutes: number;
+  /** Приватный vocab-стрик (дней подряд), вне рейтинга. */
+  streak: number;
+  /** Повторов сегодня — числитель дневной цели. */
+  reviewedToday: number;
+  /** Дневная цель повторов (константа). */
+  goal: number;
+}
+
+/** Порядок тиров для inArray-фильтра доступных деков (basic < premium < ultra). */
+const TIER_ORDER: Tier[] = ["basic", "premium", "ultra"];
+
+/**
+ * План на сегодня для /app/vocabulary: due-нагрузка, 7-дневный прогноз, банк слов и
+ * приватный стрик. Считается ТОЛЬКО по published-декам, доступным пользователю по
+ * тиру (как getReviewQueue) — фильтр `tier_required IN allowedTiers`. Owner-path:
+ * published-гейт и user_id стоят явно в каждом запросе (Drizzle обходит RLS).
+ *
+ * Round-trips: wave 1 — профиль (тир задаёт allowedTiers для остальных); wave 2 —
+ * агрегат прогресса (due-бакеты/mastered/learning/reviewed_today одним FILTER-набором),
+ * сумма word_count доступных деков, distinct дни повторов (стрик) и счётчик новых за
+ * сегодня — параллельно. Границы UTC-суток строятся в SQL через now() (без JS-Date-
+ * параметра: Date в raw sql`` роняет прод-клиент на prepare:false).
+ */
+export async function getVocabOverview(userId: string): Promise<VocabOverview> {
+  // Wave 1: эффективный тир — от него зависят allowedTiers во всех агрегатах.
+  const [prof] = await db
+    .select({ tier: profile.tier, premiumUntil: profile.premiumUntil })
+    .from(profile)
+    .where(eq(profile.id, userId));
+  const tier: Tier = prof
+    ? effectiveTier({ tier: prof.tier, premium_until: prof.premiumUntil })
+    : "basic";
+  const allowedTiers = TIER_ORDER.filter((t) => meetsTier(tier, t));
+
+  const now = new Date();
+  // Начало текущих UTC-суток как timestamptz — целиком в SQL (now()), без JS-Date.
+  const dayStart = sql`(date_trunc('day', now() at time zone 'UTC') at time zone 'UTC')`;
+  // FILTER для окна due [день+lo, день+hi); границы — параметры-числа (не Date, безопасно).
+  const dueBucket = (lo: number, hi: number) =>
+    sql<number>`(count(*) filter (where ${vocabProgress.dueAt} >= ${dayStart} + make_interval(days => ${lo}) and ${vocabProgress.dueAt} < ${dayStart} + make_interval(days => ${hi})))::int`;
+
+  // Агрегат прогресса по доступным декам — вся дневная арифметика одним запросом.
+  const progressAgg = db
+    .select({
+      dueNow: sql<number>`(count(*) filter (where ${vocabProgress.dueAt} <= now()))::int`,
+      // День 0 = бэклог + сегодня: всё, что due до конца текущих UTC-суток.
+      f0: sql<number>`(count(*) filter (where ${vocabProgress.dueAt} < ${dayStart} + make_interval(days => 1)))::int`,
+      f1: dueBucket(1, 2),
+      f2: dueBucket(2, 3),
+      f3: dueBucket(3, 4),
+      f4: dueBucket(4, 5),
+      f5: dueBucket(5, 6),
+      f6: dueBucket(6, 7),
+      mastered: sql<number>`(count(*) filter (where ${vocabProgress.intervalDays} >= ${VOCAB_MASTERED_INTERVAL_DAYS}))::int`,
+      learning: sql<number>`(count(*) filter (where ${vocabProgress.intervalDays} < ${VOCAB_MASTERED_INTERVAL_DAYS}))::int`,
+      reviewedToday: sql<number>`(count(*) filter (where ${vocabProgress.lastReviewedAt} >= ${dayStart}))::int`,
+    })
+    .from(vocabProgress)
+    .innerJoin(vocabCard, eq(vocabCard.id, vocabProgress.cardId))
+    .innerJoin(
+      vocabDeck,
+      and(
+        eq(vocabDeck.id, vocabCard.deckId),
+        eq(vocabDeck.status, "published"),
+        inArray(vocabDeck.tierRequired, allowedTiers),
+      ),
+    )
+    .where(eq(vocabProgress.userId, userId));
+
+  // Wave 2: агрегат прогресса, суммарный размер доступных деков, дни повторов (стрик,
+  // 60 дней) и счётчик новых за сегодня — независимы, читаются параллельно.
+  const [[agg], [totals], reviewDayRows, newTodayCount] = await Promise.all([
+    progressAgg,
+    db
+      .select({ total: sql<number>`coalesce(sum(${vocabDeck.wordCount}), 0)::int` })
+      .from(vocabDeck)
+      .where(and(eq(vocabDeck.status, "published"), inArray(vocabDeck.tierRequired, allowedTiers))),
+    db
+      .selectDistinct({
+        day: sql<string>`(${vocabProgress.lastReviewedAt} at time zone 'UTC')::date::text`,
+      })
+      .from(vocabProgress)
+      .innerJoin(vocabCard, eq(vocabCard.id, vocabProgress.cardId))
+      .innerJoin(
+        vocabDeck,
+        and(
+          eq(vocabDeck.id, vocabCard.deckId),
+          eq(vocabDeck.status, "published"),
+          inArray(vocabDeck.tierRequired, allowedTiers),
+        ),
+      )
+      .where(
+        and(
+          eq(vocabProgress.userId, userId),
+          isNotNull(vocabProgress.lastReviewedAt),
+          gte(vocabProgress.lastReviewedAt, sql`now() - interval '60 days'`),
+        ),
+      ),
+    countNewCardsToday(userId, now),
+  ]);
+
+  const mastered = agg?.mastered ?? 0;
+  const learning = agg?.learning ?? 0;
+  const total = totals?.total ?? 0;
+  const bank: VocabBank = { mastered, learning, newCount: Math.max(0, total - mastered - learning), total };
+
+  const forecast7 = [
+    agg?.f0 ?? 0, agg?.f1 ?? 0, agg?.f2 ?? 0, agg?.f3 ?? 0,
+    agg?.f4 ?? 0, agg?.f5 ?? 0, agg?.f6 ?? 0,
+  ];
+  const dueToday = agg?.dueNow ?? 0;
+  const newRemainingToday = newCardsRemaining(tier, newTodayCount);
+
+  // Оценка сессии: due-бэклог + планируемый дневной набор новых, ~30 сек/карту (≥1 мин).
+  // Безлимитный тир капим VOCAB_DAILY_NEW_LIMIT — разумный дневной батч, чтобы оценка
+  // не раздувалась на большом банке новых карт.
+  const plannedNew = Math.min(bank.newCount, newRemainingToday ?? VOCAB_DAILY_NEW_LIMIT);
+  const sessionMinutes = Math.max(1, Math.round((dueToday + plannedNew) * 0.5));
+
+  const streak = computeStreak(reviewDayRows.map((r) => r.day), now.toISOString().slice(0, 10));
+
+  return {
+    dueToday,
+    dueTomorrow: forecast7[1],
+    forecast7,
+    newRemainingToday,
+    bank,
+    sessionMinutes,
+    streak,
+    reviewedToday: agg?.reviewedToday ?? 0,
+    goal: VOCAB_DAILY_GOAL,
+  };
 }

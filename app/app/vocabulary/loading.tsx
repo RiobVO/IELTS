@@ -1,8 +1,9 @@
 import { AppShellSkeleton } from "@/components/app/Skeletons";
 import { Skeleton } from "@/components/core/Skeleton";
 
-/** Скелетон каталога Vocabulary — зеркалит header + grid деков (page.tsx), чтобы
- *  свап на контент не давал layout-shift. Брейкпоинты — в классе, не inline. */
+/** Скелетон каталога Vocabulary — зеркалит header + план-панель + grid деков
+ *  (page.tsx), чтобы свап на контент не давал layout-shift. Брейкпоинты — в классе,
+ *  панель складывается на flex-wrap (как в page.tsx). */
 export default function Loading() {
   return (
     <AppShellSkeleton active="vocabulary">
@@ -19,8 +20,46 @@ export default function Loading() {
           <Skeleton w={110} h={14} style={{ marginBottom: 14 }} />
           <Skeleton w="60%" h={40} style={{ marginBottom: 12 }} />
           <Skeleton w="85%" h={16} style={{ marginBottom: 6 }} />
-          <Skeleton w="50%" h={16} style={{ marginBottom: 18 }} />
-          <Skeleton w={180} h={38} r="var(--radius-full)" />
+          <Skeleton w="50%" h={16} />
+        </div>
+
+        {/* план-панель: main-строка со stat-цифрами + CTA, foot со спарком + банком */}
+        <div
+          style={{
+            background: "var(--surface)",
+            border: "2px solid var(--border)",
+            borderRadius: 18,
+            boxShadow: "var(--shadow-solid)",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 22, padding: "18px 20px" }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 80 }}>
+                <Skeleton w={46} h={26} />
+                <Skeleton w={72} h={11} />
+              </div>
+            ))}
+            <div style={{ marginLeft: "auto" }}>
+              <Skeleton w={150} h={50} r="var(--radius-md)" />
+            </div>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: 26,
+              borderTop: "1px solid var(--border-subtle)",
+              background: "var(--surface-inset)",
+              padding: "14px 20px",
+            }}
+          >
+            <Skeleton w={150} h={44} />
+            <Skeleton w={220} h={16} />
+          </div>
         </div>
 
         <div className="vls-grid">
