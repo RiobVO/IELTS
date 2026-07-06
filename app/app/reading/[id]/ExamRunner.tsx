@@ -11,6 +11,7 @@ import { QuestionNavigator, type NavPart } from "@/components/exam/QuestionNavig
 import { QuestionHtml } from "@/components/exam/QuestionHtml";
 import { PassagePane, type AnnotationRow } from "./PassagePane";
 import { saveProgress, submitAttempt } from "./actions";
+import { checkAnswer, revealQuestion, type RevealResult } from "./practice-actions";
 
 interface Question {
   id: string;
@@ -208,13 +209,66 @@ export default function ExamRunner({
     return () => clearTimeout(t);
   }, [answers, attemptId]);
 
+  // P6/P7 — обучающая петля practice: клиентские, НЕ персистятся (в отличие от answers).
+  // verdict = результат мгновенной проверки, reveal = раскрытый ключ, checkBusy = pending
+  // конкретного вопроса. В mock эти карты ВСЕГДА пусты (Check/Show не рендерятся), поэтому
+  // mock-ветка QuestionBlock не затрагивается ни на байт.
+  const isPractice = mode === "practice";
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [revealed, setRevealed] = useState<Record<string, RevealResult>>({});
+  const [checkBusy, setCheckBusy] = useState<Record<string, boolean>>({});
+
+  // Изменение ответа делает прежний вердикт устаревшим — снимаем его (раскрытый ключ
+  // не трогаем: правильный ответ от смены ввода не меняется). Стабильна (deps пусты).
+  const dropVerdict = useCallback((n: number) => {
+    setChecked((c) => {
+      const k = String(n);
+      if (!(k in c)) return c; // в mock/непроверенном — no-op, лишнего рендера нет
+      const next = { ...c };
+      delete next[k];
+      return next;
+    });
+  }, []);
+
+  const runCheck = useCallback(
+    (n: number, v: string | string[]) => {
+      setCheckBusy((b) => ({ ...b, [n]: true }));
+      void checkAnswer(attemptId, n, v)
+        .then((res) => {
+          if (res) setChecked((c) => ({ ...c, [n]: res.correct }));
+        })
+        .catch((e) => console.error("checkAnswer call failed", e))
+        .finally(() => setCheckBusy((b) => ({ ...b, [n]: false })));
+    },
+    [attemptId],
+  );
+
+  const runReveal = useCallback(
+    (n: number) => {
+      setCheckBusy((b) => ({ ...b, [n]: true }));
+      void revealQuestion(attemptId, n)
+        .then((res) => {
+          if (res) setRevealed((r) => ({ ...r, [n]: res }));
+        })
+        .catch((e) => console.error("revealQuestion call failed", e))
+        .finally(() => setCheckBusy((b) => ({ ...b, [n]: false })));
+    },
+    [attemptId],
+  );
+
   // useCallback → стабильные ссылки, чтобы memo(QuestionBlock) реально срабатывал
   // (functional setState, deps пусты).
-  const set = useCallback((n: number, v: string) => setAnswers((a) => ({ ...a, [String(n)]: v })), []);
+  const set = useCallback(
+    (n: number, v: string) => {
+      setAnswers((a) => ({ ...a, [String(n)]: v }));
+      dropVerdict(n);
+    },
+    [dropVerdict],
+  );
   // mcq_multi: переключаем букву в наборе ответа (string[]). Порядок грейдеру не важен
   // (mcq_set сверяет множества), сортируем лишь для стабильного отображения.
   const toggle = useCallback(
-    (n: number, letter: string) =>
+    (n: number, letter: string) => {
       setAnswers((a) => {
         const cur = a[String(n)];
         const arr = Array.isArray(cur) ? cur : cur ? [cur] : [];
@@ -222,8 +276,10 @@ export default function ExamRunner({
           ? arr.filter((x) => x !== letter)
           : [...arr, letter].sort();
         return { ...a, [String(n)]: next };
-      }),
-    [],
+      });
+      dropVerdict(n);
+    },
+    [dropVerdict],
   );
   const flag = useCallback((n: number) => setFlags((f) => ({ ...f, [String(n)]: !f[String(n)] })), []);
 
@@ -491,9 +547,15 @@ export default function ExamRunner({
           onAnswer={set}
           onToggle={toggle}
           onFlag={flag}
+          practice={isPractice}
+          verdict={checked[String(q.number)]}
+          reveal={revealed[String(q.number)]}
+          checkBusy={!!checkBusy[String(q.number)]}
+          onCheck={runCheck}
+          onReveal={runReveal}
         />
       )),
-    [questions, answers, flags, set, toggle, flag],
+    [questions, answers, flags, set, toggle, flag, isPractice, checked, revealed, checkBusy, runCheck, runReveal],
   );
 
   return (
@@ -711,6 +773,12 @@ const QuestionBlock = memo(function QuestionBlock({
   onAnswer,
   onToggle,
   onFlag,
+  practice,
+  verdict,
+  reveal,
+  checkBusy,
+  onCheck,
+  onReveal,
 }: {
   q: Question;
   value: string | string[];
@@ -718,6 +786,13 @@ const QuestionBlock = memo(function QuestionBlock({
   onAnswer: (n: number, v: string) => void;
   onToggle: (n: number, letter: string) => void;
   onFlag: (n: number) => void;
+  /** P6/P7 — practice-only обучающая петля. В mock всегда false → блок не рендерится. */
+  practice: boolean;
+  verdict: boolean | undefined;
+  reveal: RevealResult | undefined;
+  checkBusy: boolean;
+  onCheck: (n: number, v: string | string[]) => void;
+  onReveal: (n: number) => void;
 }) {
   const hasOptions = !!q.options && q.options.length > 0;
   // mcq_multi оценивается как набор букв (mcq_set) → нужен мультивыбор; остальные
@@ -860,7 +935,82 @@ const QuestionBlock = memo(function QuestionBlock({
           )}
         </div>
         )}
+        {/* P6/P7 — только practice: проверка ответа + раскрытие ключа. mock не рендерит. */}
+        {practice && (
+          <PracticeCheck
+            number={q.number}
+            value={value}
+            verdict={verdict}
+            reveal={reveal}
+            busy={checkBusy}
+            onCheck={onCheck}
+            onReveal={onReveal}
+          />
+        )}
       </div>
+    </div>
+  );
+});
+
+/**
+ * PracticeCheck (P6/P7) — под каждым отвеченным вопросом в practice: «Check» → инлайн
+ * вердикт ✓/✗; затем «Show answer & why» → правильный ответ + объяснение + evidence.
+ * Всё через server actions под гейтами (owner/in_progress/practice); клиент получает
+ * лишь boolean, а при раскрытии — accept/explanation/evidence ОДНОГО вопроса.
+ */
+const PracticeCheck = memo(function PracticeCheck({
+  number,
+  value,
+  verdict,
+  reveal,
+  busy,
+  onCheck,
+  onReveal,
+}: {
+  number: number;
+  value: string | string[];
+  verdict: boolean | undefined;
+  reveal: RevealResult | undefined;
+  busy: boolean;
+  onCheck: (n: number, v: string | string[]) => void;
+  onReveal: (n: number) => void;
+}) {
+  // «Check» появляется только когда вопрос отвечён (непустой ответ).
+  if (!isAnswered(value)) return null;
+  const decided = verdict !== undefined;
+  return (
+    <div className="exam-check">
+      {!decided ? (
+        <button type="button" className="exam-check-btn" disabled={busy} onClick={() => onCheck(number, value)}>
+          <Icon name="check" size={15} strokeWidth={2.6} /> Check
+        </button>
+      ) : (
+        <>
+          <span className={`exam-verdict ${verdict ? "ok" : "no"}`}>
+            <Icon name={verdict ? "check" : "x"} size={16} strokeWidth={2.8} />
+            {verdict ? "Correct" : "Not quite"}
+          </span>
+          {!reveal && (
+            <button type="button" className="exam-reveal-link" disabled={busy} onClick={() => onReveal(number)}>
+              Show answer &amp; why
+            </button>
+          )}
+        </>
+      )}
+      {reveal && (
+        <div className="exam-reveal" role="region" aria-label={`Answer for question ${number}`}>
+          <div className="exam-reveal-label">Answer</div>
+          <div className="exam-reveal-answer">{reveal.accept.join(" / ") || "—"}</div>
+          {reveal.explanation && <p className="exam-reveal-why">{reveal.explanation}</p>}
+          {reveal.evidence?.snippet && (
+            <div className="exam-reveal-ev">
+              <span aria-hidden="true">📖</span>
+              <span>{reveal.evidence.snippet}</span>
+            </div>
+          )}
+          {reveal.evidence?.para && <div className="exam-reveal-ev-para">{reveal.evidence.para}</div>}
+        </div>
+      )}
     </div>
   );
 });
@@ -928,6 +1078,29 @@ const READING_CSS = `
 /* Touch target: кнопка-флаг ≥44px на грубом указателе (мышь/десктоп без изменений). */
 .exam-flag{display:inline-flex;align-items:center;justify-content:center}
 @media (pointer:coarse){.exam-flag{min-width:44px;min-height:44px}}
+
+/* --- P6/P7 practice check/reveal. Рендерится ТОЛЬКО в practice (mock не выводит
+   блок вовсе → mock-раннер не затронут). Токены те же; брейкпоинт-свойства и тап-
+   таргеты — в классах, не inline. --- */
+.exam-check{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px;padding-left:39px}
+.exam-check-btn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.exam-check-btn:hover:not(:disabled){background:var(--surface-hover);color:var(--text-primary)}
+.exam-check-btn:disabled{opacity:.55;cursor:default}
+.exam-verdict{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:var(--text-sm);font-weight:800}
+.exam-verdict.ok{color:var(--success-text)}
+.exam-verdict.no{color:var(--error-text)}
+.exam-reveal-link{display:inline-flex;align-items:center;background:none;border:none;padding:0;color:var(--brand);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.exam-reveal-link:hover:not(:disabled){color:var(--brand-hover)}
+.exam-reveal-link:disabled{opacity:.55;cursor:default}
+.exam-reveal{flex-basis:100%;margin-top:2px;padding:12px 14px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-hover);animation:exam-reveal-in .28s cubic-bezier(.16,1,.3,1) both}
+.exam-reveal-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.exam-reveal-answer{margin-top:3px;font-family:var(--font-ui);font-size:var(--text-base);font-weight:800;color:var(--text-primary)}
+.exam-reveal-why{margin:9px 0 0;font-family:var(--font-ui);font-size:var(--text-sm);line-height:1.6;color:var(--text-secondary)}
+.exam-reveal-ev{display:flex;gap:7px;margin-top:9px;font-family:var(--font-ui);font-size:var(--text-sm);line-height:1.55;color:var(--text-secondary)}
+.exam-reveal-ev-para{margin-top:6px;font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;color:var(--text-muted)}
+@keyframes exam-reveal-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.exam-reveal{animation:none}}
+@media (pointer:coarse){.exam-check-btn{min-height:44px}.exam-reveal-link{min-height:44px}}
 @keyframes nine-blink{0%,100%{opacity:1}50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){[style*="nine-blink"]{animation:none!important}}
 

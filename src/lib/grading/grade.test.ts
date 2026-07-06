@@ -1,6 +1,6 @@
 // Юнит-тесты серверного грейдинга (BRIEF §5.1). Относительный импорт — alias не нужен.
 import { describe, it, expect } from "vitest";
-import { grade, isCorrect, type GradeKey } from "./grade";
+import { grade, gradeOne, isCorrect, type GradeKey } from "./grade";
 
 describe("isCorrect", () => {
   describe("mcq_set", () => {
@@ -50,6 +50,35 @@ describe("isCorrect", () => {
     expect(isCorrect("text_accept", ["A"], "")).toBe(false);
     expect(isCorrect("text_accept", ["A"], "   ")).toBe(false);
     expect(isCorrect("mcq_set", ["A"], "   ")).toBe(false);
+  });
+});
+
+// gradeOne — ключ-образный вход единичной проверки (P6 checkAnswer). Делегирует ту
+// же логику, что isCorrect; тесты держат контракт всех трёх режимов + нормализацию.
+describe("gradeOne", () => {
+  it("mcq_set: сверяет как множество (порядок/регистр/разделитель не важны)", () => {
+    expect(gradeOne({ mode: "mcq_set", accept: ["A", "C"] }, ["c", "a"])).toBe(true);
+    expect(gradeOne({ mode: "mcq_set", accept: ["A", "C"] }, "a,c")).toBe(true);
+    expect(gradeOne({ mode: "mcq_set", accept: ["A", "C"] }, ["A"])).toBe(false); // неполный
+    expect(gradeOne({ mode: "mcq_set", accept: ["A", "C"] }, ["A", "B", "C"])).toBe(false); // лишний
+  });
+
+  it("text_accept: принимает любой вариант после нормализации, иначе отклоняет", () => {
+    expect(gradeOne({ mode: "text_accept", accept: ["New York"] }, "  new   york ")).toBe(true);
+    expect(gradeOne({ mode: "text_accept", accept: ["color", "colour"] }, "Colour")).toBe(true);
+    expect(gradeOne({ mode: "text_accept", accept: ["color", "colour"] }, "couleur")).toBe(false);
+  });
+
+  it("exact: нормализует и сверяет ТОЛЬКО с accept[0]", () => {
+    expect(gradeOne({ mode: "exact", accept: ["Not Given"] }, " not  given ")).toBe(true);
+    expect(gradeOne({ mode: "exact", accept: ["X", "Y"] }, "Y")).toBe(false); // accept[1] игнорируется
+    expect(gradeOne({ mode: "exact", accept: ["X", "Y"] }, "X")).toBe(true);
+  });
+
+  it("пустой/отсутствующий ответ — неверно в любом режиме", () => {
+    expect(gradeOne({ mode: "exact", accept: ["A"] }, null)).toBe(false);
+    expect(gradeOne({ mode: "text_accept", accept: ["A"] }, "   ")).toBe(false);
+    expect(gradeOne({ mode: "mcq_set", accept: ["A"] }, [])).toBe(false);
   });
 });
 
