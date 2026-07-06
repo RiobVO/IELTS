@@ -232,6 +232,78 @@ export async function getReviewQueue(
   return { cards: [...dueCards, ...newCards], dueCount, newRemainingToday: remaining };
 }
 
+export interface VocabDeckBrowseCard {
+  id: string;
+  word: string;
+  definition: string;
+  partOfSpeech: string | null;
+  /** "new" — нет строки прогресса; "mastered" — interval_days ≥ порога; иначе "learning". */
+  status: "new" | "learning" | "mastered";
+}
+
+export interface VocabDeckBrowse {
+  deckTitle: string;
+  totalCards: number;
+  cards: VocabDeckBrowseCard[];
+}
+
+/**
+ * Read-only список слов дека (`/app/vocabulary/[deckId]/browse`, V13) — не пишет и не
+ * читает очередь повторов, только статус per-card. Published + тир гейтятся здесь же
+ * (паритет с getReviewQueue: страница уже гейтит через getVocabCatalog, но каждый
+ * owner-path запрос держит свой собственный гейт). Недоступен/не найден → null.
+ * Статус — одним LEFT JOIN на vocab_progress текущего пользователя, без N+1: нет
+ * строки → new, interval_days ≥ порога → mastered, иначе → learning. totalCards —
+ * длина фактической выборки (не денормализованный word_count), чтобы список и
+ * счётчик совпадали один-в-один.
+ */
+export async function getDeckBrowse(userId: string, deckId: string): Promise<VocabDeckBrowse | null> {
+  const [[deck], [prof]] = await Promise.all([
+    db
+      .select({ title: vocabDeck.title, tierRequired: vocabDeck.tierRequired })
+      .from(vocabDeck)
+      .where(and(eq(vocabDeck.id, deckId), eq(vocabDeck.status, "published"))),
+    db
+      .select({ tier: profile.tier, premiumUntil: profile.premiumUntil })
+      .from(profile)
+      .where(eq(profile.id, userId)),
+  ]);
+  if (!deck || !prof) return null;
+  const tier = effectiveTier({ tier: prof.tier, premium_until: prof.premiumUntil });
+  if (!meetsTier(tier, deck.tierRequired)) return null;
+
+  const rows = await db
+    .select({
+      id: vocabCard.id,
+      word: vocabCard.word,
+      definition: vocabCard.definition,
+      partOfSpeech: vocabCard.partOfSpeech,
+      intervalDays: vocabProgress.intervalDays,
+    })
+    .from(vocabCard)
+    .leftJoin(
+      vocabProgress,
+      and(eq(vocabProgress.cardId, vocabCard.id), eq(vocabProgress.userId, userId)),
+    )
+    .where(eq(vocabCard.deckId, deckId))
+    .orderBy(vocabCard.order);
+
+  const cards: VocabDeckBrowseCard[] = rows.map((r) => ({
+    id: r.id,
+    word: r.word,
+    definition: r.definition,
+    partOfSpeech: r.partOfSpeech,
+    status:
+      r.intervalDays == null
+        ? "new"
+        : r.intervalDays >= VOCAB_MASTERED_INTERVAL_DAYS
+          ? "mastered"
+          : "learning",
+  }));
+
+  return { deckTitle: deck.title, totalCards: cards.length, cards };
+}
+
 /**
  * Rescue-очередь: уже начатые карты с провалами/низким ease по всем published-декам,
  * доступным пользователю по тиру. Новые карты не попадают в выборку, потому что
