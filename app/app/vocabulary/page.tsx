@@ -435,7 +435,9 @@ const S: Record<string, CSSProperties> = {
   rescueCta: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 40, padding: "8px 14px", borderRadius: "var(--radius-full)", border: "2px solid transparent", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 13, fontWeight: 800, textDecoration: "none", transition: "var(--transition-colors)" },
   caughtUp: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: "var(--success-text)" },
   planFoot: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 26px", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-inset)", padding: "14px 20px" },
-  spark: { display: "flex", alignItems: "flex-end", gap: 5, height: 44 },
+  // Без фикс-высоты: колонка = столбик (до 38px) + зазор + подпись (~14px) ≈ 56px,
+  // жёсткие 44px резали подписи дней нижней кромкой панели (overflow:hidden).
+  spark: { display: "flex", alignItems: "flex-end", gap: 5 },
   sparkCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4 },
   sparkBar: { width: 14, borderRadius: "4px 4px 2px 2px", display: "block" },
   sparkTick: { fontStyle: "normal", fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 700 },

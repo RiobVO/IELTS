@@ -768,14 +768,17 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
    3D-вращения — ровно то, что просит инвариант reduced-motion). rs-seg — тот же
    pill-паттерн, что Segmented в writing/_Catalog.tsx (компонент не экспортирован,
    стиль продублирован). rs-compact держит высоту type-режима на уровне флип-карты,
-   чтобы смена режима/ответа не дёргала layout. justify-content:safe center — центрируем
-   грань, но при переполнении (длинный enrichment) падаем на выравнивание к началу, чтобы
-   контент скроллился целиком, а не обрезался сверху centered-overflow-багом флексбокса. */
+   чтобы смена режима/ответа не дёргала layout. Грани стекируются GRID'ом (grid-area:1/1),
+   а не position:absolute: absolute-грани не участвуют в высоте контейнера, и когда back
+   с enrichment-блоком перерос min-height, текст резался нижней кромкой карты. Grid-ячейка
+   растёт под самую высокую грань — карта тянется под контент, 3D-флип (preserve-3d +
+   backface-visibility) с grid-стекингом работает так же. justify-content:safe center —
+   центрируем грань, при переполнении падаем к началу (centered-overflow-баг флексбокса). */
 const CSS = `
 .rs-flip{perspective:1200px}
-.rs-flip-inner{position:relative;min-height:230px;transform-style:preserve-3d;transition:transform var(--duration-deliberate) var(--ease-in-out)}
+.rs-flip-inner{display:grid;min-height:230px;transform-style:preserve-3d;transition:transform var(--duration-deliberate) var(--ease-in-out)}
 .rs-flip.is-flipped .rs-flip-inner{transform:rotateY(180deg)}
-.rs-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:safe center;text-align:center;gap:10px;padding:26px 22px;border-radius:var(--radius-xl);border:2px solid var(--border);background:var(--surface);box-shadow:var(--shadow-solid);overflow-y:auto;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.rs-face{grid-area:1/1;display:flex;flex-direction:column;align-items:center;justify-content:safe center;text-align:center;gap:10px;padding:26px 22px;border-radius:var(--radius-xl);border:2px solid var(--border);background:var(--surface);box-shadow:var(--shadow-solid);overflow-y:auto;backface-visibility:hidden;-webkit-backface-visibility:hidden}
 .rs-face-back{transform:rotateY(180deg)}
 .rs-seg{min-height:40px;padding:0 16px;font-size:13px}
 .rs-seg:hover{color:var(--text-primary)}
