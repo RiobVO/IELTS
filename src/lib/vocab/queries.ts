@@ -9,7 +9,7 @@
  * answer_key). Лимит новых карт и дневной счётчик берутся из access.ts (не дублируем).
  */
 import "server-only";
-import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { profile, vocabCard, vocabDeck, vocabProgress } from "@/db/schema";
 import {
@@ -33,6 +33,15 @@ const cardViewColumns = {
   partOfSpeech: vocabCard.partOfSpeech,
   ipa: vocabCard.ipa,
 } as const;
+
+const RESCUE_QUEUE_LIMIT = 10;
+const RESCUE_LAPSES_MIN = 2;
+const RESCUE_EASE_MAX = 1.6;
+
+/** Единый критерий "трудной" карточки для счётчика и rescue-очереди. */
+function rescueCardCondition(): SQL {
+  return sql`(${vocabProgress.lapses} >= ${RESCUE_LAPSES_MIN} or ${vocabProgress.ease} <= ${RESCUE_EASE_MAX})`;
+}
 
 export interface VocabCardView {
   id: string;
@@ -223,6 +232,38 @@ export async function getReviewQueue(
   return { cards: [...dueCards, ...newCards], dueCount, newRemainingToday: remaining };
 }
 
+/**
+ * Rescue-очередь: уже начатые карты с провалами/низким ease по всем published-декам,
+ * доступным пользователю по тиру. Новые карты не попадают в выборку, потому что
+ * читаем только через vocab_progress.
+ */
+export async function getRescueQueue(userId: string): Promise<VocabCardView[]> {
+  const [prof] = await db
+    .select({ tier: profile.tier, premiumUntil: profile.premiumUntil })
+    .from(profile)
+    .where(eq(profile.id, userId));
+  const tier: Tier = prof
+    ? effectiveTier({ tier: prof.tier, premium_until: prof.premiumUntil })
+    : "basic";
+  const allowedTiers = TIER_ORDER.filter((t) => meetsTier(tier, t));
+
+  return db
+    .select(cardViewColumns)
+    .from(vocabProgress)
+    .innerJoin(vocabCard, eq(vocabCard.id, vocabProgress.cardId))
+    .innerJoin(
+      vocabDeck,
+      and(
+        eq(vocabDeck.id, vocabCard.deckId),
+        eq(vocabDeck.status, "published"),
+        inArray(vocabDeck.tierRequired, allowedTiers),
+      ),
+    )
+    .where(and(eq(vocabProgress.userId, userId), rescueCardCondition()))
+    .orderBy(desc(vocabProgress.lapses), asc(vocabProgress.ease))
+    .limit(RESCUE_QUEUE_LIMIT);
+}
+
 /** Банк слов пользователя по доступным декам (mastered/learning/new + всего). */
 export interface VocabBank {
   /** interval_days ≥ порога. */
@@ -245,6 +286,8 @@ export interface VocabOverview {
   forecast7: number[];
   /** Остаток новых карт на сегодня (null = безлимит premium/ultra). */
   newRemainingToday: number | null;
+  /** Уже начатые трудные карты для rescue-сессии по доступным published-декам. */
+  rescueCount: number;
   /** Банк слов по доступным декам. */
   bank: VocabBank;
   /** Детерминированная оценка длительности сессии в минутах (≥1). */
@@ -305,6 +348,7 @@ export async function getVocabOverview(userId: string): Promise<VocabOverview> {
       mastered: sql<number>`(count(*) filter (where ${vocabProgress.intervalDays} >= ${VOCAB_MASTERED_INTERVAL_DAYS}))::int`,
       learning: sql<number>`(count(*) filter (where ${vocabProgress.intervalDays} < ${VOCAB_MASTERED_INTERVAL_DAYS}))::int`,
       reviewedToday: sql<number>`(count(*) filter (where ${vocabProgress.lastReviewedAt} >= ${dayStart}))::int`,
+      rescueCount: sql<number>`(count(*) filter (where ${rescueCardCondition()}))::int`,
     })
     .from(vocabProgress)
     .innerJoin(vocabCard, eq(vocabCard.id, vocabProgress.cardId))
@@ -375,6 +419,7 @@ export async function getVocabOverview(userId: string): Promise<VocabOverview> {
     dueTomorrow: forecast7[1],
     forecast7,
     newRemainingToday,
+    rescueCount: agg?.rescueCount ?? 0,
     bank,
     sessionMinutes,
     streak,
