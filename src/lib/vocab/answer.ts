@@ -24,6 +24,13 @@ export function isAnswerCorrect(typed: string, word: string): boolean {
   return normalizeAnswer(typed) === normalizeAnswer(word);
 }
 
+/** true, если непустой введённый ответ совпадает с одним из допустимых эталонов после нормализации. */
+export function isAnswerAccepted(typed: string, acceptedAnswers: readonly string[]): boolean {
+  const normalizedTyped = normalizeAnswer(typed);
+  if (normalizedTyped === "") return false;
+  return acceptedAnswers.some((answer) => normalizeAnswer(answer) === normalizedTyped);
+}
+
 /**
  * Маппинг исхода quiz-ответа на SM-2-оценку: верно → "good", неверно → "again".
  * Общий контур повтора (гейт + SM-2 upsert) для quiz и two-button идентичен —
