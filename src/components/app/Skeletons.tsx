@@ -15,8 +15,7 @@ import { Skeleton } from "@/components/core/Skeleton";
 const NAV = [
   { id: "dashboard", label: "Home" },
   { id: "practice", label: "Practice" },
-  { id: "leaderboard", label: "League" },
-  { id: "badges", label: "Badges" },
+  { id: "progress", label: "Progress" },
 ] as const;
 
 export function AppShellSkeleton({

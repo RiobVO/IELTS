@@ -2,11 +2,22 @@ import type * as React from "react";
 import { AppShellSkeleton } from "@/components/app/Skeletons";
 import { Skeleton } from "@/components/core/Skeleton";
 
+/**
+ * Скелетон раздела Progress. loading.tsx не получает searchParams, поэтому зеркалим
+ * таб-бар + дефолтный (league) таб — самый частый вход; при переходе в badges свап
+ * контента даст короткий рефлоу, что допустимо для fallback.
+ */
 export default function Loading() {
   return (
-    <AppShellSkeleton active="leaderboard">
+    <AppShellSkeleton active="progress">
       <div style={S.arena}>
         <div style={S.wrap}>
+          {/* tab bar */}
+          <div style={{ display: "flex", gap: 9, marginBottom: 18 }}>
+            <Skeleton w={104} h={38} r="var(--radius-full)" />
+            <Skeleton w={104} h={38} r="var(--radius-full)" />
+          </div>
+
           <div style={S.head}>
             <Skeleton w={46} h={46} r={14} />
             <div style={{ flex: 1 }}>
@@ -43,7 +54,7 @@ export default function Loading() {
 
 const S: Record<string, React.CSSProperties> = {
   arena: { minHeight: "100%", background: "radial-gradient(120% 80% at 50% -8%, color-mix(in oklab, var(--brand) 14%, white) 0%, var(--bg-base) 52%)" },
-  wrap: { maxWidth: 720, margin: "0 auto", padding: "26px 28px 44px" },
+  wrap: { maxWidth: 960, margin: "0 auto", padding: "22px 16px 44px" },
   head: { display: "flex", alignItems: "center", gap: 13, marginBottom: 16 },
   podium: { display: "grid", gridTemplateColumns: "1fr 1.12fr 1fr", alignItems: "end", gap: 12, marginTop: 8 },
 };

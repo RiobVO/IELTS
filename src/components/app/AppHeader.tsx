@@ -13,8 +13,7 @@ export type ActivePage =
   | "practice"
   | "reading"
   | "listening"
-  | "leaderboard"
-  | "badges"
+  | "progress"
   | "pricing"
   | "profile";
 
@@ -38,8 +37,8 @@ const LINKS: { id: ActivePage; label: string; href: string; icon: Parameters<typ
   // Practice — единый вход во все 4 skill; reading/listening остаются каталогами
   // под ним и подсвечивают этот пункт (см. navHighlight).
   { id: "practice", label: "Practice", href: "/app/practice", icon: "dumbbell" },
-  { id: "leaderboard", label: "League", href: "/app/leaderboard", icon: "crown" },
-  { id: "badges", label: "Badges", href: "/app/badges", icon: "award" },
+  // Progress — объединённый раздел League + Badges (route-табы внутри /app/progress).
+  { id: "progress", label: "Progress", href: "/app/progress", icon: "award" },
 ];
 
 const COLORS_TRANSITION =

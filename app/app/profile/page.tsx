@@ -284,7 +284,7 @@ export default async function ProfilePage() {
           <div style={S.achCard}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
               <span className="pf-sub" style={S.sub}>Achievements</span>
-              <a href="/app/badges" style={S.achLink}>All {badges.length || 12} →</a>
+              <a href="/app/progress?tab=badges" style={S.achLink}>All {badges.length || 12} →</a>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               {preview.map((b, i) => (
@@ -293,7 +293,7 @@ export default async function ProfilePage() {
                 </div>
               ))}
             </div>
-            <div style={S.achFoot}>{earnedCount} earned · <a href="/app/badges" style={S.achFootLink}>see what&apos;s next →</a></div>
+            <div style={S.achFoot}>{earnedCount} earned · <a href="/app/progress?tab=badges" style={S.achFootLink}>see what&apos;s next →</a></div>
           </div>
           <div style={S.invite}>
             <div aria-hidden="true" style={S.inviteGlow} />
