@@ -1,9 +1,10 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { contentItem, profile } from "@/db/schema";
+import { attempt, contentItem, profile } from "@/db/schema";
 import { env } from "@/env";
 import { getUser } from "@/lib/auth";
 import { retargetBridgeOrigin } from "@/lib/import/runner/bridge";
+import { forceRunnerMode } from "@/lib/import/runner/force-mode";
 import { polyfillRunnerStorage } from "@/lib/import/runner/runner-storage";
 import { skinRunnerGate, skinRunnerBrand } from "@/lib/import/runner/skin-runner";
 import { effectiveTier, meetsTier } from "@/lib/tiers";
@@ -30,7 +31,7 @@ export async function GET(
   const user = await getUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
 
-  const [[prof], [item]] = await Promise.all([
+  const [[prof], [item], [att]] = await Promise.all([
     db
       .select({ tier: profile.tier, premiumUntil: profile.premiumUntil })
       .from(profile)
@@ -40,6 +41,20 @@ export async function GET(
       .from(contentItem)
       // Published-only (owner-path bypasses RLS): a draft id -> 404, never served.
       .where(and(eq(contentItem.id, id), eq(contentItem.status, "published"))),
+    // P0: серверный режим попытки — для синхронизации внутреннего Practice/Mock
+    // раннера (forceRunnerMode ниже). Owner-scoped запрос по partial-индексу 0007.
+    db
+      .select({ mode: attempt.mode })
+      .from(attempt)
+      .where(
+        and(
+          eq(attempt.userId, user.id),
+          eq(attempt.contentItemId, id),
+          eq(attempt.status, "in_progress"),
+        ),
+      )
+      .orderBy(desc(attempt.startedAt))
+      .limit(1),
   ]);
 
   if (!item?.html) return new Response("Not found", { status: 404 });
@@ -64,7 +79,11 @@ export async function GET(
   // bando re-skin на read-time: (1) аудио-гейт (listening) — светлый overlay вместо тёмного;
   // (2) шапка — bando-знак вместо чужого логотипа «IELTS™» + снос чужого telegram-канала.
   // No-op для незнакомых шаблонов.
-  const html = skinRunnerBrand(skinRunnerGate(scoped));
+  const skinned = skinRunnerBrand(skinRunnerGate(scoped));
+  // P0: внутренний Practice/Mock раннера подчиняется attempt.mode (автовыбор
+  // карточки + скрытие mid-test переключателя). Прямой GET без попытки (нет att)
+  // — отдаём как есть: экзам-страница всё равно создаёт attempt до iframe.
+  const html = att ? forceRunnerMode(skinned, att.mode) : skinned;
 
   return new Response(html, {
     status: 200,
