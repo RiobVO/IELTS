@@ -105,7 +105,8 @@ lacks `runner_html`.
 ## Migrations & schema
 
 - `src/db/schema.ts` (Drizzle) is the **typed source of truth** (**31 DB tables** as of migration
-  `0037_vocab`; `verify.ts` `APP_TABLE_COUNT = 31` asserts the migrated count. schema.ts types
+  `0038_vocab_enrichment` (0038 добавляет только nullable-колонки, таблиц не меняет);
+  `verify.ts` `APP_TABLE_COUNT = 31` asserts the migrated count. schema.ts types
   **30** — the legacy `topic` table lingers in the DB but its export was dropped as dead code, #26).
   Per-table provenance + RLS posture live in **SCHEMA_NOTES.md** (updated in lockstep).
   The executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by a
@@ -204,7 +205,22 @@ early).
   миграция `0037` (deck/card/progress; контент published-read, прогресс owner-SELECT + write-lockdown —
   запись только server-action owner-path), детерминированный JSON-импорт (`npm run import:vocab`,
   аддитивный upsert — реимпорт не трогает SRS-прогресс) + `/admin/vocabulary`, daily-new-cap для basic
-  (`VOCAB_DAILY_NEW_LIMIT`). Quiz-режим/Telegram-импорт/премиум-деки — отложенная Phase B.
+  (`VOCAB_DAILY_NEW_LIMIT`), Telegram-импорт деков (`.json` документом).
+- **✅ Vocabulary-апгрейд (2026-07-06, вечер)** — на `/app/vocabulary`: план-панель (due today /
+  7-дневный forecast / банк слов mastered-learning-new / оценка сессии), приватный vocab-стрик + цель
+  (`VOCAB_DAILY_GOAL`, деривация из `last_reviewed_at`, СТРОГО отдельно от `profile.current_streak`),
+  mastery-состояния (`interval_days ≥ 21`), rescue-очередь трудных слов (`/app/vocabulary/rescue`),
+  browse-режим (`[deckId]/browse`, read-only), TTS (Web Speech, скрыт без en-голоса), weak-type rail
+  (рекомендация дека по слабейшему типу из `per_type_breakdown` × `vocab_deck.question_types`).
+  Сессия: 4 режима — flashcards / type / **paraphrase** (synonym→word, дистракторы из слов очереди,
+  детерминированно `src/lib/vocab/paraphrase.ts`) / **completion** (gap-sentence, сервер-судья по
+  `accepted_answers`, в клиент они НЕ уходят) + **easy-grade** только для новых карт (сервер
+  даунгрейдит по `gate.isNew`). Миграция `0038` — enrichment-поля (nullable, RLS-постура не менялась).
+  Дашборд `/app`: vocab-модуль (due+стрик, `src/lib/vocab/summary.ts`). Cron
+  `/api/cron/vocab-due-reminders` (06:00 UTC, дедуп per user/day) — 5-й слот в `vercel.json`.
+  Premium-деки (Band 8 Collocations / Speaking Idioms & Register) импортированы **draft** —
+  публикация через `/admin/vocabulary`. Инварианты на месте: vocab вне rating/leaderboard, прогресс
+  только server-action owner-path, реимпорт аддитивный, импорт LLM-free.
 
 ### ⛔ Blocked / pending (needs external input)
 - **Anti-bot on signup** — live with **zero deps**: signup honeypot (`anti-cheat.ts`
