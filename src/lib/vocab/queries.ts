@@ -4,9 +4,11 @@
  * status='published' (деки/карты) и user_id (прогресс) — дисциплина как на
  * result-странице. Запросы параллелятся (Promise.all), без серийной лесенки.
  *
- * Карточка отдаётся целиком (word/definition/example/translation/pos/ipa) — у неё
- * нет скрытых полей: это открытый учебный контент published-дека (в отличие от
- * answer_key). Лимит новых карт и дневной счётчик берутся из access.ts (не дублируем).
+ * Карточка отдаётся открытым учебным контентом published-дека (word/definition/
+ * example/translation/pos/ipa + enrichment 0038: synonyms/collocations/wordFamily/
+ * quizPrompt). Единственное скрытое поле — accepted_answers (эталон quiz-грейдинга):
+ * оно НЕ входит в cardViewColumns, сверка идёт серверно (answerCardAction). Лимит
+ * новых карт и дневной счётчик берутся из access.ts (не дублируем).
  */
 import "server-only";
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lte, sql, type SQL } from "drizzle-orm";
@@ -23,7 +25,12 @@ import {
 import { countNewCardsToday, newCardsRemaining } from "@/lib/vocab/access";
 import { computeStreak } from "@/lib/vocab/streak";
 
-/** Колонки карточки для UI (общие для due- и new-выборок). Скрытых полей нет. */
+/**
+ * Колонки карточки для UI (общие для due- и new-выборок). Enrichment-поля 0038
+ * (synonyms/collocations/wordFamily) + quizPrompt отдаём клиенту — это открытый
+ * учебный контент. accepted_answers СЮДА НЕ включаем: грейдинг quiz-режима серверный
+ * (answerCardAction сверяет ввод owner-path), клиенту эталон отдавать нельзя.
+ */
 const cardViewColumns = {
   id: vocabCard.id,
   word: vocabCard.word,
@@ -32,6 +39,10 @@ const cardViewColumns = {
   translation: vocabCard.translation,
   partOfSpeech: vocabCard.partOfSpeech,
   ipa: vocabCard.ipa,
+  synonyms: vocabCard.synonyms,
+  collocations: vocabCard.collocations,
+  wordFamily: vocabCard.wordFamily,
+  quizPrompt: vocabCard.quizPrompt,
 } as const;
 
 const RESCUE_QUEUE_LIMIT = 10;
@@ -51,6 +62,11 @@ export interface VocabCardView {
   translation: string | null;
   partOfSpeech: string | null;
   ipa: string | null;
+  // Enrichment 0038 (nullable). quizPrompt прокинут заранее под B3 (quiz-режим).
+  synonyms: string[] | null;
+  collocations: string[] | null;
+  wordFamily: string[] | null;
+  quizPrompt: string | null;
 }
 
 export interface VocabDeckCard {
