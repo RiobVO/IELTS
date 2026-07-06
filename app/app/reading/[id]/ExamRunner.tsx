@@ -12,6 +12,7 @@ import { QuestionHtml } from "@/components/exam/QuestionHtml";
 import { PassagePane, type AnnotationRow } from "./PassagePane";
 import { saveProgress, submitAttempt } from "./actions";
 import { checkAnswer, revealQuestion, type RevealResult } from "./practice-actions";
+import { countWords, parseChoiceCount, parseWordLimit } from "@/lib/exam/format-guard";
 
 interface Question {
   id: string;
@@ -82,6 +83,37 @@ function fmt(sec: number): string {
   const s = Math.max(0, Math.floor(sec));
   const m = Math.floor(s / 60);
   return `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/* --- P4 Reader comfort (practice reading only). Префы ГЛОБАЛЬНЫЕ (не per-attempt),
+   применяются к пассажу через PassagePane (font/leading/theme). --- */
+type ReaderTheme = "default" | "sepia";
+interface ReaderPrefs {
+  size: 0 | 1 | 2;
+  leading: 0 | 1;
+  theme: ReaderTheme;
+}
+/** Вход PassagePane: разрешённые размер/интерлиньяж/тема пассажа. */
+type ReaderInput = { fontPx: number; lineHeight: number; theme: "paper" | "sepia" };
+const READER_PREFS_KEY = "bando-reading-prefs";
+const READER_FONT_PX = [16, 19, 22];
+const READER_LEADING = [1.75, 2.05];
+const READER_DEFAULT: ReaderPrefs = { size: 1, leading: 0, theme: "default" };
+
+function readReaderPrefs(): ReaderPrefs {
+  try {
+    const raw = localStorage.getItem(READER_PREFS_KEY);
+    if (!raw) return READER_DEFAULT;
+    const v = JSON.parse(raw) as Partial<ReaderPrefs>;
+    return {
+      size: v.size === 0 || v.size === 1 || v.size === 2 ? v.size : 1,
+      leading: v.leading === 0 || v.leading === 1 ? v.leading : 0,
+      theme: v.theme === "sepia" ? "sepia" : "default",
+    };
+  } catch {
+    /* storage недоступен / битый JSON — дефолтные префы */
+    return READER_DEFAULT;
+  }
 }
 
 /** Вопрос отвечен: непустая строка ИЛИ непустой набор букв (mcq_multi). */
@@ -188,6 +220,10 @@ export default function ExamRunner({
   const [transferRemaining, setTransferRemaining] = useState<number | null>(null);
   const audioStartedAtRef = useRef<number | null>(null);
   const resumeDecided = useRef(false);
+  // P8 (practice Listening Lab): аудио разлочено — play/pause/seek/replay/скорость. mock
+  // остаётся строгим single-pass (anchor/transfer/авто-сабмит ниже гейтятся mode==="mock").
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioRate, setAudioRate] = useState(1);
 
   useEffect(() => {
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
@@ -217,6 +253,36 @@ export default function ExamRunner({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [revealed, setRevealed] = useState<Record<string, RevealResult>>({});
   const [checkBusy, setCheckBusy] = useState<Record<string, boolean>>({});
+
+  // P4 — комфорт чтения только в practice-reading (у Listening пассажа нет). Префы
+  // глобальные (localStorage), применяются к PassagePane. mock/listening панель не рендерят.
+  const readerActive = !isListening && isPractice;
+  const [readerPrefs, setReaderPrefs] = useState<ReaderPrefs>(READER_DEFAULT);
+  const [readerOpen, setReaderOpen] = useState(false);
+  useEffect(() => {
+    if (readerActive) setReaderPrefs(readReaderPrefs()); // client-only → без SSR-mismatch
+  }, [readerActive]);
+  useEffect(() => {
+    if (!readerActive) return;
+    try {
+      localStorage.setItem(READER_PREFS_KEY, JSON.stringify(readerPrefs));
+    } catch {
+      /* storage недоступен (private/quota) — префы не сохранятся, не критично */
+    }
+  }, [readerActive, readerPrefs]);
+  // Мемо по примитивным префам: тик таймера не меняет ссылку → memo(PassagePane) держится
+  // (тяжёлый рендер body_html не повторяется 1/сек), пересчёт только на смену настройки.
+  const readerFor = useMemo<ReaderInput | undefined>(
+    () =>
+      readerActive
+        ? {
+            fontPx: READER_FONT_PX[readerPrefs.size] ?? 19,
+            lineHeight: READER_LEADING[readerPrefs.leading] ?? 1.75,
+            theme: readerPrefs.theme === "sepia" ? "sepia" : "paper",
+          }
+        : undefined,
+    [readerActive, readerPrefs],
+  );
 
   // Изменение ответа делает прежний вердикт устаревшим — снимаем его (раскрытый ключ
   // не трогаем: правильный ответ от смены ввода не меняется). Стабильна (deps пусты).
@@ -311,7 +377,9 @@ export default function ExamRunner({
   // продолжаем отсчёт (refresh не сбрасывает Mock-дедлайн); нет записи или запись
   // от другого режима (смена режима между попытками) → старт с чистых якорей.
   useEffect(() => {
-    if (isListening) {
+    // Listening MOCK — строгий single-pass: только audio-anchor, таймер ведёт запись.
+    // Listening PRACTICE идёт по общему wall-clock пути ниже (счёт вверх с паузой, как reading).
+    if (isListening && mode === "mock") {
       // single-pass якорь: если запись уже запускали — продолжим с реальной позиции (эффекты ниже).
       const s = readAudioStart(attemptId);
       if (s) audioStartedAtRef.current = s;
@@ -339,12 +407,13 @@ export default function ExamRunner({
     setHydrated(true);
   }, [attemptId, isListening, mode, mockMinutes]);
 
-  // Practice: счёт вверх, замирает на паузе (интервал гейтится paused).
+  // Practice: счёт вверх, замирает на паузе (интервал гейтится paused). Работает и для
+  // Listening practice (P8) — таймер отвязан от записи, как в reading-practice.
   useEffect(() => {
-    if (isListening || !started || mode !== "practice" || paused) return;
+    if (!started || mode !== "practice" || paused) return;
     const t = setInterval(() => setPracticeSeconds((s) => s + 1), 1000);
     return () => clearInterval(t);
-  }, [isListening, started, mode, paused]);
+  }, [started, mode, paused]);
 
   // Mock: обратный отсчёт от wall-clock дедлайна (refresh-корректно).
   useEffect(() => {
@@ -386,9 +455,10 @@ export default function ExamRunner({
     return dl != null && st != null ? Math.max(1, Math.round((dl - st) / 1000)) : 60;
   };
 
-  // Listening single-pass: при возврате после refresh решаем фазу по реальному времени.
+  // Listening single-pass (MOCK only): при возврате после refresh решаем фазу по реальному
+  // времени. В practice запись разлочена (нет transfer/авто-сабмита), эффект не работает.
   useEffect(() => {
-    if (!isListening || audioDur <= 0 || resumeDecided.current) return;
+    if (!isListening || mode !== "mock" || audioDur <= 0 || resumeDecided.current) return;
     resumeDecided.current = true;
     const anchor = audioStartedAtRef.current;
     if (anchor == null) return; // свежий тест → остаёмся на gate (fresh)
@@ -403,11 +473,12 @@ export default function ExamRunner({
       setTransferRemaining(Math.max(0, Math.round(audioDur + TRANSFER_SECONDS - elapsed)));
     }
     // elapsed < audioDur → gate(resume): тап продолжит с позиции; время ведёт heartbeat ниже.
-  }, [isListening, audioDur]);
+  }, [isListening, mode, audioDur]);
 
-  // Listening heartbeat: остаток записи / transfer, переход в transfer и авто-сабмит по wall-clock.
+  // Listening heartbeat (MOCK only): остаток записи / transfer, переход в transfer и
+  // авто-сабмит по wall-clock. В practice не работает — запись под ручным управлением.
   useEffect(() => {
-    if (!isListening) return;
+    if (!isListening || mode !== "mock") return;
     const tick = () => {
       const anchor = audioStartedAtRef.current;
       if (anchor == null || audioDur <= 0) return;
@@ -426,7 +497,7 @@ export default function ExamRunner({
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [isListening, audioDur]);
+  }, [isListening, mode, audioDur]);
 
   // В transfer звук останавливаем (на случай, если переход опередил событие ended).
   useEffect(() => {
@@ -438,6 +509,13 @@ export default function ExamRunner({
   const playAudio = () => {
     const a = audioRef.current;
     if (!a) return;
+    // P8 practice: аудио разлочено — старт с текущей позиции (0 при первом жесте), без
+    // single-pass anchor/forward-seek. Дальше управление через AudioPlayer/ListeningLab.
+    if (mode === "practice") {
+      setAudioPhase("playing");
+      void a.play().catch(() => setAudioPhase("gate"));
+      return;
+    }
     const anchor = audioStartedAtRef.current;
     if (anchor == null) {
       const now = Date.now();
@@ -463,6 +541,38 @@ export default function ExamRunner({
     });
   };
 
+  // P8 practice-контролы аудио (вызываются только из practice-ветки Listening Lab).
+  const toggleAudioPractice = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) void a.play().catch(() => {});
+    else a.pause();
+  };
+  const seekAudio = (sec: number) => {
+    const a = audioRef.current;
+    if (!a) return;
+    try {
+      a.currentTime = Math.max(0, Math.min(sec, a.duration || sec));
+    } catch {
+      /* seek за пределы буфера мог не пройти — не критично */
+    }
+  };
+  const replayAudio = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    try {
+      a.currentTime = 0;
+    } catch {
+      /* seek до 0 мог не пройти — не критично */
+    }
+    void a.play().catch(() => {});
+  };
+  const setAudioSpeed = (r: number) => {
+    const a = audioRef.current;
+    if (a) a.playbackRate = r;
+    setAudioRate(r);
+  };
+
   const meta = `${categoryLabel(category)} · ${questions.length} questions`;
 
   // useMemo: partGroups зависит только от [questions, answers, flags] — тик таймера
@@ -473,7 +583,9 @@ export default function ExamRunner({
   // Таймер шапки: Listening — по записи (audio remaining → transfer); Reading после
   // гидрации/старта — по режиму; до гидрации Reading — прежнее поведение.
   let timerArea: React.ReactNode;
-  if (isListening) {
+  // Listening MOCK — таймер по записи (single-pass). Listening PRACTICE использует общий
+  // practice count-up ниже (счёт вверх с паузой/restart) — запись под ручным управлением.
+  if (isListening && mode === "mock") {
     if (audioDur <= 0) {
       timerArea = (
         <span style={S.clock}>
@@ -572,6 +684,20 @@ export default function ExamRunner({
           <div style={S.topMeta}>{meta}</div>
         </div>
         <div className="exam-top-right" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
+          {/* P4 — комфорт чтения (practice reading only). Панель fixed, backdrop закрывает. */}
+          {readerActive && (
+            <button
+              type="button"
+              className="exam-ctrl"
+              style={S.ctrlBtn}
+              aria-label="Reading settings"
+              aria-expanded={readerOpen}
+              title="Reading settings"
+              onClick={() => setReaderOpen((o) => !o)}
+            >
+              <span style={{ fontFamily: "var(--font-reading)", fontWeight: 800, fontSize: 15, lineHeight: 1 }}>Aa</span>
+            </button>
+          )}
           {timerArea}
           <Button trailingIcon="arrow-right" onClick={submit} loading={pending}>
             Submit
@@ -603,7 +729,14 @@ export default function ExamRunner({
                     }}
                     onCanPlay={() => setCanPlay(true)}
                     onError={() => setCanPlay(true)}
-                    onEnded={() => setAudioPhase("transfer")}
+                    onEnded={() => {
+                      // mock: конец записи → transfer-окно. practice: replay разрешён —
+                      // просто гасим «играет», фаза остаётся playing (gate уже пройден).
+                      if (mode === "mock") setAudioPhase("transfer");
+                      else setAudioPlaying(false);
+                    }}
+                    onPlay={mode === "practice" ? () => setAudioPlaying(true) : undefined}
+                    onPause={mode === "practice" ? () => setAudioPlaying(false) : undefined}
                     style={{ display: "none" }}
                   />
                   {audioPhase === "transfer" ? (
@@ -612,12 +745,26 @@ export default function ExamRunner({
                       <span>Recording finished — use the transfer time to check and complete your answers.</span>
                     </div>
                   ) : (
-                    <AudioPlayer
-                      progress={audioDur > 0 ? audioCur / audioDur : 0}
-                      playing={audioPhase === "playing"}
-                      totalSeconds={audioDur}
-                      locked
-                    />
+                    <>
+                      <AudioPlayer
+                        progress={audioDur > 0 ? audioCur / audioDur : 0}
+                        playing={mode === "practice" ? audioPlaying : audioPhase === "playing"}
+                        totalSeconds={audioDur}
+                        locked={mode !== "practice"}
+                        onTogglePlay={mode === "practice" ? toggleAudioPractice : undefined}
+                      />
+                      {/* P8 practice: seek/replay/скорость. mock не рендерит (single-pass). */}
+                      {mode === "practice" && audioDur > 0 && (
+                        <ListeningLab
+                          cur={audioCur}
+                          dur={audioDur}
+                          rate={audioRate}
+                          onSeek={seekAudio}
+                          onReplay={replayAudio}
+                          onRate={setAudioSpeed}
+                        />
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -627,7 +774,7 @@ export default function ExamRunner({
           <div ref={qScrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
             <div style={{ maxWidth: 720, margin: "0 auto", padding: "18px 24px 48px" }}>
               <div style={S.sheetHead}>
-                <span style={S.sheetHint}>Answer as you listen — the recording plays once.</span>
+                <span style={S.sheetHint}>{mode === "practice" ? "Practice — pause, seek, or replay the recording as you work." : "Answer as you listen — the recording plays once."}</span>
               </div>
               {questionList}
             </div>
@@ -655,6 +802,7 @@ export default function ExamRunner({
               category={category}
               passages={passages}
               initialAnnotations={initialAnnotations ?? []}
+              reader={readerFor}
             />
 
             {/* Questions pane (навигатор вынесен в нижнюю полосу) */}
@@ -684,10 +832,16 @@ export default function ExamRunner({
       {isListening && hydrated && audioPhase === "gate" && (
         <ListeningGate
           resume={audioStartedAtRef.current != null}
+          practice={mode === "practice"}
           buffered={buffered}
           canPlay={canPlay}
           onPlay={playAudio}
         />
+      )}
+
+      {/* P4 — панель комфорта чтения (fixed, вне overflow shell). */}
+      {readerActive && readerOpen && (
+        <ReaderPanel prefs={readerPrefs} onChange={setReaderPrefs} onClose={() => setReaderOpen(false)} />
       )}
     </div>
   );
@@ -935,6 +1089,8 @@ const QuestionBlock = memo(function QuestionBlock({
           )}
         </div>
         )}
+        {/* P1 — только practice: мягкая проверка формата (лимит слов / число выборов). */}
+        {practice && <FormatHint q={q} value={value} />}
         {/* P6/P7 — только practice: проверка ответа + раскрытие ключа. mock не рендерит. */}
         {practice && (
           <PracticeCheck
@@ -951,6 +1107,49 @@ const QuestionBlock = memo(function QuestionBlock({
     </div>
   );
 });
+
+/**
+ * FormatHint (P1) — практис-подсказка формата. Детерминированно (parseWordLimit /
+ * parseChoiceCount по промпту) сигналит превышение лимита слов (completion) или числа
+ * выборов (mcq_multi). Ключ НЕ трогается, ввод НЕ блокируется — только мягкий hint.
+ * Возвращает null, когда формат не распознан или нарушения нет.
+ */
+const FormatHint = memo(function FormatHint({ q, value }: { q: Question; value: string | string[] }) {
+  const hasOptions = !!q.options && q.options.length > 0;
+
+  // mcq_multi: превышено число выборов из промпта («Choose TWO»).
+  if (hasOptions && q.qtype === "mcq_multi") {
+    const want = parseChoiceCount(q.prompt_html);
+    const picked = Array.isArray(value) ? value.length : value ? 1 : 0;
+    if (want != null && picked > want) {
+      return <FormatHintText text={`Choose only ${want} — you've selected ${picked}.`} />;
+    }
+    return null;
+  }
+
+  // completion: превышен лимит слов (числовые токены не считаются при AND/OR A NUMBER).
+  if (!hasOptions) {
+    const limit = parseWordLimit(q.prompt_html);
+    const single = Array.isArray(value) ? (value[0] ?? "") : value;
+    if (limit != null && countWords(single, limit.allowNumber) > limit.maxWords) {
+      return (
+        <FormatHintText
+          text={`Use no more than ${limit.maxWords} word${limit.maxWords === 1 ? "" : "s"}${limit.allowNumber ? " and/or a number" : ""}.`}
+        />
+      );
+    }
+  }
+  return null;
+});
+
+function FormatHintText({ text }: { text: string }) {
+  return (
+    <div className="exam-fmt-hint" role="status">
+      <Icon name="info" size={15} strokeWidth={2.4} />
+      <span>{text}</span>
+    </div>
+  );
+}
 
 /**
  * PracticeCheck (P6/P7) — под каждым отвеченным вопросом в practice: «Check» → инлайн
@@ -1022,36 +1221,157 @@ const PracticeCheck = memo(function PracticeCheck({
  */
 function ListeningGate({
   resume,
+  practice,
   buffered,
   canPlay,
   onPlay,
 }: {
   resume: boolean;
+  /** P8: practice-запись разлочена → честная копия «можно паузить/повторять». */
+  practice?: boolean;
   buffered: number;
   canPlay: boolean;
   onPlay: () => void;
 }) {
+  const title = practice ? "Listening practice" : resume ? "Continue the recording" : "Listening test";
+  const desc = practice
+    ? "Practice mode — you can pause, seek, replay, and change the speed. Take your time."
+    : resume
+      ? "The recording kept playing while you were away. It resumes from the current point — no rewind or replay."
+      : "The recording plays once. You can't pause, rewind, or replay it — answer as you listen.";
   return (
     <div className="exam-overlay" style={SS.overlay} role="dialog" aria-modal="true" aria-label="Listening recording">
       <div style={{ ...SS.panel, maxWidth: 460, textAlign: "center" }}>
         <span style={{ ...SS.cardIcon, width: 52, height: 52, margin: "0 auto 14px", background: "var(--brand-subtle)", color: "var(--brand)" }}>
           <Icon name="headphones" size={26} />
         </span>
-        <h1 style={SS.startTitle}>{resume ? "Continue the recording" : "Listening test"}</h1>
-        <p style={SS.startMeta}>
-          {resume
-            ? "The recording kept playing while you were away. It resumes from the current point — no rewind or replay."
-            : "The recording plays once. You can't pause, rewind, or replay it — answer as you listen."}
-        </p>
+        <h1 style={SS.startTitle}>{title}</h1>
+        <p style={SS.startMeta}>{desc}</p>
         <div style={SS.bufferTrack} aria-hidden="true">
           <div style={{ ...SS.bufferFill, width: `${Math.round(buffered * 100)}%` }} />
         </div>
         <p style={SS.bufferLabel}>{canPlay ? "Audio ready" : `Loading audio… ${Math.round(buffered * 100)}%`}</p>
         <Button variant="primary" fullWidth disabled={!canPlay} trailingIcon="arrow-right" onClick={onPlay}>
-          {resume ? "Resume" : "Play recording"}
+          {resume && !practice ? "Resume" : "Play recording"}
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * ListeningLab (P8) — практис-контролы разлоченной записи: seek-полоса, replay и
+ * скорость (0.75/1/1.25/1.5). Рендерится ТОЛЬКО в practice (mock — строгий single-pass).
+ */
+const LAB_RATES = [0.75, 1, 1.25, 1.5];
+function ListeningLab({
+  cur,
+  dur,
+  rate,
+  onSeek,
+  onReplay,
+  onRate,
+}: {
+  cur: number;
+  dur: number;
+  rate: number;
+  onSeek: (sec: number) => void;
+  onReplay: () => void;
+  onRate: (r: number) => void;
+}) {
+  return (
+    <div className="lab">
+      <input
+        type="range"
+        className="lab-seek"
+        min={0}
+        max={Math.max(1, Math.floor(dur))}
+        step={1}
+        value={Math.min(Math.floor(cur), Math.floor(dur))}
+        onChange={(e) => onSeek(Number(e.target.value))}
+        aria-label="Seek recording"
+      />
+      <div className="lab-row">
+        <button type="button" className="lab-btn" onClick={onReplay}>
+          Replay
+        </button>
+        <span className="lab-sep" aria-hidden="true" />
+        <span className="lab-label">Speed</span>
+        {LAB_RATES.map((r) => (
+          <button
+            key={r}
+            type="button"
+            className="lab-rate"
+            aria-pressed={rate === r}
+            data-active={rate === r ? "" : undefined}
+            onClick={() => onRate(r)}
+          >
+            {r}×
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ReaderPanel (P4) — практис-панель комфорта чтения: размер шрифта (3 ступени),
+ * межстрочный (2 ступени), тема пассажа (default/sepia). Fixed (вне overflow shell) +
+ * backdrop закрывает по клику вне. Префы persist в ExamRunner (bando-reading-prefs).
+ */
+function ReaderPanel({
+  prefs,
+  onChange,
+  onClose,
+}: {
+  prefs: ReaderPrefs;
+  onChange: (p: ReaderPrefs) => void;
+  onClose: () => void;
+}) {
+  // Escape закрывает панель (a11y-парность с клик-вне на backdrop).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <>
+      <button type="button" className="exam-reader-backdrop" aria-label="Close reading settings" onClick={onClose} />
+      <div className="exam-reader-panel" role="dialog" aria-label="Reading settings">
+        <div className="exam-reader-row">
+          <span className="exam-reader-label">Text size</span>
+          <div className="exam-reader-seg" role="group" aria-label="Text size">
+            {(["S", "M", "L"] as const).map((lbl, i) => (
+              <button key={lbl} type="button" className="exam-reader-opt" aria-pressed={prefs.size === i} data-active={prefs.size === i ? "" : undefined} onClick={() => onChange({ ...prefs, size: i as 0 | 1 | 2 })}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="exam-reader-row">
+          <span className="exam-reader-label">Line spacing</span>
+          <div className="exam-reader-seg" role="group" aria-label="Line spacing">
+            {(["Normal", "Loose"] as const).map((lbl, i) => (
+              <button key={lbl} type="button" className="exam-reader-opt" aria-pressed={prefs.leading === i} data-active={prefs.leading === i ? "" : undefined} onClick={() => onChange({ ...prefs, leading: i as 0 | 1 })}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="exam-reader-row">
+          <span className="exam-reader-label">Theme</span>
+          <div className="exam-reader-seg" role="group" aria-label="Passage theme">
+            {(["default", "sepia"] as const).map((t) => (
+              <button key={t} type="button" className="exam-reader-opt" aria-pressed={prefs.theme === t} data-active={prefs.theme === t ? "" : undefined} onClick={() => onChange({ ...prefs, theme: t })}>
+                {t === "default" ? "Default" : "Sepia"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1101,6 +1421,36 @@ const READING_CSS = `
 @keyframes exam-reveal-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.exam-reveal{animation:none}}
 @media (pointer:coarse){.exam-check-btn{min-height:44px}.exam-reveal-link{min-height:44px}}
+
+/* P1 format hint — мягкое предупреждение о формате (practice-only, ввод не блокирует). */
+.exam-fmt-hint{display:flex;align-items:center;gap:7px;margin-top:9px;padding-left:39px;font-family:var(--font-ui);font-size:var(--text-sm);font-weight:600;color:var(--warn-text)}
+.exam-fmt-hint svg{flex:none;color:var(--warn)}
+
+/* P8 Listening Lab — practice-only аудио-контролы (mock: single-pass, блок не рендерится). */
+.lab{margin-top:12px}
+.lab-seek{display:block;width:100%;height:6px;margin:0 0 12px;accent-color:var(--brand);cursor:pointer}
+.lab-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.lab-btn{display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.lab-btn:hover{background:var(--surface-hover);color:var(--text-primary)}
+.lab-sep{width:1px;height:20px;background:var(--border);margin:0 3px}
+.lab-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.lab-rate{display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;padding:0 10px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);font-family:var(--font-mono);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.lab-rate:hover{background:var(--surface-hover);color:var(--text-primary)}
+.lab-rate[data-active]{background:var(--brand);border-color:var(--brand);color:var(--text-on-brand)}
+@media (pointer:coarse){.lab-btn{min-height:44px}.lab-rate{min-height:44px}.lab-seek{height:12px}}
+
+/* P4 Reader comfort panel — практис-панель размера/интерлиньяжа/темы пассажа (fixed). */
+.exam-reader-backdrop{position:fixed;inset:0;z-index:39;border:none;background:transparent;cursor:default;padding:0}
+.exam-reader-panel{position:fixed;top:60px;right:12px;z-index:40;width:min(280px,calc(100vw - 24px));display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-lg);animation:exam-reveal-in .2s cubic-bezier(.16,1,.3,1) both}
+.exam-reader-row{display:flex;flex-direction:column;gap:7px}
+.exam-reader-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.exam-reader-seg{display:flex;gap:6px}
+.exam-reader-opt{flex:1;min-height:38px;padding:0 10px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.exam-reader-opt:hover{background:var(--surface-hover);color:var(--text-primary)}
+.exam-reader-opt[data-active]{background:var(--brand);border-color:var(--brand);color:var(--text-on-brand)}
+@media (min-width:1024px){.exam-reader-panel{top:64px}}
+@media (prefers-reduced-motion:reduce){.exam-reader-panel{animation:none}}
+@media (pointer:coarse){.exam-reader-opt{min-height:44px}}
 @keyframes nine-blink{0%,100%{opacity:1}50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){[style*="nine-blink"]{animation:none!important}}
 

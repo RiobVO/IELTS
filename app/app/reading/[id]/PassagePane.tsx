@@ -93,6 +93,7 @@ export const PassagePane = memo(function PassagePane({
   passages,
   initialAnnotations,
   className,
+  reader,
 }: {
   contentItemId: string;
   title: string;
@@ -101,6 +102,12 @@ export const PassagePane = memo(function PassagePane({
   initialAnnotations: AnnotationRow[];
   /** Раннер задаёт раскладку панели (display/flex) классом — адаптив за ним. */
   className?: string;
+  /**
+   * P4 — внешние префы комфорта чтения (practice-reading). Заданы → переопределяют
+   * размер/интерлиньяж/тему пассажа и убирают типографские кнопки капсулы (управление
+   * ушло в шапку). Не заданы (mock/listening) → капсула и поведение прежние.
+   */
+  reader?: { fontPx: number; lineHeight: number; theme: "paper" | "sepia" } | null;
 }) {
   /* eslint-disable-line — тело компонента ниже без изменений */
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -114,18 +121,36 @@ export const PassagePane = memo(function PassagePane({
   const [progress, setProgress] = useState(0);
   const [editor, setEditor] = useState<{ id: string; quote: string; note: string } | null>(null);
 
-  // Load saved reading prefs (client-only — no SSR mismatch).
+  // Load saved reading prefs (client-only — no SSR mismatch). Storage может быть
+  // недоступен (private mode/blocked) — try/catch, чтобы не ронять панель. При
+  // внешнем reader (practice-панель «Aa», P4) legacy-ключи не читаем и не пишем:
+  // источником префов служит reader, капсульные кнопки типографики скрыты.
   useEffect(() => {
-    const f = Number(localStorage.getItem(FONT_KEY));
-    if (f >= FONT_MIN && f <= FONT_MAX) setFontPx(f);
-    if (localStorage.getItem(THEME_KEY) === "sepia") setTheme("sepia");
-  }, []);
+    if (reader) return;
+    try {
+      const f = Number(localStorage.getItem(FONT_KEY));
+      if (f >= FONT_MIN && f <= FONT_MAX) setFontPx(f);
+      if (localStorage.getItem(THEME_KEY) === "sepia") setTheme("sepia");
+    } catch {
+      /* storage недоступен — остаются дефолты */
+    }
+  }, [reader]);
   useEffect(() => {
-    localStorage.setItem(FONT_KEY, String(fontPx));
-  }, [fontPx]);
+    if (reader) return;
+    try {
+      localStorage.setItem(FONT_KEY, String(fontPx));
+    } catch {
+      /* storage недоступен — преф не сохранится, не критично */
+    }
+  }, [fontPx, reader]);
   useEffect(() => {
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+    if (reader) return;
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* storage недоступен — преф не сохранится, не критично */
+    }
+  }, [theme, reader]);
 
   const passageEl = useCallback((order: number): HTMLElement | null => {
     return articleRef.current?.querySelector(`[data-order="${order}"]`) ?? null;
@@ -255,7 +280,10 @@ export const PassagePane = memo(function PassagePane({
   const readMin = Math.max(1, Math.round(wordCount / 200));
   const highlightCount = annotations.length;
 
-  const surface = theme === "sepia" ? "color-mix(in oklab, var(--gold-500) 13%, var(--paper-light))" : "var(--reading-surface)";
+  // P4: внешние префы (practice) переопределяют внутренние font/theme; иначе — капсула.
+  const effFont = reader ? reader.fontPx : fontPx;
+  const effTheme = reader ? reader.theme : theme;
+  const surface = effTheme === "sepia" ? "color-mix(in oklab, var(--gold-500) 13%, var(--paper-light))" : "var(--reading-surface)";
 
   return (
     <div className={className} style={{ ...S.pane, background: surface }}>
@@ -289,7 +317,7 @@ export const PassagePane = memo(function PassagePane({
         <article
           ref={articleRef}
           className="bando-reading editorial"
-          style={{ padding: "24px 48px 80px", maxWidth: 900, margin: "0 auto", fontSize: fontPx }}
+          style={{ padding: "24px 48px 80px", maxWidth: 900, margin: "0 auto", fontSize: effFont, ...(reader ? { lineHeight: reader.lineHeight } : null) }}
           onMouseUp={onMouseUp}
           onClick={onClick}
         >
@@ -307,17 +335,23 @@ export const PassagePane = memo(function PassagePane({
         <button className="cap-btn" onClick={() => setMode("note")} aria-pressed={mode === "note"} title="Note" style={S.capBtn(mode === "note")}>
           <Icon name="pen-line" size={18} strokeWidth={2.1} />
         </button>
-        <span style={S.sep} />
-        <button className="cap-btn" onClick={() => setFontPx((f) => Math.max(FONT_MIN, f - 1))} title="Smaller text" style={{ ...S.capBtn(false), fontSize: 13 }}>
-          A−
-        </button>
-        <button className="cap-btn" onClick={() => setFontPx((f) => Math.min(FONT_MAX, f + 1))} title="Larger text" style={{ ...S.capBtn(false), fontSize: 17 }}>
-          A+
-        </button>
-        <span style={S.sep} />
-        <button className="cap-btn" onClick={() => setTheme((t) => (t === "paper" ? "sepia" : "paper"))} aria-pressed={theme === "sepia"} title="Toggle paper / sepia" style={S.capBtn(theme === "sepia")}>
-          <Icon name="sun" size={18} strokeWidth={2.1} />
-        </button>
+        {/* P4: типографские кнопки (размер/тема) капсулы прячем в practice — управление
+            ушло в панель шапки. Без reader (mock/listening) капсула прежняя. */}
+        {!reader && (
+          <>
+            <span style={S.sep} />
+            <button className="cap-btn" onClick={() => setFontPx((f) => Math.max(FONT_MIN, f - 1))} title="Smaller text" style={{ ...S.capBtn(false), fontSize: 13 }}>
+              A−
+            </button>
+            <button className="cap-btn" onClick={() => setFontPx((f) => Math.min(FONT_MAX, f + 1))} title="Larger text" style={{ ...S.capBtn(false), fontSize: 17 }}>
+              A+
+            </button>
+            <span style={S.sep} />
+            <button className="cap-btn" onClick={() => setTheme((t) => (t === "paper" ? "sepia" : "paper"))} aria-pressed={theme === "sepia"} title="Toggle paper / sepia" style={S.capBtn(theme === "sepia")}>
+              <Icon name="sun" size={18} strokeWidth={2.1} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* note editor / delete panel */}
