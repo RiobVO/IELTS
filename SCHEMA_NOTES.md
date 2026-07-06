@@ -661,3 +661,35 @@ never touched).
 **Verification.** `tsc` clean; vitest green (parser + upsert enrichment cases);
 `verify` gate green on local docker (still 31 tables; up→down→up clean + idempotent;
 RLS asserts unchanged). Supabase application follows the plan's deploy sequencing.
+
+## 0039 — Vocabulary level band (additive column on vocab_deck)
+
+Additive column-only migration (product plan — level-organized Vocabulary catalog).
+**No new tables, no table-count change (stays 31), no new enums, no RLS or grant
+changes.** The single column is **nullable, no DEFAULT, no CHECK** — existing decks are
+untouched (`NULL` → they render in a trailing "More decks" section) and a re-import
+fills it through the additive deck upsert.
+
+- **`vocab_deck` new column:**
+  - `level_band text` — the deck's CEFR level for the level-sectioned catalog grid.
+    Canon is exactly `{B1, B2, C1}`, **validated in the app layer** (the parser rejects
+    anything else with a `VocabParseError`, case-sensitive after trim); the DB column
+    carries **no CHECK / enum**, mirroring the precedent of `question_types` (canon lives
+    in code, not a DB enum) and the free-text `level` column. Keeping validation in the
+    parser lets the canon evolve without a migration and matches how tier / question-type
+    slugs are policed.
+
+- **Catalog use (presentation only, no gating):** `level_band` drives grouping — the grid
+  splits decks into B1/B2/C1 sections (display order = `LEVEL_ORDER` in
+  `src/lib/vocab/level.ts`) and badges the section matching `bandToCefr(profile.target_band)`
+  as "Recommended". `target_band` is read on the profile row `getVocabOverview` already
+  fetches (no extra round-trip). It never gates deck access (tier does); an unknown /
+  `NULL` value simply falls into "More decks".
+
+- **RLS posture unchanged:** the column inherits `vocab_deck`'s published-read posture —
+  public catalog metadata like `level` / `question_types`, nothing to lock.
+
+**Verification.** `tsc` clean; vitest green (parser `level_band` cases + `bandToCefr`
+boundary tests); `verify` gate green on a throwaway local DB (still 31 tables; up→down→up
+clean + idempotent; RLS asserts unchanged). Supabase application follows the plan's deploy
+sequencing.

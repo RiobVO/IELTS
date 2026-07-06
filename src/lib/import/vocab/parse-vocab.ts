@@ -18,6 +18,7 @@
  * Инварианты: no LLM, no eval, no vm, без новых зависимостей.
  */
 import { QUESTION_TYPES, type QuestionType } from "../question-types";
+import { LEVEL_ORDER, type CefrLevel } from "../../vocab/level";
 
 export type VocabTier = "basic" | "premium" | "ultra";
 
@@ -44,6 +45,8 @@ export interface ParsedVocabDeck {
   title: string;
   description: string | null;
   level: string | null;
+  // Уровневый каталог (0039): CEFR-уровень дека; null = не задан в файле.
+  levelBand: CefrLevel | null;
   tierRequired: VocabTier;
   // Enrichment (0038): канон-слаги типов вопросов quiz-режима; null = не заданы.
   questionTypes: QuestionType[] | null;
@@ -212,6 +215,27 @@ function parseQuestionTypes(value: unknown): QuestionType[] | null {
   });
 }
 
+/**
+ * level_band (0039) — опциональный CEFR-уровень дека для уровневого каталога.
+ * absent/null/"" → null; иначе строго из канона LEVEL_ORDER ({B1,B2,C1}) после trim
+ * (регистрозависимо). Валидация на app-уровне, как tier_required: в БД колонка без
+ * CHECK/enum, канон живёт в коде (прецедент question_types).
+ */
+function parseLevelBand(value: unknown): CefrLevel | null {
+  if (value == null) return null;
+  if (typeof value !== "string") {
+    throw new VocabParseError(`level_band must be a string when present (got ${preview(value)}).`);
+  }
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  if (!(LEVEL_ORDER as readonly string[]).includes(trimmed)) {
+    throw new VocabParseError(
+      `level_band must be one of ${LEVEL_ORDER.join(", ")} (got ${preview(value)}).`,
+    );
+  }
+  return trimmed as CefrLevel;
+}
+
 export function parseVocab(fileContent: string): ParsedVocabDeck {
   // Гейт размера ДО JSON.parse: разбор мегабайтной строки — сам по себе вектор DoS.
   // Меряем БАЙТЫ (UTF-8), а не .length (UTF-16 code units) — иначе многобайтовые
@@ -235,6 +259,7 @@ export function parseVocab(fileContent: string): ParsedVocabDeck {
   const title = requiredString(obj.title, "title", MAX_TITLE_LEN);
   const description = optionalString(obj.description, "description", MAX_DESCRIPTION_LEN);
   const level = optionalString(obj.level, "level", MAX_LEVEL_LEN);
+  const levelBand = parseLevelBand(obj.level_band);
   const tierRequired = parseTier(obj.tier_required);
   const questionTypes = parseQuestionTypes(obj.question_types);
 
@@ -304,5 +329,5 @@ export function parseVocab(fileContent: string): ParsedVocabDeck {
     });
   });
 
-  return { title, description, level, tierRequired, questionTypes, cards };
+  return { title, description, level, levelBand, tierRequired, questionTypes, cards };
 }

@@ -76,6 +76,8 @@ export interface VocabDeckCard {
   title: string;
   description: string | null;
   level: string | null;
+  /** CEFR-уровень дека (0039) для секций каталога; null → секция «More decks». */
+  levelBand: string | null;
   tierRequired: Tier;
   /** Всего карточек в деке (денормализованный vocab_deck.word_count). */
   totalCards: number;
@@ -102,6 +104,7 @@ export async function getVocabCatalog(userId: string): Promise<VocabDeckCard[]> 
         title: vocabDeck.title,
         description: vocabDeck.description,
         level: vocabDeck.level,
+        levelBand: vocabDeck.levelBand,
         tierRequired: vocabDeck.tierRequired,
         // Денормализованный счётчик карточек (пересчитывается при (ре)импорте) —
         // не считаем vocab_card на каждый заход в каталог.
@@ -144,6 +147,7 @@ export async function getVocabCatalog(userId: string): Promise<VocabDeckCard[]> 
       title: d.title,
       description: d.description,
       level: d.level,
+      levelBand: d.levelBand,
       tierRequired: d.tierRequired,
       totalCards: d.totalCards,
       learnedCards: agg?.learned ?? 0,
@@ -394,6 +398,8 @@ export interface VocabOverview {
   reviewedToday: number;
   /** Дневная цель повторов (константа). */
   goal: number;
+  /** Целевой IELTS-band пользователя (0039) для бейджа «Recommended»; null = не задан. */
+  targetBand: number | null;
 }
 
 /** Порядок тиров для inArray-фильтра доступных деков (basic < premium < ultra). */
@@ -413,8 +419,10 @@ const TIER_ORDER: Tier[] = ["basic", "premium", "ultra"];
  */
 export async function getVocabOverview(userId: string): Promise<VocabOverview> {
   // Wave 1: эффективный тир — от него зависят allowedTiers во всех агрегатах.
+  // target_band читаем здесь же (профиль уже тянется) — без отдельного round-trip:
+  // нужен странице каталога для бейджа «Recommended» уровневой секции (0039).
   const [prof] = await db
-    .select({ tier: profile.tier, premiumUntil: profile.premiumUntil })
+    .select({ tier: profile.tier, premiumUntil: profile.premiumUntil, targetBand: profile.targetBand })
     .from(profile)
     .where(eq(profile.id, userId));
   const tier: Tier = prof
@@ -521,5 +529,7 @@ export async function getVocabOverview(userId: string): Promise<VocabOverview> {
     streak,
     reviewedToday: agg?.reviewedToday ?? 0,
     goal: VOCAB_DAILY_GOAL,
+    // numeric приходит строкой (postgres-js) — приводим к number для bandToCefr.
+    targetBand: prof?.targetBand != null ? Number(prof.targetBand) : null,
   };
 }
