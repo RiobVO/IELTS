@@ -14,6 +14,7 @@ export type ActivePage =
   | "reading"
   | "listening"
   | "progress"
+  | "vocabulary"
   | "pricing"
   | "profile";
 
@@ -39,6 +40,8 @@ const LINKS: { id: ActivePage; label: string; href: string; icon: Parameters<typ
   { id: "practice", label: "Practice", href: "/app/practice", icon: "dumbbell" },
   // Progress — объединённый раздел League + Badges (route-табы внутри /app/progress).
   { id: "progress", label: "Progress", href: "/app/progress", icon: "award" },
+  // Vocabulary — flashcards с интервальным повторением (SRS), отдельный раздел.
+  { id: "vocabulary", label: "Vocabulary", href: "/app/vocabulary", icon: "graduation-cap" },
 ];
 
 const COLORS_TRANSITION =

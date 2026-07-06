@@ -16,6 +16,7 @@ const NAV = [
   { id: "dashboard", label: "Home" },
   { id: "practice", label: "Practice" },
   { id: "progress", label: "Progress" },
+  { id: "vocabulary", label: "Vocabulary" },
 ] as const;
 
 export function AppShellSkeleton({
