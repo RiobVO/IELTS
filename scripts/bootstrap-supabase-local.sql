@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS auth.users (
 ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS raw_app_meta_data  jsonb NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS created_at         timestamptz NOT NULL DEFAULT now();
+-- weekly-digest.ts filters candidates by email_confirmed_at is not null (bounce
+-- protection); real Supabase auth.users always has this column, the local
+-- emulation didn't until the digest query needed it.
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS email_confirmed_at  timestamptz;
 
 -- auth.uid(): on Supabase this reads the `sub` claim from the request JWT.
 -- Local stub returns a GUC so RLS policies that call auth.uid() stay valid.
