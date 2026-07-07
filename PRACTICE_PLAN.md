@@ -100,10 +100,14 @@ listening без `audio_path` (C21 L Test 3 `4822778c…`, Test 4 `900bd8a4…`)
 - **Волна A — ✅ реализована** (без миграций, всё в practice-ветках):
   P12+P13 (result-зона, коммит `590f515`), OwnA+P2a+P14+P2b-1 (runner-зона,
   коммит `c09bd76`). Mock-рендер не тронут; server actions не менялись.
-- **Волна B** — P9-rich «вариант B» (submit НЕ трогаем: таблица
-  `0040_mistake_resolution` только с резолюциями, открытые ошибки деривятся
-  на чтении из `attempt_review_snapshot`+`attempt.answers`→`gradeOne`),
-  экран `/app/practice/mistakes`, P15.
+- **Волна B — ✅ реализована** (коммиты `0f58023`/`4c15713`/`c696474`; Codex
+  adversarial-ревью пройдено — 2 major закрыты фиксами): P9-rich «вариант B»
+  (submit НЕ тронут; `0040_mistake_resolution` — только резолюции; деривация
+  из снапшота; резолюция гасит лишь попытки, сданные ДО неё → re-fail
+  переоткрывается, forged-впрок инертен; qtype — server-lookup из `question`),
+  экран `/app/practice/mistakes` (href по каталожному правилу через диспетчер
+  `/app/exam`), P15 `?focus=QN`. `0040` применена на прод ДО пуша, постура
+  `pg_policies` проверена ([OK]).
 - **Волна C** — P11 saved words (`0041_saved_word`, SM-2 через `srs.ts`,
   дек «My words», БЕЗ синтеза `vocab_card`).
 - Оппортунистически: P10 (localStorage-остров), OwnC weakness heatmap, P5
