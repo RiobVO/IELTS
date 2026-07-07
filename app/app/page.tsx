@@ -8,7 +8,7 @@ import { getVocabDueSummary, type VocabDueSummary } from "@/lib/vocab/summary";
 import { db } from "@/db";
 import { attempt, contentItem, leaderboardEntry } from "@/db/schema";
 import { categoryLabel, qtypeLabel, LISTENING_CATEGORIES } from "@/lib/labels";
-import { bandForScore } from "@/lib/grading/band";
+import { computeBandPlan, type BandPlan, type BandPlanWeakType } from "@/lib/progress/band-plan";
 import { AppShell } from "./_AppShell";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
@@ -26,14 +26,6 @@ interface AttemptRow {
   per_type_breakdown: Breakdown;
   submitted_at: string | null;
   content_item: { title: string; category: string; band_scale: Record<string, number> | null } | null;
-}
-
-interface Weak {
-  type: string;
-  label: string;
-  correct: number;
-  total: number;
-  section: "reading" | "listening";
 }
 
 function total(b: Breakdown): number {
@@ -185,78 +177,49 @@ export default async function Dashboard() {
     } as const;
   });
 
-  // Weak areas — агрегируем per_type_breakdown по всем попыткам (без доп. запроса).
-  // Слабые типы агрегируем по всем попыткам, НО запоминаем, в какой секции
-  // (reading/listening) теряются очки — чтобы deep-link «Fix this weakness» вёл
-  // в правильный каталог (listening-only типы вроде map_labelling в reading пусты).
+  // Weak areas / band-gain / drill недели — считает ОДНО чистое ядро computeBandPlan
+  // (шарится с weekly digest, см. src/lib/progress/band-plan.ts), больше не
+  // дублируем агрегацию инлайн. Секцию (reading/listening) для попытки по-прежнему
+  // маппим сами по её category — это часть контракта входа билдера, а не запрос.
   const listeningCats = new Set<string>(LISTENING_CATEGORIES);
-  const agg: Record<string, { correct: number; total: number; rLost: number; lLost: number }> = {};
-  for (const a of attempts) {
-    const b = a.per_type_breakdown;
-    if (!b) continue;
-    const listening = listeningCats.has(a.content_item?.category ?? "");
-    for (const [type, v] of Object.entries(b)) {
-      const cur = agg[type] ?? { correct: 0, total: 0, rLost: 0, lLost: 0 };
-      cur.correct += v.correct;
-      cur.total += v.total;
-      const lost = v.total - v.correct;
-      if (listening) cur.lLost += lost;
-      else cur.rLost += lost;
-      agg[type] = cur;
-    }
-  }
-  const weak: Weak[] = Object.entries(agg)
-    .filter(([, v]) => v.total > 0)
-    .map(([type, v]) => ({
-      type,
-      label: qtypeLabel(type),
-      correct: v.correct,
-      total: v.total,
-      // Туда, где реально теряются очки; ничья → reading (больший каталог).
-      section: (v.lLost > v.rLost ? "listening" : "reading") as "reading" | "listening",
-    }))
-    .sort((x, y) => x.correct / x.total - y.correct / y.total)
-    .slice(0, 5);
+  const bandPlan = computeBandPlan(
+    attempts.map((a) => ({
+      bandScore: a.band_score != null ? Number(a.band_score) : null,
+      rawScore: a.raw_score,
+      perTypeBreakdown: a.per_type_breakdown,
+      section: listeningCats.has(a.content_item?.category ?? "") ? "listening" : "reading",
+      bandScale: a.content_item?.band_scale ?? null,
+      submittedAt: a.submitted_at,
+    })),
+    bandTarget,
+  );
+  const weak = bandPlan.weakTypes;
   const weakest = weak[0] ?? null;
   const hasAttempts = attempts.length > 0;
 
-  // Доля верных по всем типам — для тёплой строки нормализации, когда юзер реально
-  // буксует. Бренд candid, но не карающий: не сыпать «worst / lose points» без
-  // поддержки в самый уязвимый момент (ученик-не-носитель на низком старте).
-  const totals = Object.values(agg).reduce(
-    (s, v) => ({ c: s.c + v.correct, t: s.t + v.total }),
-    { c: 0, t: 0 },
-  );
-  const struggling = totals.t > 0 && totals.c / totals.t < 0.35;
-
-  // §1 — «приз» hero. Оценка ЧЕСТНАЯ: из реальной band-шкалы теста, где слабейший
-  // тип встречался (не из кросс-попыточной суммы). Консервативно — floor до 0.5.
-  let bandPill: string | null = null;
-  let drillMin: number | null = null;
-  if (weakest) {
-    const ref = attempts.find(
-      (a) =>
-        a.band_score != null &&
-        a.content_item?.band_scale != null &&
-        (a.per_type_breakdown?.[weakest.type]?.total ?? 0) > 0,
-    );
-    const refBreak = ref?.per_type_breakdown?.[weakest.type];
-    const refMissed = refBreak ? refBreak.total - refBreak.correct : 0;
-    if (ref && refMissed > 0 && ref.raw_score != null) {
-      const cur = Number(ref.band_score);
-      const better = bandForScore(ref.content_item!.band_scale, ref.raw_score + refMissed);
-      if (better != null) {
-        const gain = Math.floor((better - cur) / 0.5) * 0.5; // округление ВНИЗ до 0.5
-        if (gain >= 0.5) bandPill = `≈ +${gain.toFixed(1)} band if fixed`;
-      }
+  // Доля верных по ВСЕМ типам (не только top-5 weak-список) — для тёплой строки
+  // нормализации, когда юзер реально буксует. Бренд candid, но не карающий: не
+  // сыпать «worst / lose points» без поддержки в самый уязвимый момент
+  // (ученик-не-носитель на низком старте).
+  let struggCorrect = 0;
+  let struggTotal = 0;
+  for (const a of attempts) {
+    if (!a.per_type_breakdown) continue;
+    for (const v of Object.values(a.per_type_breakdown)) {
+      struggCorrect += v.correct;
+      struggTotal += v.total;
     }
-    // ~N min drill: объём промахов × 1.2 мин/вопрос, округл. до 5, минимум 5.
-    const drillQ = refMissed > 0 ? refMissed : weakest.total - weakest.correct;
-    if (drillQ > 0) drillMin = Math.max(5, Math.round((drillQ * 1.2) / 5) * 5);
   }
+  const struggling = struggTotal > 0 && struggCorrect / struggTotal < 0.35;
+
+  // §1 — «приз» hero, теперь из bandPlan.drill (та же честная оценка: реальная
+  // band-шкала теста, где слабейший тип встречался, не кросс-попыточная сумма).
+  const bandPill = bandPlan.drill?.bandGain != null ? `≈ +${bandPlan.drill.bandGain.toFixed(1)} band if fixed` : null;
+  const drillMin = bandPlan.drill?.estMinutes ?? null;
+
   // §3 — сколько тестов «видели» слабейший тип (для zero-state readout).
   const seenTests = weakest
-    ? attempts.filter((a) => (a.per_type_breakdown?.[weakest.type]?.total ?? 0) > 0).length
+    ? attempts.filter((a) => (a.per_type_breakdown?.[weakest.qtype]?.total ?? 0) > 0).length
     : 0;
 
   // §4 — последние 5 показанных попыток + дельта-чип к предыдущей попытке той же
@@ -323,7 +286,7 @@ export default async function Dashboard() {
                 </p>
               )}
               {weak.slice(1, 4).map((w, i) => (
-                <LossRow key={w.type} item={w} idx={i + 1} />
+                <LossRow key={w.qtype} item={w} idx={i + 1} />
               ))}
               {weak.length > 4 && (
                 <details className="dash-more">
@@ -332,7 +295,7 @@ export default async function Dashboard() {
                     <Icon name="chevron-down" size={16} strokeWidth={2.4} />
                   </summary>
                   {weak.slice(4).map((w, i) => (
-                    <LossRow key={w.type} item={w} idx={i + 4} />
+                    <LossRow key={w.qtype} item={w} idx={i + 4} />
                   ))}
                 </details>
               )}
@@ -371,6 +334,9 @@ export default async function Dashboard() {
           {/* Band readout */}
           <BandReadout band={bandLatest} target={bandTarget} source={bandSrc} hasAttempts={hasAttempts} />
 
+          {/* Plan to target band (W2-5) — дистанция + дрилл недели из bandPlan */}
+          <PlanCard plan={bandPlan} hasAttempts={hasAttempts} />
+
           {/* This week — тонкая полоса momentum под диагностикой, не co-hero */}
           <WeekCard streak={streak} xp={xp} rating={rating} rank={globalRank} week={week} resume={resume} leagueTotal={leagueTotal} />
 
@@ -387,7 +353,7 @@ export default async function Dashboard() {
 function FocusCard({
   weakest, weakCount, seenTests, bandPill, drillMin,
 }: {
-  weakest: Weak | null; weakCount: number; seenTests: number; bandPill: string | null; drillMin: number | null;
+  weakest: BandPlanWeakType | null; weakCount: number; seenTests: number; bandPill: string | null; drillMin: number | null;
 }) {
   const zero = weakest ? weakest.correct === 0 : false;
   const pct = weakest ? Math.round((weakest.correct / weakest.total) * 100) : 0;
@@ -431,7 +397,7 @@ function FocusCard({
               </div>
             )}
             <div style={S.focusCta}>
-              <Button variant="secondary" size="lg" trailingIcon="arrow-right" href={`/app/${weakest.section}?q_type=${encodeURIComponent(weakest.type)}`} style={{ color: "var(--brand-active)" }}>
+              <Button variant="secondary" size="lg" trailingIcon="arrow-right" href={`/app/${weakest.section}?q_type=${encodeURIComponent(weakest.qtype)}`} style={{ color: "var(--brand-active)" }}>
                 Fix this weakness
               </Button>
             </div>
@@ -709,7 +675,56 @@ function BandReadout({
   );
 }
 
-function LossRow({ item, idx }: { item: Weak; idx: number }) {
+/* Plan to target band (W2-5, BRIEF §12.3 шаг 2) — компакт-ридаут дистанции до
+   target + рекомендованный drill недели по слабейшему типу. Общее ядро с weekly
+   digest (computeBandPlan, src/lib/progress/band-plan.ts) — тот же дрилл юзер
+   увидит и в письме. Деградирует мягко без target/попыток вместо пустой дыры. */
+function PlanCard({ plan, hasAttempts }: { plan: BandPlan; hasAttempts: boolean }) {
+  if (plan.targetBand == null) {
+    return (
+      <div style={{ ...S.card, ...S.planCard }}>
+        <div style={S.planTitle}>Plan to target</div>
+        <p style={S.planText}>Set a target band during onboarding to see your plan here.</p>
+      </div>
+    );
+  }
+  if (!hasAttempts) {
+    return (
+      <div style={{ ...S.card, ...S.planCard }}>
+        <div style={S.planTitle}>Plan to band {plan.targetBand}</div>
+        <p style={S.planText}>Take your first test to start tracking your distance to target.</p>
+        <Link href="/app/reading" style={S.drillAny}>Take a test →</Link>
+      </div>
+    );
+  }
+  return (
+    <div style={{ ...S.card, ...S.planCard }}>
+      <div style={S.planTitle}>Plan to band {plan.targetBand}</div>
+      {plan.currentBand == null ? (
+        <p style={S.planText}>Sit a full 40-question mock to see your distance to target.</p>
+      ) : plan.reached ? (
+        <p style={S.planText}>Target reached 🎯 — keep practicing to hold it.</p>
+      ) : (
+        <p style={S.planText}>
+          <span style={S.planDistance}>{plan.distance}</span> band{plan.distance === 1 ? "" : "s"} to go.
+        </p>
+      )}
+      {plan.drill ? (
+        <Link href={`/app/${plan.drill.section}?q_type=${encodeURIComponent(plan.drill.qtype)}`} style={S.planDrill}>
+          <span>
+            This week: {plan.drill.label} · ~{plan.drill.estMinutes} min
+            {plan.drill.bandGain != null ? ` · ≈+${plan.drill.bandGain.toFixed(1)} band` : ""}
+          </span>
+          <Icon name="chevron-right" size={16} strokeWidth={2.2} />
+        </Link>
+      ) : (
+        <p style={S.planText}>Keep practicing — we&apos;ll surface a focused drill once there&apos;s enough data.</p>
+      )}
+    </div>
+  );
+}
+
+function LossRow({ item, idx }: { item: BandPlanWeakType; idx: number }) {
   const pct = Math.round((item.correct / item.total) * 100);
   const lost = item.total - item.correct;
   const worst = idx === 0;
@@ -717,7 +732,7 @@ function LossRow({ item, idx }: { item: Weak; idx: number }) {
     // Deep-link в дрилл этого типа В ЕГО СЕКЦИИ — listening-слабость не уводим в
     // reading (там её типа нет). /app/{section} редиректит в хаб практики, перенося
     // ?q_type в предвыбор фильтра.
-    <Link className="dash-loss" href={`/app/${item.section}?q_type=${encodeURIComponent(item.type)}`} style={S.loss}>
+    <Link className="dash-loss" href={`/app/${item.section}?q_type=${encodeURIComponent(item.qtype)}`} style={S.loss}>
       <span style={{ ...S.lossRank, ...(worst ? S.lossRankWorst : null) }}>{idx + 1}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={S.lossName}>{item.label}</div>
@@ -933,6 +948,26 @@ const S: Record<string, React.CSSProperties> = {
   vocabBadgeStreak: { display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--streak)", background: "var(--streak-subtle)", borderRadius: "var(--radius-full)", padding: "4px 10px" },
   vocabBadgeGoal: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-secondary)", background: "var(--surface-inset)", borderRadius: "var(--radius-full)", padding: "4px 10px" },
   vocabCta: { alignSelf: "flex-start" },
+
+  /* Plan-to-target rail card */
+  planCard: { padding: 18, display: "flex", flexDirection: "column", gap: 10 },
+  planTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)" },
+  planText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.5, color: "var(--text-muted)", margin: 0 },
+  planDistance: { fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-primary)", fontSize: "var(--text-md)" },
+  planDrill: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    fontFamily: "var(--font-ui)",
+    fontSize: "var(--text-sm)",
+    fontWeight: 700,
+    color: "var(--brand-active)",
+    textDecoration: "none",
+    background: "var(--brand-subtle)",
+    borderRadius: "var(--radius-md)",
+    padding: "10px 12px",
+  },
 
   /* Band readout */
   bandCard: { padding: "24px 28px" },
