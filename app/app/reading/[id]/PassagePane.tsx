@@ -74,6 +74,21 @@ function wrapOffsets(container: HTMLElement, start: number, end: number, id: str
   }
 }
 
+/** ВРЕМЕННЫЙ репортер диагностики аннотаций → error_log (/admin/errors). Best-effort,
+ *  тот же endpoint, что у global-error. Убрать вместе с диагностикой после закрытия бага. */
+function reportAnnotationDiag(message: string) {
+  try {
+    void fetch("/api/monitoring/client-error", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message, url: typeof location !== "undefined" ? location.href : undefined }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* диагностика best-effort */
+  }
+}
+
 function unwrap(container: HTMLElement, id: string) {
   container.querySelectorAll(`mark[data-aid="${id}"]`).forEach((m) => {
     const parent = m.parentNode;
@@ -219,8 +234,24 @@ export const PassagePane = memo(function PassagePane({
       quote: text,
       note: null,
     });
-    if (!res) return;
-    wrapOffsets(container, start, end, res.id, kind);
+    if (!res) {
+      // ВРЕМЕННАЯ диагностика prod-бага «аннотации не реагируют»: сервер вернул
+      // null молча — фиксируем факт и параметры в error_log. Убрать после закрытия.
+      reportAnnotationDiag(`annotation-insert-null: start=${start} end=${end} order=${order} textLen=${text.length}`);
+      return;
+    }
+    try {
+      wrapOffsets(container, start, end, res.id, kind);
+      const painted = container.querySelectorAll(`mark[data-aid="${res.id}"]`).length;
+      if (painted === 0 || !container.isConnected) {
+        reportAnnotationDiag(
+          `annotation-paint-diag: painted=${painted} connected=${container.isConnected} start=${start} end=${end} order=${order} contLen=${(container.textContent ?? "").length}`,
+        );
+      }
+    } catch (e) {
+      // Падение обёртки марка больше не глушит editor/счётчик ниже.
+      reportAnnotationDiag(`annotation-paint-crash: ${String(e)}`);
+    }
     const row: AnnotationRow = {
       id: res.id,
       passage_order: order,
