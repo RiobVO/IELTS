@@ -4,7 +4,7 @@ Ambiguities in BRIEF.md §5/§6.1 resolved while building the schema + migration
 The brief wins; where it was silent or self-conflicting, a sane choice was made
 and logged here. No tables were invented beyond what the brief implies.
 
-## Table count: 31 (Phase 1 shipped 13; +18 added in later phases)
+## Table count: 32 (Phase 1 shipped 13; +19 added in later phases)
 
 §5 enumerates 12 tables (`badge`/`user_badge` are two). The Phase-1 worked example
 expected **13 tables** — the 13th is **`notification`**, defined in **§11**
@@ -36,9 +36,15 @@ attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
   feature: spaced-repetition flashcards). Deck/card are published-gated content (like
   `content_item`/`passage`); `vocab_progress` is a per-user SM-2 SRS state, owner-read
   with server-only writes. See the "0037 — Vocabulary" section below.
+- `mistake_resolution` — migration `0040_mistake_resolution` (P9-rich «вариант B»:
+  per-user "mistake resolved" records). Open mistakes are NOT materialized — they are
+  derived at read-time from `attempt_review_snapshot` + `attempt.answers` via `gradeOne`,
+  so `submitAttempt`/grading/rating are untouched. Owner-read + server-only writes like
+  `vocab_progress`. See the "0040" section below.
 
-The DB has **31** tables (`verify.ts` `APP_TABLE_COUNT = 31` asserts the migrated count).
-`src/db/schema.ts` types **30** of them: the legacy `topic` table (migration `0000`, Phase 1)
+The DB has **32** tables. `verify.ts` `APP_TABLE_COUNT` must track it — bump **31 → 32**
+with the `0040` companion edit (see the "0040" section for the required verify.ts changes).
+`src/db/schema.ts` types **31** of them: the legacy `topic` table (migration `0000`, Phase 1)
 is unused since Phase 3 moved to `writing_task`/`speaking_task`, so its Drizzle export +
 `topic_skill` enum were dropped as dead code (#26) while the empty table lingers in the DB
 (no destructive drop). Re-add a typed export only if `topic` is ever revived.
@@ -693,3 +699,63 @@ fills it through the additive deck upsert.
 boundary tests); `verify` gate green on a throwaway local DB (still 31 tables; up→down→up
 clean + idempotent; RLS asserts unchanged). Supabase application follows the plan's deploy
 sequencing.
+
+## 0040 — mistake_resolution (P9-rich «вариант B»)
+
+PRACTICE_PLAN Фаза 3, волна B (mistake-review loop). One **additive** table storing
+ONLY the fact "this mistake was worked off" (a resolution). **Open mistakes are never
+materialized** — they are derived at read-time (`getOpenMistakes`,
+`src/lib/practice/mistakes.ts`) from a user's `attempt_review_snapshot` (D3) +
+`attempt.answers`, run through the same `gradeOne` grader as submit, deduped by the
+freshest attempt per `(content_item, question)`, then minus the resolution rows. This is
+the whole point of "вариант B": **`submitAttempt`, grading, rating and the daily cap are
+untouched** — no new write into scored data, and legacy attempts without a snapshot
+(pre-`0021`) are simply skipped (the derive inner-joins the snapshot). Bumps the app table
+count **31 → 32**. **No new enums** (`qtype` is a denormalized `text` slug, not the
+`question_type` enum — the server action resolves it authoritatively from `question`,
+never trusting the client label).
+
+- **`mistake_resolution`** — per-user resolution record. Purpose: mark a wrong question as
+  learned so it drops out of the derived open-mistakes queue. Provenance: PRACTICE_PLAN
+  волна B (2026-07-07). **Owner-read** like `vocab_progress` (RLS `SELECT TO authenticated
+  USING (user_id = auth.uid())`), **written ONLY owner-path** by the `resolveMistake` server
+  action — there is **no** `INSERT`/`UPDATE`/`DELETE` policy and `REVOKE ALL FROM anon,
+  authenticated, PUBLIC` strips Supabase's default-priv grants; only `SELECT` is re-granted
+  to `authenticated`. The action takes `user_id` **only** from the auth session (never the
+  form), mirroring the practice-actions gate; `qtype` is looked up server-side from
+  `question` by `(content_item_id, number)` — a non-existent question is a silent no-op,
+  so a forged call cannot invent rows for questions that aren't in the test.
+  - **Staleness semantics (anti-forge + re-fail reopen):** the derive subtracts a
+    resolution ONLY when `resolved_at >= attempt.submitted_at` of the newest attempt on
+    that question. A resolution created BEFORE an attempt never masks it — so a forged
+    "resolve in advance" is inert, and a user who re-fails a question after marking it
+    learned sees it reopen.
+  - **Columns:** `user_id` + `content_item_id` (both FK `ON DELETE CASCADE`),
+    `question_number int`, `qtype text` (denormalized slug snapshot at resolution time),
+    `resolved_at timestamptz`. **`UNIQUE(user_id, content_item_id, question_number)`** is the
+    idempotency foundation (`resolveMistake` inserts `ON CONFLICT DO NOTHING`).
+  - **Indexes:** the unique constraint's leftmost `user_id` already serves the owner-read
+    query (`WHERE user_id = $1`) and the RLS `user_id = auth.uid()` policy, so a standalone
+    `(user_id)` index would be redundant and is intentionally omitted (deviation from the
+    literal plan text, which asked for a `(user_id)` index — the constraint already provides
+    it). A dedicated `(content_item_id)` index is added instead, because `content_item_id`
+    is **not** leftmost in the unique constraint and would otherwise seq-scan on a
+    `content_item` cascade-delete (same rationale as `vocab_progress.card_id`).
+  - **Why NO answer_key-style lock:** the table holds only `(user_id, content_item_id,
+    question_number, qtype)` — no correct answers, explanations or evidence. The derived
+    open-mistakes list handed to the client also carries ONLY `{contentItemId, title,
+    section, questionNumber, qtype, attemptId, submittedAt}`; `accept`/`explanation`/
+    `evidence` stay server-side inside the derive (the snapshot is read owner-path and its
+    `accept` is used only for `gradeOne`). The user sees correct answers through the
+    existing practice-reveal, not this screen.
+
+- **`verify.ts` companion edits (landed in the same change):** (1) `APP_TABLE_COUNT`
+  **31 → 32**; (2) `mistake_resolution` added to the owner-read cohort assertion (§4i loop:
+  RLS on + anon denied); (3) a `mistake_resolution` `INSERT`-denied case added to
+  `clientWriteLockdown` (§6) mirroring the `vocab_progress` write-lockdown assertion.
+
+**Verification.** `tsc` clean; vitest green (pure `deriveOpenMistakes` — dedup / minus
+resolutions / mapping / ordering / unanswered-as-wrong). Migration round-trip on the local
+throwaway DB: `db:up:local` → `db:down:local` → `db:up:local` clean + idempotent. Supabase
+application (additive; apply before the code push to avoid a deploy-window break) follows the
+plan's deploy sequencing.
