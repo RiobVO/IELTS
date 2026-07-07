@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > Справка по докам: [BRIEF.md](./BRIEF.md) — единственная истина (спека/стек/§5/§6.1/§9, читать первой).
 > [SCHEMA_NOTES.md](./SCHEMA_NOTES.md) — разрешённые неоднозначности схемы. [BACKLOG.md](./BACKLOG.md) —
-> продуктовый бэклог (Волна 1 закрыта, Волна 2 ждёт). [AUDIT.md](./AUDIT.md) — реестр аудита.
+> продуктовый бэклог (Волна 1 закрыта; Волна 2 — 6/7 закрыто, открыты W2-3 контент-движок + W2-5).
+> [PRACTICE_PLAN.md](./PRACTICE_PLAN.md) — трек «богатый Practice-режим R/L» (фаза 3 закрыта: mistake-queue
+> `0040`, saved-words `0041`, pacing/strategy/confidence/goals — всё в ветке `mode='practice'`, mock не тронут).
+> [AUDIT.md](./AUDIT.md) — реестр аудита.
 > [REDESIGN.md](./REDESIGN.md) / [WORKLOG.md](./WORKLOG.md) — закрытые треки (редизайн / perf+sec).
 > [CLAUDE_AUDIT.md](./CLAUDE_AUDIT.md) — широкий аудит 2026-06-25 (закрыт).
 > **[AUDIT_2026-07-01.md](./AUDIT_2026-07-01.md) — АКТИВНЫЙ трек: объединённый аудит (Fan-out + Codex), 27 находок + R1;
@@ -104,10 +107,11 @@ lacks `runner_html`.
 
 ## Migrations & schema
 
-- `src/db/schema.ts` (Drizzle) is the **typed source of truth** (**31 DB tables** as of migration
-  `0038_vocab_enrichment` (0038 добавляет только nullable-колонки, таблиц не меняет);
-  `verify.ts` `APP_TABLE_COUNT = 31` asserts the migrated count. schema.ts types
-  **30** — the legacy `topic` table lingers in the DB but its export was dropped as dead code, #26).
+- `src/db/schema.ts` (Drizzle) is the **typed source of truth** (**33 DB tables** as of migration
+  `0041_saved_word`; `verify.ts` `APP_TABLE_COUNT = 33` asserts the migrated count. schema.ts types
+  **32** — the legacy `topic` table lingers in the DB but its export was dropped as dead code, #26).
+  Latest migrations: `0040_mistake_resolution` (P9-rich mistake queue) + `0041_saved_word` (P11 personal
+  word bank) — both owner-read + server-only writes, mirroring `vocab_progress` (see SCHEMA_NOTES §0040/§0041).
   Per-table provenance + RLS posture live in **SCHEMA_NOTES.md** (updated in lockstep).
   The executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by a
   custom up/down migrator (`scripts/migrate.ts`) with a `_migrations` bookkeeping table. **Keep
