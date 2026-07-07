@@ -2,273 +2,164 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> Справка по докам: [BRIEF.md](./BRIEF.md) — единственная истина (спека/стек/§5/§6.1/§9, читать первой).
-> [SCHEMA_NOTES.md](./SCHEMA_NOTES.md) — разрешённые неоднозначности схемы. [BACKLOG.md](./BACKLOG.md) —
-> продуктовый бэклог (Волна 1 закрыта; Волна 2 — 6/7 закрыто, открыты W2-3 контент-движок + W2-5).
-> [PRACTICE_PLAN.md](./PRACTICE_PLAN.md) — трек «богатый Practice-режим R/L» (фаза 3 закрыта: mistake-queue
-> `0040`, saved-words `0041`, pacing/strategy/confidence/goals — всё в ветке `mode='practice'`, mock не тронут).
-> [AUDIT.md](./AUDIT.md) — реестр аудита.
-> [REDESIGN.md](./REDESIGN.md) / [WORKLOG.md](./WORKLOG.md) — закрытые треки (редизайн / perf+sec).
-> [CLAUDE_AUDIT.md](./CLAUDE_AUDIT.md) — широкий аудит 2026-06-25 (закрыт).
-> **[AUDIT_2026-07-01.md](./AUDIT_2026-07-01.md) — АКТИВНЫЙ трек: объединённый аудит (Fan-out + Codex), 27 находок + R1;
-> ремедиация идёт по §7 (приоритет), статус каждой — в §10 (журнал закрытия).**
-> Новую работу начинать по явной просьбе пользователя.
->
-> **Старт сессии (аудит-трек).** Если пользователь НЕ поставил другую задачу — первым делом сориентируйся по
-> `AUDIT_2026-07-01.md` (§2 реестр, §7 приоритет, §10 журнал) и продолжи следующую ОТКРЫТУЮ находку по §7 (после §7 —
-> проходы §9). Явная другая просьба приоритетнее — не перехватывай несвязанные запросы. **Протокол закрытия (чтобы не
-> переделывать закрытое):** (1) перед фиксом подтверди, что находка ещё воспроизводится в коде (`file:line`); устарела →
-> помечай `N-A`/closed-as-stale с пруфом, код не трогай; (2) после закрытия допиши в §2 `→ ЗАКРЫТО <дата> commit <hash>`
-> и обнови строку в §10 (⬜→✅/🚫/N-A); (3) НИКОГДА не бери находку, помеченную в §10 как ✅ или N-A; (4) проверки перед
-> «закрыто»: `tsc`; payment/RLS/grading/migrations → `npm run verify`; логика → `npm test`; один гранулярный коммит на находку.
+Next.js (App Router) + Drizzle + Supabase. IELTS-платформа. UI/тесты — English; общение — Russian.
 
-## Source of truth
+## Docs
 
-**[BRIEF.md](./BRIEF.md)** is the single source of truth for product spec, stack, data model (§5),
-security (§6.1), and the phased roadmap (§9). Read it first; if code contradicts it, the brief wins.
-**[SCHEMA_NOTES.md](./SCHEMA_NOTES.md)** logs every resolved schema ambiguity (e.g. §5 `user` →
-`profile`). Content of tests is always English; only UI chrome is localized (next-intl, later). The
-user communicates in Russian.
+- **[BRIEF.md](./BRIEF.md)** — единственная истина: спека, стек, data-model §5, security §6.1, roadmap §9.
+  Читать первой; код противоречит — brief прав.
+- **[SCHEMA_NOTES.md](./SCHEMA_NOTES.md)** — провенанс + RLS-постура каждой таблицы, разрешённые
+  неоднозначности схемы (обновляется в lockstep с миграциями).
+- **[PRACTICE_PLAN.md](./PRACTICE_PLAN.md)** — трек «богатый Practice-режим R/L» (все фичи строго в ветке
+  `mode='practice'`, mock не тронут).
+- **[BACKLOG.md](./BACKLOG.md)** — продуктовый бэклог. История фаз — в git / BRIEF §9.
+
+Новую работу начинать по явной просьбе пользователя.
 
 ## Commands
 
 ```bash
 npm run dev            # Next.js dev server (localhost:3000)
-npm run build          # production build (also typechecks + lints the build graph)
+npm run build          # prod build (typechecks + lints the build graph)
 npx tsc --noEmit       # full typecheck (covers src/ + scripts/ that build skips)
-npm test               # vitest (unit tests for pure logic: grading, anti-cheat, parsers)
+npm test               # vitest — pure logic only (grading, anti-cheat, parsers). No e2e/browser.
 
 npm run docker:db      # local Postgres:16 on :5432 (for the verify gate)
-npm run verify         # ACCEPTANCE GATE — DB/RLS/migrations/health/auth-trigger
+npm run verify         # ACCEPTANCE GATE — DB/RLS/migrations/health/auth-trigger (DESTRUCTIVE, local-only)
 npm run db:migrate     # apply migrations (up) — targets DIRECT_URL (prod on Supabase)
 npm run db:status      # applied / pending
-npm run db:down        # revert all (down) — DESTRUCTIVE; host-guarded (see below)
-npm run db:up:local    # apply migrations to the LOCAL throwaway DB (VERIFY_DATABASE_URL)
-npm run db:down:local  # revert all on the LOCAL DB — for round-trips, never touches prod
+npm run db:up:local / db:down:local   # local throwaway DB round-trips (VERIFY_DATABASE_URL)
 npm run import <file>  # parse a test HTML file and persist it (status=draft)
 ```
 
-**Destructive-migration safety (make-it-impossible, not forbidden).** A remote `db:down`
-once wiped prod (the `_migrations`/`public` schema was dropped) because a hand-set
-`$env:DIRECT_URL` override silently emptied and fell through to the prod connection. Two
-structural guards now stand, so a rule in this file is a *complement*, not the barrier:
-- **Host-guard in `migrate.ts`** — `down`/`bootstrap` physically refuse a non-`localhost`
-  target unless `ALLOW_REMOTE_MIGRATE=1` is set consciously (mirrors `verify.ts`). `up`
-  stays unguarded (applying migrations to prod is legitimate).
-- **`db:*:local` scripts** — local round-trips target `VERIFY_DATABASE_URL` via a `--local`
-  flag, so you never hand-edit `DIRECT_URL` again. Use these for any local down/round-trip.
-- **Daily backup** — `.github/workflows/db-backup.yml` (`pg_dump` artifact) turns a wipe
-  into a restore; it is the only backup on Supabase's Free plan.
+**Definition of "closed" / verified:** `npx tsc --noEmit` always; `npm test` for logic;
+`npm run verify` for payment/RLS/grading/migration changes; `npm run build` before a prod push.
+`build`/`tsc` alone is not verification — exercise the changed behavior. Ad-hoc probes: throwaway
+`scripts/_*.ts` via `npx tsx`, deleted after (`scripts/` is gitignored).
 
-Verification = `npm run verify` (gate) + `npx tsc --noEmit` + `npm run build` + `npm test` (vitest
-covers pure logic only — no e2e/browser runner). Ad-hoc checks: throwaway `scripts/_*.ts` via
-`npx tsx`, then deleted.
+**Destructive-migration safety.** A remote `db:down` once wiped prod (hand-set `$env:DIRECT_URL` fell
+through to the prod connection). Guards now: `migrate.ts` `down`/`bootstrap` refuse a non-`localhost`
+target unless `ALLOW_REMOTE_MIGRATE=1` (`up` stays unguarded — prod migrations are legit); use
+`db:*:local` for round-trips, never hand-edit `DIRECT_URL`; daily `pg_dump` backup
+(`.github/workflows/db-backup.yml`) is the only backup on Supabase Free.
 
-## Two database access paths (critical)
+## Two database access paths (security core — BRIEF §6.1, anti-cheat §4.6)
 
-The app reaches Postgres **two different ways**, and choosing the right one is the core of the
-security model (BRIEF §6.1, anti-cheat §4.6):
+1. **Supabase client** (`src/lib/supabase/{server,client,middleware}.ts`, anon key) — pages / server
+   components / server actions, **user-scoped** reads+writes, **RLS enforced**. The only path that
+   touches the DB for a logged-in user.
+2. **Drizzle client** (`src/db/index.ts`, `DATABASE_URL`) — Postgres owner role, **bypasses RLS**,
+   **server-only**. Grading (reading the locked `answer_key`) and content import/persistence.
 
-1. **Supabase client** (`src/lib/supabase/{server,client,middleware}.ts`, anon key) — used in pages /
-   server components / server actions for **user-scoped** reads and writes. **RLS is enforced.** The
-   only path that touches the DB on behalf of a logged-in user.
-2. **Drizzle client** (`src/db/index.ts`, `DATABASE_URL`) — connects as the Postgres owner role,
-   which **bypasses RLS**. **Server-only.** Used for grading (reading the locked `answer_key`) and
-   content import/persistence.
+**`answer_key` must never reach the client.** RLS locks it (enabled + all grants revoked from
+anon/authenticated); the exam page never selects it; grading is server-only (client sends answers,
+never a score). **`attempt_review_snapshot`** (`0021`) holds correct answers + explanation/evidence
+captured at submit, locked the same way — `/result` reads it owner-path; a client read would bypass
+both the answer_key lock and the tier gate. New owner-state tables (`vocab_progress`,
+`mistake_resolution` `0040`, `saved_word` `0041`) follow this posture: RLS on, `REVOKE ALL` from
+client roles (kills Supabase default-priv grants), `GRANT SELECT` + `SELECT`-own policy, writes only
+via owner-path server actions. After deploying such a table, verify `pg_policies` on prod (local
+verify misses default-priv grants).
 
-**`answer_key` must never be fetched by the client.** RLS locks it (enabled + all grants revoked from
-anon/authenticated). The exam page deliberately does not select it; the result/review page reads
-explanations + evidence server-side via the Drizzle (owner) path, only after submit and only for the
-attempt's owner. Grading runs **only on the server** — the client sends answers, never a score.
-**`attempt_review_snapshot`** (D3, migration `0021`) holds the correct answers + explanation/evidence
-captured at submit and is locked the **same way** (RLS on, grants revoked) — `/result` reads it owner-path
-(falls back to the live key for legacy attempts); a client read there would bypass the answer_key lock
-**and** the tier gate, so never grant it to anon/authenticated.
+## Exam architecture — TWO runners
 
-## Exam architecture — TWO runners (in-progress migration)
+Catalog routes by `content_item.runner_html IS NOT NULL` (`has_runner`):
+`examHref = has_runner ? /app/exam/${id} : /app/reading/${id}`.
 
-The catalog routes each test by `content_item.runner_html IS NOT NULL` (`has_runner`):
-`app/app/practice/page.tsx` → `examHref = has_runner ? /app/exam/${id} : /app/reading/${id}`.
+1. **`/app/exam/[id]`** (target) — `ExamFrame.tsx` (iframe) + `runner/route.ts`. Serves sanitized
+   `runner_html` in an **opaque-origin sandbox** (`allow-scripts allow-modals`, **no**
+   `allow-same-origin` — departs from BRIEF §4.2 for fidelity but isolated). Parent accepts submit by
+   `e.source === iframe.contentWindow`; storage = in-memory polyfill (`runner-storage.ts`); CSP
+   deny-by-default + `connect-src 'none'`. This is the **mock** path.
+2. **`/app/reading/[id]`** (atomized) — `ExamRunner.tsx` + `src/components/exam/*`. Atomized questions
+   (+ optional verbatim `questions_html`). Serves the **practice** path and any test without
+   `runner_html`. Not dead code.
 
-1. **`/app/exam/[id]`** (NEW, target) — `app/app/exam/[id]/ExamFrame.tsx` (iframe) + `runner/route.ts`.
-   Serves the sanitized `runner_html` (the test's original HTML) in an **opaque-origin sandbox**
-   (`allow-scripts allow-modals`, без `allow-same-origin`) — P0 изоляция закрыта и проверена на Vercel
-   prod (AUDIT.md «Закрыто»).
-   Контракт: parent принимает сабмит по `e.source === iframe.contentWindow`; storage — in-memory
-   полифил (`runner-storage.ts`); CSP deny-by-default + `connect-src 'none'`. **Не возвращать
-   `allow-same-origin`** (departs from BRIEF §4.2 ради fidelity, но изолировано).
-2. **`/app/reading/[id]`** (LEGACY) — `app/app/reading/[id]/ExamRunner.tsx` + `src/components/exam/*`
-   (`QuestionHtml`/`QuestionNavigator`/`ExamTimer`/`AudioPlayer`). Atomized questions (+ optional
-   verbatim `questions_html`). For tests without `runner_html`.
-
-Both submit through the shared `app/app/reading/[id]/actions.ts` (`ensureAttempt`/`submitAttempt`) and
-`result/`. `src/components/exam/*` is **not dead code** — it's the legacy path, live while any test
-lacks `runner_html`.
+Both submit through shared `app/app/reading/[id]/actions.ts` (`ensureAttempt`/`submitAttempt`).
+Practice-only features live behind `mode='practice'` server actions in
+`app/app/reading/[id]/practice-actions.ts` — gate `owner ∧ status='in_progress' ∧ mode='practice'`
+directly in the WHERE; return the minimum to the client (a verdict / one question), never the key.
+Rating: only `mock` ∧ the absolute-first submitted attempt (`shouldRateAttempt`); practice is outside
+the daily cap. Mock path must not change when adding practice features.
 
 ## Migrations & schema
 
-- `src/db/schema.ts` (Drizzle) is the **typed source of truth** (**33 DB tables** as of migration
-  `0041_saved_word`; `verify.ts` `APP_TABLE_COUNT = 33` asserts the migrated count. schema.ts types
-  **32** — the legacy `topic` table lingers in the DB but its export was dropped as dead code, #26).
-  Latest migrations: `0040_mistake_resolution` (P9-rich mistake queue) + `0041_saved_word` (P11 personal
-  word bank) — both owner-read + server-only writes, mirroring `vocab_progress` (see SCHEMA_NOTES §0040/§0041).
-  Per-table provenance + RLS posture live in **SCHEMA_NOTES.md** (updated in lockstep).
-  The executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by a
-  custom up/down migrator (`scripts/migrate.ts`) with a `_migrations` bookkeeping table. **Keep
-  schema.ts and the SQL in lockstep when the model changes.**
-- Drizzle Kit `generate` is **forward-only** (the brief requires up/down) so it is NOT the migration
-  mechanism — only a reference (`/drizzle` is gitignored). Its first baseline emits a bogus
-  `auth.users` CREATE; ignore it.
-- `auth.users` is referenced via `authUsers` from `drizzle-orm/supabase` so it's treated as external.
-  `profile.id` is both PK and FK → `auth.users.id`. A SECURITY DEFINER trigger `on_auth_user_created`
-  (migration `0002_auth`) creates the `public.profile` row on signup.
+- `src/db/schema.ts` (Drizzle) is the **typed source of truth**: **33 DB tables** as of
+  `0041_saved_word` (`verify.ts` `APP_TABLE_COUNT = 33` asserts it; schema.ts types **32** — the legacy
+  `topic` table lingers in the DB, its export dropped as dead code). Keep schema.ts and the SQL in
+  **lockstep**; per-table provenance + RLS in **SCHEMA_NOTES.md**.
+- Executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by
+  `scripts/migrate.ts` (custom up/down, `_migrations` bookkeeping). Drizzle Kit `generate` is
+  forward-only → **not** the mechanism, only a reference (`/drizzle` gitignored; its baseline emits a
+  bogus `auth.users` CREATE — ignore).
+- `auth.users` is external (`authUsers` from `drizzle-orm/supabase`); `profile.id` is PK **and** FK →
+  `auth.users.id`. SECURITY DEFINER trigger `on_auth_user_created` (`0002`) creates the `profile` row
+  on signup. **Apply a migration immediately after pushing code that reads its new columns** — the
+  Vercel↔Supabase window otherwise 500s prod.
 
 ## Local vs Supabase, and the verify gate
 
-- `scripts/bootstrap-supabase-local.sql` **emulates** Supabase primitives (roles
-  `anon`/`authenticated`/`service_role`, the `auth` schema, `auth.users`, `auth.uid()`) so migrations
-  and the gate run against a plain Postgres. Local-only — **never run it against the real Supabase**
-  (it would overwrite `auth.uid()`).
-- `npm run verify` (`scripts/verify.ts`) is **DESTRUCTIVE** — it drops/recreates the `public` schema.
-  Runs against `VERIFY_DATABASE_URL` (local docker) and **refuses any non-local host** unless
-  `VERIFY_ALLOW_REMOTE=1`. Never point it at Supabase.
+- `scripts/bootstrap-supabase-local.sql` **emulates** Supabase primitives (roles, `auth` schema,
+  `auth.users`, `auth.uid()`) so migrations + gate run on plain Postgres. Local-only — **never** run it
+  against real Supabase (overwrites `auth.uid()`).
+- `npm run verify` (`scripts/verify.ts`) is **DESTRUCTIVE** (drops/recreates `public`). Runs against
+  `VERIFY_DATABASE_URL` (local docker) and refuses a non-local host unless `VERIFY_ALLOW_REMOTE=1`.
 
 ## Environment
 
-`.env.local` (gitignored; `.env.example` is the template). Supabase uses **two** connection strings:
-- `DATABASE_URL` — transaction pooler (`:6543`), app runtime; the Drizzle client sets `prepare: false`
-  for pgbouncer.
+`.env.local` (gitignored; `.env.example` is the template). Two Supabase connection strings:
+- `DATABASE_URL` — transaction pooler (`:6543`), app runtime; Drizzle sets `prepare: false` for pgbouncer.
 - `DIRECT_URL` — session pooler (`:5432`); migrations prefer it.
-- `VERIFY_DATABASE_URL` — local docker Postgres for the gate.
-- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — browser auth.
+- `VERIFY_DATABASE_URL` — local docker for the gate.
 
-DB passwords with special chars (`? / #`) must be **percent-encoded** in the URLs. `src/env.ts`
-fail-fasts if a required server var is missing.
+DB passwords with `? / #` must be **percent-encoded** in the URLs. `src/env.ts` fail-fasts on a missing
+required server var. **`NEXT_PUBLIC_*` must NOT be marked Sensitive in Vercel** — Sensitive vars aren't
+inlined at build, so a public origin/key reads as null at runtime.
 
 ## Import pipeline (`src/lib/import/`)
 
-Deterministic, **no LLM, no eval** (BRIEF §4.2). `parse-test.ts` uses cheerio for the markup and
-`node:vm` (isolated global-free context, `timeout` + a `MAX_VM_INPUT` size-gate against OOM, #20) to
-read the embedded JS data objects (`correctAnswers`, `acceptableAnswers`, `mcqGroups`,
-`questionTypes`, `explanations`, `evidence`). `question-types.ts`
-maps inconsistent source labels → the fixed canon enum. The answer key is routed to one of three modes
-by which data object holds it: `mcq_set` / `text_accept` / `exact`. `persist.ts` writes the
-`ParsedTest` into `content_item`/`passage`/`question`/`answer_key` in one transaction, idempotent per
-source file (refuses a destructive re-import when attempts exist → `RegradeRequiredError`). Dedicated
-parsers: `parse-listening.ts`, `parse-reading-full.ts` (40Q band scale). All 9 real Reading files +
-Listening parse every question with a key.
+Deterministic, **no LLM, no eval** (BRIEF §4.2). `parse-test.ts`: cheerio for markup + `node:vm`
+(isolated, `timeout` + `MAX_VM_INPUT` OOM-gate) to read embedded JS data objects (`correctAnswers`,
+`acceptableAnswers`, `mcqGroups`, `questionTypes`, `explanations`, `evidence`). `question-types.ts`
+maps source labels → the canon enum. Answer key routed by data object to `mcq_set` / `text_accept` /
+`exact`. `persist.ts` writes `content_item`/`passage`/`question`/`answer_key` in one transaction,
+idempotent per source file (refuses destructive re-import when attempts exist → `RegradeRequiredError`).
+Dedicated parsers: `parse-listening.ts`, `parse-reading-full.ts` (40Q band scale). Runner import
+(`runner/import-runner.ts`) sanitizes + persists `runner_html`; source HTML backed up to the private
+`source-html` bucket. Telegram bot (`app/api/telegram/`) is the phone-side import path (owner-path,
+whitelist, prod secret-gated).
 
-## Scripts gotcha
+## AI Writing/Speaking (Phase 3, env-gated)
 
-Scripts run via `tsx` (ESM). `tsx` resolves the `@/` path alias from `tsconfig.json` (verified), so
-scripts may use `@/...` imports — though the existing scripts (`verify.ts`, `migrate.ts`) use relative
-imports by convention. Import the DB client via `await import()` **after** `dotenv` loads, since
-`src/env.ts` validates env at module load (a top-level `@/db` import would trigger that validation too
-early).
+Live behind env flags (`writingFeatureEnabled`/`speakingFeatureEnabled` — need model+key+internal-
+secret+public-origin all set, else screens `redirect("/app/practice")`). Tables `writing_*`/`speaking_*`
+(`0023`–`0031`). Async eval: store → internal secret-gated route → poll; Gemini Flash (audio-native for
+Speaking). Tiers: Writing = Premium, Speaking = Ultra (sub-tier gets one preview). Raw model output
+(`*_feedback_debug`) is hard-locked (RLS + revoke, asserted by `verify`). Core R/L stays LLM-free.
 
-## Gotchas — dev server on Windows
+## Gotchas
 
-- **`TaskStop` does NOT kill the child `next`** → zombies on :3000/:3001/:3002, new dev jumps to the
-  next port, browser lands on a stale one (CSS 404 / 500 / bare Times). Fix: `netstat -ano | grep :300`
-  → `taskkill //PID <pid> //F //T` for all, then one `npm run dev`. After switching branches / `rm .next`,
-  restart dev. **Read the real port from the log** ("using available port 3001") and eyeball the page in
-  a real browser — a `fetch` HTML probe does not prove styles.
-- **`build` corrupts a live `dev`:** `npm run build` while `npm run dev` is up clobbers the shared
-  `.next` → dev dies with `Cannot find module './vendor-chunks/next.js'` (500s). While the user has the
-  site open, do NOT run `build` over dev (only `npx tsc --noEmit`). For a prod measurement: kill dev →
-  `rm -rf .next` → `npm run build` → `npm start`.
-
-## Status (compressed — detail in git / BRIEF §9 / SCHEMA_NOTES / BACKLOG)
-
-> Phase map: `0 → 1 → 2 (2A→2D) → launch hardening → 3 (active, env-gated)`. Each migration `000N` marks a
-> sub-stage. All of the below is **done, on `main`, applied to Supabase** unless noted.
-
-- **✅ Phase 0** — schema + up/down migrations, dual DB access, `on_auth_user_created` trigger, local
-  Supabase emulation + verify gate.
-- **✅ Phase 1** — auth, deterministic import + `/admin` upload/publish, catalog, exam (server-stamped
-  attempt, autosave/resume, idempotent submit, server-trusted timing), server grading + per-type
-  breakdown, dashboard. Listening + Full Reading parsers (band scale); all real files parse fully.
-- **✅ Phase 2** — 2A rating+leaderboard (`0003`), 2B badges (`0004`), 2C referrals (`0005`), 2D
-  tiers+payment (`0006`). Tier gating `src/lib/tiers.ts`; payment webhook is the sole grant path
-  (entitlement from the trusted `pending` row, not the body). Accepted gaps → SCHEMA_NOTES 2C/2D
-  (mirror AUDIT.md "осознанно отложено").
-- **✅ Launch hardening** — PostHog funnel + error-monitoring (self-hosted `error_log` sink via
-  `logError()` → `/admin/errors`, `0034`; Sentry key-optional/fail-open alongside), submit velocity
-  throttle (`src/lib/anti-cheat.ts`), in-app notifications, re-import data-loss guard, one-in_progress
-  index (`0007`), Telegram content-import bot (`app/api/telegram/`, owner-path, whitelist, prod
-  secret-gated #4).
-- **✅ Волна 1** — paywall, onboarding, band states, EN + `/pricing`, anti-bot seam, Telegram share.
-  Detail → BACKLOG.md.
-- **✅ Frontend redesign «bando»** — all `/app` screens + landing + auth re-skinned (inline styles +
-  CSS tokens, zero new deps), exam component kit, a11y/perf pass, mobile/responsive, /impeccable tail.
-  Detail → REDESIGN.md. **Responsive invariant:** breakpoint-switched props (display/grid/width) live
-  in CSS classes, never inline (inline beats media queries).
-- **✅ Progress hub + Vocabulary (2026-07-06)** — League+Badges слиты в `/app/progress` (route-табы
-  `?tab=league|badges`, старые URL 307-редиректят, top-nav Home/Practice/Progress/Vocabulary).
-  Vocabulary: `/app/vocabulary` (SM-2 flashcards, self-graded, ВНЕ rating/leaderboard-контура),
-  миграция `0037` (deck/card/progress; контент published-read, прогресс owner-SELECT + write-lockdown —
-  запись только server-action owner-path), детерминированный JSON-импорт (`npm run import:vocab`,
-  аддитивный upsert — реимпорт не трогает SRS-прогресс) + `/admin/vocabulary`, daily-new-cap для basic
-  (`VOCAB_DAILY_NEW_LIMIT`), Telegram-импорт деков (`.json` документом).
-- **✅ Vocabulary-апгрейд (2026-07-06, вечер)** — на `/app/vocabulary`: план-панель (due today /
-  7-дневный forecast / банк слов mastered-learning-new / оценка сессии), приватный vocab-стрик + цель
-  (`VOCAB_DAILY_GOAL`, деривация из `last_reviewed_at`, СТРОГО отдельно от `profile.current_streak`),
-  mastery-состояния (`interval_days ≥ 21`), rescue-очередь трудных слов (`/app/vocabulary/rescue`),
-  browse-режим (`[deckId]/browse`, read-only), TTS (Web Speech, скрыт без en-голоса), weak-type rail
-  (рекомендация дека по слабейшему типу из `per_type_breakdown` × `vocab_deck.question_types`).
-  Сессия: 4 режима — flashcards / type / **paraphrase** (synonym→word, дистракторы из слов очереди,
-  детерминированно `src/lib/vocab/paraphrase.ts`) / **completion** (gap-sentence, сервер-судья по
-  `accepted_answers`, в клиент они НЕ уходят) + **easy-grade** только для новых карт (сервер
-  даунгрейдит по `gate.isNew`). Миграция `0038` — enrichment-поля (nullable, RLS-постура не менялась).
-  Дашборд `/app`: vocab-модуль (due+стрик, `src/lib/vocab/summary.ts`). Cron
-  `/api/cron/vocab-due-reminders` (06:00 UTC, дедуп per user/day) — 5-й слот в `vercel.json`.
-  Premium-деки (Band 8 Collocations / Speaking Idioms & Register) импортированы **draft** —
-  публикация через `/admin/vocabulary`. Инварианты на месте: vocab вне rating/leaderboard, прогресс
-  только server-action owner-path, реимпорт аддитивный, импорт LLM-free.
-
-### ⛔ Blocked / pending (needs external input)
-- **Anti-bot on signup** — live with **zero deps**: signup honeypot (`anti-cheat.ts`
-  `isHoneypotTripped`, hidden decoy field) + per-IP velocity cap (`0022`). Turnstile seam
-  (`src/lib/anti-bot/`, fail-open) is now **optional**, needs Cloudflare keys. Email-verify still TODO.
-- **Payments** — webhook is fail-closed in prod; `verifyWebhook` is a generic HMAC placeholder — real
-  Payme/Click/Uzum signatures + merchant keys are the launch-blocker (#9/D1).
-- **Weekly digest / email** — `notification` table + in-app centre exist; digest jobs + email provider TODO.
-- **i18n** — deferred (EN at launch per §10).
-
-### ✅ Closed tracks (detail in git / [WORKLOG.md](./WORKLOG.md) / [REDESIGN.md](./REDESIGN.md))
-- **Practice Hub** — top-level Reading/Listening nav свёрнут в один `Practice` (`/app/practice`) с
-  continuation-героем и skill-карточками; каталоги `/app/reading` + `/app/listening` живы как routes.
-- **Аудит** — Codex-аудит + from-scratch sweep (7 осей, adversarial-verify); все находки закрыты,
-  [AUDIT.md](./AUDIT.md) реестр пуст. Ядро (answer_key / RLS / tier / anti-cheat / injection) подтверждено
-  чистым в коде.
-- **Аудит 2026-07-01** ([AUDIT_2026-07-01.md](./AUDIT_2026-07-01.md), Fan-out + Codex) — **код-трек закрыт**:
-  26/27 находок ✅ (миграции `0032`/`0033`/`0034` на проде); открыт только `#9`/`D1` (payment-подписи,
-  merchant-ключи). Осталось не-кодовое: a11y живой прогон (§9.1, браузер), finder-sweep (§9.2). Журнал
-  закрытий — §2/§10 там же.
-- **Perf/lag `/app`** — срезаны серийные server-render round-trips: AppShell header-hoist, leaderboard
-  (+ viewer-row), exam/reading START (server-only access-модуль `src/lib/exam/access.ts`), Result
-  (correlated subselects + `answer_key` EXISTS-gate), getPublishedTests parallelize. Каждое изменение
-  держит инварианты: auth, RLS, server-only grading, `answer_key` never client-side, tier gating,
-  idempotent submit; `getProfile`/`getUser` остаются `cache()`-wrapped. Замер — на prod через
-  Server-Timing (из статичного checkout латентность не мерится).
-
-### ✅ Phase 3 — AI Writing/Speaking (§4.10) — ACTIVE, env-gated
-Built and live behind an env flag. Runs on real `writing_task`/`speaking_task` tables (+ submission/
-feedback/feedback_debug, migrations 0023–0031) — the legacy `topic` table + `topic_skill` enum still
-exist but are unused. Async eval: store → internal secret-gated API-route → poll; Gemini Flash
-(audio-native for Speaking). Enabled ONLY when model+key+internal-secret+public-origin are all set
-(`writingFeatureEnabled`/`speakingFeatureEnabled`); otherwise the screens `redirect("/app/practice")`.
-Tiers: Writing = Premium, Speaking = Ultra (sub-tier gets one preview). Core R/L stays LLM-free (§4.2).
-Submit gate: task `published` (all users) + `tier_required` only for at-tier users (sub-tier = the
-free-preview lane) + UUID screen (owner-path); raw output (`*_feedback_debug`) hard-locked (RLS +
-revoke; asserted by `npm run verify`).
-
-> Branch per phase, merge to `main` when a phase is done.
+- **`tsx` + app-graph imports:** scripts importing app modules need
+  `NODE_OPTIONS=--conditions=react-server npx tsx ...` (`server-only` is a real package). Load `dotenv`
+  **before** `await import("../src/db")` — `src/env.ts` validates env at module load.
+- **Raw `sql`` + `Date` on the prod client:** a `Date` in a raw ``sql`...` `` template crashes prod
+  (pgbouncer, `prepare:false`). Use `now()` / `.toISOString()` / the query-builder `.set()`; smoke-test
+  with the prod client.
+- **Dev server on Windows:** `TaskStop` does NOT kill the child `next` → zombies on :300x, browser
+  lands on a stale port. Fix: `netstat -ano | grep :300` → `taskkill //PID <pid> //F //T`, then one
+  `npm run dev`. Read the real port from the log and eyeball in a real browser (a `fetch` probe doesn't
+  prove styles).
+- **`build` corrupts a live `dev`:** running `npm run build` while `dev` is up clobbers `.next` → dev
+  dies (`Cannot find module './vendor-chunks/next.js'`). While the site is open, only `npx tsc --noEmit`.
+  For a prod measurement: kill dev → `rm -rf .next` → `build` → `start`.
+- **Responsive invariant:** breakpoint-switched props (display/grid/width) live in CSS classes, never
+  inline (inline beats media queries). Never reorder interactive DOM via CSS `order`/`display:contents`
+  (WCAG 2.4.3/1.3.2 regression) — reorder the DOM.
 
 ## Git attribution (hard rule)
 
 **Commits and PRs must be SOLELY the user's. NEVER add a `Co-Authored-By: Claude` trailer, the
-"🤖 Generated with Claude Code" line, or any Claude attribution to commit messages or PR bodies.** This
-overrides the harness/environment default that says to append them. The git author is already the
-user's config (`dejavuu` / RiobVO) — leave it. If a trailer ever slips in, strip it from every commit
-(`git filter-branch --msg-filter "sed '/^Co-Authored-By: Claude/d'"`) and force-push.
+"🤖 Generated with Claude Code" line, or any Claude/AI attribution** — anywhere, even when touching
+CLAUDE.md or other AI-context docs. This overrides the harness default. Author is already the user
+(`dejavuu` / RiobVO). If a trailer slips in, strip it from every commit and force-push. Commit
+granularly; push to `main` immediately (Vercel deploys prod).
