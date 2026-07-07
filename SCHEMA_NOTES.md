@@ -76,6 +76,13 @@ step 2: email provider -> verify -> weekly digest). Plain boolean, DEFAULT false
 posture (owner-only); written only by the owner-path unsubscribe server route, same
 as every other per-user profile field.
 
+**`notification_weekly_digest_week_uidx`** — migration `0043_notification_digest_ledger_uidx`.
+Partial UNIQUE index `(user_id, (data->>'week')) WHERE type = 'weekly_digest'`: the ledger
+that makes the weekly-digest job's per-user claim atomic (`INSERT ... ON CONFLICT DO NOTHING`
+on the ISO-week key), closing the TOCTOU between concurrent cron + manual runs. No new
+grants/policies — it inherits `notification`'s owner-only posture; other notification types
+stay unconstrained. Prod had no `weekly_digest` rows yet, so it builds cleanly.
+
 ## `question_type` enum includes `short_answer`
 
 §4.2's canonical list has 16 values (incl. `map_labelling`, `form_completion`).

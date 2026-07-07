@@ -546,6 +546,13 @@ export const notification = pgTable(
     index("notification_user_unread_idx")
       .on(t.userId)
       .where(sql`${t.readAt} is null`),
+    // Ledger-уникальность weekly digest (migration 0043): атомарный claim одного
+    // письма на (user, ISO-week) через INSERT ... ON CONFLICT DO NOTHING. Partial по
+    // type — прочие типы уведомлений не ограничены. Закрывает TOCTOU параллельных
+    // прогонов (leftJoin+isNull не атомарен с последующей вставкой).
+    uniqueIndex("notification_weekly_digest_week_uidx")
+      .on(t.userId, sql`((${t.data}->>'week'))`)
+      .where(sql`${t.type} = 'weekly_digest'`),
   ],
 );
 
