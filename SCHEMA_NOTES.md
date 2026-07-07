@@ -70,6 +70,12 @@ For local verification, `auth.users` is emulated by
 `scripts/bootstrap-supabase-local.sql` (never part of the app migrations; on real
 Supabase the table already exists).
 
+**`profile.weekly_digest_opt_out`** — migration `0042_email_opt_out` (BRIEF §11/§12.1
+step 2: email provider -> verify -> weekly digest). Plain boolean, DEFAULT false
+(opted in). No new grants/policies: the column inherits `profile`'s existing RLS
+posture (owner-only); written only by the owner-path unsubscribe server route, same
+as every other per-user profile field.
+
 ## `question_type` enum includes `short_answer`
 
 §4.2's canonical list has 16 values (incl. `map_labelling`, `form_completion`).

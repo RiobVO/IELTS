@@ -185,6 +185,9 @@ export const profile = pgTable(
     // consent given; the server gates createSpeakingSubmission/upload on this
     // being non-null (voice = biometrics). One timestamp; versioning is a non-goal.
     recordingConsentAt: timestamp("recording_consent_at", { withTimezone: true }),
+    // Weekly digest opt-out (migration 0042, BRIEF §11/§12.1). false = opted in
+    // (default); flipped only by the owner-path unsubscribe route.
+    weeklyDigestOptOut: boolean("weekly_digest_opt_out").notNull().default(false),
   },
   (t) => [
     index("profile_region_id_idx").on(t.regionId),
