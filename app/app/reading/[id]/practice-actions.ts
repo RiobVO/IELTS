@@ -32,6 +32,8 @@ export interface RevealResult {
 /** Ключ ОДНОГО вопроса practice-попытки после всех гейтов (внутр., не сериализуется). */
 interface PracticeKeyRow {
   mode: AnswerMode;
+  /** qtype нужен серверному гейту locateEvidence (para≈ответ для matching-типов). */
+  qtype: string;
   accept: string[];
   explanation: string | null;
   evidence: unknown;
@@ -73,6 +75,7 @@ async function loadPracticeKey(
   const [row] = await db
     .select({
       mode: answerKey.mode,
+      qtype: question.qtype,
       accept: answerKey.accept,
       explanation: answerKey.explanation,
       evidence: answerKey.evidence,
@@ -90,10 +93,47 @@ async function loadPracticeKey(
 
   return {
     mode: row.mode,
+    qtype: row.qtype,
     accept: Array.isArray(row.accept) ? (row.accept as string[]) : [],
     explanation: row.explanation ?? null,
     evidence: row.evidence,
   };
+}
+
+/**
+ * qtype, где номер/буква абзаца ≈ САМ ответ: локатор ДО reveal раскрыл бы ключ в
+ * обход (P2b-2). matching_info — вопрос буквально «в каком абзаце эта информация»
+ * (para = ответ); matching_headings — заголовок абзаца и есть выбираемый ответ. Для
+ * них locateEvidence ВСЕГДА null. Для tfng/completion/mcq знание абзаца лишь
+ * подсказывает «где смотреть», но не даёт ответ — там локатор допустим.
+ */
+const LOCATE_BLOCKED_QTYPES = new Set(["matching_info", "matching_headings"]);
+
+/**
+ * P2b-2 — локатор ДО reveal («Where to look»). Тот же гейт, что у revealQuestion
+ * (owner ∧ in_progress ∧ practice в WHERE через loadPracticeKey), но отдаёт МИНИМУМ:
+ * ОДНО поле `para` ОДНОГО вопроса — куда смотреть, не что отвечать. Строго слабее
+ * P7-reveal (accept/explanation/snippet не сериализуются). Серверный qtype-гейт
+ * (см. LOCATE_BLOCKED_QTYPES) и отсутствие evidence.para → null. Best-effort → null.
+ */
+export async function locateEvidence(
+  attemptId: string,
+  questionNumber: number,
+): Promise<{ para: string } | null> {
+  try {
+    const key = await loadPracticeKey(attemptId, questionNumber);
+    if (!key) return null;
+    // qtype-гейт на СЕРВЕРЕ: для matching_info/matching_headings para ≡ ответ.
+    if (LOCATE_BLOCKED_QTYPES.has(key.qtype)) return null;
+    const raw = key.evidence as { para?: unknown } | null;
+    if (raw && typeof raw === "object" && typeof raw.para === "string" && raw.para) {
+      return { para: raw.para };
+    }
+    return null;
+  } catch (e) {
+    console.error("locateEvidence failed", e);
+    return null;
+  }
 }
 
 /**

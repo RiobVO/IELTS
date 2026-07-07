@@ -1,9 +1,9 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
-import { annotation } from "@/db/schema";
+import { annotation, answerKey, question } from "@/db/schema";
 import { ModeStart } from "@/components/exam/ModeStart";
 import {
   type AttemptMode,
@@ -158,7 +158,14 @@ export default async function ReadingTestPage({
   // Открытие/resume attempt и чтение аннотаций пользователя независимы → параллелим
   // (annotations был отдельным RT-слоем ПОСЛЕ старта). Доступ уже сгейчен выше
   // (enforceAccess), поэтому startAttempt не перечитывает content_item/profile.
-  const [{ attemptId, answers: savedAnswers, mode: attemptMode }, annotations] = await Promise.all([
+  // P2b-2 — какие вопросы имеют локатор ДО reveal. Только practice-reading (mock и
+  // listening — без; listening покрытие evidence.para = 0). owner-path (Drizzle bypass
+  // RLS), НО в клиент уходит лишь number[] — булево «есть куда посмотреть», НЕ сам para
+  // и НЕ ключ. Строго слабее уже существующего P7-reveal (тот отдаёт para после
+  // reveal). qtype-гейт зеркалит locateEvidence (matching_info/headings: para≈ответ).
+  const locatorEligible = mode === "practice" && !audioSrc;
+
+  const [{ attemptId, answers: savedAnswers, mode: attemptMode }, annotations, locatableRows] = await Promise.all([
     startAttempt(user.id, id, mode),
     // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
     // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
@@ -175,6 +182,21 @@ export default async function ReadingTestPage({
       .from(annotation)
       .where(and(eq(annotation.userId, user.id), eq(annotation.contentItemId, id)))
       .orderBy(asc(annotation.createdAt)),
+    locatorEligible
+      ? db
+          .select({ number: question.number })
+          .from(question)
+          .innerJoin(answerKey, eq(answerKey.questionId, question.id))
+          .where(
+            and(
+              eq(question.contentItemId, id),
+              // evidence.para присутствует и непустой (мягче: NULL и '' отсекаются разом).
+              sql`${answerKey.evidence} ->> 'para' <> ''`,
+              notInArray(question.qtype, ["matching_info", "matching_headings"]),
+            ),
+          )
+          .orderBy(asc(question.number))
+      : Promise.resolve([] as { number: number }[]),
   ]);
 
   return (
@@ -200,6 +222,9 @@ export default async function ReadingTestPage({
       // P15 — deep-link авто-скролл к вопросу, только practice (в mock проп не
       // передаём: mock ходит iframe-раннером, атомизации тут нет).
       focus={attemptMode === "practice" ? focusNumber : undefined}
+      // P2b-2 — номера вопросов с локатором ДО reveal. Практис-reading; для mock/
+      // listening проп undefined → кнопка «Where to look?» не рендерится.
+      locatable={attemptMode === "practice" && !audioSrc ? locatableRows.map((r) => r.number) : undefined}
     />
   );
 }
