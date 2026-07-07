@@ -23,9 +23,9 @@
  * The `badge.criteria` jsonb is a discriminated union on `type` shared verbatim
  * with the seed (Agent A) — see the SHARED CRITERIA CONTRACT in the task brief.
  */
-import { and, eq, gt, lt, or } from "drizzle-orm";
+import { and, eq, gt, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { attempt, badge, profile, userBadge } from "@/db/schema";
+import { attempt, badge, mistakeResolution, profile, userBadge } from "@/db/schema";
 
 export interface AwardedBadge {
   id: string;
@@ -54,9 +54,10 @@ type PerTypeBreakdown = Record<string, { correct: number; total: number }>;
 
 /** Compute every stat a criteria can need, once, from the owner DB path. */
 export async function computeStats(userId: string): Promise<UserStats> {
-  // profile и attempts независимы — один round-trip вместо двух (горячий путь).
-  // first_place ниже зависит от p, поэтому остаётся последовательным после.
-  const [[p], attempts] = await Promise.all([
+  // profile, attempts и closedByQtypeRows независимы — один round-trip вместо
+  // трёх последовательных (горячий путь). first_place ниже зависит от p,
+  // поэтому остаётся последовательным после.
+  const [[p], attempts, closedByQtypeRows] = await Promise.all([
     db
       .select({
         rating: profile.rating,
@@ -74,10 +75,27 @@ export async function computeStats(userId: string): Promise<UserStats> {
       })
       .from(attempt)
       .where(and(eq(attempt.userId, userId), eq(attempt.status, "submitted"))),
+    // W2-5 study-loop badges (mistakes_closed / weak_type_cleared): резолюции
+    // ошибок по qtype, из которых считаются total и per-qtype максимум.
+    db
+      .select({
+        qtype: mistakeResolution.qtype,
+        n: sql<number>`count(*)::int`,
+      })
+      .from(mistakeResolution)
+      .where(eq(mistakeResolution.userId, userId))
+      .groupBy(mistakeResolution.qtype),
   ]);
 
   let hasPerfect = false;
   const perQtype = new Map<string, QtypeAgg>();
+  const closedByQtype = new Map<string, number>();
+  let closedMistakesTotal = 0;
+  for (const r of closedByQtypeRows) {
+    const n = Number(r.n) || 0;
+    closedByQtype.set(r.qtype, n);
+    closedMistakesTotal += n;
+  }
 
   for (const a of attempts) {
     const breakdown = (a.perTypeBreakdown as PerTypeBreakdown | null) ?? {};
@@ -140,6 +158,8 @@ export async function computeStats(userId: string): Promise<UserStats> {
     hasPerfect,
     perQtype,
     isFirstPlaceGlobalAllTime,
+    closedMistakesTotal,
+    closedByQtype,
   };
 }
 
