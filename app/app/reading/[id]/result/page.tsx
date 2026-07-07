@@ -18,6 +18,7 @@ import {
   stripHtml,
   type DebriefData,
 } from "@/lib/result/debrief";
+import { detectFormatLosses } from "@/lib/result/format-loss";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import { qtypeDescription, qtypeLabel } from "@/lib/labels";
@@ -94,6 +95,7 @@ export default async function ResultPage({
       .select({
         userId: attempt.userId,
         contentItemId: attempt.contentItemId,
+        mode: attempt.mode,
         answers: attempt.answers,
         submittedAt: attempt.submittedAt,
         timeUsedSeconds: attempt.timeUsedSeconds,
@@ -217,6 +219,10 @@ export default async function ResultPage({
   const att = attRows[0];
   // Ownership — пользователь видит разбор только своей попытки на этот тест.
   if (!att || att.userId !== user.id || att.contentItemId !== id) notFound();
+
+  // P12: practice — learning-фрейм (без band-давления/percentile/share); mock
+  // рендерится как раньше, байт-в-байт (единственная ветка, где что-то меняется).
+  const isPractice = att.mode === "practice";
 
   const fullReview = profile
     ? hasFullReview(
@@ -403,6 +409,20 @@ export default async function ResultPage({
   // promptHtml уже загружен в liveRows (безусловный запрос выше, не зависит от
   // snapshot) — переиспользуем вместо нового round-trip.
   const promptByNumber = new Map(liveRows.map((r) => [r.number, r.promptHtml]));
+  // P13 (practice-only): «потерял N на формате» — детерминированный разбор поверх
+  // уже посчитанного result.perQuestion + промптов, никаких новых запросов и
+  // ничего из answer_key. Считаем только для practice, чтобы mock не тратил
+  // работу на данные, которые никогда не рендерятся.
+  const formatLoss: DebriefData["formatLoss"] = isPractice
+    ? detectFormatLosses(
+        result.perQuestion.map((q) => ({
+          number: q.number,
+          promptHtml: promptByNumber.get(q.number) ?? "",
+          givenRaw: q.given,
+          isCorrect: q.correct,
+        })),
+      )
+    : [];
   const replayCandidates: DebriefData["replay"] = !fullReview
     ? []
     : result.perQuestion
@@ -444,6 +464,7 @@ export default async function ResultPage({
     totalQuestions: result.total,
     catalogBase,
     retryHref,
+    isPractice,
     score: {
       raw: result.rawScore,
       total: result.total,
@@ -464,7 +485,9 @@ export default async function ResultPage({
       drillHref: focusQType && focusCostMarks > 0 ? `${catalogBase}?q_type=${encodeURIComponent(focusQType)}` : null,
       retryHref,
     },
-    share: profile?.referral_code ? { refCode: profile.referral_code, headline: shareHeadline } : null,
+    // P12: share-CTA — часть viral/rating-контура, скрыт для practice.
+    share: !isPractice && profile?.referral_code ? { refCode: profile.referral_code, headline: shareHeadline } : null,
+    formatLoss,
   };
 
   return (

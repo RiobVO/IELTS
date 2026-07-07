@@ -270,6 +270,9 @@ export interface DebriefData {
   totalQuestions: number;
   catalogBase: string;
   retryHref: string;
+  /** attempt.mode === 'practice' (P12) — Hero/Dock скрывают band-вердикт и
+   *  переходят на learning-тон; mock (false) рендерится как раньше, байт-в-байт. */
+  isPractice: boolean;
 
   score: {
     raw: number;
@@ -323,4 +326,8 @@ export interface DebriefData {
   };
 
   share: { refCode: string; headline: string } | null;
+
+  /** Practice-only (P13) — вопросы, неверные из-за нарушения ФОРМАТА промпта
+   *  (лимит слов / число выборов), не из-за смысла ответа. Пусто для mock. */
+  formatLoss: { number: number; reason: "word-limit" | "choice-count" }[];
 }
