@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
+import { eq, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { savedWord } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { getVocabCatalog, getVocabOverview, type VocabDeckCard, type VocabOverview } from "@/lib/vocab/queries";
 import { getWeakTypeDeckRecommendation, type WeakTypeDeckRecommendation } from "@/lib/vocab/recommend";
@@ -30,11 +33,20 @@ const TIER_LABEL: Record<string, string> = {
  */
 export default async function VocabularyPage() {
   const user = await requireUser();
-  const [overview, decks, weakTypeReco] = await Promise.all([
+  const [overview, decks, weakTypeReco, savedAgg] = await Promise.all([
     getVocabOverview(user.id),
     getVocabCatalog(user.id),
     getWeakTypeDeckRecommendation(user.id),
+    // P11 — счётчики личного словаря (owner-path; фильтр user_id явно, как в vocab-queries).
+    db
+      .select({
+        total: sql<number>`count(*)::int`,
+        due: sql<number>`(count(*) filter (where ${savedWord.dueAt} <= now()))::int`,
+      })
+      .from(savedWord)
+      .where(eq(savedWord.userId, user.id)),
   ]);
+  const savedWords = savedAgg[0] ?? { total: 0, due: 0 };
   // Уровень под целевой band (0039) — для бейджа «Recommended» на совпавшей секции.
   const recommendedLevel = bandToCefr(overview.targetBand);
 
@@ -54,6 +66,8 @@ export default async function VocabularyPage() {
             we bring back what you forget later.
           </p>
         </section>
+
+        <SavedWordsCard total={savedWords.total} due={savedWords.due} />
 
         {decks.length > 0 && <PlanPanel overview={overview} ctaHref={pickReviewTarget(decks, overview)} />}
 
@@ -92,6 +106,29 @@ function pickReviewTarget(decks: VocabDeckCard[], overview: VocabOverview): stri
     if (withNew) return `/app/vocabulary/${withNew.id}`;
   }
   return null;
+}
+
+/* ------------------------------- My words -------------------------------- */
+
+/** P11 — вход в личный словарь (saved words из пассажей). Слим-карта-ссылка со
+ *  счётчиками; при пустом словаре — подсказка, как добавлять слова. */
+function SavedWordsCard({ total, due }: { total: number; due: number }) {
+  return (
+    <Link href="/app/vocabulary/my-words" className="vc-mywords" style={S.myWords}>
+      <span style={S.myWordsIcon}>
+        <Icon name="star" size={20} strokeWidth={2.2} />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={S.myWordsTitle}>My words</div>
+        <div style={S.myWordsSub}>
+          {total === 0
+            ? "Save words from reading passages to review them here"
+            : `${total} saved${due > 0 ? ` · ${due} due` : ""}`}
+        </div>
+      </div>
+      <Icon name="arrow-right" size={18} strokeWidth={2.4} style={{ color: "var(--text-muted)" }} />
+    </Link>
+  );
 }
 
 /* ------------------------------- Plan panel ------------------------------- */
@@ -400,6 +437,8 @@ const CSS = `
 .vc-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-solid-lg)}
 .vc-card--locked:hover{transform:none;box-shadow:var(--shadow-solid);border-color:var(--border)}
 .vc-rescue:hover{border-color:currentColor;background:var(--surface)}
+.vc-mywords:hover{border-color:var(--brand-border);box-shadow:var(--shadow-solid-lg);transform:translateY(-1px)}
+@media (prefers-reduced-motion:reduce){.vc-mywords{transition:none!important}}
 @media (min-width:640px){
   .vc-grid{grid-template-columns:repeat(2,1fr)}
 }
@@ -451,6 +490,12 @@ const S: Record<string, CSSProperties> = {
   railIcon: { width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", background: "#fff", color: "var(--info-text)", display: "grid", placeItems: "center" },
   railText: { flex: 1, minWidth: 220, margin: 0, fontSize: 13.5, color: "var(--text-secondary)", lineHeight: 1.45 },
   railStrong: { color: "var(--text-primary)" },
+
+  // My words (P11) — слим-карта-ссылка.
+  myWords: { display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderRadius: "var(--radius-lg)", background: "var(--surface)", border: "2px solid var(--border)", boxShadow: "var(--shadow-solid)", textDecoration: "none", color: "inherit", transition: "transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)" },
+  myWordsIcon: { width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", background: "var(--brand-subtle)", color: "var(--text-link)", display: "grid", placeItems: "center" },
+  myWordsTitle: { fontFamily: "var(--font-ui)", fontSize: 15.5, fontWeight: 800, letterSpacing: "-0.01em", color: "var(--text-primary)" },
+  myWordsSub: { fontSize: 13, color: "var(--text-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
 
   empty: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "40px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", maxWidth: "52ch", marginInline: "auto" },
   emptyIcon: { display: "grid", placeItems: "center", width: 52, height: 52, borderRadius: "50%", background: "var(--brand-subtle)", color: "var(--text-link)", marginBottom: 4 },
