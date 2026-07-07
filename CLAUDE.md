@@ -14,7 +14,9 @@ Next.js (App Router) + Drizzle + Supabase. IELTS-платформа. UI/тест
   `mode='practice'`, mock не тронут).
 - **[BACKLOG.md](./BACKLOG.md)** — продуктовый бэклог. История фаз — в git / BRIEF §9.
 
-Новую работу начинать по явной просьбе пользователя.
+**Следующая работа — BRIEF §12 (Roadmap Next):** новая сессия начинает с §12.3,
+шаг 1 — email-блок (провайдер → verify → digest). Порядок: план с acceptance →
+«делай» от пользователя → реализация. Открытые W2-пункты и гипотезы — BACKLOG.md.
 
 ## Commands
 
