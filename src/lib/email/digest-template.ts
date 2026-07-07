@@ -2,7 +2,13 @@
  * Билдер weekly digest письма — чистая функция (без БД/сети), продукт на английском
  * (язык интерфейса). Инлайн-стили + одна колонка без внешних ресурсов/картинок —
  * так почтовые клиенты не режут вёрстку и не блокируют deliverability.
+ *
+ * BandPlan импортирован ТОЛЬКО типом (`import type`) — band-plan.ts тянет
+ * "server-only"/@/db, а этот модуль обязан оставаться чистым (грузится в vitest
+ * без env). `import type` стирается на этапе компиляции, рантайм-импорта нет.
  */
+import type { BandPlan } from "@/lib/progress/band-plan";
+
 export type DigestStats = {
   testsCount: number;
   avgBand: number | null; // средний band (только full-40Q attempts)
@@ -12,6 +18,10 @@ export type DigestStats = {
   weekStart: string; // ISO date (UTC)
   weekEnd: string;
   unsubscribeUrl: string | null;
+  // Секция "Your plan to band X" (BRIEF §12.3 шаг 2) — опускается целиком, если
+  // bandPlan не передан или у юзера не задан target_band.
+  bandPlan?: BandPlan;
+  practiceUrl?: string | null;
 };
 
 const MONTH_NAMES = [
@@ -45,8 +55,10 @@ function formatWeekRange(weekStart: string, weekEnd: string): string {
   return `${startStr} – ${endStr}`;
 }
 
-/** Экранирование для HTML-атрибута (href) — амперсанды в подписанном токене иначе рвут разметку. */
-function escapeHtmlAttr(value: string): string {
+/** Экранирование HTML (атрибуты и текстовые узлы) — динамический текст (label из
+ * qtypeLabel с фолбэком на сырой qtype, подписанный токен в href) не должен рвать
+ * разметку. Экранирование кавычек безвредно и в текстовых узлах. */
+function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;")
@@ -58,6 +70,40 @@ function formatRatingLine(rating: number, delta: number | null): string {
   if (delta === null) return `Rating: ${rating}`;
   const sign = delta >= 0 ? "+" : "-";
   return `Rating: ${rating} (${sign}${Math.abs(delta)})`;
+}
+
+/**
+ * Секция "Your plan to band X" — общий билдер с дашбордом (band-plan.ts), опускается
+ * целиком без bandPlan/target_band (юзер ещё не задал цель или план не посчитался).
+ */
+function buildPlanHtml(bandPlan: BandPlan | undefined, practiceUrl: string | null | undefined): string {
+  if (!bandPlan || bandPlan.targetBand == null) return "";
+
+  const distanceLine = bandPlan.reached ? "Target reached 🎉" : `${bandPlan.distance} away`;
+
+  const weakest = bandPlan.weakTypes[0] ?? null;
+  const weakestHtml = weakest
+    ? `<p style="margin:0 0 8px;font-size:15px;color:#333333;">Weakest area: ${escapeHtml(weakest.label)}</p>`
+    : "";
+
+  const drill = bandPlan.drill;
+  const bandGainHtml = drill?.bandGain != null ? `, +${drill.bandGain} band` : "";
+  const drillHtml = drill
+    ? `<p style="margin:0 0 8px;font-size:15px;color:#333333;">This week's drill: ${escapeHtml(drill.label)} (~${drill.estMinutes} min${bandGainHtml})</p>`
+    : "";
+
+  const linkHtml = practiceUrl
+    ? `<p style="margin:8px 0 0;"><a href="${escapeHtml(practiceUrl)}" style="color:#5b4fe0;">Practice now &rarr;</a></p>`
+    : "";
+
+  return `
+              <div style="margin:16px 0 0;padding-top:16px;border-top:1px solid #eeeeee;">
+              <h2 style="margin:0 0 8px;font-size:16px;color:#1a1a2e;">Your plan to band ${bandPlan.targetBand}</h2>
+              <p style="margin:0 0 8px;font-size:15px;color:#333333;">${distanceLine}</p>
+              ${weakestHtml}
+              ${drillHtml}
+              ${linkHtml}
+              </div>`;
 }
 
 export function buildDigestEmail(stats: DigestStats): { subject: string; html: string } {
@@ -79,8 +125,10 @@ export function buildDigestEmail(stats: DigestStats): { subject: string; html: s
 
   const unsubscribeHtml =
     stats.unsubscribeUrl !== null
-      ? `<p style="margin:8px 0 0;"><a href="${escapeHtmlAttr(stats.unsubscribeUrl)}" style="color:#999999;">Unsubscribe</a></p>`
+      ? `<p style="margin:8px 0 0;"><a href="${escapeHtml(stats.unsubscribeUrl)}" style="color:#999999;">Unsubscribe</a></p>`
       : "";
+
+  const planHtml = buildPlanHtml(stats.bandPlan, stats.practiceUrl);
 
   const html = `<!doctype html>
 <html>
@@ -95,6 +143,7 @@ export function buildDigestEmail(stats: DigestStats): { subject: string; html: s
               <p style="margin:0 0 16px;font-size:14px;color:#666666;">${weekRange}</p>
               <p style="margin:0 0 12px;font-size:15px;color:#333333;"><strong>${stats.testsCount}</strong> test${stats.testsCount === 1 ? "" : "s"} completed this week</p>
               ${statsHtml}
+              ${planHtml}
               </td>
             </tr>
             <tr>
