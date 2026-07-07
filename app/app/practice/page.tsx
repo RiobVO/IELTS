@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getHeaderData } from "@/lib/notifications/header-data";
@@ -244,6 +245,26 @@ export default async function PracticePage({
         initialFilter={initialFilter}
         notice={notice}
       />
+      {/* P9 — ненавязчивая точка входа в очередь ошибок (не count-запрос: пустое
+          состояние обслуживает экран сам). */}
+      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 40px", textAlign: "center" }}>
+        <Link
+          href="/app/practice/mistakes"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            color: "var(--text-muted)",
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-sm)",
+            fontWeight: 700,
+            textDecoration: "none",
+          }}
+        >
+          Review your mistakes
+          <span aria-hidden="true">→</span>
+        </Link>
+      </div>
     </AppShell>
   );
 }
