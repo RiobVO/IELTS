@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { contentItem } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
+import { contentTag } from "@/lib/content/exam-content";
 import { RegradeRequiredError } from "@/lib/import/persist";
 import { importRunner } from "@/lib/import/runner/import-runner";
 import { publishReviewedContentItem } from "@/lib/content/publish";
@@ -28,13 +29,14 @@ export async function uploadTest(formData: FormData) {
   }
   const html = await file.text();
 
-  let summary: { title: string; questions: number; warnings: number; brand: string };
+  let summary: { id: string; title: string; questions: number; warnings: number; brand: string };
   try {
     const r = await importRunner(html, {
       sourceFilePath: file.name,
       createdBy: profile.id,
     });
     summary = {
+      id: r.id,
       title: r.title,
       questions: r.questions,
       warnings: r.warnings,
@@ -52,8 +54,10 @@ export async function uploadTest(formData: FormData) {
     fail("Could not process the file (parsing or saving).");
   }
 
-  // A re-import can change a published test's data — invalidate the catalog cache.
+  // A re-import can change a published test's data — invalidate the catalog cache
+  // (content_item) and this test's per-id content caches (getExamContent/getContentMeta).
   revalidateTag("content_item");
+  revalidateTag(contentTag(summary.id));
   revalidatePath("/admin");
   redirect(
     `/admin?${new URLSearchParams({
@@ -98,8 +102,10 @@ export async function setStatus(formData: FormData) {
   } else {
     // Unpublishing (→ draft) is intentionally unguarded.
     await db.update(contentItem).set({ status: "draft" }).where(eq(contentItem.id, id));
-    // Catalog's published list is cached by tag — unpublish invalidates it.
+    // Catalog's published list is cached by tag — unpublish invalidates it, plus
+    // this test's per-id content caches (getExamContent now returns null for it).
     revalidateTag("content_item");
+    revalidateTag(contentTag(id));
   }
   revalidatePath("/admin");
   redirect("/admin");

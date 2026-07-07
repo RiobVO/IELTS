@@ -44,7 +44,10 @@ describe("publishReviewedContentItem", () => {
     const res = await publishReviewedContentItem("id1");
     expect(res).toEqual({ ok: true, title: "Reading 1" });
     expect(update).toHaveBeenCalledOnce();
+    // Broad catalog tag + per-test tag (W2-6): both fire so getPublishedTests and
+    // this test's getExamContent/getContentMeta caches refresh on publish.
     expect(revalidateTag).toHaveBeenCalledWith("content_item");
+    expect(revalidateTag).toHaveBeenCalledWith("content-id1");
   });
 
   it("refuses to publish when any question has an empty answer key (#17)", async () => {

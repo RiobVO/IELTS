@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
 import { db } from "@/db";
 import { answerKey, contentItem, question } from "@/db/schema";
+import { contentTag } from "@/lib/content/exam-content";
 import { isUnknownTypeWarning } from "@/lib/import/question-types";
 
 export type PublishResult =
@@ -57,6 +58,10 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
   if (hasEmptyKey) return { ok: false, reason: "empty_answer_key" };
 
   await db.update(contentItem).set({ status: "published" }).where(eq(contentItem.id, id));
+  // Каталог (getPublishedTests, тег content_item) + per-test кэши exam/result
+  // (getExamContent/getContentMeta несут content_item И content-<id>). content_item
+  // сбрасывает набор каталога, content-<id> — точечно этот тест (W2-6).
   revalidateTag("content_item");
+  revalidateTag(contentTag(id));
   return { ok: true, title: row.title };
 }
