@@ -269,7 +269,7 @@ export default async function Dashboard() {
         </div>
 
         {/* Focus — единственный визуальный якорь, full-width */}
-        <FocusCard weakest={weakest} weakCount={weak.length} seenTests={seenTests} bandPill={bandPill} drillMin={drillMin} />
+        <FocusCard weakest={weakest} weakCount={weak.length} seenTests={seenTests} bandPill={bandPill} drillMin={drillMin} hasAttempts={attempts.length > 0} />
 
         <div className="dash-col-main">
           {/* Next up — сразу под фокусом (ядро экрана) */}
@@ -351,9 +351,9 @@ export default async function Dashboard() {
 /* Focus hero — слабейший тип как фокус дня + «приз» (band-gain/drill-time) и
    zero-state спарклайн (§1/§3); для нового юзера — заход в первый тест. */
 function FocusCard({
-  weakest, weakCount, seenTests, bandPill, drillMin,
+  weakest, weakCount, seenTests, bandPill, drillMin, hasAttempts,
 }: {
-  weakest: BandPlanWeakType | null; weakCount: number; seenTests: number; bandPill: string | null; drillMin: number | null;
+  weakest: BandPlanWeakType | null; weakCount: number; seenTests: number; bandPill: string | null; drillMin: number | null; hasAttempts: boolean;
 }) {
   const zero = weakest ? weakest.correct === 0 : false;
   const pct = weakest ? Math.round((weakest.correct / weakest.total) * 100) : 0;
@@ -404,14 +404,21 @@ function FocusCard({
           </>
         ) : (
           <>
-            <h2 className="dash-focus-title" style={S.focusTitle}>Take your first test</h2>
+            {/* Два разных пустых состояния: совсем без попыток — зови в первый тест;
+                попытки есть, но ни один тип не набрал порог доверия aggregateWeakness
+                (<4 ответов на тип) — честно объясняем, что данных мало, а не молчим
+                и не рекомендуем по шуму. */}
+            <h2 className="dash-focus-title" style={S.focusTitle}>
+              {hasAttempts ? "Almost there" : "Take your first test"}
+            </h2>
             <p style={S.focusText}>
-              Sit a test to surface your weakest question type — then we&apos;ll point your daily
-              focus straight at it.
+              {hasAttempts
+                ? "Not enough answers per question type yet — one more test reveals your weak spot, and we'll point your daily focus straight at it."
+                : "Sit a test to surface your weakest question type — then we'll point your daily focus straight at it."}
             </p>
             <div style={S.focusCta}>
               <Button variant="secondary" size="lg" trailingIcon="arrow-right" href="/app/reading" style={{ color: "var(--brand-active)" }}>
-                Browse tests
+                {hasAttempts ? "Take one more test" : "Browse tests"}
               </Button>
             </div>
           </>
