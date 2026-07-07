@@ -461,7 +461,7 @@ Claude Design; (3) выдать готовый ПРОМТ со всеми реш
 | # | Что | Где в брифе | Severity | Блокирует |
 |---|---|---|---|---|
 | 1 | Платёжные подписи Payme/Click/Uzum — webhook стоит на generic HMAC-заглушке (fail-closed), деньги не принимаются | §4.8 | **blocker** (revenue) | владелец: merchant-ключи |
-| 2 | Email-блок: провайдер → email-verify → weekly digest (таблица `notification` и verify-seam готовы) | §11 | important | владелец: SMTP-провайдер + тумблер Confirm; дальше код |
+| 2 | Email-блок: **код готов целиком** (weekly digest + one-click unsubscribe на проде, env-gated no-op; verify-seam был готов ранее). Осталась полка владельца: Brevo (домен DKIM/SPF) → Supabase SMTP + Confirm → Vercel env `EMAIL_PROVIDER_API_KEY`/`EMAIL_FROM` | §11 | important | только владелец: тумблеры/ключи, деплой не нужен |
 | 3 | Apple/Facebook OAuth (сейчас только email) | §4.5 | important | владелец: dev-аккаунты/ключи |
 | 4 | Лимиты Basic — плейсхолдер `N/день` так и не стал числом (ручка free→paid) | §4.8 | important | код (решение = 1 число) |
 | 5 | i18n RU/UZ для UI-chrome | §11 | later | код (L, отдельная волна) |
