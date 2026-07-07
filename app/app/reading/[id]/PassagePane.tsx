@@ -3,7 +3,9 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { categoryLabel } from "@/lib/labels";
 import { Icon } from "@/components/core/icons";
+import { extractContext, normalizeWord } from "@/lib/vocab/saved-words";
 import { addAnnotation, deleteAnnotation, updateAnnotationNote } from "./actions";
+import { saveWord } from "../../vocabulary/saved-words-actions";
 
 export interface AnnotationRow {
   id: string;
@@ -111,6 +113,7 @@ export const PassagePane = memo(function PassagePane({
   initialAnnotations,
   className,
   reader,
+  canSaveWords,
 }: {
   contentItemId: string;
   title: string;
@@ -125,8 +128,15 @@ export const PassagePane = memo(function PassagePane({
    * ушло в шапку). Не заданы (mock/listening) → капсула и поведение прежние.
    */
   reader?: { fontPx: number; lineHeight: number; theme: "paper" | "sepia" } | null;
+  /**
+   * P11 — жест «Save word» из пассажа. Стабильный boolean от раннера: true только в
+   * practice-чтении, в mock — false (капсула сохранения не показывается). Стабилен →
+   * memo(PassagePane) не ломается.
+   */
+  canSaveWords?: boolean;
 }) {
   /* eslint-disable-line — тело компонента ниже без изменений */
+  const paneRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLElement>(null);
   const didInit = useRef(false);
@@ -139,6 +149,12 @@ export const PassagePane = memo(function PassagePane({
   const [theme, setTheme] = useState<"paper" | "sepia">("paper");
   const [progress, setProgress] = useState(0);
   const [editor, setEditor] = useState<{ id: string; quote: string; note: string } | null>(null);
+  // P11 — плавающая капсула «Save word»: всплывает при выделении одиночного слова
+  // (practice). Координаты — pane-relative (position:absolute внутри S.pane), считаются
+  // из rect выделения. Рендерится СИБЛИНГОМ мемоизированного PassageBodies → пассаж не
+  // реконсилируется, <mark> живут. savedFlash — success-состояние перед авто-снятием.
+  const [saveBubble, setSaveBubble] = useState<{ word: string; context: string; x: number; y: number } | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
 
   // Load saved reading prefs (client-only — no SSR mismatch). Storage может быть
   // недоступен (private mode/blocked) — try/catch, чтобы не ронять панель. При
@@ -193,6 +209,9 @@ export const PassagePane = memo(function PassagePane({
     if (!el) return;
     let raf = 0;
     const onScroll = () => {
+      // P11 — прокрутка уводит слово из-под капсулы (координаты pane-relative стали бы
+      // неверны) → снимаем её сразу. No-op, если капсулы нет (React гасит тот же state).
+      setSaveBubble(null);
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
@@ -285,6 +304,23 @@ export const PassagePane = memo(function PassagePane({
     const start = textOffset(container, range.startContainer, range.startOffset);
     const end = textOffset(container, range.endContainer, range.endOffset);
     const order = Number(container.dataset.order);
+
+    // P11 — кандидат в «saved word»: одиночное короткое слово в practice-чтении.
+    // Капсулу показываем ДОПОЛНИТЕЛЬНО к обычной подсветке (annotation для сохранения
+    // НЕ создаём — highlight приходит от своего инструмента, как и раньше). rect берём
+    // ДО removeAllRanges (после selection пуст). Координаты — pane-relative, чтобы не
+    // зависеть от возможного transformed-предка (position:absolute внутри S.pane).
+    const savedCandidate = canSaveWords ? normalizeWord(text) : null;
+    if (savedCandidate) {
+      const rect = range.getBoundingClientRect();
+      const paneRect = paneRef.current?.getBoundingClientRect();
+      const rawX = rect.left + rect.width / 2 - (paneRect?.left ?? 0);
+      const x = paneRect ? Math.min(Math.max(rawX, 56), paneRect.width - 56) : rawX;
+      const y = rect.top - (paneRect?.top ?? 0);
+      setSavedFlash(false);
+      setSaveBubble({ word: savedCandidate, context: extractContext(container.textContent ?? "", start, end), x, y });
+    }
+
     sel.removeAllRanges();
     if (!(end > start)) return;
 
@@ -316,7 +352,7 @@ export const PassagePane = memo(function PassagePane({
     };
     setAnnotations((a) => [...a, row]);
     if (kind === "note") setEditor({ id: res.id, quote: text, note: "" });
-  }, [contentItemId, mode]);
+  }, [contentItemId, mode, canSaveWords]);
 
   // Click an existing mark → open its editor (view/edit note · delete).
   const onClick = useCallback(
@@ -356,6 +392,23 @@ export const PassagePane = memo(function PassagePane({
     await deleteAnnotation(id);
   }, [editor, annotations, passageEl]);
 
+  // P11 — авто-снятие капсулы «Save word»: после успеха коротко держим «Saved», иначе
+  // страховочный таймаут (если юзер не сохранил и не проскроллил).
+  useEffect(() => {
+    if (!saveBubble) return;
+    const t = window.setTimeout(() => setSaveBubble(null), savedFlash ? 1600 : 6000);
+    return () => clearTimeout(t);
+  }, [saveBubble, savedFlash]);
+
+  // P11 — сохранение слова owner-path (best-effort). Успех → «Saved to My words»
+  // (эффект выше снимет капсулу); невалид/ошибка → тихо убираем. Аннотацию НЕ создаём.
+  const doSaveWord = useCallback(async () => {
+    if (!saveBubble || savedFlash) return;
+    const res = await saveWord(saveBubble.word, saveBubble.context, contentItemId);
+    if (res.ok) setSavedFlash(true);
+    else setSaveBubble(null);
+  }, [saveBubble, savedFlash, contentItemId]);
+
   const wordCount = useMemo(() => {
     const text = passages.map((p) => p.body_html).join(" ").replace(/<[^>]+>/g, " ");
     const words = text.trim().split(/\s+/).filter(Boolean).length;
@@ -370,7 +423,7 @@ export const PassagePane = memo(function PassagePane({
   const surface = effTheme === "sepia" ? "color-mix(in oklab, var(--gold-500) 13%, var(--paper-light))" : "var(--reading-surface)";
 
   return (
-    <div className={className} style={{ ...S.pane, background: surface }}>
+    <div ref={paneRef} className={className} style={{ ...S.pane, background: surface }}>
       <style>{PASSAGE_CSS}</style>
 
       {/* reading progress */}
@@ -465,6 +518,22 @@ export const PassagePane = memo(function PassagePane({
           </div>
         </div>
       )}
+
+      {/* P11 — плавающая капсула «Save word» (practice-only, canSaveWords). Абсолютна
+          внутри S.pane; success-состояние показывает «Saved to My words». */}
+      {saveBubble && (
+        <div className="pp-saveword" style={{ ...S.saveBubble, left: saveBubble.x, top: Math.max(8, saveBubble.y - 46) }}>
+          {savedFlash ? (
+            <span style={S.saveDone}>
+              <Icon name="circle-check" size={16} strokeWidth={2.4} /> Saved to My words
+            </span>
+          ) : (
+            <button type="button" className="pp-saveword-btn" onClick={doSaveWord} title={`Save “${saveBubble.word}” to My words`} style={S.saveBtn}>
+              <Icon name="star" size={15} strokeWidth={2.2} /> Save word
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 });
@@ -505,6 +574,12 @@ const PASSAGE_CSS = `
 /* Touch target: кнопки капсулы 38px → ≥44px на грубом указателе (десктоп без изменений). */
 .cap-btn{width:38px;height:38px}
 @media (pointer:coarse){.cap-btn{width:44px;height:44px}}
+/* P11 — капсула «Save word»: лёгкий вход; тач ≥44px; reduced-motion гасит анимацию. */
+.pp-saveword{animation:pp-saveword-in 140ms var(--ease-standard) 1}
+@keyframes pp-saveword-in{from{opacity:0;transform:translateX(-50%) translateY(5px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.pp-saveword-btn:hover{filter:brightness(1.06)}
+@media (pointer:coarse){.pp-saveword-btn{min-height:44px}}
+@media (prefers-reduced-motion:reduce){.pp-saveword{animation:none}}
 /* Мобильный проход (≤430px): горизонтальные поля пассажа/masthead 48px→16px, чтобы текст
    не жался к краям экрана (планшет/десктоп >430px без изменений). */
 @media (max-width:430px){
@@ -539,6 +614,11 @@ const S = {
     fontWeight: 700,
   }),
   sep: { width: 1, height: 22, background: "var(--border)", margin: "0 3px" } as React.CSSProperties,
+
+  // P11 — капсула «Save word» (position:absolute внутри S.pane; transform центрирует по x).
+  saveBubble: { position: "absolute", transform: "translateX(-50%)", zIndex: 6 } as React.CSSProperties,
+  saveBtn: { display: "inline-flex", alignItems: "center", gap: 7, minHeight: 38, padding: "8px 14px", borderRadius: "var(--radius-full)", border: "none", background: "var(--brand)", color: "var(--text-on-brand)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, cursor: "pointer", boxShadow: "var(--shadow-lg)", whiteSpace: "nowrap", transition: "var(--transition-colors)" } as React.CSSProperties,
+  saveDone: { display: "inline-flex", alignItems: "center", gap: 7, minHeight: 38, padding: "8px 14px", borderRadius: "var(--radius-full)", background: "var(--surface)", color: "var(--success-text)", border: "1px solid var(--border)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, boxShadow: "var(--shadow-lg)", whiteSpace: "nowrap" } as React.CSSProperties,
 
   editorWrap: { position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: 74, width: "min(440px, 90%)", zIndex: 5 } as React.CSSProperties,
   editor: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", padding: 16 } as React.CSSProperties,
