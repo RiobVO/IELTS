@@ -247,3 +247,27 @@ export function openaiKey(): string | null {
   const v = process.env.OPENAI_API_KEY;
   return v && v.trim() !== "" ? v.trim() : null;
 }
+
+/**
+ * Weekly-digest email config (mirror of writingEvalConfig). OPTIONAL: absent →
+ * null → the digest job no-ops (no cron misfire, just nothing to send). Активна
+ * только когда заданы ОБА EMAIL_PROVIDER_API_KEY и EMAIL_FROM — ключ без адреса
+ * отправителя не собрать письмо, адрес без ключа некому его отправить.
+ * EMAIL_FROM_NAME опционален (falls back to provider default display name).
+ * SERVER-ONLY секрет.
+ */
+export function emailDigestConfig(): {
+  apiKey: string;
+  from: string;
+  fromName?: string;
+} | null {
+  const apiKey = process.env.EMAIL_PROVIDER_API_KEY;
+  const from = process.env.EMAIL_FROM;
+  if (!apiKey?.trim() || !from?.trim()) return null;
+  const fromName = process.env.EMAIL_FROM_NAME?.trim();
+  return {
+    apiKey: apiKey.trim(),
+    from: from.trim(),
+    ...(fromName ? { fromName } : {}),
+  };
+}
