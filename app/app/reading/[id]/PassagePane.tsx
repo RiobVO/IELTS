@@ -74,21 +74,6 @@ function wrapOffsets(container: HTMLElement, start: number, end: number, id: str
   }
 }
 
-/** ВРЕМЕННЫЙ репортер диагностики аннотаций → error_log (/admin/errors). Best-effort,
- *  тот же endpoint, что у global-error. Убрать вместе с диагностикой после закрытия бага. */
-function reportAnnotationDiag(message: string) {
-  try {
-    void fetch("/api/monitoring/client-error", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message, url: typeof location !== "undefined" ? location.href : undefined }),
-      keepalive: true,
-    }).catch(() => {});
-  } catch {
-    /* диагностика best-effort */
-  }
-}
-
 function unwrap(container: HTMLElement, id: string) {
   container.querySelectorAll(`mark[data-aid="${id}"]`).forEach((m) => {
     const parent = m.parentNode;
@@ -98,6 +83,23 @@ function unwrap(container: HTMLElement, id: string) {
   });
   container.normalize();
 }
+
+/** Тела пассажей изолированы за memo. PassagePane ре-рендерится на СВОЁМ state
+ *  (scroll-progress, режим капсулы, редактор заметки, список аннотаций), и каждый
+ *  такой ре-рендер заставляет React заново установить эти dangerouslySetInnerHTML-
+ *  контейнеры — стирая <mark>, которые мы вставляем вне React (обёртка выделения).
+ *  `passages` — стабильный проп, поэтому memo отбивает все ре-рендеры → React не
+ *  реконсилирует этот DOM → марки выживают. (Та же логика, что у memo(PassagePane),
+ *  защищающего марки от тика таймера родителя.) */
+const PassageBodies = memo(function PassageBodies({ passages }: { passages: Passage[] }) {
+  return (
+    <>
+      {passages.map((p) => (
+        <div key={p.order} data-order={p.order} dangerouslySetInnerHTML={{ __html: p.body_html }} />
+      ))}
+    </>
+  );
+});
 
 // memo: пропсы (contentItemId/title/category/passages/initialAnnotations/className)
 // не меняются на тик таймера в раннере → тяжёлый рендер body_html не повторяется 1/сек.
@@ -234,23 +236,12 @@ export const PassagePane = memo(function PassagePane({
       quote: text,
       note: null,
     });
-    if (!res) {
-      // ВРЕМЕННАЯ диагностика prod-бага «аннотации не реагируют»: сервер вернул
-      // null молча — фиксируем факт и параметры в error_log. Убрать после закрытия.
-      reportAnnotationDiag(`annotation-insert-null: start=${start} end=${end} order=${order} textLen=${text.length}`);
-      return;
-    }
+    if (!res) return; // best-effort: серверный insert не удался — не блокируем экзамен
     try {
       wrapOffsets(container, start, end, res.id, kind);
-      const painted = container.querySelectorAll(`mark[data-aid="${res.id}"]`).length;
-      if (painted === 0 || !container.isConnected) {
-        reportAnnotationDiag(
-          `annotation-paint-diag: painted=${painted} connected=${container.isConnected} start=${start} end=${end} order=${order} contLen=${(container.textContent ?? "").length}`,
-        );
-      }
-    } catch (e) {
-      // Падение обёртки марка больше не глушит editor/счётчик ниже.
-      reportAnnotationDiag(`annotation-paint-crash: ${String(e)}`);
+    } catch {
+      // Обёртка марка упала (редкий не-surroundable range) — аннотация сохранена,
+      // отрисуется при следующей загрузке. Не глушим editor/счётчик ниже.
     }
     const row: AnnotationRow = {
       id: res.id,
@@ -352,9 +343,7 @@ export const PassagePane = memo(function PassagePane({
           onMouseUp={onMouseUp}
           onClick={onClick}
         >
-          {passages.map((p) => (
-            <div key={p.order} data-order={p.order} dangerouslySetInnerHTML={{ __html: p.body_html }} />
-          ))}
+          <PassageBodies passages={passages} />
         </article>
       </div>
 
