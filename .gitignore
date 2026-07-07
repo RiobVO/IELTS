@@ -58,3 +58,6 @@ npm-debug.log*
 # session scratch
 .codex-tmp/
 /photo_*.jpg
+
+.vercel
+.env*
