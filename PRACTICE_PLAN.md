@@ -47,15 +47,15 @@
 | P1 | Format guard: live-подсказки лимита слов / числа выборов (ключ не трогается; `src/lib/exam/format-guard.ts`) | S/M | атомиз. | ✅ срез 2 |
 | P2a | Подсказки-стратегии по qtype (zero-key, `strategy-hints.ts`, collapsible в QuestionBlock) | S | атомиз. | ✅ фаза 3.A |
 | P2b-1 | Локатор абзаца ПОСЛЕ reveal («Show in passage»: CustomEvent → PassagePane резолвит `#para-N` / `.rp[data-letter]`, императивный пульс) | S | атомиз. | ✅ фаза 3.A |
-| P2b-2 | Локатор ДО reveal (отдельный action, qtype-гейт против para=answer) | M | атомиз. | отложен (сперва замер покрытия `evidence` на проде) |
+| P2b-2 | Локатор ДО reveal («Where to look?»: `locateEvidence` + серверный qtype-blocklist) | M | атомиз. | ✅ фаза 3.D |
 | P3 | Свобода таймера: practice = счёт вверх + пауза (Reading с P0; Listening — с P8) | S | атомиз. | ✅ срез 1–2 |
 | P4 | Комфорт чтения: шрифт/интерлиньяж/тема (панель «Aa», `bando-reading-prefs`) | S | атомиз. | ✅ срез 2 |
-| P5 | Микро-цели и брейки | S/M | обе | фаза 3 |
+| P5 | Микро-цели и брейки (client-only GoalControl, без XP) | S/M | обе | ✅ фаза 3.D |
 | P6 | Мгновенная проверка ответа: `checkAnswer` → только boolean; owner+in_progress+practice в WHERE; нормализация = `gradeOne` (общая с submit) | M | атомиз. | ✅ срез 2 |
 | P7 | Ответ+объяснение по клику: `revealQuestion` — accept/explanation/evidence ОДНОГО вопроса | S–M | атомиз. | ✅ срез 2 |
 | P8 | Listening Lab: пауза/seek/replay/скорость в practice; mock single-pass байт-в-байт | M | атомиз. | ✅ срез 2 |
 | P9 | Повтор ошибок: rich-очередь «вариант B» (`0040`, деривация из снапшота, `/app/practice/mistakes`) | S/L | обе | ✅ фаза 3.B |
-| P10 | Confidence-метки → калибровка на result | M | атомиз. | фаза 3 |
+| P10 | Confidence-метки → калибровка на result (localStorage-форма) | M | атомиз. | ✅ фаза 3.D |
 | P11 | Слово → Vocabulary («Save word» капсула → `saved_word` 0041, SM-2, «My words») | L | атомиз. | ✅ фаза 3.C |
 | P12 | Practice-результат без band-давления (learning-фрейм: диал в pct, без share/`→ Band N`) | S | обе | ✅ фаза 3.A |
 | P13 | Format-loss callout на practice-результате («Format cost you N» — `src/lib/result/format-loss.ts` поверх format-guard, server-side) | S/M | атомиз. | ✅ фаза 3.A |
@@ -118,8 +118,16 @@ listening без `audio_path` (C21 L Test 3 `4822778c…`, Test 4 `900bd8a4…`)
   highlight, memo-инварианты целы), экран `/app/vocabulary/my-words`
   (список + flashcard-повтор, отдельно от deck-сессий). `vocab_card` не
   синтезируется, LLM-free.
-- Оппортунистически: P10 (localStorage-остров), OwnC weakness heatmap, P5
-  (локальная форма, без XP). P2b-2 — после замера покрытия `evidence`.
+- **Волна D — ✅ реализована** (коммиты `f27ee91`/`170132d`; Codex-ревью SHIP,
+  Low-находка про кап JSON.parse закрыта до пуша): P2b-2 «Where to look?» до
+  reveal (`locateEvidence` по эталону + серверный blocklist matching_info/
+  headings; замер покрытия на проде: reading 186/348 ключей с `para`,
+  listening 0 → изящная деградация, клиенту — только номера eligible-вопросов),
+  P10 confidence-метки (localStorage per attempt → остров калибровки на
+  practice-result, `perQuestionCorrect` — только вердикты), P5 микро-цели/брейки
+  (client-only, без XP), OwnC «Weak spots» на хабе (агрегат
+  `per_type_breakdown`, порог total≥4, drill через `?q_type=`).
+- Остаток пула: транскрипты Listening — content-blocked (ждут контента).
 
 ## Риски (актуальные)
 
