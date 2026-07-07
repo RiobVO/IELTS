@@ -130,6 +130,8 @@ export const PassagePane = memo(function PassagePane({
   const scrollRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLElement>(null);
   const didInit = useRef(false);
+  // P2b-1 — активный пульс-локатор (узел + таймер снятия). Императивно, вне React-state.
+  const pulseRef = useRef<{ node: HTMLElement; timer: number } | null>(null);
 
   const [annotations, setAnnotations] = useState<AnnotationRow[]>(initialAnnotations);
   const [mode, setMode] = useState<"highlight" | "note">("highlight");
@@ -202,6 +204,66 @@ export const PassagePane = memo(function PassagePane({
     return () => {
       el.removeEventListener("scroll", onScroll);
       if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // P2b-1 — локатор абзаца по evidence.para (событие от раннера, exam:locate-para).
+  // PassagePane владеет DOM-резолвом: (1) id-якорь абзаца (прод-формат "para-11") или
+  // (2) одиночная буква → .rp[data-letter="X"]. Пульс-подсветка навешивается КЛАССОМ на
+  // найденный узел ИМПЕРАТИВНО (без setState) — иначе ре-рендер стёр бы <mark>. Узел
+  // живёт в мемоизированном PassageBodies (passages стабилен) → и узел, и класс переживают
+  // ре-рендеры пассажа. Не резолвится (listening {part,text} без para и т.п.) → тихий выход.
+  useEffect(() => {
+    const onLocate = (e: Event) => {
+      const article = articleRef.current;
+      if (!article) return;
+      const detail = (e as CustomEvent<{ para?: string }>).detail;
+      const para = typeof detail?.para === "string" ? detail.para.trim() : "";
+      if (!para) return;
+
+      let node: HTMLElement | null = null;
+      // Форма 1: id-якорь абзаца ("para-11"). CSS.escape + try/catch — para серверный,
+      // но экранируем на случай спецсимволов в селекторе.
+      try {
+        node = article.querySelector<HTMLElement>(`#${CSS.escape(para)}`);
+      } catch {
+        node = null;
+      }
+      // Форма 2: одиночная буква абзаца (matching-разметка .rp[data-letter]).
+      if (!node && /^[A-Za-z]$/.test(para)) {
+        node = article.querySelector<HTMLElement>(`.rp[data-letter="${para.toUpperCase()}"]`);
+      }
+      if (!node) return; // якорь не найден — изящная деградация (кнопка тихо не реагирует)
+      const target = node;
+
+      const reduce =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+      target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+
+      // Снять прежний пульс, навесить новый (~2с). CSS гасит анимацию при reduced-motion
+      // (остаётся только скролл), поэтому класс навешиваем безусловно.
+      const prev = pulseRef.current;
+      if (prev) {
+        prev.node.classList.remove("rp-locate");
+        clearTimeout(prev.timer);
+      }
+      target.classList.add("rp-locate");
+      const timer = window.setTimeout(() => {
+        target.classList.remove("rp-locate");
+        pulseRef.current = null;
+      }, 2000);
+      pulseRef.current = { node: target, timer };
+    };
+    window.addEventListener("exam:locate-para", onLocate);
+    return () => {
+      window.removeEventListener("exam:locate-para", onLocate);
+      const p = pulseRef.current;
+      if (p) {
+        p.node.classList.remove("rp-locate");
+        clearTimeout(p.timer);
+        pulseRef.current = null;
+      }
     };
   }, []);
 
@@ -430,7 +492,16 @@ const PASSAGE_CSS = `
 .bando-reading.editorial mark[data-kind="note"]{
   background:var(--reading-note);border-bottom:2px solid color-mix(in oklab,var(--brand) 60%,transparent);
 }
+/* P2b-1 — пульс-подсветка найденного абзаца (~2с, класс навешивается императивно).
+   При prefers-reduced-motion анимации нет → остаётся только скролл (без вспышки). */
+.bando-reading.editorial .rp-locate{border-radius:5px;animation:rp-locate-pulse 2s ease-out 1}
+@keyframes rp-locate-pulse{
+  0%{background:color-mix(in oklab,var(--brand) 24%,transparent)}
+  70%{background:color-mix(in oklab,var(--brand) 16%,transparent)}
+  100%{background:transparent}
+}
 @media (prefers-reduced-motion:reduce){.bando-reading.editorial *{transition:none!important}}
+@media (prefers-reduced-motion:reduce){.bando-reading.editorial .rp-locate{animation:none}}
 /* Touch target: кнопки капсулы 38px → ≥44px на грубом указателе (десктоп без изменений). */
 .cap-btn{width:38px;height:38px}
 @media (pointer:coarse){.cap-btn{width:44px;height:44px}}
