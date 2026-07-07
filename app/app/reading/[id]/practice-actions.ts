@@ -17,10 +17,11 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { answerKey, attempt, question } from "@/db/schema";
+import { answerKey, attempt, mistakeResolution, mistakeReview, question } from "@/db/schema";
 import { getUser } from "@/lib/auth";
 import { gradeOne, type AnswerMode } from "@/lib/grading/grade";
 import { isUuid } from "@/lib/uuid";
+import { reviewCard, type Grade } from "@/lib/vocab/srs";
 
 /** Раскрытие одного вопроса (P7). evidence сведён к контракту {para?, snippet?}. */
 export interface RevealResult {
@@ -31,6 +32,10 @@ export interface RevealResult {
 
 /** Ключ ОДНОГО вопроса practice-попытки после всех гейтов (внутр., не сериализуется). */
 interface PracticeKeyRow {
+  /** id владельца попытки (из сессии) — для owner-path записи SR-стейта. */
+  userId: string;
+  /** тест попытки — ключ (user, content, number) SR-строки mistake_review. */
+  contentItemId: string;
   mode: AnswerMode;
   /** qtype нужен серверному гейту locateEvidence (para≈ответ для matching-типов). */
   qtype: string;
@@ -92,6 +97,8 @@ async function loadPracticeKey(
   if (!row) return null;
 
   return {
+    userId: user.id,
+    contentItemId: att.contentItemId,
     mode: row.mode,
     qtype: row.qtype,
     accept: Array.isArray(row.accept) ? (row.accept as string[]) : [],
@@ -180,6 +187,114 @@ export async function revealQuestion(
     return { accept: key.accept, explanation: key.explanation, evidence };
   } catch (e) {
     console.error("revealQuestion failed", e);
+    return null;
+  }
+}
+
+/**
+ * Порог «выученности»: серия из стольких «good» подряд авто-закрывает ошибку (T7 —
+ * best-effort запись в mistake_resolution, кормит W2-5-бейджи). 3 = пройдены оба
+ * первых шага SM-2 (1д → 3д) и карта вышла на множительный интервал.
+ */
+const GRADUATE_REPETITIONS = 3;
+
+/**
+ * SR-ревью ошибки из очереди (учебная петля, BRIEF §12.3 шаг 2). Тот же гейт, что у
+ * checkAnswer/reveal (loadPracticeKey: owner ∧ in_progress ∧ practice в WHERE) — mock/
+ * чужая/сданная попытка физически не вернёт строку → null. Сервер — единственный судья
+ * SM-2: клиентскому verdict НЕ доверяем, грейдим сами (gradeOne), grade = good|again
+ * (easy к ошибкам неприменим). По образцу reviewSavedWord: читаем SR-стейт owner-path →
+ * общий reviewCard (не дублируя формулу) → UPSERT owner-path. Клиенту — минимум
+ * { correct, dueAt } (ни ключа, ни SM-2-полей). Best-effort → null при сбое/провале гейта.
+ */
+export async function reviewMistake(
+  attemptId: string,
+  questionNumber: number,
+  value: string | string[],
+): Promise<{ correct: boolean; dueAt: string } | null> {
+  try {
+    const key = await loadPracticeKey(attemptId, questionNumber);
+    if (!key) return null;
+
+    // Судит сервер: verdict клиента игнорируем. easy не используется (гейт isNew к
+    // ошибкам неприменим) — только good (верно) / again (снова неверно).
+    const correct = gradeOne(key, value);
+    const grade: Grade = correct ? "good" : "again";
+    const now = new Date();
+
+    // Текущий SR-стейт owner-path (WHERE user_id ∧ content_item_id ∧ question_number).
+    const [state] = await db
+      .select({
+        ease: mistakeReview.ease,
+        intervalDays: mistakeReview.intervalDays,
+        repetitions: mistakeReview.repetitions,
+        lapses: mistakeReview.lapses,
+      })
+      .from(mistakeReview)
+      .where(
+        and(
+          eq(mistakeReview.userId, key.userId),
+          eq(mistakeReview.contentItemId, key.contentItemId),
+          eq(mistakeReview.questionNumber, questionNumber),
+        ),
+      )
+      .limit(1);
+
+    const { state: next, dueAt } = reviewCard(state ?? null, grade, now);
+
+    // UPSERT owner-path. qtype авторитетен с сервера (из loadPracticeKey), пишется
+    // только при INSERT (снимок первого ревью, как mistake_resolution) — на конфликте
+    // НЕ трогаем. dueAt/now идут через query-builder (параметризуются драйвером), НЕ в
+    // raw sql``-шаблоне — иначе Date роняет прод (pgbouncer, prepare:false).
+    await db
+      .insert(mistakeReview)
+      .values({
+        userId: key.userId,
+        contentItemId: key.contentItemId,
+        questionNumber,
+        qtype: key.qtype,
+        ease: next.ease,
+        intervalDays: next.intervalDays,
+        repetitions: next.repetitions,
+        lapses: next.lapses,
+        dueAt,
+        lastReviewedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [mistakeReview.userId, mistakeReview.contentItemId, mistakeReview.questionNumber],
+        set: {
+          ease: next.ease,
+          intervalDays: next.intervalDays,
+          repetitions: next.repetitions,
+          lapses: next.lapses,
+          dueAt,
+          lastReviewedAt: now,
+        },
+      });
+
+    // T7 — graduation: серия «good» достигла порога → авто-закрытие ошибки (кормит
+    // W2-5-бейджи через mistake_resolution). Best-effort: сбой этой записи НЕ роняет
+    // ревью (как соседние best-effort в post-submit pipeline). ON CONFLICT DO NOTHING —
+    // идемпотентно; qtype тот же авторитетный снимок с сервера.
+    if (next.repetitions >= GRADUATE_REPETITIONS) {
+      try {
+        await db
+          .insert(mistakeResolution)
+          .values({
+            userId: key.userId,
+            contentItemId: key.contentItemId,
+            questionNumber,
+            qtype: key.qtype,
+          })
+          .onConflictDoNothing();
+      } catch (e) {
+        console.error("reviewMistake graduation insert failed", e);
+      }
+    }
+
+    return { correct, dueAt: dueAt.toISOString() };
+  } catch (e) {
+    console.error("reviewMistake failed", e);
     return null;
   }
 }

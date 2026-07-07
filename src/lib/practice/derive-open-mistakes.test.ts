@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import {
   deriveOpenMistakes,
   type AttemptForMistakes,
+  type MistakeReviewRow,
 } from "./derive-open-mistakes";
 
 /** Хелпер: попытка с одним снапшот-вопросом (exact-ключ). */
@@ -52,6 +53,10 @@ describe("deriveOpenMistakes", () => {
       qtype: "tfng",
       attemptId: out[0].attemptId,
       submittedAt: new Date("2026-07-01"),
+      // Без SR-строки — ошибка due сейчас (расписания ещё нет).
+      dueAt: null,
+      isDue: true,
+      intervalDays: 0,
     });
     // accept/mode не утекают в результат.
     expect(out[0]).not.toHaveProperty("accept");
@@ -122,5 +127,81 @@ describe("deriveOpenMistakes", () => {
       [],
     );
     expect(out.map((m) => m.contentItemId)).toEqual(["new", "old"]);
+  });
+});
+
+/** SR-строка mistake_review (SM-2-расписание одной ошибки). */
+function review(
+  contentItemId: string,
+  questionNumber: number,
+  over: { dueAt: Date; intervalDays: number; lastReviewedAt: Date | null },
+): MistakeReviewRow {
+  return { contentItemId, questionNumber, ...over };
+}
+
+describe("deriveOpenMistakes — SR-расписание", () => {
+  // Фиксированное «сейчас» ради детерминизма (as в reviewCard).
+  const now = new Date("2026-07-10T00:00:00Z");
+
+  it("нет SR-строки → due сейчас (dueAt null, isDue true, intervalDays 0)", () => {
+    const out = deriveOpenMistakes(
+      [attempt({ contentItemId: "c1", number: 1, accept: ["A"], given: "B", submittedAt: new Date("2026-07-01") })],
+      [],
+      [],
+      now,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].isDue).toBe(true);
+    expect(out[0].dueAt).toBeNull();
+    expect(out[0].intervalDays).toBe(0);
+  });
+
+  it("due_at в будущем + попытка НЕ новее last_reviewed_at → scheduled (isDue false)", () => {
+    const att = attempt({ contentItemId: "c1", number: 1, accept: ["A"], given: "B", submittedAt: new Date("2026-07-01") });
+    const out = deriveOpenMistakes([att], [], [
+      review("c1", 1, { dueAt: new Date("2026-07-13"), intervalDays: 3, lastReviewedAt: new Date("2026-07-05") }),
+    ], now);
+    expect(out).toHaveLength(1);
+    expect(out[0].isDue).toBe(false);
+    expect(out[0].intervalDays).toBe(3);
+    expect(out[0].dueAt).toEqual(new Date("2026-07-13"));
+  });
+
+  it("due_at <= now → due (isDue true)", () => {
+    const att = attempt({ contentItemId: "c1", number: 1, accept: ["A"], given: "B", submittedAt: new Date("2026-07-01") });
+    const out = deriveOpenMistakes([att], [], [
+      review("c1", 1, { dueAt: new Date("2026-07-08"), intervalDays: 1, lastReviewedAt: new Date("2026-07-07") }),
+    ], now);
+    expect(out[0].isDue).toBe(true);
+  });
+
+  it("re-open: wrong-попытка ПОЗЖЕ last_reviewed_at → расписание протухло (isDue true при due_at в будущем)", () => {
+    // Ревью 07-05 (запланировано на 07-20), затем снова ошибся 07-08 → расписание невалидно.
+    const att = attempt({ contentItemId: "c1", number: 1, accept: ["A"], given: "B", submittedAt: new Date("2026-07-08") });
+    const out = deriveOpenMistakes([att], [], [
+      review("c1", 1, { dueAt: new Date("2026-07-20"), intervalDays: 7, lastReviewedAt: new Date("2026-07-05") }),
+    ], now);
+    expect(out[0].isDue).toBe(true);
+  });
+
+  it("резолюция гасит и при наличии SR-строки (как раньше)", () => {
+    const att = attempt({ contentItemId: "c1", number: 1, accept: ["A"], given: "B", submittedAt: new Date("2026-07-01") });
+    const out = deriveOpenMistakes([att], [resolution("c1", 1)], [
+      review("c1", 1, { dueAt: new Date("2026-07-20"), intervalDays: 7, lastReviewedAt: new Date("2026-07-05") }),
+    ], now);
+    expect(out).toHaveLength(0);
+  });
+
+  it("сортировка: due-первые, scheduled — потом (даже если scheduled-попытка свежее)", () => {
+    // cA без SR-строки → due; cB запланирован в будущее, попытка не новее ревью → scheduled.
+    const dueMistake = attempt({ contentItemId: "cA", number: 1, accept: ["A"], given: "B", submittedAt: new Date("2026-07-01") });
+    const schedMistake = attempt({ contentItemId: "cB", number: 1, accept: ["A"], given: "B", submittedAt: new Date("2026-07-09T00:00:00Z") });
+    const out = deriveOpenMistakes([dueMistake, schedMistake], [], [
+      review("cB", 1, { dueAt: new Date("2026-07-20"), intervalDays: 7, lastReviewedAt: new Date("2026-07-09T12:00:00Z") }),
+    ], now);
+    // Без due-first свежая cB (07-09) шла бы первой; сортировка опускает scheduled вниз.
+    expect(out.map((m) => m.contentItemId)).toEqual(["cA", "cB"]);
+    expect(out[0].isDue).toBe(true);
+    expect(out[1].isDue).toBe(false);
   });
 });

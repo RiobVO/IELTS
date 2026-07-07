@@ -11,7 +11,7 @@ import { QuestionNavigator, type NavPart } from "@/components/exam/QuestionNavig
 import { QuestionHtml } from "@/components/exam/QuestionHtml";
 import { PassagePane, type AnnotationRow } from "./PassagePane";
 import { saveProgress, submitAttempt } from "./actions";
-import { checkAnswer, locateEvidence, revealQuestion, type RevealResult } from "./practice-actions";
+import { checkAnswer, locateEvidence, reviewMistake, revealQuestion, type RevealResult } from "./practice-actions";
 import { countWords, parseChoiceCount, parseWordLimit } from "@/lib/exam/format-guard";
 import { strategyHints } from "@/lib/exam/strategy-hints";
 import { parseConfidenceMap, type ConfidenceLevel } from "@/lib/practice/confidence-calibration";
@@ -408,8 +408,16 @@ export default function ExamRunner({
         })
         .catch((e) => console.error("checkAnswer call failed", e))
         .finally(() => setCheckBusy((b) => ({ ...b, [n]: false })));
+      // Учебная петля: если проверяем именно вопрос из очереди ошибок (focus), пишем
+      // SR-ревью (тот же гейт practice; сервер грейдит сам, verdict клиента не шлём).
+      // Fire-and-forget — сбой не ломает UX проверки. Не-focus и mock (focus==null) не трогаем.
+      if (focus != null && n === focus) {
+        void reviewMistake(attemptId, n, v).catch((e) =>
+          console.error("reviewMistake call failed", e),
+        );
+      }
     },
-    [attemptId],
+    [attemptId, focus],
   );
 
   const runReveal = useCallback(
