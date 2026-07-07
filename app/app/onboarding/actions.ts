@@ -3,9 +3,11 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { db } from "@/db";
 import { profile } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { captureServer } from "@/lib/analytics/server";
 
 function fail(message: string): never {
   redirect(`/app/onboarding?error=${encodeURIComponent(message)}`);
@@ -51,6 +53,10 @@ export async function completeOnboarding(formData: FormData) {
     console.error("completeOnboarding failed", e);
     fail("Could not save your profile. Try again.");
   }
+
+  // onboarding_complete — событие воронки (§11), best-effort в after() (как test_start),
+  // не блокирует редирект. display_name не шлём (PII).
+  after(async () => captureServer("onboarding_complete", user.id, { target_band: band, has_region: regionId !== "" }));
 
   revalidatePath("/app", "layout");
   redirect("/app");
