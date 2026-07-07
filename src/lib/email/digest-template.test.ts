@@ -141,6 +141,15 @@ describe("buildDigestEmail", () => {
     expect(html).not.toContain("Your plan to band");
   });
 
+  it("bandPlan.currentBand == null → «Sit a full mock» вместо «null away»", () => {
+    const { html } = buildDigestEmail({
+      ...BASE,
+      bandPlan: { ...SAMPLE_PLAN, currentBand: null, distance: null, reached: false },
+    });
+    expect(html).toContain("Sit a full mock to measure your distance to band 7.");
+    expect(html).not.toContain("null away");
+  });
+
   it("label в weakTypes/drill экранируется (защита от инъекции разметки)", () => {
     const evilPlan: BandPlan = {
       ...SAMPLE_PLAN,

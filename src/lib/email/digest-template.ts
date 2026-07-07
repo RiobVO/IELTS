@@ -79,7 +79,15 @@ function formatRatingLine(rating: number, delta: number | null): string {
 function buildPlanHtml(bandPlan: BandPlan | undefined, practiceUrl: string | null | undefined): string {
   if (!bandPlan || bandPlan.targetBand == null) return "";
 
-  const distanceLine = bandPlan.reached ? "Target reached 🎉" : `${bandPlan.distance} away`;
+  // currentBand == null (юзер ещё не сдавал full-40Q mock) ⇒ distance тоже null —
+  // без этой ветки рендерилось бы «null away». Остальная секция (слабейший тип/дрилл)
+  // не зависит от currentBand и сохраняется как есть.
+  const distanceLine =
+    bandPlan.currentBand == null
+      ? `Sit a full mock to measure your distance to band ${bandPlan.targetBand}.`
+      : bandPlan.reached
+        ? "Target reached 🎉"
+        : `${bandPlan.distance} away`;
 
   const weakest = bandPlan.weakTypes[0] ?? null;
   const weakestHtml = weakest

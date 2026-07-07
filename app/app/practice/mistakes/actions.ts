@@ -21,7 +21,10 @@ import { isUuid } from "@/lib/uuid";
  * по (content_item, number); нет такого вопроса → no-op (заодно отсекает forged-вызовы
  * с произвольными номерами). Резолюция впрок безвредна и без этого: деривация гасит
  * ошибку только когда resolved_at >= submitted_at попытки (см. deriveOpenMistakes).
- * Идемпотентно: ON CONFLICT DO NOTHING по unique(user_id, content_item_id, number).
+ * ON CONFLICT DO UPDATE resolved_at (не DO NOTHING): переоткрытая ошибка (новая
+ * wrong-попытка после старого «Mark learned») должна перегасываться свежим
+ * resolved_at, иначе старая дата держит карточку открытой навсегда. Семантика —
+ * «последнее закрытие»; unique(user_id, content_item_id, number) не даёт задвоиться.
  */
 export async function resolveMistake(
   contentItemId: string,
@@ -44,7 +47,10 @@ export async function resolveMistake(
     await db
       .insert(mistakeResolution)
       .values({ userId: user.id, contentItemId, questionNumber, qtype: q.qtype })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: [mistakeResolution.userId, mistakeResolution.contentItemId, mistakeResolution.questionNumber],
+        set: { resolvedAt: new Date() },
+      });
     revalidatePath("/app/practice/mistakes");
   } catch (e) {
     console.error("resolveMistake failed", e);
