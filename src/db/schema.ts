@@ -969,3 +969,50 @@ export const mistakeResolution = pgTable(
     index("mistake_resolution_content_item_id_idx").on(t.contentItemId),
   ],
 );
+
+/* -------------------------------------------------------------------------- */
+/* saved_word — P11 «Saved words» (migration 0041)                              */
+/* Личный словарь: слово из пассажа (practice-чтение) + context-предложение +    */
+/* источник, со СВОИМ SM-2-стейтом (ядро reviewCard, как vocab_progress). MVP     */
+/* LLM-free и без внешних словарей — авто-дефиниций нет, vocab_card не            */
+/* синтезируется. Owner-стейт как vocab_progress/mistake_resolution: owner-read   */
+/* (RLS user_id = auth.uid()), запись ТОЛЬКО server-action owner-path — клиентских */
+/* writes нет. Vocab ВНЕ rating/leaderboard-контура.                             */
+/* -------------------------------------------------------------------------- */
+export const savedWord = pgTable(
+  "saved_word",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profile.id, { onDelete: "cascade" }),
+    word: text("word").notNull(),
+    // Предложение-окружение (вырезка из текста пассажа); DEFAULT '' — слово без контекста легально.
+    context: text("context").notNull().default(""),
+    // Источник закладки; SET NULL при удалении теста — слово переживает депубликацию контента.
+    sourceContentItemId: uuid("source_content_item_id").references(
+      () => contentItem.id,
+      { onDelete: "set null" },
+    ),
+    // SM-2 стейт (то же ядро, что vocab_progress). ease — фактор лёгкости (float), стартовый 2.5.
+    ease: real("ease").notNull().default(2.5),
+    intervalDays: integer("interval_days").notNull().default(0),
+    repetitions: integer("repetitions").notNull().default(0),
+    lapses: integer("lapses").notNull().default(0),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull().defaultNow(),
+    lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Одно слово на пользователя регистронезависимо (lower(word) → выражение требует
+    // unique INDEX). Leftmost user_id обслуживает owner-read + RLS-политику.
+    uniqueIndex("saved_word_user_lower_word_key").on(t.userId, sql`lower(${t.word})`),
+    // Due-очередь «My words» по сроку повтора (второй столбец unique-индекса — lower(word)).
+    index("saved_word_user_due_idx").on(t.userId, t.dueAt),
+    // FK-индекс source_content_item_id: ON DELETE SET NULL при удалении теста
+    // (не leftmost в unique — как mistake_resolution.content_item_id).
+    index("saved_word_source_content_item_id_idx").on(t.sourceContentItemId),
+  ],
+);
