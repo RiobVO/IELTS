@@ -4,7 +4,7 @@ Ambiguities in BRIEF.md §5/§6.1 resolved while building the schema + migration
 The brief wins; where it was silent or self-conflicting, a sane choice was made
 and logged here. No tables were invented beyond what the brief implies.
 
-## Table count: 33 (Phase 1 shipped 13; +20 added in later phases)
+## Table count: 34 (Phase 1 shipped 13; +21 added in later phases)
 
 §5 enumerates 12 tables (`badge`/`user_badge` are two). The Phase-1 worked example
 expected **13 tables** — the 13th is **`notification`**, defined in **§11**
@@ -49,11 +49,20 @@ attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
   writes (owner-path `saveWord`/`reviewSavedWord`/`deleteSavedWord`), exactly like
   `vocab_progress`/`mistake_resolution`. Unique on `(user_id, lower(word))` (expression →
   unique INDEX). Vocab is OUTSIDE the rating/leaderboard loop; this table too.
+- `mistake_review` — migration `0044_mistake_review` (учебная петля, BRIEF §12.3 шаг 2,
+  SR-волна). SM-2-расписание повторов (same `reviewCard` core as `vocab_progress`/
+  `saved_word`) for open mistakes — a per-`(user, content_item, question_number)` due-date
+  state sitting ON TOP of `mistake_resolution` (0040), which still owns the terminal
+  "resolved" fact. Open mistakes stay derived at read-time; this table only attaches a
+  `due_at`/`ease`/`repetitions` schedule so the queue can prioritize what's due. Owner-read
+  (RLS `user_id = auth.uid()`) + server-only writes (owner-path `reviewMistake`, landing in
+  a follow-up change), exactly like `saved_word`/`mistake_resolution`. This migration only
+  bumps `APP_TABLE_COUNT`; the owner-read cohort (§4i) and write-lockdown companion
+  assertions are deferred to the change that adds the `reviewMistake` write path.
 
-The DB has **33** tables. `verify.ts` `APP_TABLE_COUNT` must track it — bump **32 → 33**
-with the `0041` companion edit (`saved_word` added to the owner-read cohort in check 4i +
-a `savedWordInsertDenied` case in the write-lockdown). `src/db/schema.ts` types **32** of
-them: the legacy `topic` table (migration `0000`, Phase 1)
+The DB has **34** tables. `verify.ts` `APP_TABLE_COUNT` must track it — bump **33 → 34**
+for `0044` (`mistake_review`; count-only this round, see above). `src/db/schema.ts` types
+**33** of them: the legacy `topic` table (migration `0000`, Phase 1)
 is unused since Phase 3 moved to `writing_task`/`speaking_task`, so its Drizzle export +
 `topic_skill` enum were dropped as dead code (#26) while the empty table lingers in the DB
 (no destructive drop). Re-add a typed export only if `topic` is ever revived.

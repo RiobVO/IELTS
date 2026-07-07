@@ -1026,3 +1026,52 @@ export const savedWord = pgTable(
     index("saved_word_source_content_item_id_idx").on(t.sourceContentItemId),
   ],
 );
+
+/* -------------------------------------------------------------------------- */
+/* mistake_review — SR-расписание повторов ошибок (migration 0044)              */
+/* Промежуточный SM-2-стейт ДО терминального «закрыто» (mistake_resolution,      */
+/* 0040): зеркало saved_word, то же ядро reviewCard. Открытые ошибки по-прежнему  */
+/* деривятся на чтении — эта таблица лишь пришивает due_at к каждой (юзер, тест,  */
+/* вопрос). Owner-стейт как saved_word/mistake_resolution: owner-read (RLS         */
+/* user_id = auth.uid()), запись ТОЛЬКО server-action owner-path — клиентских     */
+/* writes нет.                                                                    */
+/* -------------------------------------------------------------------------- */
+export const mistakeReview = pgTable(
+  "mistake_review",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profile.id, { onDelete: "cascade" }),
+    contentItemId: uuid("content_item_id")
+      .notNull()
+      .references(() => contentItem.id, { onDelete: "cascade" }),
+    questionNumber: integer("question_number").notNull(),
+    // Денормализованный qtype-слаг на момент первого ревью (как mistake_resolution.qtype).
+    qtype: text("qtype").notNull(),
+    // SM-2 стейт (то же ядро, что vocab_progress/saved_word). ease — фактор лёгкости, стартовый 2.5.
+    ease: real("ease").notNull().default(2.5),
+    intervalDays: integer("interval_days").notNull().default(0),
+    repetitions: integer("repetitions").notNull().default(0),
+    lapses: integer("lapses").notNull().default(0),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull().defaultNow(),
+    lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Одна SR-запись на (юзер, тест, номер вопроса); leftmost user_id обслуживает
+    // owner-read + RLS-политику.
+    unique("mistake_review_user_content_question_key").on(
+      t.userId,
+      t.contentItemId,
+      t.questionNumber,
+    ),
+    // Due-очередь «Due now» по сроку повтора (как saved_word_user_due_idx).
+    index("mistake_review_user_due_idx").on(t.userId, t.dueAt),
+    // FK-индекс content_item_id: cascade-delete при удалении теста (не leftmost
+    // в unique — как mistake_resolution.content_item_id).
+    index("mistake_review_content_item_id_idx").on(t.contentItemId),
+  ],
+);
