@@ -21,7 +21,7 @@ export default async function ExamPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ mode?: string }>;
+  searchParams: Promise<{ mode?: string; focus?: string }>;
 }) {
   const user = await requireUser();
   const { id } = await params;
@@ -30,6 +30,11 @@ export default async function ExamPage({
   const sp = await searchParams;
   const modeParam: AttemptMode | null =
     sp.mode === "practice" || sp.mode === "mock" ? sp.mode : null;
+  // P15 — deep-link фокус вопроса (из /app/practice/mistakes). Здесь только санация до
+  // int для протаскивания в redirect; валидацию по реальным номерам делает
+  // /app/reading/[id]. В iframe-ветке (practice-lite/mock) параметр не используется.
+  const focusRaw = Math.round(Number(sp.focus));
+  const focusQS = Number.isFinite(focusRaw) && focusRaw >= 1 ? `&focus=${focusRaw}` : "";
 
   // content_item (раннер + требуемый tier), профиль и attempt-факты (незакрытая
   // попытка / была ли сдача) независимы → один параллельный слой. Незакрытая
@@ -86,7 +91,7 @@ export default async function ExamPage({
   const practiceServable =
     !!atomized && (test.section === "reading" || !!withAudio);
   if (mode === "practice" && practiceServable) {
-    redirect(`/app/reading/${id}?mode=practice`);
+    redirect(`/app/reading/${id}?mode=practice${focusQS}`);
   }
 
   if (!mode) {

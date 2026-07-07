@@ -34,7 +34,7 @@ export default async function ReadingTestPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ mode?: string; min?: string }>;
+  searchParams: Promise<{ mode?: string; min?: string; focus?: string }>;
 }) {
   const user = await requireUser();
   const { id } = await params;
@@ -116,6 +116,12 @@ export default async function ReadingTestPage({
   // Дефолт лимита mock — из длительности теста, иначе по объёму (та же шкала,
   // что жила в клиентском StartScreen до P0).
   const questionCount = questionsData?.length ?? 0;
+  // P15 — deep-link фокус вопроса (навигация из /app/practice/mistakes). Валидируем по
+  // РЕАЛЬНЫМ номерам вопросов (одиночный пассаж нумеруется не с 1), иначе undefined.
+  const focusRaw = Math.round(Number(sp.focus));
+  const questionNumbers = new Set((questionsData ?? []).map((q) => q.number));
+  const focusNumber =
+    Number.isFinite(focusRaw) && questionNumbers.has(focusRaw) ? focusRaw : undefined;
   const defaultMockMinutes =
     test.duration_seconds != null
       ? Math.max(5, Math.round(test.duration_seconds / 60))
@@ -191,6 +197,9 @@ export default async function ReadingTestPage({
       // questions_html спрятал бы P6/P7 (check/reveal) и P1-подсказки, которые живут
       // в QuestionBlock. Fidelity-verbatim остаётся mock/легаси-пути.
       questionsHtml={attemptMode === "practice" ? null : questionsHtml}
+      // P15 — deep-link авто-скролл к вопросу, только practice (в mock проп не
+      // передаём: mock ходит iframe-раннером, атомизации тут нет).
+      focus={attemptMode === "practice" ? focusNumber : undefined}
     />
   );
 }
