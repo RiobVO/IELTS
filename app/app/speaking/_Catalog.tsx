@@ -326,7 +326,9 @@ const S: Record<string, CSSProperties> = {
 
   lockBanner: { display: "flex", gap: 10, alignItems: "flex-start", padding: "14px 16px", background: "var(--brand-subtle)", border: "1px solid var(--brand-border)", borderRadius: "var(--radius-md)", fontSize: 13.5, lineHeight: 1.5, color: "var(--text-secondary)" },
 
-  segGroup: { display: "flex", flexDirection: "column", gap: 6, flex: "none" },
+  // flex:"0 1 auto"+minWidth:0 позволяют группе сжиматься в .sc-filters на узком экране,
+  // иначе ряд чипов (inline-flex wrap) держит контентную ширину и хвост тем режет MAIN{overflow-x:clip}.
+  segGroup: { display: "flex", flexDirection: "column", gap: 6, flex: "0 1 auto", minWidth: 0, maxWidth: "100%" },
   segName: { paddingLeft: 2, fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 600, color: "var(--text-muted)" },
   segment: { display: "inline-flex", flexWrap: "wrap", padding: 4, gap: 4, background: "var(--surface-inset)", borderRadius: 11 },
   seg: { appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, cursor: "pointer", transition: "var(--transition-colors)" },
