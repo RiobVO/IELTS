@@ -155,6 +155,15 @@ export const PassagePane = memo(function PassagePane({
   // реконсилируется, <mark> живут. savedFlash — success-состояние перед авто-снятием.
   const [saveBubble, setSaveBubble] = useState<{ word: string; context: string; x: number; y: number } | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  // Note-tool (выделение + заметки) — десктопная афорданс: на тач-вводе воюет с
+  // нативными «ручками» выделения, а плавающая капсула перекрывает текст. На грубом
+  // указателе прячем инструмент и не создаём аннотации (save-word ниже остаётся —
+  // это отдельная vocab-фича). isTouch client-only → без SSR-mismatch. Существующие
+  // марки (сделанные на десктопе) продолжают рендериться read-only.
+  const [isTouch, setIsTouch] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia === "function") setIsTouch(window.matchMedia("(pointer:coarse)").matches);
+  }, []);
 
   // Load saved reading prefs (client-only — no SSR mismatch). Storage может быть
   // недоступен (private mode/blocked) — try/catch, чтобы не ронять панель. При
@@ -322,7 +331,8 @@ export const PassagePane = memo(function PassagePane({
     }
 
     sel.removeAllRanges();
-    if (!(end > start)) return;
+    // На тач-вводе highlight/note выключены — save-word (выше) уже показан, аннотацию не создаём.
+    if (isTouch || !(end > start)) return;
 
     const kind = mode;
     const res = await addAnnotation({
@@ -352,18 +362,20 @@ export const PassagePane = memo(function PassagePane({
     };
     setAnnotations((a) => [...a, row]);
     if (kind === "note") setEditor({ id: res.id, quote: text, note: "" });
-  }, [contentItemId, mode, canSaveWords]);
+  }, [contentItemId, mode, canSaveWords, isTouch]);
 
-  // Click an existing mark → open its editor (view/edit note · delete).
+  // Click an existing mark → open its editor (view/edit note · delete). На тач-вводе
+  // редактор не открываем — note-tool десктопный; марки остаются read-only.
   const onClick = useCallback(
     (e: React.MouseEvent) => {
+      if (isTouch) return;
       const mark = (e.target as HTMLElement).closest?.("mark[data-aid]") as HTMLElement | null;
       if (!mark) return;
       const id = mark.dataset.aid!;
       const a = annotations.find((x) => x.id === id);
       if (a) setEditor({ id, quote: a.quote, note: a.note ?? "" });
     },
-    [annotations],
+    [annotations, isTouch],
   );
 
   const saveNote = useCallback(async () => {
@@ -434,7 +446,7 @@ export const PassagePane = memo(function PassagePane({
       <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         <div className="pp-masthead" style={S.masthead}>
           <div style={S.overline}>{categoryLabel(category)}</div>
-          <h2 style={S.ptitle}>{title}</h2>
+          <h2 className="pp-title" style={S.ptitle}>{title}</h2>
           <div style={S.pmeta}>
             <span style={S.chip}>
               <Icon name="book-open" size={14} /> ≈ {wordCount.toLocaleString("en-US")} words
@@ -453,8 +465,8 @@ export const PassagePane = memo(function PassagePane({
 
         <article
           ref={articleRef}
-          className="bando-reading editorial"
-          style={{ padding: "24px 48px 80px", maxWidth: 900, margin: "0 auto", fontSize: effFont, ...(reader ? { lineHeight: reader.lineHeight } : null) }}
+          className="bando-reading editorial pp-article"
+          style={{ maxWidth: 900, margin: "0 auto", "--pp-font": `${effFont}px`, ...(reader ? { "--pp-lh": String(reader.lineHeight) } : null) } as React.CSSProperties}
           onMouseUp={onMouseUp}
           onClick={onClick}
         >
@@ -462,19 +474,26 @@ export const PassagePane = memo(function PassagePane({
         </article>
       </div>
 
-      {/* tool capsule */}
+      {/* tool capsule. highlight/note — только тонкий указатель (десктоп): на тач
+          инструмент прячем (см. isTouch). Если на тач и без reader-кнопок капсуле
+          нечего показать — не рендерим её вовсе. */}
+      {(!isTouch || !reader) && (
       <div style={S.capsule}>
-        <button className="cap-btn" onClick={() => setMode("highlight")} aria-pressed={mode === "highlight"} title="Highlight" style={S.capBtn(mode === "highlight")}>
-          <Icon name="highlighter" size={18} strokeWidth={2.1} />
-        </button>
-        <button className="cap-btn" onClick={() => setMode("note")} aria-pressed={mode === "note"} title="Note" style={S.capBtn(mode === "note")}>
-          <Icon name="pen-line" size={18} strokeWidth={2.1} />
-        </button>
+        {!isTouch && (
+          <>
+            <button className="cap-btn" onClick={() => setMode("highlight")} aria-pressed={mode === "highlight"} title="Highlight" style={S.capBtn(mode === "highlight")}>
+              <Icon name="highlighter" size={18} strokeWidth={2.1} />
+            </button>
+            <button className="cap-btn" onClick={() => setMode("note")} aria-pressed={mode === "note"} title="Note" style={S.capBtn(mode === "note")}>
+              <Icon name="pen-line" size={18} strokeWidth={2.1} />
+            </button>
+          </>
+        )}
         {/* P4: типографские кнопки (размер/тема) капсулы прячем в practice — управление
             ушло в панель шапки. Без reader (mock/listening) капсула прежняя. */}
         {!reader && (
           <>
-            <span style={S.sep} />
+            {!isTouch && <span style={S.sep} />}
             <button className="cap-btn" onClick={() => setFontPx((f) => Math.max(FONT_MIN, f - 1))} title="Smaller text" style={{ ...S.capBtn(false), fontSize: 13 }}>
               A−
             </button>
@@ -488,6 +507,7 @@ export const PassagePane = memo(function PassagePane({
           </>
         )}
       </div>
+      )}
 
       {/* note editor / delete panel */}
       {editor && (
@@ -539,7 +559,7 @@ export const PassagePane = memo(function PassagePane({
 });
 
 const PASSAGE_CSS = `
-.bando-reading.editorial{font-family:var(--font-reading);color:var(--reading-text);line-height:1.75}
+.bando-reading.editorial{font-family:var(--font-reading);color:var(--reading-text);line-height:var(--pp-lh,1.75);font-size:var(--pp-font,18px)}
 .bando-reading.editorial p{margin:0 0 1.15em;position:relative}
 .bando-reading.editorial em{font-style:italic}
 /* Буквы абзацев — ЕДИНЫЙ контракт после read-time нормализации
@@ -580,11 +600,31 @@ const PASSAGE_CSS = `
 .pp-saveword-btn:hover{filter:brightness(1.06)}
 @media (pointer:coarse){.pp-saveword-btn{min-height:44px}}
 @media (prefers-reduced-motion:reduce){.pp-saveword{animation:none}}
-/* Мобильный проход (≤430px): горизонтальные поля пассажа/masthead 48px→16px, чтобы текст
-   не жался к краям экрана (планшет/десктоп >430px без изменений). */
+/* Адаптив пассажа (mobile-first). Single-tab колонка живёт 0–1023px (две панели
+   только ≥1024px, см. ExamRunner .exam-split), поэтому широкие поля 48px нужны лишь
+   на десктопе — на телефоне они съедали читаемую ширину. Поля/размеры — в классах
+   (не inline), иначе media-query их не победит. */
+.pp-article{padding:20px 20px 72px}
+.pp-masthead{padding:24px 20px 0}
+.pp-title{font-size:24px}
+@media (min-width:641px){
+  .pp-article{padding:24px 32px 80px}
+  .pp-masthead{padding:28px 32px 0}
+  .pp-title{font-size:27px}
+}
+@media (min-width:1024px){
+  .pp-article{padding:24px 48px 80px}
+  .pp-masthead{padding:30px 48px 0}
+  .pp-title{font-size:30px}
+}
+/* Телефон: кегль пассажа на 2px меньше выбранного в Aa (пол 16px — «большие буквы»
+   больше не выпирают на узкой колонке); поля к краям поджаты до 16px. */
+@media (max-width:640px){
+  .bando-reading.editorial{font-size:max(16px,calc(var(--pp-font,18px) - 2px))}
+}
 @media (max-width:430px){
-  .bando-reading.editorial{padding-left:16px!important;padding-right:16px!important}
-  .pp-masthead{padding-left:16px!important;padding-right:16px!important}
+  .pp-article{padding-left:16px;padding-right:16px}
+  .pp-masthead{padding-left:16px;padding-right:16px}
   /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
   .pp-note-textarea{font-size:16px!important}
 }
@@ -593,9 +633,9 @@ const PASSAGE_CSS = `
 const S = {
   pane: { minWidth: 0, flexDirection: "column", borderRight: "1px solid var(--border)", position: "relative" } as React.CSSProperties,
   progressTop: { height: 3, background: "color-mix(in oklab, var(--reading-rule) 70%, transparent)", flex: "none" } as React.CSSProperties,
-  masthead: { padding: "30px 48px 0", maxWidth: 900, margin: "0 auto", textAlign: "center" } as React.CSSProperties,
+  masthead: { maxWidth: 900, margin: "0 auto", textAlign: "center" } as React.CSSProperties,
   overline: { fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--brand)", fontWeight: 700 } as React.CSSProperties,
-  ptitle: { fontFamily: "var(--font-reading)", fontWeight: 700, fontSize: 30, color: "var(--reading-text)", lineHeight: 1.18, letterSpacing: "-0.01em", margin: "10px 0 0" } as React.CSSProperties,
+  ptitle: { fontFamily: "var(--font-reading)", fontWeight: 700, color: "var(--reading-text)", lineHeight: 1.18, letterSpacing: "-0.01em", margin: "10px 0 0" } as React.CSSProperties,
   // Чипсы (words / min read / notes) скрыты под Cambridge-видом — референс их не показывает.
   pmeta: { display: "none" } as React.CSSProperties,
   chip: { display: "inline-flex", alignItems: "center", gap: 6 } as React.CSSProperties,
