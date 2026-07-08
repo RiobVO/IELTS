@@ -135,7 +135,14 @@ export async function submitAttempt(
   // mode=null: на сабмите действует только tier-гейт (defense-in-depth). Дневной
   // кап гейтит СТАРТЫ mock, не завершения — редирект здесь терял бы доделанную
   // попытку (iframe-раннер не автосейвит ответы).
-  await enforceAccess(user.id, accessData.userTier, accessData.tierRequired, null);
+  await enforceAccess(
+    user.id,
+    accessData.userTier,
+    accessData.tierRequired,
+    accessData.category,
+    contentItemId,
+    null,
+  );
 
   if (rows.length === 0) redirect(`/app/reading/${contentItemId}`);
 

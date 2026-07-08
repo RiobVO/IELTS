@@ -43,6 +43,7 @@ function buildCards(speakingEnabled: boolean): PlanCardMeta[] {
         { t: "Answer explanations & evidence", on: true },
         ...(speakingEnabled ? [{ t: "1 free Speaking analysis to try", on: true, hero: true }] : []),
         { t: "League, badges & streaks", on: true },
+        { t: "1 trial full mock test", on: true },
         { t: "Full 40-question mock tests + band", on: false },
         { t: "AI Writing feedback", on: false },
       ],
@@ -80,7 +81,7 @@ function buildCards(speakingEnabled: boolean): PlanCardMeta[] {
 
 const FAQ = [
   { q: "Is this a subscription?", a: "No — each plan is a one-time purchase for the period you pick, with no auto-renew. There's nothing to cancel: your access runs until the end of the paid period, then you're back on the free plan unless you buy again." },
-  { q: "What's the difference between free and paid?", a: "Reading & Listening practice — including the per-type breakdown and full answer explanations — are free. You pay for full 40-question mock tests with an official band score, and AI Writing feedback (AI Speaking on Ultra)." },
+  { q: "What's the difference between free and paid?", a: "Reading & Listening practice — including the per-type breakdown and full answer explanations — are free, and your first full mock test is free to try, no card. After that you pay for full 40-question mock tests with an official band score, and AI Writing feedback (AI Speaking on Ultra)." },
   { q: "Premium vs Ultra?", a: "Premium adds full 40-question mock tests with your real band, plus AI Writing feedback (5 checks a day). Ultra adds AI Speaking feedback for Part 2 and raises Writing to 20 checks a day — everything in Premium included." },
   { q: "Are the tests like the real IELTS?", a: "Yes — real Cambridge material in a runner that mirrors the computer-delivered exam: same interface, timer, drag-and-drop." },
   { q: "How accurate is the band?", a: "Reading & Listening use the official Cambridge band scale. Writing is scored by AI on the 4 official criteria as a coaching estimate to guide practice — not an official score. AI Speaking on Ultra works the same way." },

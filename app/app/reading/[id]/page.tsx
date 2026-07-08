@@ -13,7 +13,7 @@ import {
   startAttempt,
 } from "@/lib/exam/access";
 import { categoryLabel } from "@/lib/labels";
-import { effectiveTier, type Tier } from "@/lib/tiers";
+import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import { normalizePassageHtml } from "@/lib/reading/normalize-passage";
 import ExamRunner from "./ExamRunner";
@@ -91,7 +91,7 @@ export default async function ReadingTestPage({
   const mode = existing?.mode ?? modeParam;
   // Кап — только на создание НОВОГО mock; резюм существующей попытки не расходует
   // слот и не должен блокироваться (tier-гейт применяется всегда).
-  await enforceAccess(user.id, userTier, test.tier_required as Tier, existing ? null : modeParam);
+  await enforceAccess(user.id, userTier, test.tier_required as Tier, test.category, id, existing ? null : modeParam);
 
   // Listening: one audio file for the whole test. Local public/ path now;
   // a full Storage URL (signed, §11) once audio lives in the cloud.
@@ -156,8 +156,11 @@ export default async function ReadingTestPage({
   // reveal). qtype-гейт зеркалит locateEvidence (matching_info/headings: para≈ответ).
   const locatorEligible = mode === "practice" && !audioSrc;
 
+  // Пройти enforceAccess с !meetsTier можно только по trial-лейну (§4.8) → trial-старт:
+  // H3-атомарный claim в startAttempt.
+  const isTrial = !meetsTier(userTier, test.tier_required as Tier);
   const [{ attemptId, answers: savedAnswers, mode: attemptMode }, annotations, locatableRows] = await Promise.all([
-    startAttempt(user.id, id, mode),
+    startAttempt(user.id, id, mode, isTrial),
     // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
     // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
     db

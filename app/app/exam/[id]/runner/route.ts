@@ -7,6 +7,8 @@ import { retargetBridgeOrigin } from "@/lib/import/runner/bridge";
 import { forceRunnerMode } from "@/lib/import/runner/force-mode";
 import { polyfillRunnerStorage } from "@/lib/import/runner/runner-storage";
 import { skinRunnerGate, skinRunnerBrand } from "@/lib/import/runner/skin-runner";
+import { hasConsumedTrial } from "@/lib/exam/access";
+import { isFullCategory, trialAllows } from "@/lib/exam/trial";
 import { effectiveTier, meetsTier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 
@@ -37,7 +39,11 @@ export async function GET(
       .from(profile)
       .where(eq(profile.id, user.id)),
     db
-      .select({ tierRequired: contentItem.tierRequired, html: contentItem.runnerHtml })
+      .select({
+        tierRequired: contentItem.tierRequired,
+        category: contentItem.category,
+        html: contentItem.runnerHtml,
+      })
       .from(contentItem)
       // Published-only (owner-path bypasses RLS): a draft id -> 404, never served.
       .where(and(eq(contentItem.id, id), eq(contentItem.status, "published"))),
@@ -62,8 +68,25 @@ export async function GET(
   const userTier = prof
     ? effectiveTier({ tier: prof.tier, premium_until: prof.premiumUntil })
     : "basic";
+  // Tier-гейт + trial-лейн (§4.8), зеркалит enforceAccess: Basic может открыть ОДИН
+  // полный тест без апгрейда. Без этого iframe-раннер отдал бы 403 на легитимном
+  // trial-старте (страница уже пропустила), и trial сломался бы на середине.
   if (!meetsTier(userTier, item.tierRequired)) {
-    return new Response("Forbidden", { status: 403 });
+    const maybeTrial = userTier === "basic" && isFullCategory(item.category);
+    const trialConsumed = maybeTrial ? await hasConsumedTrial(user.id, id) : true;
+    // C2: trial отдаёт runner-HTML ТОЛЬКО при существующей in_progress-попытке юзера
+    // на ЭТОТ item (att). Иначе прямой GET /runner без старта читал бы контент многих
+    // full mock, не расходуя trial. Легитимный поток цел: exam page создаёт попытку
+    // до загрузки iframe. Для premium/ultra ветка не исполняется (meetsTier пропускает).
+    const trialGranted =
+      !!att &&
+      trialAllows({
+        userTier,
+        tierRequired: item.tierRequired,
+        category: item.category,
+        trialConsumed,
+      });
+    if (!trialGranted) return new Response("Forbidden", { status: 403 });
   }
 
   // Раннер исполняется в OPAQUE origin (iframe sandbox без allow-same-origin — P0-изоляция):
