@@ -610,9 +610,9 @@ const CSS = `
 @media (max-width:430px){
   .sa-scratch{font-size:16px!important}
 }
-/* Close-кнопка 30×30 — визуал сохраняем, тап-зону растим псевдоэлементом. */
+/* Close-кнопка 30×30 — визуал сохраняем, тап-зону растим псевдоэлементом (touch, не только узкий телефон). */
 .sa-close{position:relative}
-@media (max-width:430px){
+@media (pointer:coarse){
   .sa-close::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
 }
 /* Таймер+Stop уезжают под фолд ниже высокой cue-карточки (колонки стекаются на
@@ -634,7 +634,7 @@ const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 960, margin: "0 auto", padding: "20px 16px 48px", fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   shell: { background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: 28, overflow: "hidden", boxShadow: "var(--shadow-lg)", display: "flex", flexDirection: "column" },
 
-  headbar: { display: "flex", alignItems: "center", gap: 10, padding: "14px 20px", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-raised)" },
+  headbar: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "14px 20px", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-raised)" },
   logoBars: { display: "inline-flex", alignItems: "flex-end", gap: 2, height: 18 },
   logoBar: { width: 4, borderRadius: 2 },
   headTitle: { fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" },

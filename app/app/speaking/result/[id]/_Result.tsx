@@ -139,9 +139,11 @@ const GRID_CSS = `
   .wf-herogrid{grid-template-columns:330px 1fr}
   .wf-plotrow{grid-template-columns:1fr 240px}
 }
-/* Тап-таргет пилюли истории 38px < 44px на узких телефонах. */
-@media (max-width:430px){
+/* Тап-таргет пилюли истории 38px < 44px на touch (не только узкий телефон). */
+@media (pointer:coarse){
   .sr-pill{min-height:44px}
+}
+@media (max-width:430px){
   /* CriteriaPlot/BandHero микро-текст (см. Writing _FeedbackView.tsx — тот же реюз). */
   .wf-plot-tick{font-size:11px!important}
   .wf-plot-targetmark{font-size:12px!important}
