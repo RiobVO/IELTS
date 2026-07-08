@@ -819,7 +819,7 @@ function TestRow({ t }: { t: PracticeTest }) {
         <div style={S.rowTitle}>{t.title}</div>
         {typesLabel && <div style={S.rowTypes}>{typesLabel}</div>}
       </div>
-      <div style={S.rowRight}>
+      <div style={S.rowRight} className="pc-rowright">
         {/* Живая попытка → Resume; иначе лучший прошлый результат → Done; иначе для
             непройденного — длительность (продаёт тест), не опаковый «—» (скринридер
             читает его как «em dash»). */}
@@ -919,6 +919,13 @@ const CSS = `
 .pc-skillcard:hover{transform:translateY(-3px);box-shadow:var(--shadow-solid-lg)}
 .pc-coming-item:hover{border-color:var(--brand-border)!important;background:var(--surface-hover)!important}
 .pc-row:hover{transform:translateY(-2px);border-color:var(--brand-border)!important;box-shadow:var(--shadow-solid-lg)}
+/* На телефоне ряд теста стекается: действие (Resume/Start) уходит футер-баром на всю
+   ширину под заголовок — иначе оно жмёт длинный тайтл в узкую колонку (рвётся на 8-9 строк).
+   !important бьёт inline flexDirection/alignItems/textAlign у S.rowRight (media их иначе не победит). */
+@media(max-width:560px){
+  .pc-row{flex-wrap:wrap;row-gap:14px}
+  .pc-rowright{flex-basis:100%!important;flex-direction:row!important;align-items:center!important;justify-content:space-between!important;text-align:left!important}
+}
 .pc-drill:hover{border-color:var(--brand)!important}
 .pc-drill:active{transform:translateY(3px);box-shadow:none!important}
 .pc-drilllink:hover{text-decoration:underline}
