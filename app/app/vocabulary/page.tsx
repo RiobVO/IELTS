@@ -145,7 +145,9 @@ function PlanPanel({ overview, ctaHref }: { overview: VocabOverview; ctaHref: st
           <Stat
             value={
               newRemainingToday === null ? (
-                <span title="Unlimited new cards on your plan" aria-label="Unlimited new cards on your plan">∞</span>
+                // Visible word, not an "∞" glyph: the primary persona studies on touch,
+                // where a title tooltip never fires and a bare symbol reads as noise.
+                <span style={S.statText}>Unlimited</span>
               ) : (
                 newRemainingToday
               )
@@ -188,15 +190,24 @@ function PlanPanel({ overview, ctaHref }: { overview: VocabOverview; ctaHref: st
         </div>
       </div>
 
-      <div style={S.planFoot}>
-        <Spark forecast={forecast7} />
-        <div style={S.bank}>
-          <BankDot color="var(--success)" label={`${bank.mastered} mastered`} title="Locked in — long review intervals" />
-          <BankDot color="var(--brand)" label={`${bank.learning} learning`} title="Seen before, still in active rotation" />
-          <BankDot color="var(--text-disabled)" label={`${bank.newCount} new`} title="Not started yet" />
-          <span style={S.bankTotal}>{bank.total} words total</span>
+      {/* Secondary status band. Native <details>: collapsed by default on phones
+          (a tap-summary keeps the catalog above the fold), force-expanded ≥480px via a
+          CSS override of the UA closed-details rule — no JS, no hydration flash. */}
+      <details className="vc-foot">
+        <summary className="vc-foot-sum">
+          <span>Forecast &amp; word bank</span>
+          <span className="vc-foot-caret" aria-hidden="true" />
+        </summary>
+        <div className="vc-foot-body">
+          <Spark forecast={forecast7} />
+          <div style={S.bank}>
+            <BankDot color="var(--success)" label={`${bank.mastered} mastered`} title="Locked in — long review intervals" />
+            <BankDot color="var(--brand)" label={`${bank.learning} learning`} title="Seen before, still in active rotation" />
+            <BankDot color="var(--text-disabled)" label={`${bank.newCount} new`} title="Not started yet" />
+            <span style={S.bankTotal}>{bank.total} words total</span>
+          </div>
         </div>
-      </div>
+      </details>
     </section>
   );
 }
@@ -492,6 +503,25 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){
   .vc-card{transition:none!important}
 }
+/* Secondary status band (<details>): hidden summary + always-open body on desktop;
+   collapsed body + tappable summary on phones. The min-width rule overrides the UA
+   "closed <details> hides its body" rule, so ≥480px stays expanded without an open attr. */
+.vc-foot{border-top:1px solid var(--border-subtle);background:var(--surface-inset)}
+.vc-foot-body{padding:14px 20px}
+.vc-foot-caret{width:8px;height:8px;flex:none;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform var(--duration-base) var(--ease-standard)}
+.vc-foot[open] .vc-foot-caret{transform:rotate(-135deg)}
+/* Base = phone: tappable summary; body collapsed by the UA rule unless [open].
+   Mobile is the default (no max-width query) so there is no dead zone at 479–480px. */
+.vc-foot-sum{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 20px;list-style:none;cursor:pointer;font-family:var(--font-ui);font-size:12.5px;font-weight:800;letter-spacing:0.02em;color:var(--text-muted)}
+.vc-foot-sum::-webkit-details-marker{display:none}
+.vc-foot[open] > .vc-foot-body{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+/* Desktop: drop the summary, force the body expanded regardless of [open]
+   (author rule beats the UA "closed <details> hides its body" rule). */
+@media (min-width:480px){
+  .vc-foot-sum{display:none}
+  .vc-foot-body{display:flex;flex-wrap:wrap;align-items:center;gap:14px 26px}
+}
+@media (prefers-reduced-motion:reduce){.vc-foot-caret{transition:none!important}}
 `;
 
 const S: Record<string, CSSProperties> = {
@@ -507,13 +537,14 @@ const S: Record<string, CSSProperties> = {
   planStats: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 22px" },
   stat: { display: "flex", flexDirection: "column", gap: 2, minWidth: 80 },
   statNum: { fontFamily: "var(--font-mono)", fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.1, color: "var(--text-primary)" },
+  // Word-value variant (e.g. "Unlimited") — smaller than the numeric stats so it fits the cell.
+  statText: { fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em", lineHeight: 1.35, color: "var(--text-primary)" },
   streakNum: { color: "var(--streak)", display: "inline-flex", alignItems: "center", gap: 6 },
   statSmall: { fontSize: 13, color: "var(--text-muted)", fontWeight: 700 },
   statLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" },
   planCta: { marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
   rescueCta: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 40, padding: "8px 14px", borderRadius: "var(--radius-full)", border: "2px solid transparent", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 13, fontWeight: 800, textDecoration: "none", transition: "var(--transition-colors)" },
   caughtUp: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: "var(--success-text)" },
-  planFoot: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 26px", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-inset)", padding: "14px 20px" },
   // Без фикс-высоты: колонка = столбик (до 38px) + зазор + подпись (~14px) ≈ 56px,
   // жёсткие 44px резали подписи дней нижней кромкой панели (overflow:hidden).
   sparkWrap: { display: "flex", flexDirection: "column", gap: 7 },
