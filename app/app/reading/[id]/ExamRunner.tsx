@@ -2041,7 +2041,10 @@ const READING_CSS = `
    любой ширине (practice-режим). secondary (badge/pace/goal/pause/restart) при
    нехватке ширины скроллится горизонтально; primary (clock+Submit) всегда виден,
    не сжимается. mock-режим кладёт всё плоско — при ≤3 элементах wrap не срабатывает. */
-.exam-top-right{margin-left:auto;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:14px}
+/* flex:1+min-width:0 (не margin-left:auto) — ОГРАНИЧИВАЕТ кластер доступной шириной,
+   иначе он рос бы до контента, wrap не срабатывал, а max-width:100% у secondary упирался
+   в безразмерного родителя → Submit клиппился overflow:hidden shell на телефоне. */
+.exam-top-right{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:14px}
 .exam-top-right .etr-secondary{display:flex;flex-wrap:nowrap;align-items:center;gap:14px;min-width:0;max-width:100%;overflow-x:auto;padding-block:2px;scrollbar-width:none}
 .exam-top-right .etr-secondary::-webkit-scrollbar{display:none}
 .exam-top-right .etr-primary{display:flex;flex-wrap:nowrap;align-items:center;gap:14px;flex:none}
