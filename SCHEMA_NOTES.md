@@ -838,3 +838,14 @@ Notifications-инфраструктура, волна 2. **Column-only, без 
 `npm run verify` green (34 tables; up→down→up clean + idempotent). Supabase application
 (additive колонки + грант — применить до пуша кода, читающего `kind`/`dedup_key`, чтобы
 не словить deploy-window break) следует общей последовательности.
+
+## 0047 — notification grant lockdown (снятие прод-дрейфа)
+
+Пост-применение 0046 прод-чек `pg_policies`/грантов поймал ровно готчу «Supabase
+default-priv grants»: `anon` имел ВСЕ табличные привилегии на `notification` (вплоть до
+TRUNCATE), `authenticated` — INSERT/DELETE/REFERENCES/TRIGGER/TRUNCATE. Барьер держал RLS
+(anon без политик = deny-all; INSERT/DELETE у authenticated без политик мертвы), но постура
+приведена к secure-by-default: `REVOKE ALL FROM anon` + `REVOKE` лишнего у `authenticated`.
+Клиенту остаются SELECT (policy-scoped, 0001) и `UPDATE (read_at)` (0046). `down` — no-op:
+up снимал только дрейф, контрактных грантов не менял. Проверено на проде скриптом-пробой
+(колоночный UPDATE = только `read_at` у `authenticated`).
