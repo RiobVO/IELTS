@@ -741,6 +741,12 @@ export default function ExamRunner({
   // Таймер шапки: Listening — по записи (audio remaining → transfer); Reading после
   // гидрации/старта — по режиму; до гидрации Reading — прежнее поведение.
   let timerArea: React.ReactNode;
+  // Practice-шапка расщепляется на два ряда, чтобы не разъезжаться на 3 строки на
+  // телефоне: primary (clock + Submit — всегда видимы) и secondary (badge/pace/goal/
+  // pause/restart — при нехватке ширины скроллятся горизонтально). Прочие режимы
+  // (mock/transfer/pre-start) кладут всё в timerArea и рендерятся плоско, как раньше.
+  let timerPrimary: React.ReactNode = null;
+  let timerSecondary: React.ReactNode = null;
   // Listening MOCK — таймер по записи (single-pass). Listening PRACTICE использует общий
   // practice count-up ниже (счёт вверх с паузой/restart) — запись под ручным управлением.
   if (isListening && mode === "mock") {
@@ -777,12 +783,14 @@ export default function ExamRunner({
         </>
       );
     } else {
-      timerArea = (
+      timerPrimary = (
+        <span style={S.clock}>
+          <Icon name={paused ? "pause" : "clock"} size={18} style={{ color: "var(--text-muted)" }} /> {fmt(practiceSeconds)}
+        </span>
+      );
+      timerSecondary = (
         <>
           <span className="exam-mode-badge" style={badge(false)}>Practice</span>
-          <span style={S.clock}>
-            <Icon name={paused ? "pause" : "clock"} size={18} style={{ color: "var(--text-muted)" }} /> {fmt(practiceSeconds)}
-          </span>
           {/* Own-A — pacing coach: только Reading practice, при заданной длительности и
               включённом префе. Listening practice (свой transport P8) не трогаем. */}
           {!isListening && durationSeconds != null && questions.length > 0 && readerPrefs.pace && (
@@ -844,6 +852,27 @@ export default function ExamRunner({
     [questions, answers, flags, set, toggle, flag, isPractice, checked, revealed, checkBusy, wrongTries, runCheck, runReveal, isListening, locatePara, confidence, setConf, locatableSet, runLocate],
   );
 
+  // Aa (reader settings, practice-reading-only) и Submit — общие для обеих веток
+  // шапки (split practice / flat mock), выносим, чтобы не дублировать JSX.
+  const readerBtn = readerActive ? (
+    <button
+      type="button"
+      className="exam-ctrl"
+      style={S.ctrlBtn}
+      aria-label="Reading settings"
+      aria-expanded={readerOpen}
+      title="Reading settings"
+      onClick={() => setReaderOpen((o) => !o)}
+    >
+      <span style={{ fontFamily: "var(--font-reading)", fontWeight: 800, fontSize: 15, lineHeight: 1 }}>Aa</span>
+    </button>
+  ) : null;
+  const submitBtn = (
+    <Button trailingIcon="arrow-right" onClick={submit} loading={pending}>
+      Submit
+    </Button>
+  );
+
   return (
     <div className="exam-cambridge" style={S.shell}>
       <style>{READING_CSS}</style>
@@ -857,25 +886,27 @@ export default function ExamRunner({
           <div style={S.topTitle}>{title}</div>
           <div style={S.topMeta}>{meta}</div>
         </div>
-        <div className="exam-top-right" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
-          {/* P4 — комфорт чтения (practice reading only). Панель fixed, backdrop закрывает. */}
-          {readerActive && (
-            <button
-              type="button"
-              className="exam-ctrl"
-              style={S.ctrlBtn}
-              aria-label="Reading settings"
-              aria-expanded={readerOpen}
-              title="Reading settings"
-              onClick={() => setReaderOpen((o) => !o)}
-            >
-              <span style={{ fontFamily: "var(--font-reading)", fontWeight: 800, fontSize: 15, lineHeight: 1 }}>Aa</span>
-            </button>
+        <div className="exam-top-right">
+          {/* Practice: два nowrap-ряда (secondary скроллится, primary=clock+Submit
+              всегда виден) → максимум 2 строки на телефоне. Прочие режимы — плоско. */}
+          {timerSecondary ? (
+            <>
+              <div className="etr-secondary">
+                {readerBtn}
+                {timerSecondary}
+              </div>
+              <div className="etr-primary">
+                {timerPrimary}
+                {submitBtn}
+              </div>
+            </>
+          ) : (
+            <>
+              {readerBtn}
+              {timerArea}
+              {submitBtn}
+            </>
           )}
-          {timerArea}
-          <Button trailingIcon="arrow-right" onClick={submit} loading={pending}>
-            Submit
-          </Button>
         </div>
       </div>
 
@@ -2006,6 +2037,14 @@ const READING_CSS = `
 .exam-pane-q{flex:1}
 .exam-split[data-pane="passage"] .exam-pane-q{display:none}
 .exam-split[data-pane="questions"] .exam-pane-p{display:none}
+/* Правый кластер шапки: wrap-контейнер с двумя nowrap-детьми → максимум 2 ряда на
+   любой ширине (practice-режим). secondary (badge/pace/goal/pause/restart) при
+   нехватке ширины скроллится горизонтально; primary (clock+Submit) всегда виден,
+   не сжимается. mock-режим кладёт всё плоско — при ≤3 элементах wrap не срабатывает. */
+.exam-top-right{margin-left:auto;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:14px}
+.exam-top-right .etr-secondary{display:flex;flex-wrap:nowrap;align-items:center;gap:14px;min-width:0;max-width:100%;overflow-x:auto;padding-block:2px;scrollbar-width:none}
+.exam-top-right .etr-secondary::-webkit-scrollbar{display:none}
+.exam-top-right .etr-primary{display:flex;flex-wrap:nowrap;align-items:center;gap:14px;flex:none}
 @media (min-width:1024px){
   .exam-top{padding:12px 20px;gap:14px}
   .exam-tabs{display:none}
@@ -2034,7 +2073,7 @@ const READING_CSS = `
    overflow:hidden shell), оверлеи прижаты к верху и скроллятся при высокой панели.
    Планшет/десктоп (>430px) не затрагиваются. */
 @media (max-width:430px){
-  .exam-top-right{flex-wrap:wrap;justify-content:flex-end;gap:8px!important}
+  .exam-top-right,.exam-top-right .etr-secondary,.exam-top-right .etr-primary{gap:8px!important}
   /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
   .exam-gap-input{min-width:80px!important;max-width:100%!important;font-size:16px!important}
   .exam-answer-input{font-size:16px!important}
