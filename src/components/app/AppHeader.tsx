@@ -16,7 +16,11 @@ export type ActivePage =
   | "progress"
   | "vocabulary"
   | "pricing"
-  | "profile";
+  | "profile"
+  // Полная история уведомлений (/app/notifications) — вне основной навигации,
+  // поэтому ни один nav-пункт/аватар/upgrade не подсвечивается (navHighlight → сам
+  // себя, в LINKS отсутствует).
+  | "notifications";
 
 interface AppHeaderProps {
   active: ActivePage;

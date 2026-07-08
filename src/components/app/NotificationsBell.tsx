@@ -44,7 +44,7 @@ function styleFor(n: NotifItem): TypeStyle {
    под шапкой, иначе панель 360px уезжает за левый край. display/позицию задаём
    классом, не inline. Фон строки/hover — в классах (inline перебил бы hover, а
    транзишен фона гасим при prefers-reduced-motion). */
-const NB_CSS = `
+export const NB_CSS = `
 .nb-bell{width:40px;height:40px}
 @media (pointer:coarse){ .nb-bell{width:44px;height:44px} }
 .nb-panel{position:absolute;top:46px;right:0;width:360px}
@@ -65,6 +65,9 @@ const NB_CSS = `
 .nb-row.nb-link:hover{background:var(--surface-hover)}
 @media (prefers-reduced-motion:reduce){ .nb-row{transition:none} }
 .nb-due{flex:none;font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;color:var(--success-text);background:var(--success-subtle);border-radius:999px;padding:1px 7px;line-height:1.4}
+.nb-viewall{transition:background-color var(--duration-fast) var(--ease-standard)}
+.nb-viewall:hover{background:var(--surface-hover)}
+@media (prefers-reduced-motion:reduce){ .nb-viewall{transition:none} }
 `;
 
 function relTime(iso: string): string {
@@ -76,8 +79,10 @@ function relTime(iso: string): string {
   return then.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
-/** Внутренность строки уведомления — общая для ссылочного (<Link>) и статичного (<div>) вариантов. */
-function RowInner({ n, isUnread }: { n: NotifItem; isUnread: boolean }) {
+/** Внутренность строки уведомления — общая для ссылочного (<Link>) и статичного (<div>)
+ *  вариантов. Экспортируется, чтобы страница /app/notifications рисовала строки тем же
+ *  кодом и стилем (NB_CSS), без дубля разметки. */
+export function RowInner({ n, isUnread }: { n: NotifItem; isUnread: boolean }) {
   const st = styleFor(n);
   const dueCount = n.payload.kind === "vocab_due_reminder" ? n.payload.dueCount : 0;
   return (
@@ -126,6 +131,8 @@ export function NotificationsBell({
   const [locallyRead, setLocallyRead] = useState<ReadonlySet<string>>(() => new Set());
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
+  // Метка последнего refresh — троттл оживления счётчика на возврат фокуса.
+  const lastRefresh = useRef(0);
   const bell = useInteractive();
 
   // Счётчик с поправкой на оптимистично прочитанные (считаем только те, что были
@@ -150,6 +157,27 @@ export function NotificationsBell({
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  // Оживление счётчика на возврат вкладки/окна БЕЗ поллинга и realtime: на
+  // visibilitychange(visible)/focus зовём router.refresh() (перечитывает серверный
+  // unread в шапке), но не чаще раза в 60с — leading-троттл, иначе частые alt-tab
+  // спамили бы RSC-перерендер. Не зависит от open — слушатели живут весь маунт.
+  useEffect(() => {
+    const THROTTLE_MS = 60_000;
+    const maybeRefresh = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastRefresh.current < THROTTLE_MS) return;
+      lastRefresh.current = now;
+      router.refresh();
+    };
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", maybeRefresh);
+    return () => {
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", maybeRefresh);
+    };
+  }, [router]);
 
   const handleMarkAll = () => {
     startTransition(async () => {
@@ -180,7 +208,7 @@ export function NotificationsBell({
         type="button"
         className="nb-bell"
         aria-label="Notifications"
-        aria-haspopup="menu"
+        aria-haspopup="true"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         {...bell.handlers}
@@ -225,7 +253,6 @@ export function NotificationsBell({
 
       {open && (
         <div
-          role="menu"
           className="nb-panel"
           style={{
             background: "var(--surface)",
@@ -277,6 +304,26 @@ export function NotificationsBell({
               })}
             </div>
           )}
+
+          {/* Мост к полной истории — отдельная страница /app/notifications. */}
+          <Link
+            href="/app/notifications"
+            onClick={() => setOpen(false)}
+            className="nb-viewall"
+            style={{
+              display: "block",
+              textAlign: "center",
+              padding: "12px 16px",
+              borderTop: "1px solid var(--border-subtle)",
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-xs)",
+              fontWeight: 700,
+              color: "var(--text-link)",
+              textDecoration: "none",
+            }}
+          >
+            View all notifications
+          </Link>
         </div>
       )}
     </div>
