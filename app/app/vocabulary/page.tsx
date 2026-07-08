@@ -229,7 +229,7 @@ function Spark({ forecast }: { forecast: number[] }) {
         return (
           <span key={i} style={S.sparkCol}>
             <i style={{ ...S.sparkBar, height: h, background: isToday ? "var(--brand)" : "var(--brand-subtle)" }} />
-            <em style={{ ...S.sparkTick, color: isToday ? "var(--text-link)" : "var(--text-disabled)" }}>
+            <em style={{ ...S.sparkTick, color: isToday ? "var(--text-link)" : "var(--text-muted)" }}>
               {isToday ? "TD" : DOW[(todayDow + i) % 7]}
             </em>
           </span>
@@ -488,7 +488,7 @@ const S: Record<string, CSSProperties> = {
   spark: { display: "flex", alignItems: "flex-end", gap: 5 },
   sparkCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4 },
   sparkBar: { width: 14, borderRadius: "4px 4px 2px 2px", display: "block" },
-  sparkTick: { fontStyle: "normal", fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 700 },
+  sparkTick: { fontStyle: "normal", fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 700 },
   bank: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16 },
   bankItem: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: "var(--text-secondary)" },
   bankDotI: { width: 9, height: 9, borderRadius: 3, flex: "none", display: "block" },
