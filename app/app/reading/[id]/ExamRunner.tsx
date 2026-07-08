@@ -505,21 +505,32 @@ export default function ExamRunner({
 
   // useCallback → стабильная ссылка onJump, чтобы memo(QuestionNavigator) не ломался
   // на каждый тик таймера (setCurrent/setPane/qScrollRef стабильны, deps пусты).
+  // Скролл к вопросу с rAF-ретраем. offsetTop считать нельзя: у .exam-qscroll нет
+  // position → offsetParent всплывал к body и scrollTo перелетал на высоту шапки.
+  // Берём реальную дельту через rect. Ретрай нужен, т.к. на мобильном панель вопросов
+  // могла быть display:none (активен таб Passage / deep-link на маунте) — тогда
+  // clientHeight=0, rect нулевой и scrollTo прыгнул бы в 0. Ждём до ~10 кадров, пока
+  // панель получит высоту после смены таба.
+  const scrollToQuestion = useCallback((n: number, smooth: boolean) => {
+    let tries = 0;
+    const attempt = () => {
+      const el = document.getElementById(`q-${n}`);
+      const wrap = qScrollRef.current;
+      if (el && wrap && wrap.clientHeight > 0) {
+        const top = wrap.scrollTop + el.getBoundingClientRect().top - wrap.getBoundingClientRect().top - 14;
+        wrap.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+        return;
+      }
+      if (tries++ < 10) requestAnimationFrame(attempt);
+    };
+    requestAnimationFrame(attempt);
+  }, []);
+
   const jump = useCallback((n: number) => {
     setCurrent(n);
     setPane("questions"); // на мобильном гарантируем, что таб вопросов активен
-    const el = document.getElementById(`q-${n}`);
-    const wrap = qScrollRef.current;
-    // offsetTop считается от offsetParent, а не от скролл-контейнера: у .exam-qscroll
-    // нет position → offsetParent всплывал к body, и scrollTo перелетал на высоту
-    // шапки (вопрос уезжал под верхнюю панель, первым видимым становился следующий).
-    // Реальную дельту берём через rect — верно при любом позиционировании и вложенности
-    // (в т.ч. listening, где список обёрнут ещё одним контейнером).
-    if (el && wrap) {
-      const top = wrap.scrollTop + el.getBoundingClientRect().top - wrap.getBoundingClientRect().top - 14;
-      wrap.scrollTo({ top, behavior: "smooth" });
-    }
-  }, []);
+    scrollToQuestion(n, true);
+  }, [scrollToQuestion]);
 
   // P15 — deep-link фокус: один раз на маунте проскроллить к вопросу (из mistakes/result).
   // Переиспользуем jump (setCurrent + на мобильном открывает панель вопросов + скролл в
@@ -529,8 +540,10 @@ export default function ExamRunner({
   useEffect(() => {
     if (didFocus.current || focus == null) return;
     didFocus.current = true;
-    const raf = requestAnimationFrame(() => jump(focus));
-    return () => cancelAnimationFrame(raf);
+    // jump сам ждёт видимости панели вопросов (rAF-ретрай) — на мобильном дефолтный
+    // таб Passage, и панель вопросов выходит из display:none только после setPane;
+    // раньше одиночный rAF считал rect по скрытой панели (clientHeight=0) → scrollTop=0.
+    jump(focus);
   }, [focus, jump]);
 
   // submitRef держит свежий submit (с актуальными answers) для авто-сабмита из таймера.
