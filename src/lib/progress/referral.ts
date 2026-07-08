@@ -85,6 +85,7 @@ export async function maybeRewardReferral(
       await db.insert(notification).values({
         userId: inviterId,
         type: "system",
+        kind: "referral",
         title: "Referral activated",
         body: "Your friend completed their first test — you earned +100 XP",
       });
@@ -100,6 +101,7 @@ export async function maybeRewardReferral(
       await db.insert(notification).values({
         userId,
         type: "system",
+        kind: "referral",
         title: "Welcome",
         body: "You earned +50 XP for signing up via an invite",
       });
