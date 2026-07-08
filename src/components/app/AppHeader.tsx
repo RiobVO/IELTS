@@ -28,6 +28,7 @@ interface AppHeaderProps {
   recent: NotifItem[];
   /** Server actions проброшены со страницы (RSC), чтобы не тянуть импорт через границу. */
   markAllRead: () => Promise<void>;
+  markOneRead: (id: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -178,7 +179,7 @@ function StatPill({ icon, value, label, color }: { icon: Parameters<typeof Icon>
   );
 }
 
-export function AppHeader({ active, streak, xp, initials, unread, recent, markAllRead, signOut }: AppHeaderProps) {
+export function AppHeader({ active, streak, xp, initials, unread, recent, markAllRead, markOneRead, signOut }: AppHeaderProps) {
   const upgrade = useInteractive();
   const out = useInteractive();
   const burger = useInteractive();
@@ -270,7 +271,7 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
           </Link>
 
           {/* Колокольчик уведомлений — dropdown-окошко (вместо отдельной страницы). */}
-          <NotificationsBell unread={unread} items={recent} markAllRead={markAllRead} />
+          <NotificationsBell unread={unread} items={recent} markAllRead={markAllRead} markOneRead={markOneRead} />
 
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--streak)" }} title="Day streak">
             <Icon name="flame" size={17} strokeWidth={2.4} /> {streak}
