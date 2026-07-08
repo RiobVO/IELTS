@@ -2048,6 +2048,16 @@ const READING_CSS = `
 .exam-top-right .etr-secondary{display:flex;flex-wrap:nowrap;align-items:center;gap:14px;min-width:0;max-width:100%;overflow-x:auto;padding-block:2px;scrollbar-width:none}
 .exam-top-right .etr-secondary::-webkit-scrollbar{display:none}
 .exam-top-right .etr-primary{display:flex;flex-wrap:nowrap;align-items:center;gap:14px;flex:none}
+/* Мобильная шапка (≤640px): правый кластер уходит ОТДЕЛЬНЫМ рядом во всю ширину ПОД
+   заголовок (title получает ряд 1 целиком) — иначе тулбар (Aa/badge/pace/goal/таймер/
+   Submit) жмётся в угол рядом с тайтлом и всё выглядит тесно. nowrap+space-between:
+   secondary скроллится слева, clock+Submit фиксированы справа. DOM-порядок не трогаем
+   (order ломает focus-порядок — WCAG 2.4.3). */
+@media (max-width:640px){
+  .exam-top{flex-wrap:wrap;row-gap:10px}
+  .exam-top>div:first-of-type{flex:1 1 auto;min-width:0}
+  .exam-top-right{flex-basis:100%;flex-wrap:nowrap;justify-content:space-between}
+}
 @media (min-width:1024px){
   .exam-top{padding:12px 20px;gap:14px}
   .exam-tabs{display:none}
