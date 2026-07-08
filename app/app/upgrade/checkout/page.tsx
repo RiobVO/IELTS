@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { payment } from "@/db/schema";
+import { paymentsLive } from "@/lib/payments";
 import { AppShell } from "../../_AppShell";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
@@ -33,6 +34,10 @@ export default async function CheckoutPage({
     ? (await db.select().from(payment).where(eq(payment.id, pid)).limit(1))[0]
     : undefined;
   const valid = row && row.userId === user.id;
+  // Гейт §12: в production без мерчант-ключа ЭТОГО провайдера sandbox-«Pay» ведёт в
+  // fail-closed webhook (400). Прячем его — честный статус вместо тупика. Совпадает с
+  // гейтом на pricing (initiatePayment и не создаст сюда pending), оборона в глубину.
+  const live = valid ? paymentsLive(row.provider) : false;
 
   return (
     <AppShell active="pricing">
@@ -42,7 +47,7 @@ export default async function CheckoutPage({
         <div className="mob-back">
           <Button variant="ghost" size="sm" icon="arrow-left" href="/app/upgrade">Pricing</Button>
         </div>
-        <h1 style={S.h1}>Checkout (sandbox)</h1>
+        <h1 style={S.h1}>Checkout</h1>
 
         {!valid ? (
           <div style={S.empty}>
@@ -62,17 +67,28 @@ export default async function CheckoutPage({
               </div>
             </div>
 
-            <p style={S.note}>
-              No real provider keys yet (§10). The button below simulates a callback from {row.provider} —
-              it posts the webhook that completes the payment and extends the subscription.
-            </p>
-
             {row.status === "completed" ? (
               <Button href="/app/profile" trailingIcon="arrow-right" fullWidth>
                 Payment complete — go to profile
               </Button>
+            ) : row.status === "failed" ? (
+              <>
+                <p style={S.note}>This payment didn&apos;t go through, or the checkout expired. Nothing was charged.</p>
+                <Button href="/app/upgrade" variant="secondary" icon="arrow-left" fullWidth>Back to plans</Button>
+              </>
+            ) : !live ? (
+              <>
+                <p style={S.note}>Paid plans aren&apos;t live yet — nothing was charged. Keep using the free plan in full; we&apos;ll open checkout soon.</p>
+                <Button href="/app/upgrade" variant="secondary" icon="arrow-left" fullWidth>Back to plans</Button>
+              </>
             ) : (
-              <SimulatePayment provider={row.provider} providerTransactionId={row.providerTransactionId} />
+              <>
+                <p style={S.note}>
+                  Sandbox checkout (§10) — no real provider keys yet. The button below simulates a callback from {row.provider}:
+                  it posts the webhook that completes the payment and extends the subscription.
+                </p>
+                <SimulatePayment provider={row.provider} providerTransactionId={row.providerTransactionId} />
+              </>
             )}
           </>
         )}

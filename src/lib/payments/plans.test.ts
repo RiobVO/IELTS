@@ -1,7 +1,7 @@
 // Юнит-тесты каталога тарифов (BRIEF §4.8). Контракт: поиск по паре (tier, months).
 // Сумму НЕ проверяем — это плейсхолдер-данные, а не поведение функции.
 import { describe, it, expect } from "vitest";
-import { PLANS, findPlan, isPaymentExpired, validateEntitlement, stacksOnExistingPeriod } from "./plans";
+import { PLANS, findPlan, isPaymentExpired, validateEntitlement, stacksOnExistingPeriod, paymentFailureReason } from "./plans";
 
 describe("findPlan", () => {
   it("возвращает тариф, совпадающий и по tier, и по months", () => {
@@ -92,6 +92,20 @@ describe("stacksOnExistingPeriod", () => {
     expect(stacksOnExistingPeriod(null, "premium")).toBe(false);
     expect(stacksOnExistingPeriod("basic", "premium")).toBe(false);
     expect(stacksOnExistingPeriod("basic", "ultra")).toBe(false);
+  });
+});
+
+// Нормализация исхода applyCompletedPayment → причина события payment_failed (§11).
+describe("paymentFailureReason", () => {
+  it("неуспешные исходы дают причину для воронки", () => {
+    expect(paymentFailureReason("invalid")).toBe("invalid");
+    expect(paymentFailureReason("expired")).toBe("expired");
+    expect(paymentFailureReason("error")).toBe("error");
+  });
+  it("успех / дубль / not_found события не порождают (null)", () => {
+    expect(paymentFailureReason("applied")).toBeNull();
+    expect(paymentFailureReason("duplicate")).toBeNull();
+    expect(paymentFailureReason("not_found")).toBeNull();
   });
 });
 

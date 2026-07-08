@@ -5,7 +5,7 @@ import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
 import { Icon } from "@/components/core/icons";
 import type { Tier } from "@/lib/tiers";
-import { initiatePayment } from "./actions";
+import { initiatePayment, joinPaymentWaitlist } from "./actions";
 
 interface Price {
   monthly: number;
@@ -38,7 +38,7 @@ function buildCards(speakingEnabled: boolean): PlanCardMeta[] {
       tagline: "Get started for free.",
       cta: "Start free",
       features: [
-        { t: "Unlimited Reading & Listening", on: true },
+        { t: "Unlimited Reading & Listening practice", on: true },
         { t: "Per-type breakdown — what you miss", on: true },
         { t: "Answer explanations & evidence", on: true },
         ...(speakingEnabled ? [{ t: "1 free Speaking analysis to try", on: true, hero: true }] : []),
@@ -58,48 +58,54 @@ function buildCards(speakingEnabled: boolean): PlanCardMeta[] {
         { t: "Full 40-question mock tests + real band", on: true, hero: true },
         { t: "Sit it under real exam timing", on: true },
         { t: "Drill any weak type on demand", on: true },
-        { t: "AI Writing feedback — Task 1 & 2", on: true, hero: true },
+        { t: "AI Writing feedback — Task 1 & 2 (5/day)", on: true, hero: true },
         { t: "Priority new content", on: true },
       ],
     },
     {
       id: "ultra",
       name: "Ultra",
-      tagline: "Everything, plus a human check.",
+      tagline: "AI Speaking feedback and the highest limits.",
       cta: "Upgrade to Ultra",
       features: [
         { t: "Everything in Premium", on: true },
-        { t: "AI Writing feedback — priority", on: true, hero: true },
-        { t: speakingEnabled ? "AI Speaking feedback — Part 2 long-turn" : "Speaking + human review (coming)", on: true, hero: speakingEnabled },
-        { t: "Monthly band-prediction report (coming)", on: true },
-        { t: "1:1 strategy call (quarterly)", on: true, hero: true },
+        { t: speakingEnabled ? "AI Speaking feedback — Part 2 long-turn" : "AI Speaking feedback — Part 2 (coming)", on: true, hero: speakingEnabled },
+        { t: "AI Writing feedback — 20/day (vs 5)", on: true, hero: true },
         { t: "Priority new content", on: true },
-        { t: "Cancel anytime", on: true },
+        { t: "One-time payment — no auto-renew", on: true },
       ],
     },
   ];
 }
 
 const FAQ = [
-  { q: "Can I cancel anytime?", a: "Yes, one click in your profile. Access stays until the end of your paid period." },
-  { q: "What's the difference between free and paid?", a: "Reading & Listening — including the per-type breakdown and full answer explanations — are free forever. You pay for full 40-question mock tests with an official band score, and AI Writing feedback (Speaking coming)." },
-  { q: "Premium vs Ultra?", a: "Premium adds full 40-question mock tests with your real band, plus AI Writing feedback. Ultra adds priority Writing, a band-prediction report, a 1:1 strategy call, and (coming) Speaking with a human review." },
+  { q: "Is this a subscription?", a: "No — each plan is a one-time purchase for the period you pick, with no auto-renew. There's nothing to cancel: your access runs until the end of the paid period, then you're back on the free plan unless you buy again." },
+  { q: "What's the difference between free and paid?", a: "Reading & Listening practice — including the per-type breakdown and full answer explanations — are free. You pay for full 40-question mock tests with an official band score, and AI Writing feedback (AI Speaking on Ultra)." },
+  { q: "Premium vs Ultra?", a: "Premium adds full 40-question mock tests with your real band, plus AI Writing feedback (5 checks a day). Ultra adds AI Speaking feedback for Part 2 and raises Writing to 20 checks a day — everything in Premium included." },
   { q: "Are the tests like the real IELTS?", a: "Yes — real Cambridge material in a runner that mirrors the computer-delivered exam: same interface, timer, drag-and-drop." },
-  { q: "How accurate is the band?", a: "Reading & Listening use the official Cambridge band scale. Writing is scored by AI on the 4 official criteria as a coaching estimate to guide practice — not an official score. Speaking (coming) will work the same way, with a human check on Ultra." },
-  { q: "When does Speaking launch?", a: "AI Writing feedback is available now on Premium. Speaking is in active development; Ultra members get access first." },
-  { q: "What payment methods work?", a: "Local cards: Uzcard, Humo, and Visa/Mastercard." },
-  { q: "Is there a refund?", a: "Yes — 7-day money-back, no questions asked." },
-  { q: "Can I switch plans?", a: "Yes, upgrade or downgrade anytime; the difference is prorated." },
+  { q: "How accurate is the band?", a: "Reading & Listening use the official Cambridge band scale. Writing is scored by AI on the 4 official criteria as a coaching estimate to guide practice — not an official score. AI Speaking on Ultra works the same way." },
+  { q: "What payment methods work?", a: "Local cards and payment providers — the exact options appear at checkout once paid plans launch." },
+  { q: "Can I switch plans?", a: "Yes. Buy the same tier again and the extra time stacks onto what's left. Switch to a different tier and a fresh period starts from your payment — time isn't prorated." },
   { q: "Do I need a card for the free plan?", a: "No. Basic needs no card — just sign up and start." },
 ];
 
 const fmt = (tiyin: number) => new Intl.NumberFormat("en-US").format(Math.round(tiyin / 100));
+
+/** Inline-алерт из ?error= (initiatePayment fail-closed): честное сообщение вместо
+ *  сырого HTTP. `unavailable` — оплата не запущена (гейт paymentsLive). */
+const ERROR_COPY: Record<string, string> = {
+  unavailable: "Paid plans aren't live yet. Tap “Notify me” on a plan and we'll email you the moment they open.",
+  provider: "Something went wrong starting checkout. Please try again.",
+  plan: "That plan isn't available right now. Please pick another.",
+};
 
 export default function PricingScreen({
   current,
   price,
   ctaHref,
   speakingEnabled = false,
+  paymentsLive = true,
+  error,
 }: {
   current: Tier;
   price: { premium: Price; ultra: Price };
@@ -109,9 +115,16 @@ export default function PricingScreen({
   /** SPEAKING_EVAL_MODEL ops-gate — advertise the free Speaking preview only when
    *  the feature is actually reachable (false until launch). */
   speakingEnabled?: boolean;
+  /** Платёжный гейт (§12): false в production без мерчант-ключа — платный CTA
+   *  прячем за waitlist, чтобы не вести в тупик оплаты. Guest-режим не затрагивает.
+   *  Default true — публичная /pricing и dev рендерят обычный CTA. */
+  paymentsLive?: boolean;
+  /** ?error= из initiatePayment fail-closed → inline-алерт. */
+  error?: string;
 }) {
   const [annual, setAnnual] = useState(true);
   const CARDS = buildCards(speakingEnabled);
+  const errorMsg = error ? ERROR_COPY[error] : undefined;
 
   return (
     <div className="pricing-wrap" style={S.wrap}>
@@ -126,6 +139,13 @@ export default function PricingScreen({
           Practice and review free. Upgrade for full mock exams with your <i style={{ fontFamily: "var(--font-reading)" }}>real</i> band — and AI Writing feedback.
         </p>
       </div>
+
+      {errorMsg && (
+        <div role="alert" style={S.alert}>
+          <Icon name="info" size={17} style={{ flex: "none", marginTop: 1 }} />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
       {/* Billing toggle */}
       <div style={{ display: "flex", justifyContent: "center", margin: "22px 0 30px" }}>
@@ -145,13 +165,13 @@ export default function PricingScreen({
       {/* Plans */}
       <div style={S.plans}>
         {CARDS.map((card) => (
-          <PlanCard key={card.id} card={card} current={current} annual={annual} price={price} ctaHref={ctaHref} />
+          <PlanCard key={card.id} card={card} current={current} annual={annual} price={price} ctaHref={ctaHref} paymentsLive={paymentsLive} />
         ))}
       </div>
 
       {/* Trust line */}
       <div style={S.trust}>
-        {["Cancel anytime", "Local cards (Uzcard, Humo, Visa)", "7-day money-back", "Reading & Listening free forever"].map((t) => (
+        {["No auto-renew", "Local cards & payment providers", "Reading & Listening practice free"].map((t) => (
           <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
             <Icon name="circle-check" size={15} style={{ color: "var(--success-text)" }} /> {t}
           </span>
@@ -175,12 +195,14 @@ function PlanCard({
   annual,
   price,
   ctaHref,
+  paymentsLive,
 }: {
   card: PlanCardMeta;
   current: Tier;
   annual: boolean;
   price: { premium: Price; ultra: Price };
   ctaHref?: string;
+  paymentsLive: boolean;
 }) {
   const pop = !!card.popular;
   const guest = !!ctaHref;
@@ -224,7 +246,7 @@ function PlanCard({
         ) : (
           <>
             <span style={{ ...S.price, color: "var(--text-primary)" }}>Free</span>
-            <span style={S.priceUnit}>forever</span>
+            <span style={S.priceUnit}>no card needed</span>
           </>
         )}
       </div>
@@ -235,17 +257,22 @@ function PlanCard({
           {card.id === "basic" ? "Start free" : card.cta}
         </Button>
       ) : paid && !isCurrent ? (
-        <form action={initiatePayment}>
-          <input type="hidden" name="tier" value={card.id} />
-          <input type="hidden" name="months" value={annual ? 12 : 1} />
-          <input type="hidden" name="provider" value="payme" />
-          <Button type="submit" size="lg" fullWidth variant={pop ? "primary" : "secondary"} trailingIcon="arrow-right">
-            {card.cta}
-          </Button>
-        </form>
+        paymentsLive ? (
+          <form action={initiatePayment}>
+            <input type="hidden" name="tier" value={card.id} />
+            <input type="hidden" name="months" value={annual ? 12 : 1} />
+            <input type="hidden" name="provider" value="payme" />
+            <Button type="submit" size="lg" fullWidth variant={pop ? "primary" : "secondary"} trailingIcon="arrow-right">
+              {card.cta}
+            </Button>
+          </form>
+        ) : (
+          // Оплата ещё не запущена (§12): вместо тупика — сбор интереса (waitlist).
+          <WaitlistCta tier={card.id} months={annual ? 12 : 1} pop={pop} />
+        )
       ) : (
         <Button size="lg" fullWidth variant="secondary" disabled>
-          {isCurrent ? "Current plan" : card.id === "basic" ? "Free forever" : card.cta}
+          {isCurrent ? "Current plan" : card.id === "basic" ? "Free" : card.cta}
         </Button>
       )}
 
@@ -260,6 +287,35 @@ function PlanCard({
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * Waitlist-CTA (§12): пока оплата не запущена, вместо покупки собираем интерес.
+ * Оптимистично переходим в "joined" сразу по клику — событие payment_waitlist
+ * best-effort (аналитика не критична), ошибку глушим и состояние не откатываем:
+ * повторно давить кнопку смысла нет, а «сорвавшийся» лог не должен пугать юзера.
+ */
+function WaitlistCta({ tier, months, pop }: { tier: CardId; months: number; pop: boolean }) {
+  const [joined, setJoined] = useState(false);
+  return (
+    <>
+      <Button
+        size="lg"
+        fullWidth
+        variant={joined ? "secondary" : pop ? "primary" : "secondary"}
+        disabled={joined}
+        icon={joined ? "circle-check" : "bell"}
+        onClick={() => {
+          if (joined) return;
+          setJoined(true);
+          void joinPaymentWaitlist({ tier, months }).catch(() => {});
+        }}
+      >
+        {joined ? "You're on the list" : "Notify me when paid plans launch"}
+      </Button>
+      <p style={S.waitNote}>Paid plans aren't live yet — free plan works in full.</p>
+    </>
   );
 }
 
@@ -281,6 +337,8 @@ const S: Record<string, React.CSSProperties> = {
   eyebrow: { display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-link)", background: "var(--brand-subtle)", padding: "5px 14px", borderRadius: "var(--radius-full)", marginBottom: 14 },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-3xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 8px" },
   lead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", color: "var(--text-muted)", margin: 0 },
+  alert: { display: "flex", alignItems: "flex-start", gap: 9, maxWidth: 620, margin: "16px auto 0", padding: "11px 15px", background: "var(--brand-subtle)", color: "var(--text-secondary)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.45, textAlign: "left" },
+  waitNote: { margin: "9px 0 0", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", textAlign: "center", lineHeight: 1.4 },
 
   toggle: { display: "inline-flex", alignItems: "center", gap: 4, padding: 4, background: "var(--surface-inset)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-full)" },
   toggleBtn: { display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 18px", border: "none", borderRadius: "var(--radius-full)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer" },
