@@ -29,6 +29,16 @@ const DONE_NOTICE: Record<string, string> = {
   deleted: "Topic deleted.",
 };
 
+// Form grids stack to one column below 640px — no @media existed at all before.
+const ADMIN_RESP_CSS = `
+.adm-grid2{grid-template-columns:1fr}
+.adm-grid3{grid-template-columns:1fr}
+@media (min-width:640px){
+  .adm-grid2{grid-template-columns:1fr 1fr}
+  .adm-grid3{grid-template-columns:1fr 1fr 1fr}
+}
+`;
+
 /**
  * Admin — manage Writing Lab Task 2 topics. Standalone admin layout (no AppShell),
  * gated by requireAdmin. The form creates topics; the list below publishes/unpublishes
@@ -46,6 +56,7 @@ export default async function AdminWritingPage({
 
   return (
     <main style={S.page}>
+      <style>{ADMIN_RESP_CSS}</style>
       <div style={S.wrap}>
         <div style={S.head}>
           <h1 style={S.h1}>New Task 2 topic</h1>
@@ -62,7 +73,7 @@ export default async function AdminWritingPage({
         {done && DONE_NOTICE[done] && <p style={S.ok}>{DONE_NOTICE[done]}</p>}
 
         <form action={createWritingTask} style={S.card}>
-          <div style={S.grid2}>
+          <div className="adm-grid2" style={S.grid2}>
             <div>
               <label style={S.label} htmlFor="task_part">Part</label>
               <select id="task_part" name="task_part" defaultValue="task2" style={S.select}>
@@ -93,7 +104,7 @@ export default async function AdminWritingPage({
             style={S.textarea}
           />
 
-          <div style={S.grid2}>
+          <div className="adm-grid2" style={S.grid2}>
             <div>
               <label style={S.label} htmlFor="category">Category</label>
               <select id="category" name="category" defaultValue="academic" style={S.select}>
@@ -111,7 +122,7 @@ export default async function AdminWritingPage({
             </div>
           </div>
 
-          <div style={S.grid2}>
+          <div className="adm-grid2" style={S.grid2}>
             <div>
               <label style={S.label} htmlFor="topic">Topic</label>
               <select id="topic" name="topic" defaultValue="auto" style={S.select}>
@@ -133,7 +144,7 @@ export default async function AdminWritingPage({
             </div>
           </div>
 
-          <div style={S.grid3}>
+          <div className="adm-grid3" style={S.grid3}>
             <div>
               <label style={S.label} htmlFor="difficulty">Difficulty</label>
               <select id="difficulty" name="difficulty" defaultValue="2" style={S.select}>
@@ -239,8 +250,8 @@ const S: Record<string, CSSProperties> = {
   card: { marginTop: 22, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 22, display: "flex", flexDirection: "column", gap: 8 },
   label: { fontSize: 12, fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6, display: "block" },
   textarea: { width: "100%", resize: "vertical", minHeight: 130, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, lineHeight: 1.5, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", outline: "none", marginBottom: 14 },
-  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 },
-  grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 18 },
+  grid2: { display: "grid", gap: 14, marginBottom: 18 },
+  grid3: { display: "grid", gap: 14, marginBottom: 18 },
   select: { width: "100%", height: 44, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0 12px", cursor: "pointer" },
   file: { width: "100%", background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 13, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px", cursor: "pointer" },
   actions: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
@@ -254,5 +265,5 @@ const S: Record<string, CSSProperties> = {
   rowMain: { flex: "1 1 280px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 },
   prompt: { margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--text-primary)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
   meta: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  rowActions: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  rowActions: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" },
 };
