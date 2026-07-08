@@ -824,10 +824,10 @@ const S: Record<string, CSSProperties> = {
 
   wordRow: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap" },
   word: { fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
-  ttsBtn: { width: 38, height: 38, borderRadius: "var(--radius-full)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", display: "grid", placeItems: "center", padding: 0, cursor: "pointer", transition: "var(--transition-colors)" },
+  ttsBtn: { width: 44, height: 44, borderRadius: "var(--radius-full)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", display: "grid", placeItems: "center", padding: 0, cursor: "pointer", transition: "var(--transition-colors)" },
   ipa: { fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--text-muted)" },
   pos: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-link)", background: "var(--brand-subtle)", padding: "3px 10px", borderRadius: "var(--radius-full)" },
-  flipBtn: { marginTop: 14, appearance: "none", cursor: "pointer", padding: "10px 20px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
+  flipBtn: { marginTop: 14, minHeight: 44, appearance: "none", cursor: "pointer", padding: "10px 20px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
   definition: { fontSize: 17, lineHeight: 1.5, color: "var(--text-primary)", fontWeight: 600 },
   example: { margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--text-muted)" },
   translation: { fontSize: 15, fontWeight: 700, color: "var(--text-link)" },
