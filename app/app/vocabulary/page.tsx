@@ -511,7 +511,7 @@ const S: Record<string, CSSProperties> = {
 
   // Weak-type rail (V10)
   rail: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "15px 18px", borderRadius: "var(--radius-lg)", background: "var(--info-subtle)", border: "2px solid color-mix(in oklab, var(--info) 45%, transparent)" },
-  railIcon: { width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", background: "#fff", color: "var(--info-text)", display: "grid", placeItems: "center" },
+  railIcon: { width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", background: "var(--surface)", color: "var(--info-text)", display: "grid", placeItems: "center" },
   railText: { flex: 1, minWidth: 220, margin: 0, fontSize: 13.5, color: "var(--text-secondary)", lineHeight: 1.45 },
   railStrong: { color: "var(--text-primary)" },
 
