@@ -230,20 +230,36 @@ function Spark({ forecast }: { forecast: number[] }) {
       })
       .join(", ");
 
+  // Heaviest upcoming day (excl. today's backlog) — turns the forecast from garnish
+  // into a plan signal ("brace for Thursday"). Hidden when nothing is due ahead.
+  let peakIdx = 0;
+  let peakCount = 0;
+  for (let i = 1; i < forecast.length; i++) {
+    if (forecast[i] > peakCount) {
+      peakCount = forecast[i];
+      peakIdx = i;
+    }
+  }
+  const peakLabel =
+    peakCount === 0 ? null : `${peakIdx === 1 ? "Tomorrow" : DOW[(todayDow + peakIdx) % 7]} · ${peakCount}`;
+
   return (
-    <div style={S.spark} role="img" aria-label={label}>
-      {forecast.map((c, i) => {
-        const isToday = i === 0;
-        const h = c === 0 ? 3 : Math.round((c / max) * 34) + 4;
-        return (
-          <span key={i} style={S.sparkCol}>
-            <i style={{ ...S.sparkBar, height: h, background: isToday ? "var(--brand)" : "var(--brand-subtle)" }} />
-            <em style={{ ...S.sparkTick, color: isToday ? "var(--text-link)" : "var(--text-muted)" }}>
-              {isToday ? "TD" : DOW[(todayDow + i) % 7]}
-            </em>
-          </span>
-        );
-      })}
+    <div style={S.sparkWrap}>
+      <div style={S.spark} role="img" aria-label={label}>
+        {forecast.map((c, i) => {
+          const isToday = i === 0;
+          const h = c === 0 ? 3 : Math.round((c / max) * 34) + 4;
+          return (
+            <span key={i} style={S.sparkCol}>
+              <i style={{ ...S.sparkBar, height: h, background: isToday ? "var(--brand)" : "var(--brand-subtle)" }} />
+              <em style={{ ...S.sparkTick, color: isToday ? "var(--text-link)" : "var(--text-muted)" }}>
+                {isToday ? "TD" : DOW[(todayDow + i) % 7]}
+              </em>
+            </span>
+          );
+        })}
+      </div>
+      {peakLabel && <span style={S.sparkCaption}>Heaviest ahead: {peakLabel}</span>}
     </div>
   );
 }
@@ -500,6 +516,8 @@ const S: Record<string, CSSProperties> = {
   planFoot: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 26px", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-inset)", padding: "14px 20px" },
   // Без фикс-высоты: колонка = столбик (до 38px) + зазор + подпись (~14px) ≈ 56px,
   // жёсткие 44px резали подписи дней нижней кромкой панели (overflow:hidden).
+  sparkWrap: { display: "flex", flexDirection: "column", gap: 7 },
+  sparkCaption: { display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", color: "var(--text-muted)" },
   spark: { display: "flex", alignItems: "flex-end", gap: 5 },
   sparkCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4 },
   sparkBar: { width: 14, borderRadius: "4px 4px 2px 2px", display: "block" },
