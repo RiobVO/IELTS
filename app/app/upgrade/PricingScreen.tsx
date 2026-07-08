@@ -129,7 +129,7 @@ export default function PricingScreen({
 
   return (
     <div className="pricing-wrap" style={S.wrap}>
-      <style>{`.pricing-wrap{padding:28px 16px 48px}@media(min-width:768px){.pricing-wrap{padding:38px 28px 56px}}@media(max-width:430px){.pricing-togglebtn{min-height:44px}}`}</style>
+      <style>{`.pricing-wrap{padding:28px 16px 48px}@media(min-width:768px){.pricing-wrap{padding:38px 28px 56px}}@media(pointer:coarse){.pricing-togglebtn{min-height:44px}}`}</style>
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: 8 }}>
         <span style={S.eyebrow}>

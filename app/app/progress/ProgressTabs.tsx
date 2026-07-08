@@ -6,12 +6,12 @@ import { Icon, type IconName } from "@/components/core/icons";
  * переключение таба меняет URL (`?tab=`), поэтому две next/link с `aria-current` на
  * активной — правильнее ARIA-tablist (сохраняет back/forward, deep-link, no-JS).
  * Пилюли по образцу `LeaderboardControls` (тот же TAB/TAB_ON, тап-таргет 44px на
- * узких телефонах). Рендерится внутри wrap каждой панели → наследует её gutter.
+ * touch). Рендерится внутри wrap каждой панели → наследует её gutter.
  */
 export function ProgressTabs({ tab }: { tab: "league" | "badges" }) {
   return (
     <nav aria-label="Progress sections" className="pg-tabs" style={NAV}>
-      <style>{"@media (max-width:430px){.pg-tab{min-height:44px}}"}</style>
+      <style>{"@media (pointer:coarse){.pg-tab{min-height:44px}}"}</style>
       <TabLink href="/app/progress?tab=league" active={tab === "league"} icon="crown" label="League" />
       <TabLink href="/app/progress?tab=badges" active={tab === "badges"} icon="award" label="Badges" />
     </nav>

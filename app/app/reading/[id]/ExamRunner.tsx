@@ -2020,18 +2020,23 @@ const READING_CSS = `
   .exam-split[data-pane="questions"] .exam-pane-p{display:flex}
 }
 
-/* Мобильный проход (≤430px): правый кластер шапки переносится (иначе Submit клиппит
-   overflow:hidden shell), оверлеи прижаты к верху и скроллятся при высокой панели,
-   тап-таргеты ≥44px. Планшет/десктоп (>430px) не затрагиваются. */
-@media (max-width:430px){
-  .exam-top-right{flex-wrap:wrap;justify-content:flex-end;gap:8px!important}
+/* Тап-таргеты ≥44px — на факте touch-ввода, не только на узких телефонах:
+   иначе планшеты/landscape-телефоны (431-1023px) остаются с мелкими целями. */
+@media (pointer:coarse){
   .exam-tabs button{height:44px!important}
   .exam-exit{width:44px!important;height:44px!important}
   .exam-ctrl{width:44px!important;height:44px!important}
   .exam-ctrl-text{height:44px!important}
   .exam-opt{min-height:44px!important}
+  .exam-gap-input{min-height:44px!important}
+}
+/* Мобильный проход (≤430px): правый кластер шапки переносится (иначе Submit клиппит
+   overflow:hidden shell), оверлеи прижаты к верху и скроллятся при высокой панели.
+   Планшет/десктоп (>430px) не затрагиваются. */
+@media (max-width:430px){
+  .exam-top-right{flex-wrap:wrap;justify-content:flex-end;gap:8px!important}
   /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
-  .exam-gap-input{min-width:80px!important;max-width:100%!important;min-height:44px!important;font-size:16px!important}
+  .exam-gap-input{min-width:80px!important;max-width:100%!important;font-size:16px!important}
   .exam-answer-input{font-size:16px!important}
   .exam-overlay{align-items:start!important}
   /* Бейдж режима (Practice/Mock/Transfer) — смысловой лейбл, поднимаем до 12px. */

@@ -1023,7 +1023,7 @@ const S: Record<string, React.CSSProperties> = {
   // Нейтральная пилюля (не красно-залитая): единственный красный акцент в списке —
   // ранг худшей строки (lossRankWorst), а не каскад из пяти красных пятен.
   lossPts: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-muted)", background: "var(--surface-inset)", borderRadius: "var(--radius-full)", padding: "4px 9px", minWidth: 58, textAlign: "center" },
-  moreSummary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "13px 0 2px", borderTop: "1px solid var(--border-subtle)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--brand-active)" },
+  moreSummary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 44, padding: "13px 0 2px", borderTop: "1px solid var(--border-subtle)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--brand-active)" },
 
   /* Recent tests */
   trow: { display: "flex", alignItems: "center", gap: 14, padding: "15px 0", borderBottom: "1px solid var(--border-subtle)", textDecoration: "none", color: "inherit" },

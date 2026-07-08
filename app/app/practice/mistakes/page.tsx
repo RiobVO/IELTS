@@ -38,6 +38,8 @@ export default async function MistakesPage({
   return (
     <AppShell active="practice">
       <div style={{ maxWidth: 860, margin: "0 auto", padding: "32px 24px 64px" }}>
+        {/* Тап-таргет фильтр-чипов (~29px) < 44px на touch. */}
+        <style>{"@media (pointer:coarse){.mistake-chip{min-height:44px}}"}</style>
         <Link href="/app/practice" style={S.back}>
           <Icon name="arrow-left" size={16} strokeWidth={2.4} /> Practice
         </Link>
@@ -106,7 +108,7 @@ export default async function MistakesPage({
 /** Серверный фильтр-чип по типу вопроса (Link, без клиентского стейта). */
 function FilterChip({ label, href, active }: { label: string; href: string; active: boolean }) {
   return (
-    <Link href={href} style={active ? { ...S.chip, ...S.chipActive } : S.chip}>
+    <Link href={href} className="mistake-chip" style={active ? { ...S.chip, ...S.chipActive } : S.chip}>
       {label}
     </Link>
   );

@@ -111,6 +111,8 @@ const MODE_START_CSS = `
 .mode-start-chip{transition:var(--transition-colors)}
 .mode-start-chip:hover{background:var(--surface-hover)}
 .mode-start-presets{flex-wrap:wrap}
+/* Чипы выбора лимита времени — единственный способ выбрать mock-таймер, 34px < 44px на touch. */
+@media (pointer:coarse){.mode-start-chip{min-height:44px}}
 @media (prefers-reduced-motion:reduce){.mode-start-btn,.mode-start-chip{transition:none}}
 `;
 
