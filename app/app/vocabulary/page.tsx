@@ -396,6 +396,7 @@ function DeckCard({ deck }: { deck: VocabDeckCard }) {
       <div style={S.cardFoot}>
         <Link
           href={primaryHref}
+          className="vc-flink"
           style={deck.locked ? S.lockFoot : isMastered ? S.maintainFoot : S.startFoot}
           aria-label={deck.locked ? `Upgrade to ${tierLabel} to unlock ${deck.title}` : undefined}
         >
@@ -416,6 +417,7 @@ function DeckCard({ deck }: { deck: VocabDeckCard }) {
         {!deck.locked && (
           <Link
             href={`/app/vocabulary/${deck.id}/browse`}
+            className="vc-flink"
             style={S.browseFoot}
             aria-label={`Browse all words in ${deck.title}`}
           >
@@ -438,6 +440,10 @@ const CSS = `
 .vc-card--locked:hover{transform:none;box-shadow:var(--shadow-solid);border-color:var(--border)}
 .vc-rescue:hover{border-color:currentColor;background:var(--surface)}
 .vc-mywords:hover{border-color:var(--brand-border);box-shadow:var(--shadow-solid-lg);transform:translateY(-1px)}
+/* Footer links are the densest tap cluster — give them a real 44px target and the
+   app's signature focus ring (inline styles can't carry :focus-visible). */
+.vc-flink{min-height:44px}
+.vc-flink:focus-visible,.vc-mywords:focus-visible,.vc-rescue:focus-visible{outline:none;box-shadow:var(--ring)}
 @media (prefers-reduced-motion:reduce){.vc-mywords{transition:none!important}}
 @media (min-width:640px){
   .vc-grid{grid-template-columns:repeat(2,1fr)}
