@@ -183,13 +183,20 @@ const Q_CSS = `
 .q-verbatim .stem{display:flex;gap:8px;margin-bottom:10px;font-weight:600}
 .q-verbatim .materials-box,.q-verbatim .form-box,.q-verbatim .summary-wrap{margin:10px 0;padding:14px 16px;background:var(--surface-hover);border:1px solid var(--border);border-radius:8px}
 .q-verbatim .analysis{display:none}
-/* Мобильный проход (≤430px): широкие таблицы вопросов скроллятся вместо клиппинга панели;
-   author-CSS перебивает presentational-хинт nowrap → ячейки переносятся. Поля и тап-таргеты ≥44px. */
+/* Широкие таблицы вопросов скроллятся сами вместо клиппинга всей панели —
+   безусловно: одноколоночный (табовый) режим раннера живёт до 1024px
+   (ExamRunner min-width:1024px), а этот фикс раньше был заперт в ≤430px и не
+   покрывал 431-1023px (планшеты, телефоны landscape). На десктопе, где таблица
+   и так не шире контейнера, overflow-x:auto ничего не меняет визуально. */
+.q-verbatim table{display:block;overflow-x:auto}
+.q-verbatim td[nowrap],.q-verbatim th[nowrap]{white-space:normal}
 @media (max-width:430px){
-  .q-verbatim table{display:block;overflow-x:auto}
-  .q-verbatim td[nowrap],.q-verbatim th[nowrap]{white-space:normal}
   /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
-  .q-verbatim .q-text{min-width:80px!important;max-width:100%!important;min-height:44px!important;font-size:16px!important}
+  .q-verbatim .q-text{min-width:80px!important;max-width:100%!important;font-size:16px!important}
+}
+/* Тап-таргеты ≥44px на touch — не только узкие телефоны (планшеты/landscape тоже). */
+@media (pointer:coarse){
+  .q-verbatim .q-text{min-height:44px!important}
   .q-verbatim .q-hit{position:relative}
   .q-verbatim .q-hit::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
 }
