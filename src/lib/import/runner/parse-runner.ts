@@ -1,6 +1,11 @@
 import * as cheerio from "cheerio";
 import { extractData, extractFunctionTable, extractRangeBuilderTable } from "../extract-js";
-import { canonQuestionType, unknownTypeWarning, UNKNOWN_TYPE_FALLBACK } from "../question-types";
+import {
+  canonQuestionType,
+  unknownTypeWarning,
+  blankTypeWarning,
+  UNKNOWN_TYPE_FALLBACK,
+} from "../question-types";
 import type { ParsedTest, ParsedQuestion, ParsedAnswerKey } from "../types";
 
 export interface RunnerParseResult {
@@ -89,12 +94,14 @@ function parseReadingRunner(html: string): RunnerParseResult {
       ? { mode: "text_accept", accept: accept[k]!, explanation: expl[k] ?? null, evidence: evid[k] ?? null }
       : { mode: "exact", accept: [NORM(correct[k])], explanation: expl[k] ?? null, evidence: evid[k] ?? null };
     // Review-gate (BRIEF §4.2.1): не глотать неуверенный маппинг типа — поднять
-    // в warnings, чтобы админ увидел fallback перед публикацией.
-    const canon = canonQuestionType(types[k] ?? "");
+    // в warnings, чтобы админ увидел fallback перед публикацией. P1: пустой label
+    // (источник не указал тип) → informational (не блок); непустой мусор → блок.
+    const rawType = types[k] ?? "";
+    const canon = canonQuestionType(rawType);
     if (canon.type === null) {
-      warnings.push(unknownTypeWarning(n, types[k] ?? ""));
+      warnings.push(rawType.trim() === "" ? blankTypeWarning(n) : unknownTypeWarning(n, rawType));
     } else if (!canon.confident) {
-      warnings.push(`Q${n}: low-confidence type ${JSON.stringify(types[k] ?? "")} → ${canon.type}`);
+      warnings.push(`Q${n}: low-confidence type ${JSON.stringify(rawType)} → ${canon.type}`);
     }
     if (!answer.accept.some((a) => (a ?? "").trim() !== "")) {
       warnings.push(`Q${n}: empty answer key`);
@@ -171,12 +178,14 @@ function parseListeningRunner(html: string): RunnerParseResult {
       explanation: null,
       evidence: null,
     };
-    // Review-gate: поднять неуверенный маппинг типа и пустой ключ в warnings.
-    const canon = canonQuestionType(types[String(n)] ?? "");
+    // Review-gate: поднять неуверенный маппинг типа и пустой ключ в warnings. P1:
+    // пустой label → informational (не блок), непустой нераспознанный → блок.
+    const rawType = types[String(n)] ?? "";
+    const canon = canonQuestionType(rawType);
     if (canon.type === null) {
-      warnings.push(unknownTypeWarning(n, types[String(n)] ?? ""));
+      warnings.push(rawType.trim() === "" ? blankTypeWarning(n) : unknownTypeWarning(n, rawType));
     } else if (!canon.confident) {
-      warnings.push(`Q${n}: low-confidence type ${JSON.stringify(types[String(n)] ?? "")} → ${canon.type}`);
+      warnings.push(`Q${n}: low-confidence type ${JSON.stringify(rawType)} → ${canon.type}`);
     }
     if (!answer.accept.some((a) => (a ?? "").trim() !== "")) {
       warnings.push(`Q${n}: empty answer key`);

@@ -1,6 +1,6 @@
 // Юнит-тесты канонизации типов вопросов (BRIEF §4.2).
 import { describe, it, expect } from "vitest";
-import { canonQuestionType } from "./question-types";
+import { canonQuestionType, blankTypeWarning, isUnknownTypeWarning } from "./question-types";
 
 describe("canonQuestionType", () => {
   // Реальные ярлыки из источников → канон-энум. Ожидаемые значения выписаны руками,
@@ -71,5 +71,28 @@ describe("canonQuestionType", () => {
       type: "note_completion",
       confident: false,
     });
+  });
+});
+
+// P1 (2026-07-09): пустой qtype (источник не указал тип) — informational, публикация
+// разрешена (грейдинг по answer-mode, не по qtype). Непустой нераспознанный — блок.
+// isUnknownTypeWarning стал blank-aware, чтобы разблокировать и УЖЕ сохранённые драфты.
+describe("blankTypeWarning / isUnknownTypeWarning (P1 softening)", () => {
+  it("blankTypeWarning не считается блокирующим unknown-type", () => {
+    expect(isUnknownTypeWarning(blankTypeWarning(3))).toBe(false);
+  });
+
+  it("persisted пустой-label warning (старый маркер) больше НЕ блокирует", () => {
+    expect(isUnknownTypeWarning('Q1: unknown type "" → fell back to short_answer')).toBe(false);
+  });
+
+  it("непустой нераспознанный тип остаётся блокирующим", () => {
+    expect(isUnknownTypeWarning('Q2: unknown type "Frobnicate" → fell back to short_answer')).toBe(
+      true,
+    );
+  });
+
+  it("малформленный маркер без label трактуется как блокирующий (fail-closed)", () => {
+    expect(isUnknownTypeWarning("Q9: unknown type → fell back to short_answer")).toBe(true);
   });
 });
