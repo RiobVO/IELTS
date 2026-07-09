@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { InfoPage } from "@/components/marketing/InfoPage";
 
 export const metadata: Metadata = {
-  title: "About — bando",
+  title: "About | bando",
   description: "bando is the IELTS Reading & Listening trainer that shows you exactly which question types cost you points, then drills them.",
 };
 

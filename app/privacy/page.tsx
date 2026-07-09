@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { InfoPage } from "@/components/marketing/InfoPage";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — bando",
+  title: "Privacy Policy | bando",
   description: "How bando collects, uses and protects your data.",
 };
 

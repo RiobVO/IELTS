@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { InfoPage } from "@/components/marketing/InfoPage";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — bando",
+  title: "Terms of Service | bando",
   description: "The terms that govern your use of bando.",
 };
 
