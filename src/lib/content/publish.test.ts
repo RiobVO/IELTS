@@ -9,11 +9,16 @@ vi.mock("@/db", () => ({ db: { select: (...a: unknown[]) => select(...a), update
 vi.mock("next/cache", () => ({ revalidateTag }));
 import { publishReviewedContentItem } from "./publish";
 
-// select #1 (content item): .from().where().limit(); select #2 (#17 answer-key gate):
-// .from().innerJoin().where().
-const selectChain = (rows: unknown[]) => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve(rows) }) }) });
-const keysChain = (rows: unknown[]) => ({ from: () => ({ innerJoin: () => ({ where: () => Promise.resolve(rows) }) }) });
+// select #1 (content): from().where().limit(); select #2 (integrity left-join
+// question→answer_key): from().leftJoin().where(); select #3 (listening audio,
+// passages): from().where().
+const contentChain = (rows: unknown[]) => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve(rows) }) }) });
+const integrityChain = (rows: unknown[]) => ({ from: () => ({ leftJoin: () => ({ where: () => Promise.resolve(rows) }) }) });
+const passagesChain = (rows: unknown[]) => ({ from: () => ({ where: () => Promise.resolve(rows) }) });
 const updateChain = () => ({ set: () => ({ where: () => Promise.resolve(undefined) }) });
+
+// Строка integrity-запроса: {номер вопроса, id ключа (null = ключа нет), accept}.
+const q = (number: number, accept: unknown = ["A"], keyId: string | null = `k${number}`) => ({ number, keyId, accept });
 
 beforeEach(() => {
   select.mockReset();
@@ -23,50 +28,48 @@ beforeEach(() => {
 
 describe("publishReviewedContentItem", () => {
   it("refuses to publish an unreviewed item (reviewed_at null) without an update", async () => {
-    select.mockReturnValue(selectChain([{ reviewedAt: null, title: "T" }]));
+    select.mockReturnValue(contentChain([{ reviewedAt: null, title: "T", section: "reading" }]));
     const res = await publishReviewedContentItem("id1");
     expect(res).toEqual({ ok: false, reason: "not_reviewed" });
     expect(update).not.toHaveBeenCalled();
   });
 
   it("reports not_found for a missing item", async () => {
-    select.mockReturnValue(selectChain([]));
+    select.mockReturnValue(contentChain([]));
     const res = await publishReviewedContentItem("id1");
     expect(res).toEqual({ ok: false, reason: "not_found" });
     expect(update).not.toHaveBeenCalled();
   });
 
-  it("publishes a reviewed item with non-empty keys and returns its title", async () => {
+  it("publishes a reviewed reading item with contiguous, non-empty keys and returns its title", async () => {
     select
-      .mockReturnValueOnce(selectChain([{ reviewedAt: new Date(), title: "Reading 1" }]))
-      .mockReturnValueOnce(keysChain([{ accept: ["A"] }, { accept: ["journal", "journals"] }]));
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "Reading 1", section: "reading" }]))
+      .mockReturnValueOnce(integrityChain([q(1, ["A"]), q(2, ["journal", "journals"])]));
     update.mockReturnValue(updateChain());
     const res = await publishReviewedContentItem("id1");
     expect(res).toEqual({ ok: true, title: "Reading 1" });
     expect(update).toHaveBeenCalledOnce();
-    // Broad catalog tag + per-test tag (W2-6): both fire so getPublishedTests and
-    // this test's getExamContent/getContentMeta caches refresh on publish.
+    // Broad catalog tag + per-test tag (W2-6): both fire on publish.
     expect(revalidateTag).toHaveBeenCalledWith("content_item");
     expect(revalidateTag).toHaveBeenCalledWith("content-id1");
   });
 
   it("refuses to publish when any question has an empty answer key (#17)", async () => {
     select
-      .mockReturnValueOnce(selectChain([{ reviewedAt: new Date(), title: "Reading 1" }]))
-      .mockReturnValueOnce(keysChain([{ accept: ["A"] }, { accept: [""] }])); // one blank key
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "Reading 1", section: "reading" }]))
+      .mockReturnValueOnce(integrityChain([q(1, ["A"]), q(2, [""])])); // one blank key
     const res = await publishReviewedContentItem("id1");
     expect(res).toEqual({ ok: false, reason: "empty_answer_key" });
     expect(update).not.toHaveBeenCalled();
   });
 
   it("refuses to publish when a question type didn't resolve (unknown-type fallback) (#13)", async () => {
-    // qtype in the DB is already 'short_answer' (fallback applied), so the only durable
-    // trace of the unresolved type is the persisted import warning — the gate reads it back.
     select.mockReturnValueOnce(
-      selectChain([
+      contentChain([
         {
           reviewedAt: new Date(),
           title: "Reading 1",
+          section: "reading",
           importWarnings: ['Q2: unknown type "Frobnicate" → fell back to short_answer'],
         },
       ]),
@@ -77,14 +80,13 @@ describe("publishReviewedContentItem", () => {
   });
 
   it("publishes despite informational / low-confidence warnings — only unknown-type blocks (#13)", async () => {
-    // Guard against a false barrier: most real imports carry low-confidence / no-explanation
-    // warnings; those must NOT block publishing (the type is resolved, grading is fine).
     select
       .mockReturnValueOnce(
-        selectChain([
+        contentChain([
           {
             reviewedAt: new Date(),
             title: "Reading 1",
+            section: "reading",
             importWarnings: [
               'Q3: low-confidence type "Some Matching" → matching_info',
               "2 question(s) without explanation",
@@ -92,7 +94,7 @@ describe("publishReviewedContentItem", () => {
           },
         ]),
       )
-      .mockReturnValueOnce(keysChain([{ accept: ["A"] }]));
+      .mockReturnValueOnce(integrityChain([q(1, ["A"])]));
     update.mockReturnValue(updateChain());
     const res = await publishReviewedContentItem("id1");
     expect(res).toEqual({ ok: true, title: "Reading 1" });
@@ -100,24 +102,103 @@ describe("publishReviewedContentItem", () => {
   });
 
   it("publishes when a low-confidence source label merely contains 'unknown type' (no false barrier) (#13)", async () => {
-    // The raw source label — not our marker — happens to contain "unknown type" AND still
-    // resolves to a real canon type (…matching → matching_info), so grading is fine. The gate
-    // must key off the fallback suffix, not the bare substring; a broad substring match would
-    // falsely block this valid test (the exact false barrier variant B set out to avoid).
     select
       .mockReturnValueOnce(
-        selectChain([
+        contentChain([
           {
             reviewedAt: new Date(),
             title: "Reading 1",
+            section: "reading",
             importWarnings: ['Q5: low-confidence type "unknown type matching" → matching_info'],
           },
         ]),
       )
-      .mockReturnValueOnce(keysChain([{ accept: ["A"] }]));
+      .mockReturnValueOnce(integrityChain([q(1, ["A"])]));
     update.mockReturnValue(updateChain());
     const res = await publishReviewedContentItem("id1");
     expect(res).toEqual({ ok: true, title: "Reading 1" });
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  // P1 (softening at the gate): пустой QTYPE, УЖЕ сохранённый в драфте со старым блок-
+  // маркером, больше не блокирует publish (разблокировка persisted-драфтов без реимпорта).
+  it("publishes a draft whose only unknown-type warning is a blank label (P1)", async () => {
+    select
+      .mockReturnValueOnce(
+        contentChain([
+          {
+            reviewedAt: new Date(),
+            title: "Listening blank",
+            section: "reading",
+            importWarnings: ['Q1: unknown type "" → fell back to short_answer'],
+          },
+        ]),
+      )
+      .mockReturnValueOnce(integrityChain([q(1, ["A"])]));
+    update.mockReturnValue(updateChain());
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: true, title: "Listening blank" });
+  });
+
+  // (а) номера вопросов без дыр и без дублей — offset-agnostic.
+  it("refuses to publish when question numbers have a gap (P1a)", async () => {
+    select
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "R", section: "reading" }]))
+      .mockReturnValueOnce(integrityChain([q(1, ["A"]), q(3, ["B"])]));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "question_number_gap" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to publish when question numbers have a duplicate (P1a)", async () => {
+    select
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "R", section: "reading" }]))
+      .mockReturnValueOnce(integrityChain([q(1, ["A"]), q(1, ["B"])]));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "question_number_gap" });
+  });
+
+  // Критично: одиночный пассаж нумеруется НЕ с 1 (passage_2 → 14..26) — публиковаться ДОЛЖЕН,
+  // не ложно блокироваться (буквальный «1..N» его бы срезал).
+  it("publishes an offset-numbered single passage (14..26) — no false block (P1a)", async () => {
+    const rows = Array.from({ length: 13 }, (_, i) => q(14 + i, ["A"]));
+    select
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "Passage 2", section: "reading" }]))
+      .mockReturnValueOnce(integrityChain(rows));
+    update.mockReturnValue(updateChain());
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: true, title: "Passage 2" });
+  });
+
+  // (б) у каждого вопроса должна быть строка answer_key.
+  it("refuses to publish when a question has no answer_key row (P1b)", async () => {
+    select
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "R", section: "reading" }]))
+      .mockReturnValueOnce(integrityChain([q(1, ["A"]), { number: 2, keyId: null, accept: null }]));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "answer_key_count_mismatch" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // (в) listening без аудио не публикуется; reading этот запрос не выполняет.
+  it("refuses to publish a listening test without audio (P1c)", async () => {
+    select
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "L", section: "listening" }]))
+      .mockReturnValueOnce(integrityChain([q(1, ["A"])]))
+      .mockReturnValueOnce(passagesChain([{ audioPath: null }]));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "missing_listening_audio" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("publishes a listening test once audio is attached (P1c)", async () => {
+    select
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "L", section: "listening" }]))
+      .mockReturnValueOnce(integrityChain([q(1, ["A"])]))
+      .mockReturnValueOnce(passagesChain([{ audioPath: "audio/l.mp3" }]));
+    update.mockReturnValue(updateChain());
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: true, title: "L" });
     expect(update).toHaveBeenCalledOnce();
   });
 });
