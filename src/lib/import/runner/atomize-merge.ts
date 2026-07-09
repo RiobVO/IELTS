@@ -43,6 +43,20 @@ export function mergeAtomization(runner: ParsedTest, atom: ParsedTest): MergeRes
     return { parsed: runner, atomized: false, reason };
   }
 
+  // Структурная целостность: каждый вопрос обязан ссылаться на реальный пассаж
+  // atom, иначе persist смапит его на fallback (чужой пассаж) или уронит NOT NULL
+  // passage_id при пустом наборе — регрессия против runner-only (1 fallback-пассаж).
+  const atomOrders = new Set(atom.passages.map((p) => p.order));
+  const orphanOrders = [
+    ...new Set(atom.questions.map((q) => q.passageOrder).filter((o) => !atomOrders.has(o))),
+  ].sort((a, b) => a - b);
+  if (atom.passages.length === 0 || orphanOrders.length > 0) {
+    const reason =
+      `atomization skipped — question(s) reference missing passage order(s) ` +
+      `[${orphanOrders.join(",")}] (atom passages: [${[...atomOrders].sort((a, b) => a - b).join(",")}])`;
+    return { parsed: runner, atomized: false, reason };
+  }
+
   // passages: берём атомизированные (order/title/bodyHtml/questionsHtml), но
   // audioPath НЕ затираем — он привязан на runner-пути (listening) и его у atom нет.
   const runnerAudioByOrder = new Map<number, string | null>(
