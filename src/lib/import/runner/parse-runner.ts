@@ -134,6 +134,18 @@ function parseReadingRunner(html: string): RunnerParseResult {
     } else if (!canon.confident) {
       warnings.push(`Q${n}: low-confidence type ${JSON.stringify(rawType)} → ${canon.type}`);
     }
+    // Multi-select guard (вариант B): массив в correctAnswers без mcqGroups-записи — почти
+    // наверняка choose-TWO/THREE, оформленный не по authoring-спеке (одиночный ответ клиент
+    // в массив не оборачивает). Выход (mode/accept) НЕ меняем — NORM-артефакт остаётся, чтобы
+    // грейдинг мока (per-box submit раннера) не поехал; это review-сигнал: админ обязан
+    // добавить mcqGroups-диапазон. Длина 1 — не multi (не триггерим).
+    const rawCorrect = (correct as Record<string, unknown>)[k];
+    if (Array.isArray(rawCorrect) && rawCorrect.length > 1) {
+      warnings.push(
+        `Q${n}: correctAnswers is an array (possible choose-TWO/THREE) but has no mcqGroups ` +
+          `entry — grading falls back to ${answer.mode}; add an mcqGroups range so it is graded as a letter-set`,
+      );
+    }
     if (!answer.accept.some((a) => (a ?? "").trim() !== "")) {
       warnings.push(`Q${n}: empty answer key`);
     }

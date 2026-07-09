@@ -138,6 +138,39 @@ describe("parseRunner — reading mcq_set (#7)", () => {
   });
 });
 
+// Multi-select guard (вариант B): reading-вопрос с МАССИВОМ в correctAnswers, но БЕЗ
+// записи в mcqGroups — вероятный choose-TWO/THREE, оформленный не по authoring-спеке.
+// Парсер НЕ меняет выход (mode/accept — тот же NORM-артефакт), только поднимает warning
+// на review-экран: админ обязан добавить mcqGroups-диапазон. Массив длины 1 — не multi.
+describe("parseRunner — array-shaped correct answer without mcqGroups", () => {
+  it("массив длины 2 без mcqGroups → warning; mode/accept НЕ меняются (exact + NORM-артефакт)", () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"1":["B","D"]};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    const q1 = parsed.questions.find((q) => q.number === 1)!;
+    expect(q1.answer.mode).toBe("exact");
+    expect(q1.answer.accept).toEqual(["B,D"]); // выход не тронут: String(["B","D"]) → "B,D"
+    expect(parsed.warnings.some((w) => /Q1/.test(w) && /mcqGroups/i.test(w))).toBe(true);
+  });
+
+  it("массив длины 1 → НЕ триггерит warning (не multi-select)", () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"1":["B"]};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    expect(parsed.warnings.some((w) => /Q1/.test(w) && /mcqGroups/i.test(w))).toBe(false);
+  });
+
+  it("номер есть в mcqGroups → array-warning не поднимается (mcqGroups-ветка приоритетна)", () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"1":["B","D"]};
+var mcqGroups = {"1-2": {"qs":[1,2],"correct":["B","D"]}};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    const q1 = parsed.questions.find((q) => q.number === 1)!;
+    expect(q1.answer.mode).toBe("mcq_set"); // mcqGroups-ветка отработала
+    expect(parsed.warnings.some((w) => /Q1/.test(w) && /mcqGroups/i.test(w) && /array/i.test(w))).toBe(false);
+  });
+});
+
 describe("parseRunner — listening", () => {
   const r = parseRunner(listening);
   it("определяет section listening и внешний audio src", () => {
