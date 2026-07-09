@@ -171,6 +171,56 @@ var mcqGroups = {"1-2": {"qs":[1,2],"correct":["B","D"]}};</script></body></html
   });
 });
 
+// Multi-select guard по LABEL (вариант B): реальные корпусные ярлыки choose-TWO без
+// mcqGroups (Cambridge 21 Reading Test 2 "Multiple Choice (TWO answers)"; Vol7 Test 3
+// "Multiple Choice (Two Answers)"). Warning поднимается, но qtype/mode/accept — как раньше.
+describe("parseRunner — choose-TWO/THREE label without mcqGroups", () => {
+  it('"Multiple Choice (TWO answers)" без mcqGroups → warning; qtype/mode/accept НЕ меняются', () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"20":"B","21":"D"};
+var questionTypes = {"20":"Multiple Choice (TWO answers)","21":"Multiple Choice (TWO answers)"};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    const q20 = parsed.questions.find((q) => q.number === 20)!;
+    expect(q20.qtype).toBe("mcq_single"); // выход не тронут (CONTAINS multiplechoice)
+    expect(q20.answer.mode).toBe("exact");
+    expect(q20.answer.accept).toEqual(["B"]);
+    expect(parsed.warnings.some((w) => /Q20/.test(w) && /mcqGroups/i.test(w))).toBe(true);
+  });
+
+  it('"Multiple Choice (Two Answers)" без mcqGroups → warning', () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"21":"A","22":"C"};
+var questionTypes = {"21":"Multiple Choice (Two Answers)","22":"Multiple Choice (Two Answers)"};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    expect(parsed.warnings.some((w) => /Q21/.test(w) && /mcqGroups/i.test(w))).toBe(true);
+  });
+
+  it('plain "Multiple Choice" → нет choose-many warning', () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"1":"B"};var questionTypes = {"1":"Multiple Choice"};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    expect(parsed.warnings.some((w) => /Q1/.test(w) && /mcqGroups/i.test(w))).toBe(false);
+  });
+
+  it('"Note completion (two words)" → нет warning (защита от голого "two")', () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"1":"raindrops"};var questionTypes = {"1":"Note completion (two words)"};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    expect(parsed.warnings.some((w) => /Q1/.test(w) && /mcqGroups/i.test(w))).toBe(false);
+  });
+
+  it("TWO-label, но номер в mcqGroups → нет choose-many warning (mcqGroups приоритетна)", () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"20":"B"};
+var questionTypes = {"20":"Multiple Choice (TWO answers)"};
+var mcqGroups = {"20-21": {"qs":[20,21],"correct":["B","D"]}};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    const q20 = parsed.questions.find((q) => q.number === 20)!;
+    expect(q20.answer.mode).toBe("mcq_set"); // mcqGroups-ветка отработала
+    expect(parsed.warnings.some((w) => /Q20/.test(w) && /mcqGroups/i.test(w))).toBe(false);
+  });
+});
+
 describe("parseRunner — listening", () => {
   const r = parseRunner(listening);
   it("определяет section listening и внешний audio src", () => {

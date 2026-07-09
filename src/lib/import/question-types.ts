@@ -99,6 +99,18 @@ export function canonQuestionType(label: string): CanonResult {
   return { type: null, confident: false };
 }
 
+// Вариант B — детект ярлыка choose-TWO/THREE для review-сигнала (не меняет qtype-выход).
+// Матчит СОСТАВНОЙ префикс `multiplechoice` + `two`/`three` в norm-строке, а НЕ голый
+// "two"/"three": иначе "Note completion (two words)" (norm "notecompletiontwowords") ложно
+// попал бы в multi-select. norm выкидывает всё, кроме букв, поэтому "Multiple Choice (TWO
+// answers)" → "multiplechoicetwoanswers" содержит "multiplechoicetwo". canonQuestionType
+// по-прежнему возвращает mcq_single для таких ярлыков — это лишь флаг на ревью-экран, что
+// authoring-спека требует mcqGroups-диапазон для choose-TWO/THREE.
+export function isChooseManyLabel(label: string): boolean {
+  const key = norm(label);
+  return key.includes("multiplechoicetwo") || key.includes("multiplechoicethree");
+}
+
 // A source label that maps to no canon type falls back to short_answer. grade.ts routes
 // by answer-key mode, not qtype, so grading is unaffected — but the fallback hides a
 // genuinely unsupported type. The parser records it as a warning; the publish gate (#13)

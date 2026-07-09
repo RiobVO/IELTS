@@ -1,6 +1,11 @@
 // Юнит-тесты канонизации типов вопросов (BRIEF §4.2).
 import { describe, it, expect } from "vitest";
-import { canonQuestionType, blankTypeWarning, isUnknownTypeWarning } from "./question-types";
+import {
+  canonQuestionType,
+  blankTypeWarning,
+  isUnknownTypeWarning,
+  isChooseManyLabel,
+} from "./question-types";
 
 describe("canonQuestionType", () => {
   // Реальные ярлыки из источников → канон-энум. Ожидаемые значения выписаны руками,
@@ -105,5 +110,23 @@ describe("blankTypeWarning / isUnknownTypeWarning (P1 softening)", () => {
   it("строка не в форме сгенерированного envelope не блокирует", () => {
     // генератор ВСЕГДА кавычит label (JSON.stringify) — строка без кавычек не наш warning
     expect(isUnknownTypeWarning("Q9: unknown type → fell back to short_answer")).toBe(false);
+  });
+});
+
+// Вариант B: детект label choose-TWO/THREE по СОСТАВНОМУ префиксу (multiplechoice + two/
+// three), а не голому "two"/"three" — иначе "Note completion (two words)" ложно попадёт в
+// multi-select. qtype-выход canonQuestionType при этом не меняется (label остаётся mcq_single).
+describe("isChooseManyLabel", () => {
+  it("реальные choose-TWO/THREE ярлыки → true", () => {
+    expect(isChooseManyLabel("Multiple Choice (TWO answers)")).toBe(true);
+    expect(isChooseManyLabel("Multiple Choice (Two Answers)")).toBe(true);
+    expect(isChooseManyLabel("Multiple Choice (three answers)")).toBe(true);
+  });
+
+  it("plain / completion ярлыки → false (защита от голого two/three)", () => {
+    expect(isChooseManyLabel("Multiple Choice")).toBe(false);
+    expect(isChooseManyLabel("Note completion (two words)")).toBe(false);
+    expect(isChooseManyLabel("Sentence completion (TWO WORDS)")).toBe(false);
+    expect(isChooseManyLabel("")).toBe(false);
   });
 });
