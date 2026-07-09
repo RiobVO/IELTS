@@ -32,6 +32,35 @@ export function parseRunner(html: string): RunnerParseResult {
   return section === "listening" ? parseListeningRunner(html) : parseReadingRunner(html);
 }
 
+// Распознаваемые контейнеры ключа ответов (по любому из имён строятся вопросы).
+const KEY_CONTAINERS = ["correctAnswers", "KEY", "acceptableAnswers", "acceptableVariants", "mcqGroups"];
+
+/**
+ * P4: диагностика отказа при 0 распознанных вопросов. Различает два случая:
+ *  - контейнер ключа НЕ найден — источник хранит ключ под нераспознанным именем
+ *    (другой генератор, «bespoke»); парсер такой диалект не поддерживает (осознанный YAGNI);
+ *  - контейнер найден, но номера вопросов не распознаны (нечисловые ключи вроде "q1",
+ *    иная разметка name="qN" / .part[data-part]) — ключ есть, но форма чужая.
+ * Только для сообщения об ошибке; поведение импорта (fail-closed) не меняется.
+ */
+export function diagnoseEmptyRunnerParse(html: string): string {
+  const src = scriptText(html);
+  const declared = KEY_CONTAINERS.filter((name) =>
+    new RegExp(`(?:const|let|var)\\s+${name}\\s*=`).test(src),
+  );
+  if (declared.length === 0) {
+    return (
+      "no questions parsed — answer-key container not found (expected one of " +
+      "correctAnswers / KEY / acceptableAnswers / mcqGroups). This source generator isn't supported."
+    );
+  }
+  return (
+    `no questions parsed — answer key found (${declared.join(", ")}) but no question numbers ` +
+    `were recognized (expected numeric keys 1..N; this source uses a different layout, e.g. ` +
+    `name="qN" / .part[data-part]). This source generator isn't supported.`
+  );
+}
+
 function mkQuestion(
   number: number,
   qtype: string,
