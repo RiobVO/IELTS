@@ -849,3 +849,18 @@ TRUNCATE), `authenticated` — INSERT/DELETE/REFERENCES/TRIGGER/TRUNCATE. Бар
 Клиенту остаются SELECT (policy-scoped, 0001) и `UPDATE (read_at)` (0046). `down` — no-op:
 up снимал только дрейф, контрактных грантов не менял. Проверено на проде скриптом-пробой
 (колоночный UPDATE = только `read_at` у `authenticated`).
+
+## 0048 — writing/speaking grant lockdown (снятие прод-дрейфа)
+
+Тот же класс, что 0047, на 7 таблицах Writing/Speaking (`writing_task`,
+`writing_submission`, `writing_feedback`, `speaking_task`, `speaking_submission`,
+`speaking_feedback`, `speaking_audio_event`). Read-only аудит прода поймал дрейф Supabase
+default privileges: у `authenticated` остались `REFERENCES`/`TRIGGER`/`TRUNCATE` — хардинг
+0024/0028 ревокал `INSERT`/`UPDATE`/`DELETE` **точечно**, не через `REVOKE ALL`, поэтому
+унаследованные default-priv гранты недоснялись. У `anon` грантов уже ноль, политики
+(`select_own`/`select_published`) корректны. Снимается: `REVOKE ALL FROM anon` (страховка)
++ `REVOKE INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE FROM authenticated`;
+контрактный `SELECT` (0023/0027) сохранён. `TRUNCATE` особо опасен — RLS его не фильтрует.
+`down` — no-op: снимаемое не выдавалось нашим контрактом (SELECT для authenticated не
+трогали, I/U/D уже сняты 0024/0028, REFERENCES/TRIGGER/TRUNCATE — чистый дрейф). Гейт
+(`verify.ts §4k`) ассертит: `authenticated` — ровно `SELECT`, `anon` — без грантов.
