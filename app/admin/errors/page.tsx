@@ -1,9 +1,11 @@
+import type { Metadata } from "next";
 import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { errorLog } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Admin errors | bando" };
 
 /**
  * Owner-only просмотр self-hosted error sink (§11): последние ошибки server + client

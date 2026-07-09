@@ -26,13 +26,13 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  if (!isUuid(id)) return { title: "Exam" };
+  if (!isUuid(id)) return { title: "Exam | bando" };
   const [row] = await db
     .select({ title: contentItem.title })
     .from(contentItem)
     .where(eq(contentItem.id, id))
     .limit(1);
-  return { title: row?.title ?? "Exam" };
+  return { title: `${row?.title ?? "Exam"} | bando` };
 }
 
 export default async function ExamPage({

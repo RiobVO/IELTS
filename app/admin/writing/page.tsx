@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth";
 import { Badge, type BadgeTone } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
@@ -13,6 +14,7 @@ import {
 import { createWritingTask, publishTask, removeTask, unpublishTask } from "./actions";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Admin writing | bando" };
 
 const CATEGORY_LABEL: Record<AdminTaskRow["category"], string> = {
   academic: "Academic",

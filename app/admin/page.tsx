@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { desc, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { contentItem } from "@/db/schema";
@@ -8,6 +9,7 @@ import { Badge } from "@/components/core/Badge";
 import { markReviewed, setStatus, uploadTest } from "./actions";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Admin | bando" };
 
 export default async function AdminPage({
   searchParams,

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { Metadata } from "next";
 import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { vocabDeck } from "@/db/schema";
@@ -8,6 +9,7 @@ import { Badge } from "@/components/core/Badge";
 import { setVocabStatus, uploadVocab } from "./actions";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Admin vocabulary | bando" };
 
 const TIER_LABEL: Record<string, string> = {
   basic: "Basic",

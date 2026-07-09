@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { turnstileConfig } from "@/env";
 import { AuthScreen } from "./AuthScreen";
+
+export const metadata: Metadata = { title: "Sign in | bando" };
 
 export default async function AuthPage({
   searchParams,

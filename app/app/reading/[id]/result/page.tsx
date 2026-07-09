@@ -1,8 +1,9 @@
 import { and, asc, desc, eq, exists, isNotNull, lt, ne, sql } from "drizzle-orm";
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
-import { answerKey, attempt, attemptReviewSnapshot, question } from "@/db/schema";
+import { answerKey, attempt, attemptReviewSnapshot, contentItem, question } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
 import { getActiveBadges } from "@/lib/content/badges";
 import { getContentMeta } from "@/lib/content/exam-content";
@@ -31,6 +32,25 @@ import ResultCoach from "./ResultCoach";
 import type { AKItem, AKType } from "./InsightReport";
 
 export const dynamic = "force-dynamic";
+
+// Динамический title вкладки — заголовок теста вместо статичного дефолта из layout.tsx.
+// Чистый read-only запрос (без grade()/getContentMeta и прочей бизнес-логики страницы):
+// generateMetadata не должна триггерить сайд-эффекты и не обязана знать про владение
+// попыткой — название теста публично видно на /app/exam и /app/reading точно так же.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  if (!isUuid(id)) return { title: "Result | bando" };
+  const [row] = await db
+    .select({ title: contentItem.title })
+    .from(contentItem)
+    .where(eq(contentItem.id, id))
+    .limit(1);
+  return { title: `${row?.title ?? "Result"} | bando` };
+}
 
 function fmtDuration(sec: number): string {
   if (sec < 60) return `${sec}s`;
