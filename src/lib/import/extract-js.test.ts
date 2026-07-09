@@ -31,6 +31,46 @@ describe("extractObjectLiteral", () => {
   });
 });
 
+// P2 (2026-07-09): апостроф в // или /* */-комментарии ВНУТРИ объекта открывал
+// фантомную "строку" → счётчик скобок сбивался → extractObjectLiteral возвращал null.
+// Это security-путь: тот же сканер чистит correctAnswers из runner_html (blankObject),
+// молчаливый null => сырой ключ уезжает в браузер mock-iframe. Сканер должен быть
+// comment-aware: содержимое комментария не участвует ни в подсчёте кавычек, ни скобок.
+describe("extractObjectLiteral — comment-aware (P2)", () => {
+  it("апостроф в // -комментарии не открывает фантомную строку", () => {
+    const src = `const o = { // don't touch\n"1": "TRUE" };`;
+    expect(extractObjectLiteral(src, "o")).toBe(`{ // don't touch\n"1": "TRUE" }`);
+  });
+
+  it("апостроф и скобки в /* */-комментарии не ломают баланс", () => {
+    const src = `const o = { /* don't {drop} me */ "1": "A" };`;
+    expect(extractObjectLiteral(src, "o")).toBe(`{ /* don't {drop} me */ "1": "A" }`);
+  });
+
+  it("несбалансированная скобка в комментарии не влияет на depth снаружи", () => {
+    const src = `const o = { a: 1 // trailing brace } here\n};`;
+    expect(extractObjectLiteral(src, "o")).toBe(`{ a: 1 // trailing brace } here\n}`);
+  });
+
+  it("`//` внутри строки НЕ считается комментарием (не ломать строки-URL)", () => {
+    const src = `const o = { url: "http://x/}y" };`;
+    expect(extractObjectLiteral(src, "o")).toBe(`{ url: "http://x/}y" }`);
+  });
+
+  // Adversarial (Codex, 2026-07-09): comment-aware цикл стартует ПОСЛЕ пре-скана
+  // между `=` и `{`, который пропускал только whitespace → комментарий там ронял
+  // extractObjectLiteral в null ДО цикла → blankObject молча пропускал объект (утечка).
+  it("пропускает block-комментарий между `=` и `{`", () => {
+    const src = `const o = /* between */ { "1": "A" };`;
+    expect(extractObjectLiteral(src, "o")).toBe(`{ "1": "A" }`);
+  });
+
+  it("пропускает line-комментарий между `=` и `{`", () => {
+    const src = `const o = // note\n{ "1": "A" };`;
+    expect(extractObjectLiteral(src, "o")).toBe(`{ "1": "A" }`);
+  });
+});
+
 describe("evalDataObject", () => {
   it("разбирает литерал в JS-значение", () => {
     expect(evalDataObject("{ a: 1, b: [2, 3] }")).toEqual({ a: 1, b: [2, 3] });
