@@ -315,6 +315,12 @@ async function clientWriteLockdown(): Promise<{
  *     uid — «0 affected» там выглядел одинаково и под deny, и под честный мисматч):
  *     UPDATE(read_at) под чужим B → 0 строк; под владельцем A → 1 строка; UPDATE
  *     не-read_at колонки под A → 42501 (нет колоночного гранта, до RLS).
+ *   - qual-текст `user_id = auth.uid()` сам по себе не доказательство: политика вида
+ *     `user_id = auth.uid() OR true` тоже содержит эту подстроку, но реально открыта
+ *     всем. Рядом с текстовой проверкой — та же живая проба A/B, но на SELECT: чужой
+ *     B делает SELECT * FROM notification WHERE id = <notifId A> — должен получить
+ *     0 строк; сам A на той же строке — 1 (иначе непонятно, deny это или запрос
+ *     просто пуст из-за другого бага).
  * Табличные гранты берём из role_table_grants (колоночные там НЕ отражаются), колоночный
  * UPDATE — из column_privileges (при снятом табличном UPDATE там останется лишь read_at).
  */
@@ -330,6 +336,8 @@ async function notificationLock(): Promise<{
   crossUserUpdateAffected: number;
   ownUserUpdateAffected: number;
   nonReadAtUpdateDenied: boolean;
+  crossUserSelectRows: number;
+  ownUserSelectRows: number;
 }> {
   const [{ rls }] = await sql<{ rls: boolean }[]>`
     SELECT relrowsecurity AS rls FROM pg_class
@@ -417,6 +425,8 @@ async function notificationLock(): Promise<{
   let crossUserUpdateAffected = -1;
   let ownUserUpdateAffected = -1;
   let nonReadAtUpdateDenied = false;
+  let crossUserSelectRows = -1;
+  let ownUserSelectRows = -1;
 
   try {
     const [{ id: notifId }] = await sql<{ id: string }[]>`
@@ -443,6 +453,26 @@ async function notificationLock(): Promise<{
     crossUserUpdateAffected = (await updateAs(userB, "read_at = now()")) ?? -1;
     ownUserUpdateAffected = (await updateAs(userA, "read_at = now()")) ?? -1;
     nonReadAtUpdateDenied = (await updateAs(userA, "title = 'hacked'")) === null;
+
+    // Живая проба на SELECT (не только qual-substring): число видимых строк при
+    // успехе; -1 при 42501 (табличный SELECT-грант снят — до RLS, отдельный сбой).
+    const selectAs = async (uid: string): Promise<number> => {
+      try {
+        const rows = await sql.begin(async (tx) => {
+          await tx`SELECT set_config('request.jwt.claim.sub', ${uid}, true)`;
+          await tx.unsafe("SET LOCAL ROLE authenticated");
+          return tx.unsafe(`SELECT * FROM notification WHERE id = '${notifId}'`);
+        });
+        return rows.length;
+      } catch (e: unknown) {
+        const err = e as { code?: string; message?: string };
+        if (err?.code === "42501" || /permission denied/i.test(String(err?.message ?? e))) return -1;
+        throw e;
+      }
+    };
+
+    crossUserSelectRows = await selectAs(userB);
+    ownUserSelectRows = await selectAs(userA);
   } finally {
     await sql`DELETE FROM auth.users WHERE id = ${userA}`;
     await sql`DELETE FROM auth.users WHERE id = ${userB}`;
@@ -460,6 +490,8 @@ async function notificationLock(): Promise<{
     crossUserUpdateAffected,
     ownUserUpdateAffected,
     nonReadAtUpdateDenied,
+    crossUserSelectRows,
+    ownUserSelectRows,
   };
 }
 
@@ -717,13 +749,16 @@ async function main() {
   }
 
   // 4j. notification (0001 → 0046 → 0047): гейт её раньше не ассертил — а именно эти
-  // миграции закрывали её постуру. Ревью усилило проверку дважды: (1) раньше сверялись
+  // миграции закрывали её постуру. Ревью усилило проверку трижды: (1) раньше сверялись
   // только ИМЕНА политик — заглушка с тем же именем, но другим cmd/qual прошла бы
   // незамеченной, теперь сверяем cmd/roles/qual/with_check против owner-паттерна 0001
   // и требуем ровно 2 permissive-политики на таблице; (2) живая проба раньше била по
   // WHERE user_id = gen_random_uuid() — «успех» UPDATE(read_at) ничего не доказывал
   // (0 affected rows одинаково и под deny, и под честный мисматч), теперь три реальных
-  // исхода на реальных identity A/B и реальной строке.
+  // исхода на реальных identity A/B и реальной строке; (3) qual-текст сам по себе не
+  // доказательство — `user_id = auth.uid() OR true` тоже пройдёт substring-матч, но
+  // реально открыта всем, поэтому рядом с текстовой проверкой — живая cross-user проба
+  // именно на SELECT (не только на UPDATE): чужой B не должен увидеть строку A вовсе.
   const nl = await notificationLock();
   const authGrantsOk = nl.authTableGrants.length === 1 && nl.authTableGrants[0] === "SELECT";
   const authWritableOk = nl.authWritable.length === 1 && nl.authWritable[0] === "read_at";
@@ -738,12 +773,15 @@ async function main() {
     nl.updatePolicyOk &&
     nl.crossUserUpdateAffected === 0 &&
     nl.ownUserUpdateAffected === 1 &&
-    nl.nonReadAtUpdateDenied
+    nl.nonReadAtUpdateDenied &&
+    nl.crossUserSelectRows === 0 &&
+    nl.ownUserSelectRows === 1
   )
     ok(
       "RLS — notification locked (anon no grants; authenticated SELECT + UPDATE(read_at) only; " +
         "select_own/update_own policies match owner-check cmd/roles/qual with no extra permissive " +
-        "policies; cross-user UPDATE affects 0 rows, own-user UPDATE affects 1, non-read_at UPDATE denied 42501)",
+        "policies; cross-user UPDATE affects 0 rows, own-user UPDATE affects 1, non-read_at UPDATE denied 42501; " +
+        "live cross-user SELECT returns 0 rows, own-user SELECT returns 1)",
     );
   else
     fail(
@@ -752,7 +790,8 @@ async function main() {
         `authWritable=[${nl.authWritable.join(",")}], policyCount=${nl.policyCount}, ` +
         `selectPolicyOk=${nl.selectPolicyOk}, updatePolicyOk=${nl.updatePolicyOk}, ` +
         `crossUserUpdateAffected=${nl.crossUserUpdateAffected}, ownUserUpdateAffected=${nl.ownUserUpdateAffected}, ` +
-        `nonReadAtUpdateDenied=${nl.nonReadAtUpdateDenied})`,
+        `nonReadAtUpdateDenied=${nl.nonReadAtUpdateDenied}, crossUserSelectRows=${nl.crossUserSelectRows}, ` +
+        `ownUserSelectRows=${nl.ownUserSelectRows})`,
     );
 
   // 4k. Writing/Speaking grant-постура (0023/0024/0027/0028 → 0048): у authenticated —
