@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -6,6 +7,7 @@ import { getProfile } from "@/lib/auth";
 import OnboardingForm from "./OnboardingForm";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Onboarding | bando" };
 
 /**
  * Post-signup onboarding (W1-2): capture display_name / region / target_band so

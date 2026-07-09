@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { getOpenMistakes, type OpenMistake } from "@/lib/practice/mistakes";
@@ -7,6 +8,7 @@ import { AppShell } from "../../_AppShell";
 import { MarkLearnedButton } from "./MarkLearnedButton";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Mistakes | bando" };
 
 /**
  * `/app/practice/mistakes` — очередь ошибок (P9-rich «вариант B») с SM-2-расписанием

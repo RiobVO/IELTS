@@ -3,7 +3,7 @@ import { LeaguePanel } from "./LeaguePanel";
 import { BadgesPanel } from "./BadgesPanel";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Progress" };
+export const metadata: Metadata = { title: "Progress | bando" };
 
 /**
  * Объединённый раздел Progress — League + Badges под одним маршрутом с route-табами

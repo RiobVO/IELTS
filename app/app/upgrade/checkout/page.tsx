@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
@@ -11,6 +12,7 @@ import { Badge } from "@/components/core/Badge";
 import SimulatePayment from "./SimulatePayment";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Checkout | bando" };
 
 const TIER_LABEL: Record<string, string> = { premium: "Premium", ultra: "Ultra" };
 

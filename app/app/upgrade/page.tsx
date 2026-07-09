@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getProfile, requireUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { effectiveTier, type Tier } from "@/lib/tiers";
@@ -9,6 +10,7 @@ import { Button } from "@/components/core/Button";
 import PricingScreen from "./PricingScreen";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Upgrade | bando" };
 
 export default async function UpgradePage({
   searchParams,
