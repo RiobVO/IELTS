@@ -54,13 +54,22 @@ async function checkAuthThrottle(scope: AuthThrottleScope, identifier?: string):
   }
   const ipHash = createHash("sha256").update(`${scope}:${key}`).digest("hex");
   const since = new Date(Date.now() - windowSeconds * 1000);
-  const [recent] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(signupThrottle)
-    .where(and(eq(signupThrottle.ipHash, ipHash), gte(signupThrottle.createdAt, since)));
-  const exceeded = exceedsAuthThrottle(scope, recent?.n ?? 0);
-  if (!exceeded) await db.insert(signupThrottle).values({ ipHash });
-  return exceeded;
+  // COUNT и INSERT атомарны под advisory-xact-lock (тот же паттерн, что trial-лейн
+  // в src/lib/exam/access.ts ~274): без лока параллельный burst запросов все видят
+  // один и тот же count < limit и все проходят — для scope "resetEmail" это
+  // почтовая бомбардировка жертвы вместо реального капа. Лок снимается на
+  // commit/rollback, не течёт через pgbouncer; ключ — ipHash (уже несёт префикс
+  // scope), не raw identifier.
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${ipHash}))`);
+    const [recent] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(signupThrottle)
+      .where(and(eq(signupThrottle.ipHash, ipHash), gte(signupThrottle.createdAt, since)));
+    const exceeded = exceedsAuthThrottle(scope, recent?.n ?? 0);
+    if (!exceeded) await tx.insert(signupThrottle).values({ ipHash });
+    return exceeded;
+  });
 }
 
 export async function signIn(formData: FormData) {
@@ -218,11 +227,14 @@ export async function signOut() {
  */
 export async function requestPasswordReset(email: string): Promise<{ error: string | null }> {
   const normalizedEmail = email.toLowerCase().trim();
-  const [ipExceeded, emailExceeded] = await Promise.all([
-    checkAuthThrottle("reset"),
-    checkAuthThrottle("resetEmail", normalizedEmail),
-  ]);
-  if (ipExceeded || emailExceeded) {
+  // Последовательно, НЕ Promise.all: IP-лимит первым. Уже исчерпанный IP отклоняем,
+  // не трогая per-email счётчик — иначе атакующий с забаненного IP выжигает
+  // per-email бюджет жертвы вторым чеком, который запускался параллельно и всё
+  // равно списывал попытку.
+  if (await checkAuthThrottle("reset")) {
+    return { error: AUTH_THROTTLE_MESSAGE };
+  }
+  if (await checkAuthThrottle("resetEmail", normalizedEmail)) {
     return { error: AUTH_THROTTLE_MESSAGE };
   }
 
@@ -238,7 +250,7 @@ export async function requestPasswordReset(email: string): Promise<{ error: stri
         "requestPasswordReset: NEXT_PUBLIC_SITE_URL is not set, reset link will land on Supabase Site URL root",
     });
   }
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
     ...(origin ? { redirectTo: `${origin}/auth/callback?next=/auth/update-password` } : {}),
   });
   return { error: error ? error.message : null };
