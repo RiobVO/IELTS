@@ -95,15 +95,18 @@ export function shouldRateAttempt(input: {
 }
 
 /**
- * IP-throttle для login/reset-password (§11 anti-abuse) — тот же механизм и та же
- * таблица signup_throttle, что signup-cap выше (миграция под отдельную колонку scope
- * не заводится — ключ вместо этого несёт префикс scope, см. checkAuthThrottle в
- * app/auth/actions.ts). Login — щедрый порог: легитимные ретраи забытого пароля не
- * должны страдать. Reset — строже: живой юзер жмёт "send" один раз, не трижды.
+ * IP/email-throttle для login/reset-password (§11 anti-abuse) — тот же механизм и та
+ * же таблица signup_throttle, что signup-cap выше (миграция под отдельную колонку
+ * scope не заводится — ключ вместо этого несёт префикс scope, см. checkAuthThrottle
+ * в app/auth/actions.ts). Login и reset (по IP) — щедрый порог: общий IP за NAT
+ * (университет/офис) не должен блокировать легитимных юзеров, отсекаем только
+ * автоматизированный спам с одного адреса. resetEmail — строгий per-email лимит
+ * поверх reset: живой юзер жмёт "send" один раз, не трижды, а NAT его не размывает.
  */
 export const AUTH_THROTTLE_LIMITS = {
   login: { windowSeconds: 10 * 60, max: 10 },
-  reset: { windowSeconds: 10 * 60, max: 3 },
+  reset: { windowSeconds: 10 * 60, max: 10 },
+  resetEmail: { windowSeconds: 10 * 60, max: 3 },
 } as const;
 
 export type AuthThrottleScope = keyof typeof AUTH_THROTTLE_LIMITS;

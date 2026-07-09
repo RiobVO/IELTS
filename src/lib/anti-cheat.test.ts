@@ -76,14 +76,23 @@ describe("exceedsAuthThrottle", () => {
   it("login: ровно потолок → true (граница включительна, >=)", () => {
     expect(exceedsAuthThrottle("login", AUTH_THROTTLE_LIMITS.login.max)).toBe(true);
   });
-  it("reset: меньше потолка → false", () => {
+  it("reset (per-IP): меньше потолка → false", () => {
     expect(exceedsAuthThrottle("reset", AUTH_THROTTLE_LIMITS.reset.max - 1)).toBe(false);
   });
-  it("reset: ровно потолок → true (граница включительна, >=)", () => {
+  it("reset (per-IP): ровно потолок → true (граница включительна, >=)", () => {
     expect(exceedsAuthThrottle("reset", AUTH_THROTTLE_LIMITS.reset.max)).toBe(true);
   });
-  it("scope-пороги независимы (reset строже login)", () => {
-    expect(AUTH_THROTTLE_LIMITS.reset.max).toBeLessThan(AUTH_THROTTLE_LIMITS.login.max);
+  it("reset (per-IP) вровень с login (NAT-фикс: общий IP не банит легитимных юзеров)", () => {
+    expect(AUTH_THROTTLE_LIMITS.reset.max).toBe(AUTH_THROTTLE_LIMITS.login.max);
+  });
+  it("resetEmail: меньше потолка → false", () => {
+    expect(exceedsAuthThrottle("resetEmail", AUTH_THROTTLE_LIMITS.resetEmail.max - 1)).toBe(false);
+  });
+  it("resetEmail: ровно потолок → true (граница включительна, >=)", () => {
+    expect(exceedsAuthThrottle("resetEmail", AUTH_THROTTLE_LIMITS.resetEmail.max)).toBe(true);
+  });
+  it("resetEmail строже reset/login (строгий per-email лимит поверх щедрого per-IP)", () => {
+    expect(AUTH_THROTTLE_LIMITS.resetEmail.max).toBeLessThan(AUTH_THROTTLE_LIMITS.reset.max);
   });
 });
 
