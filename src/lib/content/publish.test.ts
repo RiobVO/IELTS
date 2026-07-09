@@ -63,6 +63,16 @@ describe("publishReviewedContentItem", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  // Codex-ревью (2026-07-09): не-массивный accept (напр. jsonb {}) не должен ронять гейт
+  // на .some — трактуем как пустой ключ.
+  it("не падает на не-массивном accept — трактует как пустой ключ (#17)", async () => {
+    select
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "Reading 1", section: "reading" }]))
+      .mockReturnValueOnce(integrityChain([{ number: 1, keyId: "k1", accept: {} }]));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "empty_answer_key" });
+  });
+
   it("refuses to publish when a question type didn't resolve (unknown-type fallback) (#13)", async () => {
     select.mockReturnValueOnce(
       contentChain([
