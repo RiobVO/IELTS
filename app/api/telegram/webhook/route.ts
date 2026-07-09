@@ -365,6 +365,17 @@ async function handleVocabUpload(
   }
 }
 
+// Причина отказа publish-гейта → сообщение админу (паритет с admin setStatus).
+// Держать в синхроне с PublishResult.reason в @/lib/content/publish.
+const PUBLISH_FAIL_MSG: Record<string, string> = {
+  not_reviewed: "Сначала подтверди ключ в /admin (review), затем публикуй.",
+  empty_answer_key: "Нельзя опубликовать: у вопроса пустой ключ — почини импорт.",
+  unresolved_question_type: "Нельзя опубликовать: тип вопроса не распознан (см. warnings) — почини импорт.",
+  question_number_gap: "Нельзя опубликовать: дыра или дубль в номерах вопросов — почини импорт.",
+  answer_key_count_mismatch: "Нельзя опубликовать: у вопроса нет ключа — почини импорт.",
+  missing_listening_audio: "Нельзя опубликовать: у listening-теста ещё нет аудио — прикрепи mp3.",
+};
+
 /**
  * Публикация по нажатию inline-кнопки (callback_data = "publish:<id>"). Зеркалит
  * admin setStatus через общий publishReviewedContentItem: публикует ТОЛЬКО после
@@ -382,16 +393,7 @@ async function handlePublish(cq: TgCallbackQuery): Promise<void> {
   try {
     const res = await publishReviewedContentItem(id);
     if (!res.ok) {
-      await answerCallback(
-        cq.id,
-        res.reason === "not_reviewed"
-          ? "Сначала подтверди ключ в /admin (review), затем публикуй."
-          : res.reason === "empty_answer_key"
-            ? "Нельзя опубликовать: у вопроса пустой ключ — почини импорт."
-            : res.reason === "unresolved_question_type"
-              ? "Нельзя опубликовать: тип вопроса не распознан (см. warnings) — почини импорт."
-              : "Тест не найден",
-      );
+      await answerCallback(cq.id, PUBLISH_FAIL_MSG[res.reason] ?? "Тест не найден");
       return;
     }
     await answerCallback(cq.id, "Опубликовано ✅");
