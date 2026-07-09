@@ -23,7 +23,7 @@ const SUPABASE_MEDIA_ORIGIN = new URL(env.SUPABASE_URL).origin;
 // гейтятся на exam-странице (enforceAccess перед startAttempt); здесь
 // defense-in-depth на случай прямого GET /runner.
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
@@ -103,10 +103,22 @@ export async function GET(
   // (2) шапка — bando-знак вместо чужого логотипа «IELTS™» + снос чужого telegram-канала.
   // No-op для незнакомых шаблонов.
   const skinned = skinRunnerBrand(skinRunnerGate(scoped));
+  // Лимит mock из ?min= (iframe передаёт его сюда). Route доступен прямым GET →
+  // defense-in-depth: та же валидация, что на exam-странице. searchParams.get даёт
+  // null при отсутствии (у страницы — undefined) → явно ведём его в NaN → null,
+  // иначе Number(null)===0 склампилось бы в 5 минут.
+  const minParam = new URL(req.url).searchParams.get("min");
+  const minRaw = minParam == null ? NaN : Math.round(Number(minParam));
+  const minutes = Number.isFinite(minRaw)
+    ? Math.min(180, Math.max(5, minRaw))
+    : null;
   // P0: внутренний Practice/Mock раннера подчиняется attempt.mode (автовыбор
-  // карточки + скрытие mid-test переключателя). Прямой GET без попытки (нет att)
-  // — отдаём как есть: экзам-страница всё равно создаёт attempt до iframe.
-  const html = att ? forceRunnerMode(skinned, att.mode) : skinned;
+  // карточки + скрытие mid-test переключателя; для нативного mode-card раннера — ещё
+  // и mock-лимит из minutes). Прямой GET без попытки (нет att) — отдаём как есть:
+  // экзам-страница всё равно создаёт attempt до iframe.
+  const html = att
+    ? forceRunnerMode(skinned, att.mode, att.mode === "mock" ? minutes : null)
+    : skinned;
 
   return new Response(html, {
     status: 200,

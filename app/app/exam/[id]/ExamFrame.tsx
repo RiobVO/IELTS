@@ -5,9 +5,12 @@ import { submitAttempt } from "../../reading/[id]/actions";
 interface Props {
   attemptId: string;
   contentItemId: string;
+  // Лимит mock (минуты) для авто-старта нативного mode-card раннера. null → раннер
+  // возьмёт свой дефолт. Уходит в runner-route как ?min= (там та же валидация).
+  mockMinutes?: number | null;
 }
 
-export default function ExamFrame({ attemptId, contentItemId }: Props) {
+export default function ExamFrame({ attemptId, contentItemId, mockMinutes }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const submitted = useRef(false);
   const [, start] = useTransition();
@@ -39,7 +42,9 @@ export default function ExamFrame({ attemptId, contentItemId }: Props) {
       <style>{".exam-frame{height:100vh;height:100dvh}"}</style>
       <iframe
         ref={iframeRef}
-        src={`/app/exam/${contentItemId}/runner`}
+        src={`/app/exam/${contentItemId}/runner${
+          mockMinutes != null ? `?min=${mockMinutes}` : ""
+        }`}
         title="IELTS exam"
         sandbox="allow-scripts allow-modals"
         className="exam-frame"
