@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getProfile, getUser } from "@/lib/auth";
 import { speakingFeatureEnabled } from "@/env";
@@ -8,6 +9,10 @@ import { AppShell } from "../../../_AppShell";
 import { SpeakingResult } from "./_Result";
 
 export const dynamic = "force-dynamic";
+// Статичный title (не generateMetadata), тем же резоном, что и Writing result:
+// единственный источник темы — readFeedbackResult, owner-scoped join, звать его
+// заново (или дублировать getUser()) ради заголовка вкладки не стоит.
+export const metadata: Metadata = { title: "Speaking result | bando" };
 
 /**
  * Speaking feedback result (`/app/speaking/result/[id]`). Owner-scoped read — only

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getProfile, getUser } from "@/lib/auth";
 import { writingFeatureEnabled } from "@/env";
@@ -7,6 +8,10 @@ import { AppShell } from "../../../_AppShell";
 import { FeedbackView } from "./_FeedbackView";
 
 export const dynamic = "force-dynamic";
+// Статичный title (не generateMetadata): единственный read, дающий тему эссе
+// (readFeedbackResult), owner-scoped — генерации метаданных пришлось бы повторно
+// звать getUser() и тащить весь feedback-джойн ради заголовка вкладки. Не стоит того.
+export const metadata: Metadata = { title: "Writing result | bando" };
 
 /**
  * Feedback result (`/app/writing/result/[id]`). Owner-scoped read — only the

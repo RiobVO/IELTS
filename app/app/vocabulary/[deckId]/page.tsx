@@ -1,11 +1,33 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { db } from "@/db";
+import { vocabDeck } from "@/db/schema";
 import { getReviewQueue, getVocabCatalog } from "@/lib/vocab/queries";
 import { isUuid } from "@/lib/uuid";
 import { AppShell } from "../../_AppShell";
 import { ReviewSession } from "./ReviewSession";
 
 export const dynamic = "force-dynamic";
+
+// Динамический title вкладки — имя дека вместо статичного дефолта. Чистый read-only
+// запрос названия (без getVocabCatalog/getReviewQueue): generateMetadata не должна
+// триггерить бизнес-логику самой страницы (тот же принцип, что в reading/[id]).
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ deckId: string }>;
+}): Promise<Metadata> {
+  const { deckId } = await params;
+  if (!isUuid(deckId)) return { title: "Deck | bando" };
+  const [row] = await db
+    .select({ title: vocabDeck.title })
+    .from(vocabDeck)
+    .where(eq(vocabDeck.id, deckId))
+    .limit(1);
+  return { title: row ? `${row.title} | bando` : "Deck | bando" };
+}
 
 /**
  * Экран одной сессии повторов (`/app/vocabulary/[deckId]`). uuid-гейт (мусор →

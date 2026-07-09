@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
 import { writingFeatureEnabled } from "@/env";
@@ -8,6 +9,7 @@ import { AppShell } from "../_AppShell";
 import { WritingCatalog, type PreviewState } from "./_Catalog";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Writing | bando" };
 
 /**
  * Writing Lab catalog (`/app/writing`). Disabled-safe: with WRITING_EVAL_MODEL
