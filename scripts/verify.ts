@@ -300,6 +300,94 @@ async function clientWriteLockdown(): Promise<{
   }
 }
 
+/**
+ * notification-таблица (0001 → 0046 → 0047). Родилась в 0001 ДО постуры «REVOKE ALL +
+ * явные гранты», подтип-дискриминатор `kind` и колоночный UPDATE-lock добавили 0046,
+ * прод-дрейф default-priv грантов снял 0047. Итоговая постура, которую держим:
+ *   - RLS включён; anon без политик = deny-all и вообще без табличных грантов (0047);
+ *   - authenticated: табличный грант ТОЛЬКО SELECT (табличный UPDATE снят 0046 →
+ *     заменён колоночным UPDATE(read_at); INSERT/DELETE/… снят 0047);
+ *   - политики select_own + update_own (0001) на месте;
+ *   - живая проба: под authenticated UPDATE не-read_at колонки падает 42501 (нет
+ *     колоночного гранта — до RLS), а UPDATE(read_at) проходит.
+ * Табличные гранты берём из role_table_grants (колоночные там НЕ отражаются), колоночный
+ * UPDATE — из column_privileges (при снятом табличном UPDATE там останется лишь read_at).
+ */
+async function notificationLock(): Promise<{
+  rlsEnabled: boolean;
+  anonDenied: boolean;
+  anonNoGrants: boolean;
+  authTableGrants: string[];
+  authWritable: string[];
+  policies: string[];
+  nonReadAtUpdateDenied: boolean;
+  readAtUpdateAllowed: boolean;
+}> {
+  const [{ rls }] = await sql<{ rls: boolean }[]>`
+    SELECT relrowsecurity AS rls FROM pg_class
+    WHERE oid = 'public.notification'::regclass`;
+
+  let anonDenied = false;
+  try {
+    await sql.begin(async (tx) => {
+      await tx.unsafe("SET LOCAL ROLE anon");
+      await tx.unsafe("SELECT * FROM notification");
+    });
+  } catch (e: unknown) {
+    const err = e as { code?: string; message?: string };
+    anonDenied = err?.code === "42501" || /permission denied/i.test(String(err?.message ?? e));
+  }
+
+  const anonGrants = await sql<{ privilege_type: string }[]>`
+    SELECT privilege_type FROM information_schema.role_table_grants
+    WHERE table_schema = 'public' AND table_name = 'notification' AND grantee = 'anon'`;
+
+  const authTable = await sql<{ privilege_type: string }[]>`
+    SELECT privilege_type FROM information_schema.role_table_grants
+    WHERE table_schema = 'public' AND table_name = 'notification' AND grantee = 'authenticated'`;
+
+  // Колоночный UPDATE-грант: без табличного UPDATE (снят 0046) тут остаётся лишь read_at.
+  const authCols = await sql<{ column_name: string }[]>`
+    SELECT column_name FROM information_schema.column_privileges
+    WHERE table_schema = 'public' AND table_name = 'notification'
+      AND grantee = 'authenticated' AND privilege_type = 'UPDATE'`;
+
+  const pols = await sql<{ policyname: string }[]>`
+    SELECT policyname FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'notification'`;
+
+  // Живая проба под authenticated: title (не read_at) → 42501 (нет колоночного гранта,
+  // проверяется до RLS); read_at → успех. WHERE по случайному uid не матчит строк, так
+  // что грант-слой рубит title ещё до обработки строк, а read_at обновляет 0 строк без ошибки.
+  const probeDenied = async (setClause: string): Promise<boolean> => {
+    try {
+      await sql.begin(async (tx) => {
+        await tx.unsafe("SET LOCAL ROLE authenticated");
+        await tx.unsafe(
+          `UPDATE notification SET ${setClause} WHERE user_id = gen_random_uuid()`,
+        );
+      });
+      return false;
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      return err?.code === "42501" || /permission denied/i.test(String(err?.message ?? e));
+    }
+  };
+  const nonReadAtUpdateDenied = await probeDenied("title = 'x'");
+  const readAtUpdateAllowed = !(await probeDenied("read_at = now()"));
+
+  return {
+    rlsEnabled: rls === true,
+    anonDenied,
+    anonNoGrants: anonGrants.length === 0,
+    authTableGrants: authTable.map((r) => r.privilege_type).sort(),
+    authWritable: authCols.map((r) => r.column_name).sort(),
+    policies: pols.map((r) => r.policyname),
+    nonReadAtUpdateDenied,
+    readAtUpdateAllowed,
+  };
+}
+
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer();
@@ -515,6 +603,37 @@ async function main() {
     else
       fail(`RLS — ${t} not anon-locked (rlsEnabled=${l.rlsEnabled}, anonDenied=${l.anonDenied})`);
   }
+
+  // 4j. notification (0001 → 0046 → 0047): гейт её раньше не ассертил — а именно эти
+  // миграции закрывали её постуру. Клиенту оставлены SELECT (policy-scoped) + колоночный
+  // UPDATE(read_at); табличный UPDATE снят 0046, прод-дрейф грантов (anon — всё,
+  // authenticated — INSERT/DELETE/TRUNCATE/…) снят 0047. Ассертим целиком.
+  const nl = await notificationLock();
+  const authGrantsOk = nl.authTableGrants.length === 1 && nl.authTableGrants[0] === "SELECT";
+  const authWritableOk = nl.authWritable.length === 1 && nl.authWritable[0] === "read_at";
+  const policiesOk =
+    nl.policies.includes("notification_select_own") &&
+    nl.policies.includes("notification_update_own");
+  if (
+    nl.rlsEnabled &&
+    nl.anonDenied &&
+    nl.anonNoGrants &&
+    authGrantsOk &&
+    authWritableOk &&
+    policiesOk &&
+    nl.nonReadAtUpdateDenied &&
+    nl.readAtUpdateAllowed
+  )
+    ok(
+      "RLS — notification locked (anon no grants; authenticated SELECT + UPDATE(read_at) only; select_own/update_own policies; non-read_at UPDATE denied, read_at UPDATE allowed)",
+    );
+  else
+    fail(
+      `RLS — notification lockdown incomplete (rlsEnabled=${nl.rlsEnabled}, anonDenied=${nl.anonDenied}, ` +
+        `anonNoGrants=${nl.anonNoGrants}, authTableGrants=[${nl.authTableGrants.join(",")}], ` +
+        `authWritable=[${nl.authWritable.join(",")}], policies=[${nl.policies.join(",")}], ` +
+        `nonReadAtUpdateDenied=${nl.nonReadAtUpdateDenied}, readAtUpdateAllowed=${nl.readAtUpdateAllowed})`,
+    );
 
   // 5. auth trigger: a new auth.users row auto-creates a profile
   if (await profileAutoCreated())
