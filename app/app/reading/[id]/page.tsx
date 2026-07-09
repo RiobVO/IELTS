@@ -1,8 +1,9 @@
 import { and, asc, eq, notInArray, sql } from "drizzle-orm";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
 import { db } from "@/db";
-import { annotation, answerKey, question } from "@/db/schema";
+import { annotation, answerKey, contentItem, question } from "@/db/schema";
 import { getExamContent } from "@/lib/content/exam-content";
 import { ModeStart } from "@/components/exam/ModeStart";
 import {
@@ -19,6 +20,24 @@ import { normalizePassageHtml } from "@/lib/reading/normalize-passage";
 import ExamRunner from "./ExamRunner";
 
 export const dynamic = "force-dynamic";
+
+// Динамический title вкладки — заголовок теста вместо статичного дефолта из layout.tsx.
+// Чистый read-only запрос (без getExamContent/enforceAccess): generateMetadata не должна
+// триггерить сайд-эффекты (создание attempt, редиректы) логики самой страницы.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  if (!isUuid(id)) return { title: "Practice" };
+  const [row] = await db
+    .select({ title: contentItem.title })
+    .from(contentItem)
+    .where(eq(contentItem.id, id))
+    .limit(1);
+  return { title: row?.title ?? "Practice" };
+}
 
 interface Question {
   id: string;

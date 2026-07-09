@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { and, eq, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
@@ -15,6 +16,24 @@ import { categoryLabel } from "@/lib/labels";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import ExamFrame from "./ExamFrame";
+
+// Динамический title вкладки — заголовок теста вместо статичного дефолта из layout.tsx.
+// Чистый read-only запрос (без enforceAccess/startAttempt): generateMetadata не должна
+// триггерить сайд-эффекты (создание attempt, редиректы) логики самой страницы.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  if (!isUuid(id)) return { title: "Exam" };
+  const [row] = await db
+    .select({ title: contentItem.title })
+    .from(contentItem)
+    .where(eq(contentItem.id, id))
+    .limit(1);
+  return { title: row?.title ?? "Exam" };
+}
 
 export default async function ExamPage({
   params,
