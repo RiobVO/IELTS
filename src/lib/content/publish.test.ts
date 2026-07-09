@@ -158,6 +158,17 @@ describe("publishReviewedContentItem", () => {
     expect(res).toEqual({ ok: false, reason: "question_number_gap" });
   });
 
+  // Codex-ревью (2026-07-09): offset-agnostic формула пропускала неположительные номера
+  // ([-1,0,1] даёт max-min+1==distinct). Номера вопросов обязаны быть положительными целыми.
+  it("refuses to publish when question numbers are non-positive (P1a)", async () => {
+    select
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "R", section: "reading" }]))
+      .mockReturnValueOnce(integrityChain([q(-1, ["A"]), q(0, ["B"]), q(1, ["C"])]));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "question_number_gap" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
   // Критично: одиночный пассаж нумеруется НЕ с 1 (passage_2 → 14..26) — публиковаться ДОЛЖЕН,
   // не ложно блокироваться (буквальный «1..N» его бы срезал).
   it("publishes an offset-numbered single passage (14..26) — no false block (P1a)", async () => {

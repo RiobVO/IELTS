@@ -27,6 +27,8 @@ export type PublishResult =
  */
 function questionNumbersOk(numbers: number[]): boolean {
   if (numbers.length === 0) return false;
+  // Номера — положительные целые (Codex 2026-07-09: [-1,0,1] иначе проходит по формуле).
+  if (!numbers.every((n) => Number.isInteger(n) && n > 0)) return false;
   const distinct = new Set(numbers).size;
   if (distinct !== numbers.length) return false; // дубли
   return Math.max(...numbers) - Math.min(...numbers) + 1 === distinct; // дыры
