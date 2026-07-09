@@ -71,8 +71,13 @@ export function captureQuestions(
   root.find("*").each((_, el) => {
     if (!("attribs" in el)) return;
     for (const name of Object.keys(el.attribs)) {
-      if (/^on/i.test(name) || name === "style") $(el).removeAttr(name);
-      else if (
+      // Анти-утечка ключа (BRIEF §6.1): захваченный HTML рендерится на клиенте
+      // (QuestionHtml реэмитит атрибуты). Источник несёт правильный ответ в
+      // data-correct/data-answer — вырезаем любой атрибут с correct/answer/solution
+      // в имени. Слоты (data-q/data-qtype/data-value) создаём мы сами, они чисты.
+      if (/^on/i.test(name) || name === "style" || /(correct|answer|solution)/i.test(name)) {
+        $(el).removeAttr(name);
+      } else if (
         /^(href|src|xlink:href|formaction|action)$/i.test(name) &&
         /^\s*(javascript|data|vbscript):/i.test(el.attribs[name] ?? "")
       ) {
