@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { getProfile, getUser } from "@/lib/auth";
 import { db } from "@/db";
@@ -23,10 +23,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   if (!isUuid(id)) return { title: "Speaking practice | bando" };
+  // Published-гейт — тот же, что у loadPublishedTask (speaking/read.ts): draft cue-card
+  // не должна светить prompt в <title> вкладки раньше собственного notFound страницы.
   const [row] = await db
     .select({ prompt: speakingTask.prompt })
     .from(speakingTask)
-    .where(eq(speakingTask.id, id))
+    .where(and(eq(speakingTask.id, id), eq(speakingTask.status, "published")))
     .limit(1);
   if (!row) return { title: "Speaking practice | bando" };
   const label = speakingCategoryLabel[detectCategory(row.prompt)];

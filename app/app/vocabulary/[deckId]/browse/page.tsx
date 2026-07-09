@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/db";
 import { vocabDeck } from "@/db/schema";
@@ -22,10 +22,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { deckId } = await params;
   if (!isUuid(deckId)) return { title: "Browse deck | bando" };
+  // Published-гейт — тот же, что у getDeckBrowse (vocab/queries.ts): draft-дек не
+  // должен светить title в <title> вкладки раньше собственного notFound страницы.
   const [row] = await db
     .select({ title: vocabDeck.title })
     .from(vocabDeck)
-    .where(eq(vocabDeck.id, deckId))
+    .where(and(eq(vocabDeck.id, deckId), eq(vocabDeck.status, "published")))
     .limit(1);
   return { title: row ? `${row.title} — Browse | bando` : "Browse deck | bando" };
 }

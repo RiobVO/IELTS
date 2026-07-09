@@ -27,10 +27,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   if (!isUuid(id)) return { title: "Exam | bando" };
+  // Published-гейт — тот же, что у страничного запроса ниже (строка ~74): draft-id не
+  // должен светить title в <title> вкладки раньше собственного 404 страницы.
   const [row] = await db
     .select({ title: contentItem.title })
     .from(contentItem)
-    .where(eq(contentItem.id, id))
+    .where(and(eq(contentItem.id, id), eq(contentItem.status, "published")))
     .limit(1);
   return { title: `${row?.title ?? "Exam"} | bando` };
 }
