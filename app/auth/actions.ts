@@ -10,6 +10,9 @@ import { signupThrottle } from "@/db/schema";
 import { publicSiteUrl } from "@/env";
 import { captureServer } from "@/lib/analytics/server";
 import {
+  AUTH_THROTTLE_LIMITS,
+  type AuthThrottleScope,
+  exceedsAuthThrottle,
   exceedsSignupRate,
   isHoneypotTripped,
   SIGNUP_THROTTLE_WINDOW_SECONDS,
@@ -26,11 +29,44 @@ function fail(message: string, extra?: Record<string, string>): never {
   redirect(`/auth?${params.toString()}`);
 }
 
+// Нейтральное сообщение о троттле (§11 anti-abuse): не раскрывает, существует ли
+// аккаунт, не отличимо от обычной перегрузки.
+const AUTH_THROTTLE_MESSAGE = "Too many attempts. Try again later.";
+
+/**
+ * IP-throttle для login/reset (§11 anti-abuse), переиспользующий signup-механизм:
+ * та же таблица signup_throttle и тот же паттерн (COUNT в скользящем окне → insert
+ * только если ещё не превышен), но без новой миграции под колонку scope — вместо
+ * неё scope едет префиксом в самом хешируемом ключе (sha256(`${scope}:${ip}`)),
+ * поэтому счётчики login/reset/signup не пересекаются несмотря на общую таблицу.
+ * true → лимит исчерпан, вызывающий отклоняет попытку.
+ */
+async function checkAuthThrottle(scope: AuthThrottleScope): Promise<boolean> {
+  const { windowSeconds } = AUTH_THROTTLE_LIMITS[scope];
+  const h = await headers();
+  const ipRaw = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ipHash = createHash("sha256").update(`${scope}:${ipRaw}`).digest("hex");
+  const since = new Date(Date.now() - windowSeconds * 1000);
+  const [recent] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(signupThrottle)
+    .where(and(eq(signupThrottle.ipHash, ipHash), gte(signupThrottle.createdAt, since)));
+  const exceeded = exceedsAuthThrottle(scope, recent?.n ?? 0);
+  if (!exceeded) await db.insert(signupThrottle).values({ ipHash });
+  return exceeded;
+}
+
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   // `next` приходит из формы — нормализуем до внутреннего пути (open-redirect guard).
   const next = safeNextPath(formData.get("next") as string | null);
+
+  // Порог щедрый (10/10мин) — не задевает живого юзера, перебирающего забытый
+  // пароль; отсекает только автоматизированный brute-force с одного IP.
+  if (await checkAuthThrottle("login")) {
+    fail(AUTH_THROTTLE_MESSAGE, { mode: "login", email });
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -155,4 +191,28 @@ export async function signOut() {
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/auth");
+}
+
+/**
+ * Запрос ссылки сброса пароля (app/auth/reset). Раньше форма звала
+ * supabase.auth.resetPasswordForEmail напрямую из браузера — здесь у неё не было
+ * доступа ни к IP, ни к троттлингу. Перенесено на сервер ИМЕННО чтобы навесить
+ * IP-throttle (строже login: 3/10мин — живой юзер жмёт "send" один раз, не трижды).
+ * Вызывается напрямую как функция (не через <form action>) — страница держит
+ * своё sending/sent-состояние, это не рвёт её флоу. redirectTo — ТОЛЬКО через
+ * доверенный publicSiteUrl() (не location.origin/Host) — та же анти-спуф причина,
+ * что у emailRedirectTo в signUp выше. Supabase сам анти-энумерирует несуществующий
+ * email (error обычно null) — мы это поведение не трогаем.
+ */
+export async function requestPasswordReset(email: string): Promise<{ error: string | null }> {
+  if (await checkAuthThrottle("reset")) {
+    return { error: AUTH_THROTTLE_MESSAGE };
+  }
+
+  const supabase = await createClient();
+  const origin = publicSiteUrl();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    ...(origin ? { redirectTo: `${origin}/auth/callback?next=/auth/update-password` } : {}),
+  });
+  return { error: error ? error.message : null };
 }

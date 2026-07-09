@@ -95,6 +95,27 @@ export function shouldRateAttempt(input: {
 }
 
 /**
+ * IP-throttle для login/reset-password (§11 anti-abuse) — тот же механизм и та же
+ * таблица signup_throttle, что signup-cap выше (миграция под отдельную колонку scope
+ * не заводится — ключ вместо этого несёт префикс scope, см. checkAuthThrottle в
+ * app/auth/actions.ts). Login — щедрый порог: легитимные ретраи забытого пароля не
+ * должны страдать. Reset — строже: живой юзер жмёт "send" один раз, не трижды.
+ */
+export const AUTH_THROTTLE_LIMITS = {
+  login: { windowSeconds: 10 * 60, max: 10 },
+  reset: { windowSeconds: 10 * 60, max: 3 },
+} as const;
+
+export type AuthThrottleScope = keyof typeof AUTH_THROTTLE_LIMITS;
+
+/** true, если число попыток в окне достигло потолка для данного scope — текущую
+ *  попытку отклоняем. Чистая — порог тестируется без БД (тот же паттерн, что
+ *  exceedsSignupRate выше); сам COUNT в окне и запись делает checkAuthThrottle. */
+export function exceedsAuthThrottle(scope: AuthThrottleScope, countInWindow: number): boolean {
+  return countInWindow >= AUTH_THROTTLE_LIMITS[scope].max;
+}
+
+/**
  * Honeypot (§11 anti-bot, без внешних зависимостей): в signup-форме есть скрытое
  * поле-приманка, невидимое живому пользователю (offscreen + aria-hidden). Бот,
  * автозаполняющий все поля, отправит его непустым. true => это бот. Чистая функция —
