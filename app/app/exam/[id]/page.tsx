@@ -130,7 +130,8 @@ export default async function ExamPage({
   // Пройти enforceAccess с !meetsTier можно только по trial-лейну (§4.8) → это
   // trial-старт: H3-атомарный claim в startAttempt.
   const isTrial = !meetsTier(userTier, test.tierRequired);
-  const { attemptId } = await startAttempt(user.id, id, mode, isTrial);
+  // `existing` из батча выше — резюм без повторного SELECT той же строки.
+  const { attemptId } = await startAttempt(user.id, id, mode, isTrial, existing);
   // Лимит mock из URL (?min=) — от пресетов ModeStart; clamp против ручных значений
   // (та же валидация, что в /app/reading). В iframe уходит только для mock: раннер
   // синхронизирует внутренний mock-таймер с этим значением (forceRunnerMode).
