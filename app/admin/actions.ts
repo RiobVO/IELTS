@@ -65,7 +65,7 @@ export async function uploadTest(formData: FormData) {
       q: String(summary.questions),
       w: String(summary.warnings),
       ...(summary.brand ? { brand: summary.brand } : {}),
-    }).toString()}`,
+    }).toString()}#${summary.id}`,
   );
 }
 
@@ -117,7 +117,8 @@ export async function setStatus(formData: FormData) {
     revalidateTag(contentTag(id));
   }
   revalidatePath("/admin");
-  redirect("/admin");
+  // #id — якорь на затронутую строку, чтобы редирект не сбрасывал скролл наверх.
+  redirect(`/admin#${id}`);
 }
 
 /**
@@ -134,5 +135,6 @@ export async function markReviewed(formData: FormData) {
     .set({ reviewedAt: sql`now()` })
     .where(eq(contentItem.id, id));
   revalidatePath("/admin");
-  redirect("/admin");
+  // #id — якорь на затронутую строку, чтобы редирект не сбрасывал скролл наверх.
+  redirect(`/admin#${id}`);
 }

@@ -4,8 +4,8 @@ import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { vocabDeck } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
-import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
+import { SubmitButton, ConfirmButton } from "@/components/admin/AdminSubmit";
 import { setVocabStatus, uploadVocab } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +59,7 @@ export default async function AdminVocabPage({
       <div style={S.wrap}>
         <h1 style={S.h1}>Vocabulary</h1>
         <p style={S.sub}>
-          {profile.email} · role=admin · {decks.length} deck(s)
+          {profile.email} · {decks.length} deck(s)
         </p>
 
         {sp.error && <p style={S.err}>{sp.error}</p>}
@@ -78,8 +78,15 @@ export default async function AdminVocabPage({
             a draft until published.
           </p>
           <form action={uploadVocab} style={S.uploadForm}>
-            <input type="file" name="file" accept=".json,application/json" required style={S.file} />
-            <Button type="submit">Upload</Button>
+            <input
+              type="file"
+              name="file"
+              accept=".json,application/json"
+              required
+              aria-label="Vocabulary deck JSON file"
+              style={S.file}
+            />
+            <SubmitButton>Upload</SubmitButton>
           </form>
         </section>
 
@@ -106,9 +113,22 @@ export default async function AdminVocabPage({
                       <input type="hidden" name="id" value={d.id} />
                       <input type="hidden" name="status" value={published ? "draft" : "published"} />
                       {published ? (
-                        <Button type="submit" variant="secondary" size="sm">Unpublish</Button>
+                        <ConfirmButton
+                          variant="secondary"
+                          size="sm"
+                          message={`Unpublish “${d.title}”? Students will no longer see this deck.`}
+                        >
+                          Unpublish
+                        </ConfirmButton>
                       ) : (
-                        <Button type="submit" size="sm" icon="check">Publish</Button>
+                        <ConfirmButton
+                          variant="success"
+                          size="sm"
+                          icon="check"
+                          message={`Publish “${d.title}” live to students now?`}
+                        >
+                          Publish
+                        </ConfirmButton>
                       )}
                     </form>
                   </div>
@@ -123,7 +143,7 @@ export default async function AdminVocabPage({
 }
 
 const S: Record<string, CSSProperties> = {
-  page: { minHeight: "100dvh", padding: "2.5rem 1.5rem 4rem", background: "var(--bg-base)" },
+  page: { padding: "2.5rem 1.5rem 4rem" },
   wrap: { maxWidth: 760, margin: "0 auto" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
   sub: { fontFamily: "var(--font-ui)", color: "var(--text-muted)", marginTop: 6, fontSize: "var(--text-sm)" },

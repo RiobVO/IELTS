@@ -5,8 +5,9 @@ import { answerKey, contentItem, question } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { categoryLabel } from "@/lib/labels";
 import { summarizeReview, type ReviewRow, type ReviewSummary } from "@/lib/content/review-summary";
-import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
+import { SubmitButton, ConfirmButton } from "@/components/admin/AdminSubmit";
+import { ContentFilter } from "@/components/admin/ContentFilter";
 import { markReviewed, setStatus, uploadTest } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -74,7 +75,7 @@ export default async function AdminPage({
       <div style={S.wrap}>
         <h1 style={S.h1}>Admin</h1>
         <p style={S.sub}>
-          {profile.email} · role=admin · {items.length} test(s)
+          {profile.email} · {items.length} test(s)
         </p>
 
         {sp.error && <p style={S.err}>{sp.error}</p>}
@@ -98,8 +99,15 @@ export default async function AdminPage({
             Template-conformant HTML (§4.2.1). The parser extracts passage, questions and key; the test is saved as a draft until published.
           </p>
           <form action={uploadTest} style={S.uploadForm}>
-            <input type="file" name="file" accept=".html,.htm,text/html" required style={S.file} />
-            <Button type="submit">Upload</Button>
+            <input
+              type="file"
+              name="file"
+              accept=".html,.htm,text/html"
+              required
+              aria-label="Test HTML file"
+              style={S.file}
+            />
+            <SubmitButton>Upload</SubmitButton>
           </form>
         </section>
 
@@ -107,6 +115,7 @@ export default async function AdminPage({
         {items.length === 0 ? (
           <p style={S.hint}>Nothing uploaded yet.</p>
         ) : (
+          <ContentFilter statuses={Array.from(new Set(items.map((i) => i.status))).sort()}>
           <ul style={S.list}>
             {items.map((it) => {
               const warnings = (it.importWarnings as string[] | null) ?? [];
@@ -114,8 +123,16 @@ export default async function AdminPage({
               const isDraft = it.status !== "published";
               const summary = isDraft ? summaries.get(it.id) : undefined;
               return (
-                // id-якорь: телеграм-бот шлёт ссылку /admin#<uuid> на review конкретного теста
-                <li key={it.id} id={it.id} style={S.row}>
+                // id-якорь: телеграм-бот шлёт ссылку /admin#<uuid> на review конкретного теста;
+                // data-* — для клиентского ContentFilter (title/status).
+                <li
+                  key={it.id}
+                  id={it.id}
+                  data-admin-row
+                  data-title={it.title.toLowerCase()}
+                  data-status={it.status}
+                  style={S.row}
+                >
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={S.rowTitle}>{it.title}</div>
                     <div style={S.meta}>
@@ -189,18 +206,31 @@ export default async function AdminPage({
                       <form action={setStatus}>
                         <input type="hidden" name="id" value={it.id} />
                         <input type="hidden" name="status" value="draft" />
-                        <Button type="submit" variant="secondary" size="sm">Unpublish</Button>
+                        <ConfirmButton
+                          variant="secondary"
+                          size="sm"
+                          message={`Unpublish “${it.title}”? Students will no longer see it in the catalog.`}
+                        >
+                          Unpublish
+                        </ConfirmButton>
                       </form>
                     ) : reviewed ? (
                       <form action={setStatus}>
                         <input type="hidden" name="id" value={it.id} />
                         <input type="hidden" name="status" value="published" />
-                        <Button type="submit" variant="secondary" size="sm">Publish</Button>
+                        <ConfirmButton
+                          variant="success"
+                          size="sm"
+                          icon="check"
+                          message={`Publish “${it.title}” live to real students now?`}
+                        >
+                          Publish
+                        </ConfirmButton>
                       </form>
                     ) : (
                       <form action={markReviewed}>
                         <input type="hidden" name="id" value={it.id} />
-                        <Button type="submit" size="sm">Approve</Button>
+                        <SubmitButton size="sm">Approve</SubmitButton>
                       </form>
                     )}
                   </div>
@@ -208,6 +238,7 @@ export default async function AdminPage({
               );
             })}
           </ul>
+          </ContentFilter>
         )}
       </div>
     </main>
@@ -215,7 +246,7 @@ export default async function AdminPage({
 }
 
 const S: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", padding: "2.5rem 1.5rem 4rem", background: "var(--bg-base)" },
+  page: { padding: "2.5rem 1.5rem 4rem" },
   wrap: { maxWidth: 760, margin: "0 auto" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
   sub: { fontFamily: "var(--font-ui)", color: "var(--text-muted)", marginTop: 6, fontSize: "var(--text-sm)" },

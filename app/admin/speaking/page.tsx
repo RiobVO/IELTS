@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth";
 import { Badge, type BadgeTone } from "@/components/core/Badge";
-import { Button } from "@/components/core/Button";
+import { SubmitButton, ConfirmButton } from "@/components/admin/AdminSubmit";
 import { speakingDifficultyLabel } from "@/lib/speaking/catalog-meta";
 import { listAllTasks, type AdminSpeakingTaskRow } from "@/lib/speaking/admin";
 import { createSpeakingTask, publishSpeakingTask, removeSpeakingTask, unpublishSpeakingTask } from "./actions";
@@ -49,7 +49,7 @@ export default async function AdminSpeakingPage({
       <div style={S.wrap}>
         <div style={S.head}>
           <h1 style={S.h1}>New Part 2 cue card</h1>
-          <Badge tone="neutral">Draft</Badge>
+          <Badge tone="warn">Draft</Badge>
         </div>
         <p style={S.sub}>Students see this cue card in the Speaking catalog only after you publish it.</p>
 
@@ -120,8 +120,10 @@ export default async function AdminSpeakingPage({
           </div>
 
           <div style={S.actions}>
-            <Button type="submit" name="intent" value="publish" icon="check">Publish cue card</Button>
-            <Button type="submit" name="intent" value="draft" variant="secondary">Save draft</Button>
+            <ConfirmButton name="intent" value="publish" icon="check" message="Publish this cue card live to students now?">
+              Publish cue card
+            </ConfirmButton>
+            <SubmitButton name="intent" value="draft" variant="secondary">Save draft</SubmitButton>
             <span style={S.caption}>Draft → Published</span>
           </div>
         </form>
@@ -152,7 +154,7 @@ export default async function AdminSpeakingPage({
  */
 function CueRow({ task }: { task: AdminSpeakingTaskRow }) {
   const published = task.status === "published";
-  const statusTone: BadgeTone = published ? "success" : "neutral";
+  const statusTone: BadgeTone = published ? "success" : "warn";
   return (
     <li style={S.row}>
       <div style={S.rowMain}>
@@ -181,17 +183,23 @@ function CueRow({ task }: { task: AdminSpeakingTaskRow }) {
         {published ? (
           <form action={unpublishSpeakingTask}>
             <input type="hidden" name="id" value={task.id} />
-            <Button type="submit" size="sm" variant="secondary">Unpublish</Button>
+            <ConfirmButton size="sm" variant="secondary" message="Unpublish this cue card? Students will no longer see it in the catalog.">
+              Unpublish
+            </ConfirmButton>
           </form>
         ) : (
           <form action={publishSpeakingTask}>
             <input type="hidden" name="id" value={task.id} />
-            <Button type="submit" size="sm" variant="success" icon="check">Publish</Button>
+            <ConfirmButton size="sm" variant="success" icon="check" message="Publish this cue card live to students now?">
+              Publish
+            </ConfirmButton>
           </form>
         )}
         <form action={removeSpeakingTask}>
           <input type="hidden" name="id" value={task.id} />
-          <Button type="submit" size="sm" variant="danger" icon="trash">Delete</Button>
+          <ConfirmButton size="sm" variant="danger" icon="trash" message="Delete this cue card permanently? This cannot be undone.">
+            Delete
+          </ConfirmButton>
         </form>
       </div>
     </li>
@@ -199,35 +207,36 @@ function CueRow({ task }: { task: AdminSpeakingTaskRow }) {
 }
 
 const S: Record<string, CSSProperties> = {
-  page: { minHeight: "100dvh", background: "var(--bg-base)", padding: "40px 18px 64px" },
-  wrap: { maxWidth: 700, margin: "0 auto", fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
+  page: { padding: "40px 18px 64px" },
+  wrap: { maxWidth: 760, margin: "0 auto", fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   head: { display: "flex", alignItems: "center", gap: 12 },
-  h1: { margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em" },
-  sub: { margin: "8px 0 0", fontSize: 14, color: "var(--text-muted)" },
+  h1: { margin: 0, fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)" },
+  sub: { margin: "8px 0 0", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
 
-  err: { marginTop: 16, padding: "12px 14px", borderRadius: "var(--radius-md)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 14, fontWeight: 600 },
-  ok: { marginTop: 16, padding: "12px 14px", borderRadius: "var(--radius-md)", background: "var(--success-subtle)", color: "var(--success-text)", fontSize: 14, fontWeight: 600 },
+  err: { marginTop: 16, padding: "12px 14px", borderRadius: "var(--radius-md)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: "var(--text-sm)", fontWeight: 600 },
+  ok: { marginTop: 16, padding: "12px 14px", borderRadius: "var(--radius-md)", background: "var(--success-subtle)", color: "var(--success-text)", fontSize: "var(--text-sm)", fontWeight: 600 },
 
   card: { marginTop: 22, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 22, display: "flex", flexDirection: "column", gap: 8 },
-  label: { fontSize: 12, fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6, display: "block" },
-  textarea: { width: "100%", resize: "vertical", minHeight: 60, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, lineHeight: 1.5, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", outline: "none", marginBottom: 18 },
-  input: { width: "100%", height: 44, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0 12px", outline: "none" },
+  label: { fontSize: "var(--text-xs)", fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6, display: "block" },
+  textarea: { width: "100%", resize: "vertical", minHeight: 60, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", lineHeight: 1.5, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", outline: "none", marginBottom: 18 },
+  input: { width: "100%", height: 44, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0 12px", outline: "none" },
   grid3: { display: "grid", gap: 14, marginBottom: 18 },
-  select: { width: "100%", height: 44, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0 12px", cursor: "pointer" },
+  select: { width: "100%", height: 44, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0 12px", cursor: "pointer" },
   actions: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
-  caption: { fontSize: 12, color: "var(--text-muted)" },
+  caption: { fontSize: "var(--text-xs)", color: "var(--text-muted)" },
 
   listHead: { display: "flex", alignItems: "center", gap: 10, margin: "40px 0 14px" },
-  h2: { margin: 0, fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em" },
-  empty: { margin: 0, padding: "22px 18px", background: "var(--surface)", border: "2px dashed var(--border)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)", fontSize: 14, textAlign: "center" },
+  h2: { margin: 0, fontSize: "var(--text-lg)", fontWeight: 800, letterSpacing: "var(--tracking-tight)" },
+  empty: { margin: 0, padding: "22px 18px", background: "var(--surface)", border: "2px dashed var(--border)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)", fontSize: "var(--text-sm)", textAlign: "center" },
   list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 },
   row: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 16 },
   rowMain: { flex: "1 1 280px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8 },
-  prompt: { margin: 0, fontSize: 15, fontWeight: 700, lineHeight: 1.4, color: "var(--text-primary)" },
+  // clamp: длинный cue-card-промпт больше не доминирует над строкой (полный текст — в превью ниже).
+  prompt: { margin: 0, fontSize: "var(--text-base)", fontWeight: 700, lineHeight: 1.4, color: "var(--text-primary)", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" },
   previewBullets: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 },
-  previewBullet: { display: "flex", gap: 8, alignItems: "baseline", fontSize: 13, color: "var(--text-secondary)" },
+  previewBullet: { display: "flex", gap: 8, alignItems: "baseline", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
   previewDot: { width: 5, height: 5, borderRadius: "50%", background: "var(--brand)", flex: "none" },
-  closing: { margin: 0, fontSize: 13, fontStyle: "italic", color: "var(--text-muted)" },
+  closing: { margin: 0, fontSize: "var(--text-sm)", fontStyle: "italic", color: "var(--text-muted)" },
   meta: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 },
   rowActions: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" },
 };
