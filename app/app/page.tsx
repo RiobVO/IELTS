@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { getProfile, requireUser } from "@/lib/auth";
@@ -36,6 +37,24 @@ function total(b: Breakdown): number {
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
+
+// Знаменатель лиги («of N», §6) одинаков для всех юзеров и меняется только
+// пересчётом лидерборда — полный count() по leaderboard_entry на каждый рендер
+// дашборда (пост-логин landing) не нужен и растёт с числом юзеров. Data-cache
+// с TTL 5 мин (как getPublishedTests): минуты устаревания знаменателя незаметны,
+// O(N)-скан уходит с горячего пути. force-dynamic страницы не касается —
+// unstable_cache работает на уровне data cache, не route cache.
+const getLeagueTotal = unstable_cache(
+  async (): Promise<number> => {
+    const [row] = await db
+      .select({ n: count() })
+      .from(leaderboardEntry)
+      .where(and(eq(leaderboardEntry.period, "all_time"), eq(leaderboardEntry.scope, "global")));
+    return row?.n ?? 0;
+  },
+  ["league-total-global-alltime"],
+  { revalidate: 300 },
+);
 
 /** Календарный ключ дня по UTC — для дедупа активности и сравнения дней недели. */
 const dayKey = (d: Date) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
@@ -78,7 +97,7 @@ export default async function Dashboard() {
 
   // Профиль / список попыток / глобальный ранг независимы → один Promise.all
   // (без водопада). Ранг читается owner-путём, но строго по своему user_id.
-  const [profile, attemptsRes, rankRows, leagueCountRows, inProgressRows, vocabSummary] = await Promise.all([
+  const [profile, attemptsRes, rankRows, leagueTotal, inProgressRows, vocabSummary] = await Promise.all([
     getProfile(),
     supabase
       .from("attempt")
@@ -100,11 +119,8 @@ export default async function Dashboard() {
         ),
       )
       .limit(1),
-    // §6 — знаменатель лиги (тот же period/scope, что rank).
-    db
-      .select({ n: count() })
-      .from(leaderboardEntry)
-      .where(and(eq(leaderboardEntry.period, "all_time"), eq(leaderboardEntry.scope, "global"))),
+    // §6 — знаменатель лиги (тот же period/scope, что rank), из data-cache.
+    getLeagueTotal(),
     // §5 — последняя in_progress попытка (owner-path: нужен has_runner, runner_html не гранчен).
     db
       .select({
@@ -254,9 +270,6 @@ export default async function Dashboard() {
           ).length + 1,
       }
     : null;
-
-  // §6 — знаменатель лиги (тот же period/scope, что rank).
-  const leagueTotal = leagueCountRows[0]?.n ?? null;
 
   return (
     <AppShell active="dashboard">
