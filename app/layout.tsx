@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { posthogConfig, publicSiteUrl } from "@/env";
 import { PostHogProvider } from "@/lib/analytics/provider";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 // Literata (--font-literata) намеренно НЕ здесь: serif нужен только внутри /app
 // (пассажи/результаты) и грузится в app/app/layout.tsx — публичные страницы
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${jakarta.variable} ${jbMono.variable}`}>
       <body>
         {analytics ? <PostHogProvider config={analytics}>{children}</PostHogProvider> : children}
+        <SpeedInsights />
       </body>
     </html>
   );
