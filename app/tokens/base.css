@@ -16,7 +16,6 @@ body {
   font-weight: var(--weight-regular);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  font-feature-settings: "ss01" 1, "cv01" 1;
 }
 
 a { color: var(--text-link); text-decoration: none; }
