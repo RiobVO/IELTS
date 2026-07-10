@@ -929,7 +929,7 @@ const S: Record<string, React.CSSProperties> = {
     gap: 7,
     fontFamily: "var(--font-ui)",
     fontSize: "var(--text-xs)",
-    fontWeight: 800,
+    fontWeight: 700,
     color: "rgba(255,255,255,0.92)",
   },
   focusTitle: { fontFamily: "var(--font-ui)", fontWeight: 900, letterSpacing: "var(--tracking-tighter)", color: "#fff", margin: "14px 0 0", textWrap: "balance" },
@@ -939,7 +939,7 @@ const S: Record<string, React.CSSProperties> = {
   // Accuracy-ридаут в hero: тихий caps-лейбл + крупная mono-цифра (фирменный знак
   // «цифры = mono») — контраст веса, и число выносит data из прозы (тон прозы тёплый).
   focusProgHead: { display: "flex", alignItems: "baseline", justifyContent: "space-between", maxWidth: 380, marginBottom: 8 },
-  focusProgLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "rgba(255,255,255,0.85)" },
+  focusProgLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "rgba(255,255,255,0.85)" },
   focusProgVal: { fontFamily: "var(--font-mono)", fontSize: "var(--text-md)", fontWeight: 600, color: "#fff" },
   focusCta: { marginTop: "auto", paddingTop: 26 },
   focusPills: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 },
@@ -966,7 +966,7 @@ const S: Record<string, React.CSSProperties> = {
   vocabCard: { padding: 18, display: "flex", flexDirection: "column", gap: 12 },
   vocabTop: { display: "flex", alignItems: "center", gap: 10 },
   vocabIc: { width: 38, height: 38, flex: "none", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)" },
-  vocabTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)" },
+  vocabTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)" },
   vocabLine: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)", marginTop: 2 },
   vocabNum: { fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-primary)" },
   vocabText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.5, color: "var(--text-muted)", margin: 0 },
@@ -977,7 +977,7 @@ const S: Record<string, React.CSSProperties> = {
 
   /* Plan-to-target rail card */
   planCard: { padding: 18, display: "flex", flexDirection: "column", gap: 10 },
-  planTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)" },
+  planTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)" },
   planText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.5, color: "var(--text-muted)", margin: 0 },
   planDistance: { fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-primary)", fontSize: "var(--text-md)" },
   planDrill: {
@@ -1019,7 +1019,7 @@ const S: Record<string, React.CSSProperties> = {
   sectionTitle: {
     fontFamily: "var(--font-ui)",
     fontSize: "var(--text-xl)",
-    fontWeight: 800,
+    fontWeight: 700,
     color: "var(--text-primary)",
     margin: 0,
     whiteSpace: "nowrap",
@@ -1046,12 +1046,12 @@ const S: Record<string, React.CSSProperties> = {
   /* Recent tests */
   trow: { display: "flex", alignItems: "center", gap: 14, padding: "15px 0", borderBottom: "1px solid var(--border-subtle)", textDecoration: "none", color: "inherit" },
   trowIc: { width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)" },
-  trowIcR: { background: "var(--warn-subtle)", color: "var(--warn-text)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800 },
-  trowIcL: { background: "var(--success-subtle)", color: "var(--success-text)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800 },
+  trowIcR: { background: "var(--warn-subtle)", color: "var(--warn-text)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700 },
+  trowIcL: { background: "var(--success-subtle)", color: "var(--success-text)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700 },
   trowTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   trowMeta: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 2 },
   trowScore: { fontFamily: "var(--font-mono)", fontSize: "var(--text-base)", fontWeight: 600, color: "var(--text-primary)", minWidth: 64, textAlign: "right" },
-  chip: { fontSize: "var(--text-2xs)", fontWeight: 800, borderRadius: 7, padding: "3px 8px", flex: "none", fontFamily: "var(--font-ui)" },
+  chip: { fontSize: "var(--text-2xs)", fontWeight: 700, borderRadius: 7, padding: "3px 8px", flex: "none", fontFamily: "var(--font-ui)", letterSpacing: "0.01em" },
   chipWeak: { background: "var(--error-subtle)", color: "var(--error-text)" },
   chipUp: { background: "var(--success-subtle)", color: "var(--success-text)" },
   chipRev: { background: "var(--surface-inset)", color: "var(--text-muted)" },

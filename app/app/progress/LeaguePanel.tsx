@@ -414,7 +414,7 @@ const S: Record<string, React.CSSProperties> = {
 
   podium: { display: "grid", gridTemplateColumns: "1fr 1.15fr 1fr", gap: 12, alignItems: "end", marginBottom: 18 },
   pod: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 },
-  podAv: { position: "relative", width: 58, height: 58, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-base)", color: "#fff", marginBottom: 8, boxShadow: "0 6px 16px -6px rgba(20,40,55,.4)" },
+  podAv: { position: "relative", width: 58, height: 58, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-base)", color: "#fff", marginBottom: 8, boxShadow: "0 6px 16px -6px rgba(20,40,55,.4)" },
   podRk: { position: "absolute", bottom: -6, right: -6, width: 24, height: 24, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#1a1525", border: "2px solid var(--bg-base)" },
   podName: { fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-sm)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-primary)" },
   podXp: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)", marginBottom: 9 },
@@ -423,7 +423,7 @@ const S: Record<string, React.CSSProperties> = {
   grid: { alignItems: "start" },
   list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 7 },
   pinned: { marginTop: 12 },
-  pinnedLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
+  pinnedLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
 
   lrow: { display: "flex", alignItems: "center", gap: 13, padding: "11px 15px", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-md)" },
   lrowYou: { background: "var(--brand-subtle)", borderColor: "var(--brand)", boxShadow: "0 0 28px -8px color-mix(in oklab, var(--brand) 70%, transparent)" },
@@ -440,12 +440,12 @@ const S: Record<string, React.CSSProperties> = {
 
   side: { display: "flex", flexDirection: "column", gap: 14, minWidth: 0 },
   card: { background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-sm)" },
-  eyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
+  eyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
   herePill: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--brand-active)", background: "var(--brand-subtle)", borderRadius: "var(--radius-full)", padding: "3px 9px", whiteSpace: "nowrap" },
   tierFoot: { display: "flex", flexDirection: "column", gap: 4, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border-subtle)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
 
   standing: { background: "linear-gradient(180deg, var(--brand-subtle), var(--surface))", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-md)" },
-  standingEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand-active)", marginBottom: 8 },
+  standingEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand-active)", marginBottom: 8 },
   standingRank: { fontFamily: "var(--font-ui)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" },
   standingOf: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
   standingTrack: { height: 9, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden", margin: "12px 0 8px" },

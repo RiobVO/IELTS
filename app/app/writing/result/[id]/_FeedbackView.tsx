@@ -110,7 +110,7 @@ const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 980, margin: "0 auto", padding: "20px 16px 56px", display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 },
   overline: { fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--text-link)", marginBottom: 8 },
-  h1: { margin: 0, fontSize: 26, fontWeight: 800, lineHeight: 1.15, color: "var(--text-primary)", textWrap: "balance" },
+  h1: { margin: 0, fontSize: 26, fontWeight: 700, lineHeight: 1.15, color: "var(--text-primary)", textWrap: "balance" },
   historyPill: { flex: "none", display: "inline-flex", alignItems: "center", height: 38, padding: "0 16px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-secondary)", fontSize: 13, fontWeight: 700, textDecoration: "none", transition: "var(--transition-colors)" },
 
   footer: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginTop: 8, paddingTop: 20, borderTop: "1px solid var(--border-subtle)" },

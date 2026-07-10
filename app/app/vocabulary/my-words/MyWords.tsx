@@ -255,25 +255,25 @@ const CSS = `
 const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 640, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   back: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "var(--text-muted)", textDecoration: "none" },
-  title: { margin: "10px 0 0", fontSize: 26, fontWeight: 800, color: "var(--text-primary)" },
+  title: { margin: "10px 0 0", fontSize: 26, fontWeight: 700, color: "var(--text-primary)" },
   sub: { margin: "8px 0 0", fontSize: 15, lineHeight: 1.5, color: "var(--text-muted)", maxWidth: "52ch" },
   headStats: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 },
   stat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--surface-inset)", color: "var(--text-secondary)", fontSize: 12.5, fontWeight: 700 },
-  statDue: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", color: "var(--text-link)", fontSize: 12.5, fontWeight: 800 },
+  statDue: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", color: "var(--text-link)", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.01em" },
 
   srOnly: { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 },
   toast: { alignSelf: "flex-start", padding: "8px 14px", borderRadius: "var(--radius-full)", background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-solid)", fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" },
 
   empty: { display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "40px 24px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.55, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)" },
   emptyIcon: { display: "grid", placeItems: "center", width: 52, height: 52, borderRadius: "50%", background: "var(--brand-subtle)", color: "var(--text-link)", marginBottom: 2 },
-  emptyTitle: { fontFamily: "var(--font-ui)", fontSize: 17, fontWeight: 800, color: "var(--text-primary)" },
+  emptyTitle: { fontFamily: "var(--font-ui)", fontSize: 17, fontWeight: 700, color: "var(--text-primary)" },
 
   reviewCta: { display: "flex" },
 
   list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 },
   row: { display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)" },
   rowMain: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 },
-  rowWord: { display: "inline-flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
+  rowWord: { display: "inline-flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
   dueDot: { width: 8, height: 8, borderRadius: "var(--radius-full)", background: "var(--brand)", flex: "none" },
   rowContext: { fontSize: 13, lineHeight: 1.45, color: "var(--text-muted)", fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   del: { flex: "none", display: "grid", placeItems: "center", borderRadius: "var(--radius-md)", border: "none", background: "transparent", color: "var(--text-muted)", cursor: "pointer", transition: "var(--transition-colors)" },
@@ -285,7 +285,7 @@ const S: Record<string, CSSProperties> = {
 
   card: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 16, minHeight: 200, padding: "28px 22px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
   word: { fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
-  flipBtn: { minHeight: 44, appearance: "none", cursor: "pointer", padding: "10px 20px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
+  flipBtn: { minHeight: 44, appearance: "none", cursor: "pointer", padding: "10px 20px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, letterSpacing: "0.01em" },
   context: { fontSize: 16, lineHeight: 1.55, color: "var(--text-primary)", maxWidth: "44ch" },
   noContext: { color: "var(--text-muted)", fontStyle: "italic" },
 
@@ -295,7 +295,7 @@ const S: Record<string, CSSProperties> = {
 
   summary: { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10, padding: "40px 24px", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-solid)" },
   summaryIcon: { display: "grid", placeItems: "center", width: 56, height: 56, borderRadius: "50%", background: "var(--success-subtle)", color: "var(--success-text)", marginBottom: 4 },
-  summaryTitle: { margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-primary)" },
+  summaryTitle: { margin: 0, fontSize: 22, fontWeight: 700, color: "var(--text-primary)" },
   summaryBody: { margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--text-muted)" },
   summaryActions: { display: "flex", gap: 12, marginTop: 14 },
 };

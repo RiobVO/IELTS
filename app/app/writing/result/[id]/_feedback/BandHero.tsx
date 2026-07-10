@@ -98,7 +98,7 @@ const S: Record<string, CSSProperties> = {
   disclaimer: { margin: "16px 0 0", fontSize: 13, lineHeight: 1.5, color: "var(--text-secondary)" },
 
   right: { background: "var(--surface)", borderLeft: "4px solid var(--error)", padding: 26 },
-  blockerBadge: { display: "inline-flex", alignItems: "center", padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" },
+  blockerBadge: { display: "inline-flex", alignItems: "center", padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" },
   blockerName: { fontFamily: "var(--font-reading)", fontSize: 21, fontWeight: 700, color: "var(--text-primary)", marginTop: 12 },
   blockerNote: { margin: "8px 0 0", fontSize: 16, lineHeight: 1.5, color: "var(--text-secondary)" },
   blockerCta: { margin: "14px 0 0", fontSize: 14, fontWeight: 600, color: "var(--text-link)" },

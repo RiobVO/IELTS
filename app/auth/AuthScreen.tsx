@@ -439,7 +439,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
                 </span>
                 <span style={{ fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: 21, color: "var(--surface-premium-ink)" }}>band<span style={{ color: "var(--violet-300)" }}>o</span></span>
               </div>
-              <h2 style={{ fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: 26, lineHeight: 1.15, margin: "0 0 10px", maxWidth: 280 }}>{signup ? "Already with us?" : "New to bando?"}</h2>
+              <h2 style={{ fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: 26, lineHeight: 1.15, margin: "0 0 10px", maxWidth: 280 }}>{signup ? "Already with us?" : "New to bando?"}</h2>
               <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,.66)", lineHeight: 1.55, margin: "0 0 22px", maxWidth: 270 }}>{signup ? "Log in and keep your streak, league rank and progress moving." : "Take a free test and see exactly which question types cost you points."}</p>
               <button onClick={() => setMode(signup ? "login" : "signup")} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 46, padding: "0 22px", borderRadius: "var(--radius-md)", border: "2px solid rgba(255,255,255,.5)", background: "transparent", color: "var(--surface-premium-ink)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer" }}>
                 {signup ? "Log in" : "Create account"} <span aria-hidden="true">→</span>

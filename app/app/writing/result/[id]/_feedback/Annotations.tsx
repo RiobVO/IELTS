@@ -102,7 +102,7 @@ const CSS = `
 `;
 
 const S: Record<string, CSSProperties> = {
-  h2: { margin: "0 0 4px", fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
+  h2: { margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
   help: { margin: "0 0 12px", fontSize: 13.5, color: "var(--text-muted)" },
   legend: { display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 14 },
   legendItem: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600, color: "var(--text-secondary)" },
@@ -117,7 +117,7 @@ const S: Record<string, CSSProperties> = {
   essay: { minWidth: 0, background: "var(--reading-surface)", color: "var(--reading-text)", fontFamily: "var(--font-reading)", fontSize: 16, lineHeight: 1.95, whiteSpace: "pre-wrap", overflowWrap: "break-word", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 22px" },
   cards: { minWidth: 0, display: "flex", flexDirection: "column", gap: 10 },
   card: { display: "flex", flexDirection: "column", gap: 5, textAlign: "left", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", cursor: "pointer", fontFamily: "var(--font-ui)", transition: "background-color var(--duration-fast) var(--ease-standard)" },
-  cardType: { fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" },
+  cardType: { fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" },
   // text-primary (not -secondary): the muted grey washes out on the success/warn/error
   // subtle tint when a card is active. Keep italic for the quote, fix the contrast.
   cardQuote: { fontFamily: "var(--font-reading)", fontStyle: "italic", fontSize: 13.5, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },

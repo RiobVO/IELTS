@@ -96,7 +96,7 @@ export function Dial({
         <div style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 44, lineHeight: 1, letterSpacing: "-0.02em", color: "var(--text-primary)" }}>
           {center.kind === "band" ? <CountUp value={center.value} decimals={1} /> : <CountUp value={center.value} decimals={0} suffix="%" />}
         </div>
-        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)", marginTop: 7 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)", marginTop: 7 }}>
           {center.kind === "band" ? "Band score" : "Score"}
         </div>
       </div>

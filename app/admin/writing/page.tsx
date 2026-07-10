@@ -258,7 +258,7 @@ const S: Record<string, CSSProperties> = {
   ok: { marginTop: 16, padding: "12px 14px", borderRadius: "var(--radius-md)", background: "var(--success-subtle)", color: "var(--success-text)", fontSize: "var(--text-sm)", fontWeight: 600 },
 
   card: { marginTop: 22, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 22, display: "flex", flexDirection: "column", gap: 8 },
-  label: { fontSize: "var(--text-xs)", fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6, display: "block" },
+  label: { fontSize: "var(--text-xs)", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6, display: "block" },
   textarea: { width: "100%", resize: "vertical", minHeight: 130, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", lineHeight: 1.5, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", outline: "none", marginBottom: 14 },
   grid2: { display: "grid", gap: 14, marginBottom: 18 },
   grid3: { display: "grid", gap: 14, marginBottom: 18 },
@@ -270,7 +270,7 @@ const S: Record<string, CSSProperties> = {
   caption: { fontSize: "var(--text-xs)", color: "var(--text-muted)" },
 
   listHead: { display: "flex", alignItems: "center", gap: 10, margin: "40px 0 14px" },
-  h2: { margin: 0, fontSize: "var(--text-lg)", fontWeight: 800 },
+  h2: { margin: 0, fontSize: "var(--text-lg)", fontWeight: 700 },
   empty: { margin: 0, padding: "22px 18px", background: "var(--surface)", border: "2px dashed var(--border)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)", fontSize: "var(--text-sm)", textAlign: "center" },
   list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 },
   row: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 16 },

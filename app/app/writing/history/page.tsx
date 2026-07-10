@@ -98,7 +98,7 @@ const CSS = `
 
 const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 880, margin: "0 auto", padding: "24px 18px 56px", display: "flex", flexDirection: "column", gap: 22, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
-  h1: { margin: 0, fontSize: 26, fontWeight: 800, color: "var(--text-primary)" },
+  h1: { margin: 0, fontSize: 26, fontWeight: 700, color: "var(--text-primary)" },
   sub: { margin: "8px 0 0", fontSize: 15, color: "var(--text-muted)", maxWidth: "54ch" },
 
   empty: { padding: "36px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)" },
@@ -107,7 +107,7 @@ const S: Record<string, CSSProperties> = {
   meta: { display: "flex", alignItems: "center", gap: 9, marginBottom: 10, flexWrap: "wrap" },
   chip: { fontSize: 11, fontWeight: 700, color: "var(--text-link)", background: "var(--brand-subtle)", padding: "2px 9px", borderRadius: "var(--radius-full)" },
   date: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" },
-  latest: { fontSize: 10, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--success-text)", background: "var(--success-subtle)", padding: "2px 8px", borderRadius: "var(--radius-full)" },
+  latest: { fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--success-text)", background: "var(--success-subtle)", padding: "2px 8px", borderRadius: "var(--radius-full)" },
   // Two-line clamp so cards in a row stay even; prompt wraps (not the old single-line ellipsis).
   prompt: { fontSize: 14.5, lineHeight: 1.4, fontWeight: 600, color: "var(--text-primary)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
   foot: { display: "flex", alignItems: "center", gap: 10, marginTop: "auto", paddingTop: 14 },

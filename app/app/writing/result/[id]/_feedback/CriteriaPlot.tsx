@@ -105,7 +105,7 @@ function Marker({ low, high, targetLeft, gap }: { low: number; high: number; tar
 
 const S: Record<string, CSSProperties> = {
   headRow: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 12 },
-  h2: { margin: 0, fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
+  h2: { margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
   weakest: { fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
 
   panel: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: 20, boxShadow: "var(--shadow-solid)", overflow: "hidden" },
@@ -120,7 +120,7 @@ const S: Record<string, CSSProperties> = {
   rowTop: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
   rank: { flex: "none", width: 24, height: 24, borderRadius: 7, background: "var(--surface-inset)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, display: "grid", placeItems: "center" },
   critName: { fontFamily: "var(--font-reading)", fontSize: 17, fontWeight: 600, color: "var(--text-primary)" },
-  fixFirst: { display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: "var(--radius-full)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" },
+  fixFirst: { display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: "var(--radius-full)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" },
   range: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 800, color: "var(--text-primary)" },
   detail: { marginTop: 10, marginLeft: 35, display: "flex", flexDirection: "column", gap: 5 },
   line: { display: "flex", gap: 10, alignItems: "baseline" },

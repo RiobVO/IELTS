@@ -82,7 +82,7 @@ function Arrow() {
 }
 
 const S: Record<string, CSSProperties> = {
-  h2: { margin: "0 0 12px", fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
+  h2: { margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
 };
 
 const CSS = `

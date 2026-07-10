@@ -133,10 +133,10 @@ const CSS = `
 `;
 
 const S: Record<string, CSSProperties> = {
-  h2: { margin: "0 0 12px", fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
+  h2: { margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
   stack: { display: "flex", flexDirection: "column", gap: 12 },
   card: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 18 },
-  cardTitle: { fontSize: 13, fontWeight: 800, color: "var(--text-primary)", marginBottom: 12 },
+  cardTitle: { fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 12 },
 
   yoursLabel: { fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 4 },
   // No strikethrough: the original is a baseline to compare against, not an error to

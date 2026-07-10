@@ -426,7 +426,7 @@ const PF_CSS = `
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 840, margin: "0 auto" },
   idRow: { display: "flex", alignItems: "center", gap: 18, marginBottom: 18 },
-  avatar: { width: 60, height: 60, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", color: "var(--text-on-brand)", fontFamily: "var(--font-ui)", fontSize: 23, fontWeight: 800, boxShadow: "var(--shadow-md)" },
+  avatar: { width: 60, height: 60, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", color: "var(--text-on-brand)", fontFamily: "var(--font-ui)", fontSize: 23, fontWeight: 700, boxShadow: "var(--shadow-md)" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
   subLine: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 2 },
 
@@ -436,7 +436,7 @@ const S: Record<string, React.CSSProperties> = {
   ringNum: { fontFamily: "var(--font-mono)", fontSize: 40, fontWeight: 600, lineHeight: 1, letterSpacing: "-0.02em" },
   ringCap: { fontSize: 10.5, color: "rgba(255,255,255,.8)", marginTop: 3 },
   heroEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,.82)", fontWeight: 700 },
-  heroTitle: { fontFamily: "var(--font-ui)", fontSize: 23, fontWeight: 800, margin: "8px 0 0", lineHeight: 1.2 },
+  heroTitle: { fontFamily: "var(--font-ui)", fontSize: 23, fontWeight: 700, margin: "8px 0 0", lineHeight: 1.2 },
   heroMono: { fontFamily: "var(--font-mono)", fontWeight: 600 },
   heroText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,.82)", margin: "8px 0 0", maxWidth: 380, lineHeight: 1.5 },
 
@@ -444,7 +444,7 @@ const S: Record<string, React.CSSProperties> = {
   nextCard: { display: "flex", alignItems: "center", gap: 16, padding: "20px 22px", background: "var(--surface)", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-solid)", textDecoration: "none", color: "inherit" },
   nextIcon: { flex: "none", width: 48, height: 48, borderRadius: 14, background: "linear-gradient(160deg, var(--brand), var(--brand-active))", color: "var(--text-on-brand)", display: "grid", placeItems: "center", boxShadow: "0 0 22px -6px var(--brand)" },
   nextEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--brand-active)" },
-  nextTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, marginTop: 3 },
+  nextTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, marginTop: 3 },
   nextSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", marginTop: 2 },
   weekCard: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", padding: "18px 20px" },
   weekStreak: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--streak)", display: "inline-flex", alignItems: "center", gap: 4 },
@@ -462,14 +462,14 @@ const S: Record<string, React.CSSProperties> = {
 
   invite: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-xl)", background: "linear-gradient(160deg, var(--surface-premium), var(--surface-premium-deep))", padding: 20, color: "var(--surface-premium-ink)" },
   inviteGlow: { position: "absolute", top: -80, right: -60, width: 240, height: 240, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--brand) 50%, transparent), transparent 64%)" },
-  inviteTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--surface-premium-ink)", whiteSpace: "nowrap" },
+  inviteTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--surface-premium-ink)", whiteSpace: "nowrap" },
   inviteText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "rgba(255,255,255,.7)", margin: "0 0 14px", lineHeight: 1.5 },
 
   quietCard: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", padding: "6px 22px 16px", marginBottom: 12 },
   quietHead: { display: "flex", alignItems: "center", padding: "15px 0 8px" },
   quietFoot: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 14, gap: 12, flexWrap: "wrap" },
   quietNote: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
-  sub: { fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" },
+  sub: { fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" },
 
   payEmpty: { padding: "1.25rem 0", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
   payRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0" },

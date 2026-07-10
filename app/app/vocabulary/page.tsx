@@ -515,7 +515,7 @@ const CSS = `
 .vc-foot[open] .vc-foot-caret{transform:rotate(-135deg)}
 /* Base = phone: tappable summary; body collapsed by the UA rule unless [open].
    Mobile is the default (no max-width query) so there is no dead zone at 479–480px. */
-.vc-foot-sum{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 20px;list-style:none;cursor:pointer;font-family:var(--font-ui);font-size:12.5px;font-weight:800;letter-spacing:0.02em;color:var(--text-muted)}
+.vc-foot-sum{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 20px;list-style:none;cursor:pointer;font-family:var(--font-ui);font-size:12.5px;font-weight:700;letter-spacing:0.02em;color:var(--text-muted)}
 .vc-foot-sum::-webkit-details-marker{display:none}
 .vc-foot[open] > .vc-foot-body{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
 /* Desktop: drop the summary, force the body expanded regardless of [open]
@@ -546,7 +546,7 @@ const S: Record<string, CSSProperties> = {
   statSmall: { fontSize: 13, color: "var(--text-muted)", fontWeight: 700 },
   statLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" },
   planCta: { marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
-  rescueCta: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 44, padding: "8px 14px", borderRadius: "var(--radius-full)", border: "2px solid transparent", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 13, fontWeight: 800, textDecoration: "none", transition: "var(--transition-colors)" },
+  rescueCta: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 44, padding: "8px 14px", borderRadius: "var(--radius-full)", border: "2px solid transparent", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 13, fontWeight: 700, letterSpacing: "0.01em", textDecoration: "none", transition: "var(--transition-colors)" },
   caughtUp: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: "var(--success-text)" },
   // Без фикс-высоты: колонка = столбик (до 38px) + зазор + подпись (~14px) ≈ 56px,
   // жёсткие 44px резали подписи дней нижней кромкой панели (overflow:hidden).
@@ -570,7 +570,7 @@ const S: Record<string, CSSProperties> = {
   // My words (P11) — слим-карта-ссылка.
   myWords: { display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderRadius: "var(--radius-lg)", background: "var(--surface)", border: "2px solid var(--border)", boxShadow: "var(--shadow-solid)", textDecoration: "none", color: "inherit", transition: "transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)" },
   myWordsIcon: { width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", background: "var(--brand-subtle)", color: "var(--text-link)", display: "grid", placeItems: "center" },
-  myWordsTitle: { fontFamily: "var(--font-ui)", fontSize: 15.5, fontWeight: 800, color: "var(--text-primary)" },
+  myWordsTitle: { fontFamily: "var(--font-ui)", fontSize: 15.5, fontWeight: 700, color: "var(--text-primary)" },
   myWordsSub: { fontSize: 13, color: "var(--text-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
 
   empty: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "40px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", maxWidth: "52ch", marginInline: "auto" },
@@ -583,13 +583,13 @@ const S: Record<string, CSSProperties> = {
   sections: { display: "flex", flexDirection: "column", gap: 30 },
   section: { display: "flex", flexDirection: "column", gap: 14 },
   sectionHead: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
-  sectionTitle: { margin: 0, fontFamily: "var(--font-ui)", fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
-  recoChip: { display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 800 },
+  sectionTitle: { margin: 0, fontFamily: "var(--font-ui)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
+  recoChip: { display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, letterSpacing: "0.01em" },
 
   card: { display: "flex", flexDirection: "column", gap: 12, textAlign: "left", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, color: "inherit", transition: "transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
   cardTop: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
   lockBadge: { display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700 },
-  cardTitle: { fontSize: 18, fontWeight: 800, color: "var(--text-primary)" },
+  cardTitle: { fontSize: 18, fontWeight: 700, color: "var(--text-primary)" },
   cardDesc: { margin: 0, fontSize: 13.5, lineHeight: 1.5, color: "var(--text-muted)" },
 
   progressRow: { display: "flex", flexDirection: "column", gap: 6, marginTop: "auto" },
@@ -600,8 +600,8 @@ const S: Record<string, CSSProperties> = {
   lockTeaser: { marginTop: "auto", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text-muted)" },
 
   cardFoot: { marginTop: 4, display: "flex", alignItems: "center", gap: 14 },
-  startFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800, textDecoration: "none" },
-  maintainFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--success-text)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800, textDecoration: "none" },
+  startFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, textDecoration: "none" },
+  maintainFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--success-text)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, textDecoration: "none" },
   lockFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, textDecoration: "none" },
   browseFoot: { display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 13.5, fontWeight: 700, textDecoration: "none" },
 };

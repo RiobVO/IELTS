@@ -191,7 +191,7 @@ export default function OnboardingForm({
 const S: Record<string, React.CSSProperties> = {
   screen: { minHeight: "100dvh", background: "var(--bg-base)", display: "grid", placeItems: "center", padding: "32px 18px" },
   card: { width: "100%", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-lg)" },
-  eyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand)" },
+  eyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand)" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-3xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "8px 0 6px" },
   lead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", color: "var(--text-muted)", margin: "0 0 24px", lineHeight: 1.5 },
   error: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--error-text)", background: "var(--error-subtle)", border: "1px solid var(--error)", borderRadius: "var(--radius-md)", padding: "10px 14px", marginBottom: 18 },
@@ -213,6 +213,6 @@ const S: Record<string, React.CSSProperties> = {
   resultScore: { fontFamily: "var(--font-mono)", fontSize: "var(--text-4xl)", fontWeight: 700, color: "var(--brand)", lineHeight: 1 },
   resultScoreTot: { color: "var(--text-muted)", fontSize: "var(--text-2xl)" },
   resultLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)", marginTop: 16 },
-  resultType: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--text-primary)", marginTop: 4 },
+  resultType: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--text-primary)", marginTop: 4 },
   resultText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: 1.5, margin: "10px auto 0", maxWidth: 360 },
 };

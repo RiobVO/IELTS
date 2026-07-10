@@ -118,7 +118,7 @@ export function NotificationsList({
       <style>{NL_CSS}</style>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--text-primary)" }}>
+        <h1 style={{ margin: 0, fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--text-primary)" }}>
           Notifications
         </h1>
         {anyUnread && (

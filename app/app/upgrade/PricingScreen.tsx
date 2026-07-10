@@ -343,15 +343,15 @@ const S: Record<string, React.CSSProperties> = {
 
   toggle: { display: "inline-flex", alignItems: "center", gap: 4, padding: 4, background: "var(--surface-inset)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-full)" },
   toggleBtn: { display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 18px", border: "none", borderRadius: "var(--radius-full)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer" },
-  saveTag: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, color: "var(--success-text)", background: "var(--success-subtle)", padding: "2px 7px", borderRadius: "var(--radius-full)" },
+  saveTag: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--success-text)", background: "var(--success-subtle)", padding: "2px 7px", borderRadius: "var(--radius-full)" },
 
   plans: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 18, alignItems: "start", maxWidth: 920, margin: "0 auto" },
-  ribbon: { display: "inline-flex", alignItems: "center", gap: 5, background: "var(--brand)", color: "var(--text-on-brand)", fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", padding: "5px 12px", borderRadius: "var(--radius-full)", boxShadow: "0 3px 0 0 var(--brand-edge)" },
-  planName: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--text-primary)" },
+  ribbon: { display: "inline-flex", alignItems: "center", gap: 5, background: "var(--brand)", color: "var(--text-on-brand)", fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", padding: "5px 12px", borderRadius: "var(--radius-full)", boxShadow: "0 3px 0 0 var(--brand-edge)" },
+  planName: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--text-primary)" },
   tagline: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", minHeight: 38, lineHeight: 1.4 },
   price: { fontFamily: "var(--font-ui)", fontSize: 40, fontWeight: 900, letterSpacing: "-0.03em" },
   priceUnit: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
 
   trust: { display: "flex", justifyContent: "center", gap: 22, flexWrap: "wrap", margin: "30px 0 38px", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
-  faqHead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--text-primary)", textAlign: "center", margin: "0 0 12px" },
+  faqHead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--text-primary)", textAlign: "center", margin: "0 0 12px" },
 };
