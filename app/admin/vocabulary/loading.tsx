@@ -1,6 +1,5 @@
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 
-/** Фон/шапку даёт layout (AdminNav) — здесь только skeleton тела. */
 export default function Loading() {
   return <AdminSkeleton />;
 }
