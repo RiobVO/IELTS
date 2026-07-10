@@ -162,6 +162,10 @@ export default async function Dashboard() {
   const rating = profile?.rating ?? 1000;
   const bandTarget = profile?.target_band != null ? Number(profile.target_band) : null;
   const globalRank = rankRows[0]?.rank ?? null;
+  // Ранг читается свежим запросом, знаменатель — из 5-минутного data-cache: у
+  // нового участника лиги кэш может отставать («#N+1 of N»). Кламп снизу по
+  // собственному рангу исключает невозможное состояние без инвалидационной обвязки.
+  const leagueTotalSafe = globalRank != null ? Math.max(leagueTotal, globalRank) : leagueTotal;
 
   // Последняя попытка с band (single-passage тесты band не имеют).
   const banded = attempts.find((a) => a.band_score != null);
@@ -353,7 +357,7 @@ export default async function Dashboard() {
           <PlanCard plan={bandPlan} hasAttempts={hasAttempts} />
 
           {/* This week — тонкая полоса momentum под диагностикой, не co-hero */}
-          <WeekCard streak={streak} xp={xp} rating={rating} rank={globalRank} week={week} resume={resume} leagueTotal={leagueTotal} />
+          <WeekCard streak={streak} xp={xp} rating={rating} rank={globalRank} week={week} resume={resume} leagueTotal={leagueTotalSafe} />
 
           {/* Vocabulary — слим-модуль сводки (due/streak/goal), приватный от рейтинга */}
           <VocabCard summary={vocabSummary} />
