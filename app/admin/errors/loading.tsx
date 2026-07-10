@@ -1,5 +1,5 @@
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 
 export default function Loading() {
-  return <AdminSkeleton rows={6} />;
+  return <AdminSkeleton rows={6} form={false} />;
 }
