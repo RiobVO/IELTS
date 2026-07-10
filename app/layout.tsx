@@ -1,14 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans, Literata, JetBrains_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { posthogConfig, publicSiteUrl } from "@/env";
 import { PostHogProvider } from "@/lib/analytics/provider";
 
+// Literata (--font-literata) намеренно НЕ здесь: serif нужен только внутри /app
+// (пассажи/результаты) и грузится в app/app/layout.tsx — публичные страницы
+// (лендинг/auth/pricing) не прелоадят его 6 woff2-файлов.
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-jakarta", display: "swap",
-});
-const literata = Literata({
-  subsets: ["latin"], weight: ["400", "500", "600"], style: ["normal", "italic"], variable: "--font-literata", display: "swap",
 });
 const jbMono = JetBrains_Mono({
   subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-jbmono", display: "swap",
@@ -45,7 +45,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const analytics = posthogConfig();
   return (
-    <html lang="en" className={`${jakarta.variable} ${literata.variable} ${jbMono.variable}`}>
+    <html lang="en" className={`${jakarta.variable} ${jbMono.variable}`}>
       <body>
         {analytics ? <PostHogProvider config={analytics}>{children}</PostHogProvider> : children}
       </body>
