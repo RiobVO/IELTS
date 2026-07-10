@@ -284,7 +284,7 @@ const S: Record<string, CSSProperties> = {
   progressLabel: { flex: "none", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" },
 
   card: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 16, minHeight: 200, padding: "28px 22px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
-  word: { fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
+  word: { fontSize: 28, fontWeight: 700, color: "var(--text-primary)" },
   flipBtn: { minHeight: 44, appearance: "none", cursor: "pointer", padding: "10px 20px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, letterSpacing: "0.01em" },
   context: { fontSize: 16, lineHeight: 1.55, color: "var(--text-primary)", maxWidth: "44ch" },
   noContext: { color: "var(--text-muted)", fontStyle: "italic" },

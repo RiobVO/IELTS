@@ -95,7 +95,7 @@ export function CheckEmail({
           <Logo size={28} />
         </a>
 
-        <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 6px" }}>Check your email</h1>
+        <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 6px" }}>Check your email</h1>
         <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.55, color: "var(--text-muted)", margin: "0 0 4px" }}>We sent a confirmation link to</p>
         <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px", wordBreak: "break-all" }}>{email}</p>
         <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.55, color: "var(--text-muted)", margin: "0 0 22px" }}>Click the link in that email to activate your account. It can take a minute to arrive — check your spam folder too.</p>

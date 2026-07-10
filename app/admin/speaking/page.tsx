@@ -210,7 +210,7 @@ const S: Record<string, CSSProperties> = {
   page: { padding: "40px 18px 64px" },
   wrap: { maxWidth: 760, margin: "0 auto", fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   head: { display: "flex", alignItems: "center", gap: 12 },
-  h1: { margin: 0, fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)" },
+  h1: { margin: 0, fontSize: "var(--text-2xl)", fontWeight: 700 },
   sub: { margin: "8px 0 0", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
 
   err: { marginTop: 16, padding: "12px 14px", borderRadius: "var(--radius-md)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: "var(--text-sm)", fontWeight: 600 },

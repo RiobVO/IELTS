@@ -85,7 +85,7 @@ export default function UpdatePasswordPage() {
           <Logo size={28} />
         </a>
 
-        <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 6px" }}>Set a new password</h1>
+        <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 6px" }}>Set a new password</h1>
         <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.55, color: "var(--text-muted)", margin: "0 0 22px" }}>Choose a new password for your account. Minimum 6 characters.</p>
 
         {error && (

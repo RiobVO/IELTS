@@ -110,7 +110,7 @@ function Row({ label, value }: { label: string; value: string }) {
 
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 520, margin: "0 auto" },
-  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 18px" },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 18px" },
   card: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: "8px 20px" },
   row: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid var(--border-subtle)" },
   rowLabel: { fontFamily: "var(--font-ui)", color: "var(--text-muted)", fontSize: "var(--text-sm)" },

@@ -823,7 +823,7 @@ const S: Record<string, CSSProperties> = {
   capBody: { fontSize: 13, color: "var(--text-muted)", marginTop: 3, lineHeight: 1.5 },
 
   wordRow: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap" },
-  word: { fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
+  word: { fontSize: 28, fontWeight: 700, color: "var(--text-primary)" },
   ttsBtn: { width: 44, height: 44, borderRadius: "var(--radius-full)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", display: "grid", placeItems: "center", padding: 0, cursor: "pointer", transition: "var(--transition-colors)" },
   ipa: { fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--text-muted)" },
   pos: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-link)", background: "var(--brand-subtle)", padding: "3px 10px", borderRadius: "var(--radius-full)" },

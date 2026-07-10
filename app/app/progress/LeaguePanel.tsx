@@ -408,7 +408,7 @@ const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 960, margin: "0 auto", width: "100%" },
   head: { display: "flex", alignItems: "center", gap: 13, marginBottom: 16 },
   crown: { width: 44, height: 44, flex: "none", borderRadius: 13, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", boxShadow: "0 0 26px -4px color-mix(in oklab, var(--brand) 80%, transparent)" },
-  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: 0 },
   sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
   scopeNote: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", margin: "0 2px 16px" },
 

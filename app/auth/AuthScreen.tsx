@@ -290,7 +290,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
           {signup && (
             <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
               <div className="auth-rise">
-                <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 4px" }}>Create your account</h1>
+                <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 4px" }}>Create your account</h1>
                 <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "0 0 22px" }}>Your first full test is free. No card.</p>
               </div>
 
@@ -373,7 +373,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
           {!signup && (
             <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
               <div className="auth-rise">
-                <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 4px" }}>Welcome back</h1>
+                <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 4px" }}>Welcome back</h1>
                 <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "0 0 22px" }}>Pick up where you left off.</p>
               </div>
 
