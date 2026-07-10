@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { and, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { getProfile, getUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { speakingTask } from "@/db/schema";
 import { speakingFeatureEnabled } from "@/env";
@@ -44,6 +45,8 @@ export default async function SpeakingAttemptPage({ params }: { params: Promise<
   const user = await getUser();
   if (!user) redirect("/auth");
   if (!speakingFeatureEnabled()) redirect("/app/practice");
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
 
   const { id } = await params;
   if (!isUuid(id)) notFound();

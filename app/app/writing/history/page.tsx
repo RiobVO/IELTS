@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { writingFeatureEnabled } from "@/env";
 import { listUserHistory } from "@/lib/writing/read";
 import { writingCategoryLabel, confidenceLabel } from "@/lib/writing/labels";
@@ -41,6 +42,8 @@ export default async function WritingHistoryPage() {
   const user = await getUser();
   if (!user) redirect("/auth");
   if (!writingFeatureEnabled()) redirect("/app/practice");
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
 
   const rows = await listUserHistory(user.id);
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { writingFeatureEnabled } from "@/env";
 import { listPublishedTasks } from "@/lib/writing/read";
 import { completedCounts } from "@/lib/writing/store";
@@ -19,6 +20,8 @@ export const metadata: Metadata = { title: "Writing | bando" };
 export default async function WritingCatalogPage() {
   const user = await requireUser();
   if (!writingFeatureEnabled()) redirect("/app/practice");
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
 
   const [profile, tasks] = await Promise.all([getProfile(), listPublishedTasks()]);
 

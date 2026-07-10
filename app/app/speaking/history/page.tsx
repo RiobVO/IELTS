@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { speakingFeatureEnabled } from "@/env";
 import { listUserHistory } from "@/lib/speaking/read";
 import { AppShell } from "../../_AppShell";
@@ -19,6 +20,8 @@ export default async function SpeakingHistoryPage() {
   const user = await getUser();
   if (!user) redirect("/auth");
   if (!speakingFeatureEnabled()) redirect("/app/practice");
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
 
   const rows = await listUserHistory(user.id);
 

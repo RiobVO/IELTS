@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { savedWord } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { getVocabCatalog, getVocabOverview, type VocabDeckCard, type VocabOverview } from "@/lib/vocab/queries";
 import { getWeakTypeDeckRecommendation, type WeakTypeDeckRecommendation } from "@/lib/vocab/recommend";
 import { bandToCefr, LEVEL_ORDER, type CefrLevel } from "@/lib/vocab/level";
@@ -33,6 +34,8 @@ const TIER_LABEL: Record<string, string> = {
  */
 export default async function VocabularyPage() {
   const user = await requireUser();
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
   const [overview, decks, weakTypeReco, savedAgg] = await Promise.all([
     getVocabOverview(user.id),
     getVocabCatalog(user.id),

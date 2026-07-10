@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { speakingFeatureEnabled } from "@/env";
 import { listPublishedTasks, listUserHistory } from "@/lib/speaking/read";
 import { effectiveTier, meetsTier, SPEAKING_MIN_TIER, type Tier } from "@/lib/tiers";
@@ -22,6 +23,8 @@ export const metadata: Metadata = { title: "Speaking | bando" };
 export default async function SpeakingCatalogPage() {
   const user = await requireUser();
   if (!speakingFeatureEnabled()) redirect("/app/practice");
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
 
   const [profile, tasks] = await Promise.all([getProfile(), listPublishedTasks()]);
   const tier: Tier = profile

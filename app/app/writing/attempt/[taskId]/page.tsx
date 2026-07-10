@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { and, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { writingTask } from "@/db/schema";
 import { writingFeatureEnabled } from "@/env";
@@ -45,6 +46,8 @@ export async function generateMetadata({
 export default async function AttemptPage({ params }: { params: Promise<{ taskId: string }> }) {
   await requireUser();
   if (!writingFeatureEnabled()) redirect("/app/practice");
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
 
   const { taskId } = await params;
   if (!isUuid(taskId)) notFound();

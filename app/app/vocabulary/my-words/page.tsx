@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { asc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { savedWord } from "@/db/schema";
 import { AppShell } from "../../_AppShell";
@@ -17,6 +18,8 @@ export const metadata: Metadata = { title: "My words | bando" };
  */
 export default async function MyWordsPage() {
   const user = await requireUser();
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
   const rows = await db
     .select({
       id: savedWord.id,
