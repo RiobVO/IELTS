@@ -35,13 +35,6 @@ type Breakdown = Record<string, { correct: number; total: number }> | null;
 type Section = "reading" | "listening";
 type Test = Awaited<ReturnType<typeof getPublishedTests>>[number];
 
-interface SubmittedRow {
-  content_item_id: string;
-  per_type_breakdown: Breakdown;
-  band_score: string | null;
-  raw_score: number | null;
-  content_item: { section: Section } | null;
-}
 interface InProgressRow {
   content_item_id: string;
   answers: Record<string, unknown> | null;
@@ -115,36 +108,54 @@ export default async function PracticePage({
   const notice = sp.limit === "1" ? "limit" : sp.throttled === "1" ? "throttled" : null;
   const supabase = await createClient();
 
-  // Профиль (тир) / submitted-попытки (слабый тип + best band + best raw score
-  // для карточки «Done») / in_progress (resume + прогресс строк) / оба
-  // published-списка / Weak-spots виджет — параллельно. Прогрев шапки конкурентно
-  // (cache()'d, AppShell переиспользует).
-  const [profile, submittedRes, inProgressRes, readingTests, listeningTests, weaknessRows] = await Promise.all([
+  // Профиль (тир) / submitted-попытки (weak-spots + слабый тип + best band + best
+  // raw score) / in_progress (resume + прогресс строк) / оба published-списка /
+  // trial-лейн — параллельно, одной волной. Прогрев шапки конкурентно (cache()'d,
+  // AppShell переиспользует).
+  const [profile, submittedRows, inProgressRes, readingTests, listeningTests, trialRows] = await Promise.all([
     getProfile(),
-    supabase
-      .from("attempt")
-      .select("content_item_id,per_type_breakdown,band_score,raw_score,content_item:content_item_id(section)")
-      .eq("status", "submitted")
-      .order("submitted_at", { ascending: false })
-      .limit(50),
+    // Единое owner-чтение submitted-попыток (Drizzle обходит RLS — скоуп по user.id
+    // ставим сами, как в mistakes.ts/дашборде). Раньше было ДВА пересекающихся
+    // запроса: Supabase (50, hero/drill/bestBand) + Drizzle (300, weak-spots).
+    // Теперь одно чтение: первые 50 строк (slice ниже) сохраняют старое окно
+    // hero/drill, все 300 кормят weak-spots статистику за историю.
+    db
+      .select({
+        contentItemId: attemptTable.contentItemId,
+        perTypeBreakdown: attemptTable.perTypeBreakdown,
+        bandScore: attemptTable.bandScore,
+        rawScore: attemptTable.rawScore,
+        section: contentItem.section,
+      })
+      .from(attemptTable)
+      .innerJoin(contentItem, eq(contentItem.id, attemptTable.contentItemId))
+      .where(and(eq(attemptTable.userId, user.id), eq(attemptTable.status, "submitted")))
+      .orderBy(desc(attemptTable.submittedAt))
+      .limit(300),
     supabase
       .from("attempt")
       .select("content_item_id,answers,started_at,content_item:content_item_id(title,category,section)")
       .eq("status", "in_progress")
-      .order("started_at", { ascending: false }),
+      .order("started_at", { ascending: false })
+      // Страховка от неограниченного чтения answers-jsonb: живых in_progress больше
+      // сотни не бывает (по одной на тест), но unbounded-скан здесь ни к чему.
+      .limit(100),
     getPublishedTests("reading"),
     getPublishedTests("listening"),
-    // Weak-spots виджет (P-OwnC): отдельный owner-path запрос (Drizzle, как дашборд
-    // app/app/page.tsx), ТОЛЬКО per_type_breakdown, шире окно (300 vs 50 у submittedRes
-    // выше — тому хватает недавнего для hero/drill, здесь нужна надёжная статистика по
-    // типам за всю историю). Drizzle обходит RLS (owner role) — скоуп по user.id ставим
-    // сами, как в mistakes.ts/дашборде.
+    // Trial-лейн (§4.8): (content_item_id, status) попыток на полных gated-тестах.
+    // Раньше шёл серийным хопом ПОСЛЕ батча (ждал userTier), теперь в общей волне —
+    // запрос дешёвый, для non-basic результат просто отбрасывается ниже.
     db
-      .select({ perTypeBreakdown: attemptTable.perTypeBreakdown })
+      .selectDistinct({ id: attemptTable.contentItemId, status: attemptTable.status })
       .from(attemptTable)
-      .where(and(eq(attemptTable.userId, user.id), eq(attemptTable.status, "submitted")))
-      .orderBy(desc(attemptTable.submittedAt))
-      .limit(300),
+      .innerJoin(contentItem, eq(contentItem.id, attemptTable.contentItemId))
+      .where(
+        and(
+          eq(attemptTable.userId, user.id),
+          ne(contentItem.tierRequired, "basic"),
+          inArray(contentItem.category, [...FULL_CATEGORIES]),
+        ),
+      ),
     getHeaderData(),
   ]);
 
@@ -155,35 +166,22 @@ export default async function PracticePage({
   // inline on the hub via setTargetBand. null only defends the unset edge.
   const rawTarget = (profile as { target_band: string | number | null } | null)?.target_band;
   const targetBand = rawTarget != null ? Number(rawTarget) : null;
-  const submitted = (submittedRes.data ?? []) as unknown as SubmittedRow[];
   const inProgress = (inProgressRes.data ?? []) as unknown as InProgressRow[];
+  // Hero/drill/bestBand считаются по старому 50-окну недавних попыток: набор
+  // отсортирован desc, slice эквивалентен прежнему limit(50) отдельного запроса.
+  const submitted = submittedRows.slice(0, 50);
 
-  // Trial-лейн (§4.8): Basic получает ОДИН бесплатный полный gated-тест. Один owner-
-  // запрос (Drizzle, скоуп по user.id сами) — (content_item_id, status) попыток на
-  // полных gated-тестах; правило расхода per-card считает trialConsumedBy (единый
-  // источник с hasConsumedTrial). Только Basic платит RT: premium/ultra проходят
-  // обычным tier-гейтом.
-  const trialAttempts: TrialAttemptRow[] = [];
-  if (userTier === "basic") {
-    const rows = await db
-      .selectDistinct({ id: attemptTable.contentItemId, status: attemptTable.status })
-      .from(attemptTable)
-      .innerJoin(contentItem, eq(contentItem.id, attemptTable.contentItemId))
-      .where(
-        and(
-          eq(attemptTable.userId, user.id),
-          ne(contentItem.tierRequired, "basic"),
-          inArray(contentItem.category, [...FULL_CATEGORIES]),
-        ),
-      );
-    for (const r of rows) trialAttempts.push({ contentItemId: r.id, status: r.status });
-  }
+  // Trial-лейн (§4.8): Basic получает ОДИН бесплатный полный gated-тест; правило
+  // расхода per-card считает trialConsumedBy (единый источник с hasConsumedTrial).
+  // Premium/ultra проходят обычным tier-гейтом — им набор не нужен, отбрасываем.
+  const trialAttempts: TrialAttemptRow[] =
+    userTier === "basic" ? trialRows.map((r) => ({ contentItemId: r.id, status: r.status })) : [];
 
-  // Weak-spots виджет — 3–5 слабейших типов с min-порогом надёжности (total >= 4,
-  // дефолт aggregateWeakness). Ниже порога / нет попыток → пустой массив, виджет не
-  // рендерится (не пустая коробка).
+  // Weak-spots виджет (P-OwnC) — 3–5 слабейших типов по всей истории (300-окно) с
+  // min-порогом надёжности (total >= 4, дефолт aggregateWeakness). Ниже порога /
+  // нет попыток → пустой массив, виджет не рендерится (не пустая коробка).
   const weakSpots: WeaknessRow[] = aggregateWeakness(
-    weaknessRows.map((r) => r.perTypeBreakdown as PerTypeBreakdown),
+    submittedRows.map((r) => r.perTypeBreakdown as PerTypeBreakdown),
   );
   // Тот же (reliability-filtered) набор типов даёт бейдж «weak spot» на карточке
   // каталога — переиспользуем weakSpots, не считаем заново (шире `weak` ниже,
@@ -197,12 +195,12 @@ export default async function PracticePage({
   // Лучший raw_score по тесту (для карточки «Done · X/Y») — тот же submitted-набор.
   const bestRawById = new Map<string, number>();
   for (const a of submitted) {
-    const sec: Section = a.content_item?.section ?? "reading";
-    if (a.band_score != null) bestBand[sec] = Math.max(bestBand[sec], Number(a.band_score));
-    if (a.raw_score != null) {
-      bestRawById.set(a.content_item_id, Math.max(bestRawById.get(a.content_item_id) ?? 0, a.raw_score));
+    const sec: Section = a.section;
+    if (a.bandScore != null) bestBand[sec] = Math.max(bestBand[sec], Number(a.bandScore));
+    if (a.rawScore != null) {
+      bestRawById.set(a.contentItemId, Math.max(bestRawById.get(a.contentItemId) ?? 0, a.rawScore));
     }
-    const b = a.per_type_breakdown;
+    const b = a.perTypeBreakdown as Breakdown;
     if (!b) continue;
     for (const [type, v] of Object.entries(b)) {
       const cur = agg[type] ?? { correct: 0, total: 0, rLost: 0, lLost: 0 };
