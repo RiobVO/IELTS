@@ -255,7 +255,7 @@ const CSS = `
 const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 640, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   back: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "var(--text-muted)", textDecoration: "none" },
-  title: { margin: "10px 0 0", fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
+  title: { margin: "10px 0 0", fontSize: 26, fontWeight: 800, color: "var(--text-primary)" },
   sub: { margin: "8px 0 0", fontSize: 15, lineHeight: 1.5, color: "var(--text-muted)", maxWidth: "52ch" },
   headStats: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 },
   stat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--surface-inset)", color: "var(--text-secondary)", fontSize: 12.5, fontWeight: 700 },
@@ -273,7 +273,7 @@ const S: Record<string, CSSProperties> = {
   list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 },
   row: { display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)" },
   rowMain: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 },
-  rowWord: { display: "inline-flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em", color: "var(--text-primary)" },
+  rowWord: { display: "inline-flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
   dueDot: { width: 8, height: 8, borderRadius: "var(--radius-full)", background: "var(--brand)", flex: "none" },
   rowContext: { fontSize: 13, lineHeight: 1.45, color: "var(--text-muted)", fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   del: { flex: "none", display: "grid", placeItems: "center", borderRadius: "var(--radius-md)", border: "none", background: "transparent", color: "var(--text-muted)", cursor: "pointer", transition: "var(--transition-colors)" },

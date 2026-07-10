@@ -20,13 +20,16 @@ a{color:inherit;text-decoration:none}svg{display:block}
 ::selection{background:var(--v2);color:#fff}
 .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
 h1,h2,h3{font-weight:800;letter-spacing:-.03em;line-height:1.04;text-wrap:balance;color:var(--ink)}
+/* Минус-трекинг — только дисплейным кеглям (hero h1 40–73px, .sec-h h2 32–48px);
+   мелкие h3 фич-карточек (18/22px) в плотной Jakarta слипаются — им 0. */
+.fcard h3{letter-spacing:0}
 em{font-style:normal;color:var(--v)}
 .ico{stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--v),var(--vb));width:100%;transform:scaleX(0);transform-origin:left;will-change:transform;z-index:200}
 
 nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--rule)}
 .nav-in{display:flex;align-items:center;gap:34px;height:72px}
-.logo{font-weight:800;font-size:22px;letter-spacing:-.04em;display:flex;align-items:center;gap:10px}
+.logo{font-weight:800;font-size:22px;display:flex;align-items:center;gap:10px}
 .logo .o{color:var(--v)}
 .seal{width:34px;height:34px;border-radius:11px;background:var(--ink);display:grid;place-content:center;gap:2.5px;box-shadow:var(--sh-sm)}
 .seal i{display:block;height:2.5px;border-radius:2px}

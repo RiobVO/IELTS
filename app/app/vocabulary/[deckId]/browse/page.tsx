@@ -134,7 +134,7 @@ const CSS = `
 const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 900, margin: "0 auto", padding: "24px 16px 56px", display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   head: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  title: { margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: "-0.015em", color: "var(--text-primary)" },
+  title: { margin: 0, fontSize: 20, fontWeight: 800, color: "var(--text-primary)" },
   sub: { margin: "4px 0 0", fontSize: 12.5, color: "var(--text-muted)" },
 
   table: { width: "100%", minWidth: 520, borderCollapse: "collapse" },

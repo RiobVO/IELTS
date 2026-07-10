@@ -344,10 +344,10 @@ const S: Record<string, CSSProperties> = {
 
   metaRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, minHeight: 26 },
   metaRight: { display: "inline-flex", alignItems: "center", gap: 8, flex: "none" },
-  cat: { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 8, padding: "5px 10px", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600, letterSpacing: "-0.005em" },
+  cat: { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 8, padding: "5px 10px", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600 },
   lockChip: { display: "inline-flex", alignItems: "center", gap: 4, borderRadius: 7, padding: "3px 8px", border: "1px solid var(--border)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 700 },
 
-  prompt: { margin: "0 0 14px", fontSize: 18, fontWeight: 600, lineHeight: 1.4, letterSpacing: "-0.01em", color: "var(--text-primary)" },
+  prompt: { margin: "0 0 14px", fontSize: 18, fontWeight: 600, lineHeight: 1.4, color: "var(--text-primary)" },
   promptLocked: { color: "var(--text-muted)" },
 
   bullets: { marginBottom: 16 },

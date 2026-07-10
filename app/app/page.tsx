@@ -859,7 +859,7 @@ const DASH_CSS = `
 .dash-bandnum-wrap:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:8px}
 @media (min-width:768px){
   .dash-wrap{padding:32px 28px 56px}
-  .dash-hi{font-size:32px;white-space:nowrap}
+  .dash-hi{font-size:32px;white-space:nowrap;letter-spacing:var(--tracking-tight)}
   .dash-focus-title{font-size:42px}
   .dash-band-num{font-size:60px}
   .dash-band{flex-direction:row;align-items:center;gap:32px}
@@ -904,7 +904,7 @@ const S: Record<string, React.CSSProperties> = {
   // Стат-лейбл (sentence case) — намеренно тише brand-eyebrow приветствия, чтобы
   // надзаголовок не повторялся как один и тот же AI-каданс на каждой секции.
   bandLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-secondary)" },
-  hi: { fontFamily: "var(--font-ui)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "8px 0 0" },
+  hi: { fontFamily: "var(--font-ui)", fontWeight: 800, color: "var(--text-primary)", margin: "8px 0 0" },
   date: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", paddingBottom: 4 },
 
   /* Focus hero */
@@ -1020,7 +1020,6 @@ const S: Record<string, React.CSSProperties> = {
     fontFamily: "var(--font-ui)",
     fontSize: "var(--text-xl)",
     fontWeight: 800,
-    letterSpacing: "var(--tracking-tight)",
     color: "var(--text-primary)",
     margin: 0,
     whiteSpace: "nowrap",

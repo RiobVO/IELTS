@@ -1010,7 +1010,7 @@ const S: Record<string, CSSProperties> = {
   // Hero — violet 3D-карта, белый ink (WCAG AA на brand, проверено: 4.63:1).
   hero: { flex: 1, background: "var(--brand)", borderRadius: "var(--radius-xl)", boxShadow: "0 5px 0 0 var(--brand-edge)", padding: 24, color: "var(--text-on-brand)", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 20, minHeight: 200 },
   heroEyebrow: { fontSize: 12, fontWeight: 700, letterSpacing: "0.03em", marginBottom: 10 },
-  heroTitle: { fontSize: 20, fontWeight: 800, letterSpacing: "-0.015em", lineHeight: 1.2, textWrap: "balance" },
+  heroTitle: { fontSize: 20, fontWeight: 800, lineHeight: 1.2, textWrap: "balance" },
   heroSub: { fontSize: 13, marginTop: 8, lineHeight: 1.45 },
   rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
@@ -1023,7 +1023,7 @@ const S: Record<string, CSSProperties> = {
   skillCard: { display: "flex", flexDirection: "column", gap: 14, textAlign: "left", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow-solid)", padding: 18, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
   skillTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
   skillTile: { width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 16, fontWeight: 800 },
-  skillName: { fontSize: 18, fontWeight: 800, letterSpacing: "-0.015em", color: "var(--text-primary)" },
+  skillName: { fontSize: 18, fontWeight: 800, color: "var(--text-primary)" },
   skillCount: { fontSize: 13, color: "var(--text-muted)", marginTop: 3 },
   // marginTop:auto прижимает футер к низу карты — заполняет пустую нижнюю зону.
   skillFoot: { marginTop: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, color: "var(--text-link)" },
@@ -1053,7 +1053,7 @@ const S: Record<string, CSSProperties> = {
   catalog: {},
   filterCol: {},
   listHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", rowGap: 10, outline: "none" },
-  listTitle: { margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
+  listTitle: { margin: 0, fontSize: 20, fontWeight: 800, color: "var(--text-primary)" },
   sortWrap: { position: "relative", display: "inline-flex", alignItems: "center" },
   sortSelect: { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: 13, color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "var(--surface)", padding: "6px 28px 6px 12px", cursor: "pointer", transition: "var(--transition-colors)" },
   activeEcho: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 },

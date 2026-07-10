@@ -270,7 +270,7 @@ const S: Record<string, CSSProperties> = {
   caption: { fontSize: "var(--text-xs)", color: "var(--text-muted)" },
 
   listHead: { display: "flex", alignItems: "center", gap: 10, margin: "40px 0 14px" },
-  h2: { margin: 0, fontSize: "var(--text-lg)", fontWeight: 800, letterSpacing: "var(--tracking-tight)" },
+  h2: { margin: 0, fontSize: "var(--text-lg)", fontWeight: 800 },
   empty: { margin: 0, padding: "22px 18px", background: "var(--surface)", border: "2px dashed var(--border)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)", fontSize: "var(--text-sm)", textAlign: "center" },
   list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 },
   row: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 16 },
