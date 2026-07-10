@@ -14,6 +14,7 @@
  * (submit action) calls redirect() immediately after — a progression failure
  * must not break the submit, only skip the perk.
  */
+import { after } from "next/server";
 import { and, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { attempt, contentItem, profile } from "@/db/schema";
@@ -209,25 +210,33 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
     // result page can celebrate them once.
     const awardedBadges = await evaluateBadges(input.userId);
 
-    // In-app уведомление о каждой разблокировке бейджа (BRIEF §11). Best-effort
-    // (createNotifications не бросает) — внутри общего guard'а applyPostSubmit.
-    if (awardedBadges.length > 0) {
-      await createNotifications(
-        awardedBadges.map((b) => ({
-          userId: input.userId,
-          type: "badge_unlocked" as const,
-          title: `Badge unlocked: ${b.name}`,
-          body: b.description,
-          data: { code: b.code, icon: b.icon },
-        })),
-      );
-    }
-
-    // Referral reward (BRIEF §4.9 / §11): rewards the invitee's pending referral
-    // exactly once, only after a RATED first attempt (anti-farm — a too-fast
-    // submit must not claim it). Best-effort — never throws; it's also inside
-    // applyPostSubmit's own try/catch guard.
-    await maybeRewardReferral(input.userId, progression.rated);
+    // Бейдж-уведомления (BRIEF §11) и referral-награда (§4.9, только после RATED
+    // первой попытки — anti-farm) ответу сабмита не нужны: тост разблокировки едет
+    // по значению (awardedBadges → redirect URL), а не выводится из этих записей.
+    // Поэтому обе уходят в after() — post-response, юзер не платит их round-trip'ы.
+    // Компромисс: unread-счётчик колокольчика на result-странице может отстать на
+    // одну навигацию (вставка идёт после ответа). Обе функции best-effort и не
+    // бросают; try/catch — страховка, т.к. after()-колбэк исполняется уже ВНЕ
+    // общего guard'а applyPostSubmit.
+    const rated = progression.rated;
+    after(async () => {
+      try {
+        if (awardedBadges.length > 0) {
+          await createNotifications(
+            awardedBadges.map((b) => ({
+              userId: input.userId,
+              type: "badge_unlocked" as const,
+              title: `Badge unlocked: ${b.name}`,
+              body: b.description,
+              data: { code: b.code, icon: b.icon },
+            })),
+          );
+        }
+        await maybeRewardReferral(input.userId, rated);
+      } catch (e) {
+        console.error("applyPostSubmit: deferred badge/referral work failed", e);
+      }
+    });
 
     return {
       rated: progression.rated,
