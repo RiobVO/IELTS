@@ -36,6 +36,7 @@ vi.mock("../persist", () => ({
 vi.mock("../source-html-storage", () => ({ uploadSourceHtml }));
 
 import { importRunner } from "./import-runner";
+import { MAX_IMPORT_AUDIO_BYTES } from "../audio-cap";
 
 const listeningParsed = () => ({
   section: "listening",
@@ -71,6 +72,22 @@ describe("importRunner atomicity (#12)", () => {
     expect(parsedArg.passages[0]!.audioPath).toBeNull();
     expect(res.hasAudio).toBe(false);
     expect(res.warnings).toBe(1);
+  });
+
+  // Storage-гигиена: внешнее аудио > лимита (audio-cap) — ГРОМКИЙ отказ attach'а, не тихий
+  // skip. Тест сохраняется без аудио (persist один раз), но audioTooLarge=true + warning,
+  // чтобы бот отдельной строкой попросил пережать mp3. Аплоада нет (аудио не в bucket).
+  it("аудио > лимита: persist БЕЗ аудио, audioTooLarge=true, upload не вызван", async () => {
+    parseRunner.mockReturnValue({ parsed: listeningParsed(), externalAudioSrc: "http://cdn/big.mp3" });
+    fetchAudio.mockResolvedValue(new ArrayBuffer(MAX_IMPORT_AUDIO_BYTES + 1)); // на байт больше капа
+    const res = await importRunner("<html/>", {});
+    expect(uploadAudio).not.toHaveBeenCalled();
+    expect(persist).toHaveBeenCalledTimes(1);
+    const [parsedArg] = persist.mock.calls[0] as [{ warnings: string[]; passages: Array<{ audioPath: string | null }> }];
+    expect(parsedArg.warnings.some((w) => /exceeds .*cap/i.test(w))).toBe(true);
+    expect(parsedArg.passages[0]!.audioPath).toBeNull();
+    expect(res.hasAudio).toBe(false);
+    expect(res.audioTooLarge).toBe(true);
   });
 
   // Дубль-гвард (QA 2026-07-02): тот же тест под другим именем файла ложился второй

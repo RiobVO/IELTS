@@ -22,6 +22,11 @@ import { contentTag } from "@/lib/content/exam-content";
 import { publishReviewedContentItem } from "@/lib/content/publish";
 import { importVocabDeck } from "@/lib/import/vocab/persist-vocab";
 import { MAX_FILE_BYTES, VocabParseError } from "@/lib/import/vocab/parse-vocab";
+import {
+  withinAudioCap,
+  audioTooLargeMessage,
+  MAX_IMPORT_AUDIO_MB,
+} from "@/lib/import/audio-cap";
 
 /**
  * Telegram-бот импорта контента (admin-канал, аналог /admin). Умеет:
@@ -194,11 +199,14 @@ async function handleHtmlUpload(
       ? `\n🚩 бренд не вычищен (новый источник?): ${r.brandWarnings.join("; ")} — проверь шапку в раннере.`
       : "";
     const isListening = r.hasAudio || /listening/i.test(r.title);
-    const audioHint = !r.hasAudio && isListening
-      ? "\n🎧 Это Listening без аудио в файле — пришли mp3 следующим файлом."
-      : r.hasAudio
-        ? "\n🎧 Аудио подхвачено из файла."
-        : "";
+    const audioHint = r.audioTooLarge
+      ? `\n🎧 Аудио в файле больше ${MAX_IMPORT_AUDIO_MB} MB и НЕ прикреплено — ` +
+        "пережми mp3 (≤64–96 kbps mono) и пришли отдельным файлом."
+      : !r.hasAudio && isListening
+        ? "\n🎧 Это Listening без аудио в файле — пришли mp3 следующим файлом."
+        : r.hasAudio
+          ? "\n🎧 Аудио подхвачено из файла."
+          : "";
     await sendUploadResult(
       chatId,
       `✅ «${r.title}» сохранён как draft.\n` +
@@ -240,6 +248,13 @@ async function handleHtmlUpload(
  * audio_path). Путь в bucket = `<contentItemId>.mp3` (upsert идемпотентен).
  */
 async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
+  // Ранний size-гейт ПО заявленному Telegram file_size — ДО поиска теста и скачивания
+  // (образец — vocab-гейт). Бюджет Storage 1 GB: несжатый/стерео mp3 в bucket не пускаем.
+  // Actionable-ответ (пережать до ≤64–96 kbps mono) вместо тихого падения на аплоаде.
+  if (typeof file.file_size === "number" && !withinAudioCap(file.file_size)) {
+    await sendMessage(chatId, audioTooLargeMessage(file.file_size));
+    return;
+  }
   // Привязываем к новейшему Listening-тесту, КОТОРОМУ ЕЩЁ НУЖНО аудио (нет ни одного
   // passage с audio_path), а не к глобально-последнему listening. Иначе mp3 мог уехать
   // на уже укомплектованный/чужой тест (два админа / повторная загрузка / задержка).
@@ -279,6 +294,11 @@ async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
   try {
     const path = await getFilePath(file.file_id);
     const bytes = await downloadFileBytes(path);
+    // Defense-in-depth: file_size мог отсутствовать/занижать — проверяем факт до аплоада.
+    if (!withinAudioCap(bytes.byteLength)) {
+      await sendMessage(chatId, audioTooLargeMessage(bytes.byteLength));
+      return;
+    }
     const url = await uploadAudio(
       `${test.id}.mp3`,
       bytes,
