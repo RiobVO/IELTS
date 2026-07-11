@@ -279,7 +279,7 @@ function Hero({ data, onReview, onTypes }: { data: DebriefData; onReview: () => 
           </div>
           <div className="rc-vd-rule" />
           <div>
-            <BlindSpotCopy blindSpot={data.blindSpot} />
+            <BlindSpotCopy blindSpot={data.blindSpot} score={data.score} />
             <div className="rc-vd-actions">
               <Button onClick={onReview}>Review my misses →</Button>
               <Button variant="secondary" onClick={onTypes}>See where I stand</Button>
@@ -292,13 +292,44 @@ function Hero({ data, onReview, onTypes }: { data: DebriefData; onReview: () => 
   );
 }
 
-function BlindSpotCopy({ blindSpot }: { blindSpot: DebriefData["blindSpot"] }) {
+function BlindSpotCopy({
+  blindSpot,
+  score,
+}: {
+  blindSpot: DebriefData["blindSpot"];
+  score: DebriefData["score"];
+}) {
   if (!blindSpot) {
+    // blindSpot=null НЕ значит "всё верно": computeBlindSpot возвращает null и
+    // при единственном типе вопросов, и при ровной точности типов, и при
+    // rawScore=0 (сравнивать не с чем). Ветвим по счёту (Codex 2026-07-11):
+    // праздничная копия — ТОЛЬКО при perfect score; ноль — "старт с нуля";
+    // смешанный счёт без выраженного слабого типа — нейтральная копия.
+    // "0 верных при отвеченных" и "пустой сабмит" не различаем — нужен был бы
+    // per-question "answered", которого нет для mock (инвариант 1) — не дёшево.
+    if (score.raw === 0 && score.total > 0) {
+      return (
+        <>
+          <div className="rc-vd-ey">Let&rsquo;s get a baseline</div>
+          <h2 className="rc-vd-h">Rough start — every expert began here.</h2>
+          <p className="rc-vd-p">Nothing here clicked yet, and that&rsquo;s fine — it&rsquo;s a baseline, not a verdict. Walk through what tripped you up below, then re-sit once it clicks.</p>
+        </>
+      );
+    }
+    if (score.raw === score.total && score.total > 0) {
+      return (
+        <>
+          <div className="rc-vd-ey">Nothing left to fix</div>
+          <h2 className="rc-vd-h">You cleared every question.</h2>
+          <p className="rc-vd-p">There&rsquo;s no blind spot to chase this time — carry the habit into your next attempt and keep the streak going.</p>
+        </>
+      );
+    }
     return (
       <>
-        <div className="rc-vd-ey">Nothing left to fix</div>
-        <h2 className="rc-vd-h">You cleared every question.</h2>
-        <p className="rc-vd-p">There&rsquo;s no blind spot to chase this time — carry the habit into your next attempt and keep the streak going.</p>
+        <div className="rc-vd-ey">No single weak spot</div>
+        <h2 className="rc-vd-h">Your misses don&rsquo;t cluster — yet.</h2>
+        <p className="rc-vd-p">No one question type stands out as the culprit this time. Walk through your misses below — the pattern usually shows up after a few more attempts.</p>
       </>
     );
   }
@@ -899,6 +930,13 @@ const COACH_CSS = `
 @media (max-width:430px){
   .rc-dock-full{display:none}
   .rc-dock-short{display:inline}
+  /* Три rc-tab (Review misses/By type/Answer key) не помещались в rc-seg на узких
+     телефонах — третий ("Answer key") обрубался у края без намёка на скролл
+     (overflow-x:auto + скрытый scrollbar). Паддинги/шрифт уже, вертикальный
+     размер (min-height) не трогаем — тап-таргет не деградирует. */
+  .rc-seg{padding:4px;gap:2px}
+  .rc-tab{padding:9px 8px;gap:4px;font-size:12px}
+  .rc-tab .rc-b{font-size:10px;padding:1px 5px}
 }
 @media (prefers-reduced-motion:reduce){
   .rc-rr-track i,.rc-opt,.rc-rr-next,.rc-bt-row,.rc-bt-name,.rc-bt-go,.rc-bt-bar span,.rc-toast,.rc-tab{transition:none}
