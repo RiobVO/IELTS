@@ -41,6 +41,8 @@ export interface AKItem {
   /** Present only when the full review is unlocked (server-gated). */
   answer?: string;
   evidence?: string | null;
+  /** RU-объяснение (L1-слой, 0050) — тот же гейт, что answer/evidence. */
+  explanationRu?: string | null;
 }
 export interface AKType {
   type: string;
@@ -185,6 +187,9 @@ export function AnswerKeyFilter({
 
 function AKRow({ q, isOpen, onToggle }: { q: AKItem; isOpen: boolean; onToggle: () => void }) {
   const detailId = `ak-detail-${q.number}`;
+  // Свёрнут по умолчанию (сбрасывается при повторном открытии строки — EN
+  // остаётся основной методикой, RU только по явному запросу).
+  const [ruOpen, setRuOpen] = useState(false);
   return (
     <>
       <button
@@ -217,6 +222,20 @@ function AKRow({ q, isOpen, onToggle }: { q: AKItem; isOpen: boolean; onToggle: 
           ) : (
             <div className="ak-evstub">
               The passage line that proves this is shown here in your real result, highlighted in the reading view.
+            </div>
+          )}
+          {q.explanationRu && (
+            <div className="ak-ru">
+              <button
+                type="button"
+                className="ak-ru-toggle"
+                aria-expanded={ruOpen}
+                onClick={() => setRuOpen((o) => !o)}
+              >
+                <span className="ak-ru-badge">RU</span>
+                {ruOpen ? "Hide" : "Explain in Russian"}
+              </button>
+              {ruOpen && <p className="ak-ru-text">{q.explanationRu}</p>}
             </div>
           )}
         </div>
@@ -277,6 +296,12 @@ div[data-n]:first-child > .ak-row{border-top:0}
    плоский текст (React text child, не dangerouslySetInnerHTML) — <mark> в
    данных нет и не может отрендериться, правило было бы мёртвым CSS. */
 .ak-evstub{font-family:var(--font-ui);font-size:12.5px;color:var(--text-muted);font-style:italic;padding:11px 13px;border:1px dashed var(--border);border-radius:10px;line-height:1.5}
+/* RU-объяснение (L1-слой, 0050) — свёрнутый по умолчанию тумблер. */
+.ak-ru-toggle{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:2px 0;border:none;background:none;color:var(--text-muted);font-family:var(--font-ui);font-size:13.5px;font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.ak-ru-toggle:hover{color:var(--text-secondary)}
+.ak-ru-badge{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--brand-active);background:var(--brand-subtle);border-radius:5px;padding:2px 5px}
+.ak-ru-text{margin:6px 0 0;font-family:var(--font-ui);font-size:13.5px;line-height:1.6;color:var(--text-secondary)}
+@media (pointer:coarse){.ak-ru-toggle{min-height:44px}}
 
 @media (pointer:coarse){
   .chip{min-height:44px}

@@ -313,6 +313,8 @@ export interface DebriefData {
     given: string;
     answer: string;
     why: string | null;
+    /** RU-объяснение (L1-слой, 0050) — тот же гейт, что `why` (fullReview). */
+    whyRu: string | null;
     evidence: string | null;
     /** Ungated generic per-type reference — тот же qtypeDescription, что и у akItems.strategy (деградация как в Answer key). */
     strategy: string;

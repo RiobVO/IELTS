@@ -1,12 +1,14 @@
 "use server";
 
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { db } from "@/db";
 import { contentItem } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { contentTag } from "@/lib/content/exam-content";
+import { triggerL1Generation } from "@/lib/content/l1/store";
 import { RegradeRequiredError } from "@/lib/import/persist";
 import { importRunner } from "@/lib/import/runner/import-runner";
 import { publishReviewedContentItem } from "@/lib/content/publish";
@@ -53,6 +55,11 @@ export async function uploadTest(formData: FormData) {
     console.error("admin uploadTest failed", e);
     fail("Could not process the file (parsing or saving).");
   }
+
+  // Kick off L1 (RU) explanation generation for the freshly imported draft — best-effort,
+  // deferred past the redirect (mirrors onboarding_complete's after()). No-op if the
+  // feature isn't configured (l1FeatureEnabled() gates inside triggerL1Generation).
+  after(() => triggerL1Generation(summary.id));
 
   // A re-import can change a published test's data — invalidate the catalog cache
   // (content_item) and this test's per-id content caches (getExamContent/getContentMeta).
@@ -170,5 +177,38 @@ export async function markReviewed(formData: FormData) {
     .where(eq(contentItem.id, id));
   revalidatePath("/admin");
   // #id — якорь на затронутую строку, чтобы редирект не сбрасывал скролл наверх.
+  redirect(`/admin#${id}`);
+}
+
+/**
+ * Re-run L1 (RU) explanation generation for one test (admin review screen).
+ *
+ * Из терминального статуса (pending/done/failed): reset → pending + немедленный
+ * триггер. Из 'generating' триггер НЕ запускается — иначе два прогона пишут
+ * вперемешку и старый может выставить done поверх нового (гонка без поколений
+ * claim'а). Вместо этого залипший 'generating' (упавшая/потерянная Vercel-функция)
+ * force-reset'ится в 'failed' БЕЗ триггера: к повторному клику админа старый прогон
+ * гарантированно мёртв (function timeout << человеческая реакция), и обычная ветка
+ * запускает чистый прогон. Publish от l1_status не зависит.
+ */
+export async function regenerateL1(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect("/admin");
+  const claimed = await db
+    .update(contentItem)
+    .set({ l1Status: "pending" })
+    .where(and(eq(contentItem.id, id), ne(contentItem.l1Status, "generating")))
+    .returning({ id: contentItem.id });
+  if (claimed.length > 0) {
+    await triggerL1Generation(id);
+  } else {
+    // Был 'generating' — только расстопориваем; следующий клик запустит прогон.
+    await db
+      .update(contentItem)
+      .set({ l1Status: "failed" })
+      .where(and(eq(contentItem.id, id), eq(contentItem.l1Status, "generating")));
+  }
+  revalidatePath("/admin");
   redirect(`/admin#${id}`);
 }

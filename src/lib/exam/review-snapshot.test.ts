@@ -1,11 +1,12 @@
 // Юнит-тесты сборщика review-snapshot (D3). Контракт: строки ключа (загружены на
 // submit) → стабильная форма {questions:[{number,qtype,mode,accept,explanation,
-// evidence}]}; не-массив accept → [], отсутствующие explanation/evidence → null.
+// explanationRu,evidence}]}; не-массив accept → [], отсутствующие
+// explanation/explanationRu/evidence → null.
 import { describe, it, expect } from "vitest";
 import { buildReviewSnapshot } from "./review-snapshot";
 
 describe("buildReviewSnapshot", () => {
-  it("маппит строки ключа в snapshot (accept/explanation/evidence)", () => {
+  it("маппит строки ключа в snapshot (accept/explanation/explanationRu/evidence)", () => {
     const snap = buildReviewSnapshot([
       {
         number: 1,
@@ -13,6 +14,7 @@ describe("buildReviewSnapshot", () => {
         mode: "exact",
         accept: ["TRUE"],
         explanation: "why",
+        explanationRu: "почему",
         evidence: { para: "p1", snippet: "s" },
       },
       {
@@ -21,6 +23,7 @@ describe("buildReviewSnapshot", () => {
         mode: "text_accept",
         accept: ["journal", "journals"],
         explanation: null,
+        explanationRu: null,
         evidence: null,
       },
     ]);
@@ -31,12 +34,13 @@ describe("buildReviewSnapshot", () => {
       mode: "exact",
       accept: ["TRUE"],
       explanation: "why",
+      explanationRu: "почему",
       evidence: { para: "p1", snippet: "s" },
     });
     expect(snap.questions[1].evidence).toBeNull();
   });
 
-  it("нормализует не-массив accept → [] и отсутствующие explanation/evidence → null", () => {
+  it("нормализует не-массив accept → [] и отсутствующие explanation/explanationRu/evidence → null", () => {
     const snap = buildReviewSnapshot([
       {
         number: 1,
@@ -44,11 +48,13 @@ describe("buildReviewSnapshot", () => {
         mode: "exact",
         accept: null,
         explanation: undefined,
+        explanationRu: undefined,
         evidence: undefined,
       },
     ]);
     expect(snap.questions[0].accept).toEqual([]);
     expect(snap.questions[0].explanation).toBeNull();
+    expect(snap.questions[0].explanationRu).toBeNull();
     expect(snap.questions[0].evidence).toBeNull();
   });
 });

@@ -249,6 +249,29 @@ export function openaiKey(): string | null {
 }
 
 /**
+ * L1-объяснения (RU) для R/L-контента (миграция 0050) — mirror of writingEvalConfig.
+ * OPTIONAL: без неё контент публикуется без RU-объяснений (answer_key.explanation_ru
+ * остаётся NULL), приложение бутится как обычно. Активируется только когда заданы
+ * ОБА: GEMINI_API_KEY и L1_GEN_MODEL (ключ без модели нечего звать; модель без ключа
+ * нечем). SERVER-ONLY секреты, используются только внутри src/lib/content/l1/.
+ */
+export function l1GenConfig(): { apiKey: string; model: string } | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.L1_GEN_MODEL;
+  if (!apiKey?.trim() || !model?.trim()) return null;
+  return { apiKey: apiKey.trim(), model: model.trim() };
+}
+
+/**
+ * Mirror of writingFeatureEnabled for the L1 generation step. No dedicated internal
+ * secret — the trigger reuses CRON_SECRET (Bearer, checked with isCronAuthorized),
+ * same reasoning as speakingInternalSecret: one more shared secret buys nothing here.
+ */
+export function l1FeatureEnabled(): boolean {
+  return l1GenConfig() !== null && cronSecret() !== null && publicSiteUrl() !== null;
+}
+
+/**
  * Weekly-digest email config (mirror of writingEvalConfig). OPTIONAL: absent →
  * null → the digest job no-ops (no cron misfire, just nothing to send). Активна
  * только когда заданы ОБА EMAIL_PROVIDER_API_KEY и EMAIL_FROM — ключ без адреса

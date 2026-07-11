@@ -4,6 +4,7 @@ import { and, desc, eq, exists, isNotNull, not, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { contentItem, passage, vocabDeck } from "@/db/schema";
 import { telegramConfig, publicSiteUrl } from "@/env";
+import { triggerL1Generation } from "@/lib/content/l1/store";
 import {
   answerCallback,
   downloadFileBytes,
@@ -182,6 +183,12 @@ async function handleHtmlUpload(
     // Зеркало uploadTest в /admin: широкий тег гасит все per-id энтри разом.
     revalidateTag("content_item");
     revalidateTag(contentTag(r.id));
+    // Кикофф L1 (RU) генерации — уже внутри after() (deferTelegramWork), поэтому БЕЗ
+    // вложенного after(): напрямую с .catch, чтобы сбой триггера не ушёл в общий catch
+    // ниже и не превратил успешный импорт в сообщение об ошибке пользователю.
+    await triggerL1Generation(r.id).catch((e) =>
+      console.error("telegram l1 trigger failed", r.id, e),
+    );
     const warn = r.warnings ? `\n⚠️ предупреждений: ${r.warnings}` : "";
     const brand = r.brandWarnings.length
       ? `\n🚩 бренд не вычищен (новый источник?): ${r.brandWarnings.join("; ")} — проверь шапку в раннере.`

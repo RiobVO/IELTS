@@ -34,6 +34,8 @@ import { reviewCard, type Grade } from "@/lib/vocab/srs";
 export interface RevealResult {
   accept: string[];
   explanation: string | null;
+  /** RU-объяснение (L1-слой, 0050) — тот же гейт/путь, что explanation. */
+  explanationRu: string | null;
   evidence: { para?: string; snippet?: string } | null;
 }
 
@@ -48,6 +50,7 @@ interface PracticeKeyRow {
   qtype: string;
   accept: string[];
   explanation: string | null;
+  explanationRu: string | null;
   evidence: unknown;
 }
 
@@ -90,6 +93,7 @@ async function loadPracticeKey(
       qtype: question.qtype,
       accept: answerKey.accept,
       explanation: answerKey.explanation,
+      explanationRu: answerKey.explanationRu,
       evidence: answerKey.evidence,
     })
     .from(question)
@@ -110,6 +114,7 @@ async function loadPracticeKey(
     qtype: row.qtype,
     accept: Array.isArray(row.accept) ? (row.accept as string[]) : [],
     explanation: row.explanation ?? null,
+    explanationRu: row.explanationRu ?? null,
     evidence: row.evidence,
   };
 }
@@ -191,7 +196,7 @@ export async function revealQuestion(
       if (e.para || e.snippet) evidence = e;
     }
 
-    return { accept: key.accept, explanation: key.explanation, evidence };
+    return { accept: key.accept, explanation: key.explanation, explanationRu: key.explanationRu, evidence };
   } catch (e) {
     console.error("revealQuestion failed", e);
     return null;
