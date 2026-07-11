@@ -310,6 +310,9 @@ div[data-n]:first-child > .ak-row{border-top:0}
   .ak-row{grid-template-columns:28px 1fr}
   .ak-chev{grid-column:3;grid-row:1}
   .ak-detail{padding-left:18px}
+  /* Ряд chip-фильтров скроллится (overflow-x:auto + скрытый scrollbar), но обрезался
+     у правого края без намёка, что есть ещё контент — тот же fade, что у rc-seg. */
+  .ak-filter{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent)}
 }
 @media (prefers-reduced-motion:reduce){
   .chip,.ak-row,.ak-chev{transition:none}

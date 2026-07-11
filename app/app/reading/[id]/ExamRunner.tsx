@@ -793,7 +793,9 @@ export default function ExamRunner({
     } else if (audioPhase === "transfer") {
       timerArea = (
         <>
-          <span className="exam-mode-badge" style={badge(true)}>Transfer</span>
+          <span className="exam-mode-badge" style={badge(true)} aria-label="Transfer time">
+            <span className="emb-text">Transfer</span>
+          </span>
           <ExamTimer remainingSeconds={transferRemaining ?? TRANSFER_SECONDS} totalSeconds={TRANSFER_SECONDS} />
         </>
       );
@@ -802,7 +804,9 @@ export default function ExamRunner({
         <>
           {/* P0: режим — серверная истина; в Listening поведение пока одинаковое
               (single-pass), но рейтинг/кап различаются — бейдж показывает честно. */}
-          <span className="exam-mode-badge" style={badge(mode === "mock")}>{mode === "mock" ? "Mock" : "Practice"}</span>
+          <span className="exam-mode-badge" style={badge(mode === "mock")} aria-label={mode === "mock" ? "Mock mode" : "Practice mode"}>
+            <span className="emb-text">{mode === "mock" ? "Mock" : "Practice"}</span>
+          </span>
           <ExamTimer remainingSeconds={audRemaining ?? audioDur} totalSeconds={audioDur} />
         </>
       );
@@ -812,7 +816,9 @@ export default function ExamRunner({
       const total = mockTotalSeconds();
       timerArea = (
         <>
-          <span className="exam-mode-badge" style={badge(true)}>Mock</span>
+          <span className="exam-mode-badge" style={badge(true)} aria-label="Mock mode">
+            <span className="emb-text">Mock</span>
+          </span>
           <ExamTimer remainingSeconds={mockRemaining ?? total} totalSeconds={total} />
         </>
       );
@@ -828,7 +834,9 @@ export default function ExamRunner({
               .etr-scroll), чтобы флекс никогда не ужимал его контейнер уже своего
               контента: раньше badge жил в общем overflow-x:auto ряду и на узких
               телефонах обрезался серединой слова («PRACTIC|») без намёка на скролл. */}
-          <span className="exam-mode-badge" style={badge(false)}>Practice</span>
+          <span className="exam-mode-badge" style={badge(false)} aria-label="Practice mode">
+            <span className="emb-text">Practice</span>
+          </span>
           {/* Менее критичные practice-контролы — своя скроллящаяся полоса: при нехватке
               ширины уезжают вбок, не утягивая за собой essential-бейдж режима. */}
           <div className="etr-scroll">
@@ -2186,6 +2194,14 @@ const READING_CSS = `
   /* Бейдж режима (Practice/Mock/Transfer) — смысловой лейбл, поднимаем до 12px,
      паддинги чуть уже (чип сжимается, а не обрезается). */
   .exam-mode-badge{font-size:12px!important;padding:4px 8px!important}
+}
+/* На 375px (iPhone SE) и дешёвых Android ≤360px бейджу больше некуда сжиматься без
+   обрезки слова серединой («PRACTI») — честнее убрать текст целиком и оставить
+   компактную цветную точку (текст уходит в aria-label). 390px+ (проверено на
+   реальном устройстве) вмещает текст целиком — этот порог их не задевает. */
+@media (max-width:389px){
+  .exam-mode-badge{width:10px!important;height:10px!important;padding:0!important;border-radius:50%!important;overflow:hidden}
+  .exam-mode-badge .emb-text{display:none}
 }
 
 /* === Cambridge skin (шаг 4): бело-сине-графитовый вид реального computer-IELTS.
