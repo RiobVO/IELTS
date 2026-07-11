@@ -9,7 +9,7 @@ import { QuestionFilter } from "@/components/exam/QuestionFilter";
 import { CatalogNotice } from "@/components/app/CatalogNotice";
 import { Input } from "@/components/core/Input";
 import { qtypeLabel, categoryLabel, qtypeDescription } from "@/lib/labels";
-import { setTargetBand } from "./actions";
+import { setTargetBand, joinContentWaitlist } from "./actions";
 
 /** Valid IELTS targets — same scale the onboarding select offers. */
 const BANDS = ["4.0", "4.5", "5.0", "5.5", "6.0", "6.5", "7.0", "7.5", "8.0", "8.5", "9.0"];
@@ -137,6 +137,7 @@ export function PracticeCatalog({
   speakingEnabled = false,
   initialFilter,
   notice,
+  telegramChannelUrl,
 }: {
   tests: PracticeTest[];
   filterCategories: FilterOption[];
@@ -161,6 +162,9 @@ export function PracticeCatalog({
   initialFilter?: InitialFilter;
   /** Почему отбросило в практику: дневной лимит / throttle сабмита. null = без баннера. */
   notice?: "limit" | "throttled" | null;
+  /** Student Telegram channel (TELEGRAM_CHANNEL_URL) — CTA on the empty-catalog
+   *  funnel. null when unset => that CTA is simply not rendered. */
+  telegramChannelUrl: string | null;
 }) {
   const [selCats, setSelCats] = useState<string[]>(initialFilter?.cats ?? []);
   const [selTypes, setSelTypes] = useState<string[]>(initialFilter?.types ?? []);
@@ -235,6 +239,9 @@ export function PracticeCatalog({
     revealCatalog();
   };
   const activeFilterCount = selCats.length + selTypes.length;
+  // Каталог вообще пуст (контент-вайп, §12.3) — отличаем от «фильтр ничего не
+  // нашёл»: та ветка ниже остаётся нетронутой, эта получает CTA-воронку вместо тупика.
+  const catalogEmpty = tests.length === 0;
 
   const skillSection: Section | null = skill === "reading" || skill === "listening" ? skill : null;
   const lockedSkill = skill === "writing" || skill === "speaking" ? skill : null;
@@ -311,7 +318,9 @@ export function PracticeCatalog({
               Practice your weakest type: {drillWeakest.label}
             </button>
           ) : (
-            hero.kind === "first" && (
+            // catalogEmpty: hero already reads "New tests are on the way" (buildHero
+            // fallback) — this baseline-framing note would contradict it.
+            hero.kind === "first" && !catalogEmpty && (
               <div style={S.firstNote}>
                 <Icon name="target" size={16} strokeWidth={2.5} style={{ color: "var(--text-link)", marginTop: 1 }} />
                 <span>Your first test sets your baseline — no pressure, you can pause and resume anytime.</span>
@@ -480,7 +489,13 @@ export function PracticeCatalog({
                 ))}
               </div>
             )}
-            {filtered.length === 0 ? (
+            {catalogEmpty ? (
+              <CatalogEmptyFunnel
+                telegramChannelUrl={telegramChannelUrl}
+                writingEnabled={writingEnabled}
+                speakingEnabled={speakingEnabled}
+              />
+            ) : filtered.length === 0 ? (
               <div style={S.empty}>
                 <div>No tests match this filter yet.</div>
                 {(selCats.length > 0 || selTypes.length > 0 || skillSection) && (
@@ -848,6 +863,86 @@ function TestRow({ t }: { t: PracticeTest }) {
   );
 }
 
+/* ── Catalog empty-state funnel (content-wipe, §12.3) ─────────────────────
+   Whole catalog empty (not just a filter miss) — convert instead of dead-ending:
+   honest "refreshing" framing, two soft CTAs (Telegram channel / waitlist), and
+   live-feature cards so the visit isn't wasted. */
+function CatalogEmptyFunnel({
+  telegramChannelUrl,
+  writingEnabled,
+  speakingEnabled,
+}: {
+  telegramChannelUrl: string | null;
+  writingEnabled: boolean;
+  speakingEnabled: boolean;
+}) {
+  const cards: { href: string; icon: IconName; name: string; desc: string }[] = [
+    { href: "/app/vocabulary", icon: "graduation-cap", name: "Vocabulary", desc: "Grow your word bank with spaced repetition." },
+    { href: "/app/practice/mistakes", icon: "target", name: "Mistake review", desc: "Drill the questions you've gotten wrong before." },
+    ...(writingEnabled ? [{ href: "/app/writing", icon: "pen-line" as IconName, name: "Writing", desc: "Get Task 1 & 2 scored, with a model rewrite." }] : []),
+    ...(speakingEnabled ? [{ href: "/app/speaking", icon: "mic" as IconName, name: "Speaking", desc: "Record Part 2 and get scored on the spot." }] : []),
+  ];
+  return (
+    <div style={S.catalogEmpty}>
+      <span style={S.catalogEmptyIcon}>
+        <Icon name="sparkles" size={26} strokeWidth={2} />
+      </span>
+      <div style={S.catalogEmptyTitle}>New tests are on the way</div>
+      <p style={S.catalogEmptySub}>
+        The Reading and Listening library is being refreshed — check back soon, or get
+        pinged the moment fresh tests land.
+      </p>
+      <div className="pc-empty-ctas" style={S.catalogEmptyCtas}>
+        {telegramChannelUrl && (
+          <Button variant="secondary" trailingIcon="arrow-up-right" href={telegramChannelUrl}>
+            Join our Telegram channel
+          </Button>
+        )}
+        <ContentWaitlistCta />
+      </div>
+      <div style={S.catalogEmptyMeanwhile}>
+        <span style={S.catalogEmptyMeanwhileLabel}>Meanwhile, keep your streak alive</span>
+        <div className="pc-empty-cards" style={S.catalogEmptyCards}>
+          {cards.map((c) => (
+            <Link key={c.href} href={c.href} className="pc-empty-card" style={S.catalogEmptyCard}>
+              <span style={S.catalogEmptyCardIcon}>
+                <Icon name={c.icon} size={18} strokeWidth={2.2} />
+              </span>
+              <span>
+                <span style={S.catalogEmptyCardName}>{c.name}</span>
+                <span style={S.catalogEmptyCardDesc}>{c.desc}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Waitlist CTA — same optimistic pattern as WaitlistCta in app/upgrade/PricingScreen.tsx:
+ * flip to "joined" on click, fire the server action best-effort (analytics isn't
+ * critical, and there's nothing sensible to roll back to on failure).
+ */
+function ContentWaitlistCta() {
+  const [joined, setJoined] = useState(false);
+  return (
+    <Button
+      variant={joined ? "secondary" : "primary"}
+      icon={joined ? "circle-check" : "bell"}
+      disabled={joined}
+      onClick={() => {
+        if (joined) return;
+        setJoined(true);
+        void joinContentWaitlist().catch(() => {});
+      }}
+    >
+      {joined ? "You're on the list" : "Notify me when new tests land"}
+    </Button>
+  );
+}
+
 /* ── Locked-skill panel (Writing / Speaking) — inline, non-destructive ───── */
 function LockedPanel({ skill, onBack }: { skill: "writing" | "speaking"; onBack: () => void }) {
   const sk = COMING[skill];
@@ -918,6 +1013,8 @@ const CSS = `
 .pc-bars{order:2}
 .pc-skillcard:hover{transform:translateY(-3px);box-shadow:var(--shadow-solid-lg)}
 .pc-coming-item:hover{border-color:var(--brand-border)!important;background:var(--surface-hover)!important}
+.pc-empty-cards{grid-template-columns:1fr}
+.pc-empty-card:hover{border-color:var(--brand-border)!important;background:var(--surface-hover)!important}
 .pc-row:hover{transform:translateY(-2px);border-color:var(--brand-border)!important;box-shadow:var(--shadow-solid-lg)}
 /* На телефоне ряд теста стекается: действие (Resume/Start) уходит футер-баром на всю
    ширину под заголовок — иначе оно жмёт длинный тайтл в узкую колонку (рвётся на 8-9 строк).
@@ -950,6 +1047,7 @@ const CSS = `
 @media (min-width:560px){
   .pc-skills{grid-template-columns:repeat(2,1fr);gap:16px}
   .pc-showall{height:28px}
+  .pc-empty-cards{grid-template-columns:repeat(2,1fr)}
 }
 @media (min-width:768px){
   .pc-wrap{padding:32px 28px 72px}
@@ -1062,6 +1160,20 @@ const S: Record<string, CSSProperties> = {
   showAll: { display: "inline-flex", alignItems: "center", gap: 5, padding: "0 13px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "var(--transition-colors)" },
   resultCount: { fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-muted)" },
   empty: { padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)" },
+
+  // Catalog empty-state funnel (whole catalog empty — §12.3 content-wipe)
+  catalogEmpty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "44px 24px", textAlign: "center", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)" },
+  catalogEmptyIcon: { display: "grid", placeItems: "center", width: 56, height: 56, borderRadius: "50%", background: "var(--brand-subtle)", color: "var(--text-link)", marginBottom: 14 },
+  catalogEmptyTitle: { fontFamily: "var(--font-ui)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)" },
+  catalogEmptySub: { margin: "8px 0 0", fontSize: 14, lineHeight: 1.55, color: "var(--text-muted)", maxWidth: "48ch" },
+  catalogEmptyCtas: { display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12, marginTop: 22 },
+  catalogEmptyMeanwhile: { marginTop: 36, width: "100%", borderTop: "1px solid var(--border-subtle)", paddingTop: 26 },
+  catalogEmptyMeanwhileLabel: { display: "block", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 14 },
+  catalogEmptyCards: { display: "grid", gap: 12 },
+  catalogEmptyCard: { display: "flex", alignItems: "flex-start", gap: 10, textAlign: "left", padding: "14px 16px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", color: "inherit", textDecoration: "none", transition: "var(--transition-colors)" },
+  catalogEmptyCardIcon: { flex: "none", display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: "var(--radius-sm)", background: "var(--brand-subtle)", color: "var(--text-link)" },
+  catalogEmptyCardName: { display: "block", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)" },
+  catalogEmptyCardDesc: { display: "block", fontSize: 12.5, lineHeight: 1.4, color: "var(--text-muted)", marginTop: 2 },
 
   // Test row
   row: { display: "flex", alignItems: "center", gap: 18, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: "18px 20px", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },

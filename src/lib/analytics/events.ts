@@ -18,6 +18,7 @@ export const AnalyticsEvent = {
   CheckoutBlocked: "checkout_blocked",
   PaymentFailed: "payment_failed",
   PaymentWaitlist: "payment_waitlist",
+  ContentWaitlist: "content_waitlist",
 } as const;
 
 /** Свойства каждого события (ключ объекта = имя события в PostHog). */
@@ -59,6 +60,9 @@ export type EventProperties = {
   /** Клик по «Notify me when paid plans launch» пока оплата не запущена —
    *  измеряем спрос на платные тарифы до онбординга мерчанта. */
   payment_waitlist: { tier: string; period_months: number };
+  /** Клик по «Notify me when new tests land» в пустом каталоге (контент-вайп,
+   *  BRIEF §12.3) — измеряем спрос на свежий контент, пока библиотека пополняется. */
+  content_waitlist: { source: "catalog" };
 };
 
 /** Имена событий — производны от контракта свойств, чтобы не разъехались. */
