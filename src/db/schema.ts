@@ -443,7 +443,9 @@ export const referral = pgTable("referral", {
   inviterId: uuid("inviter_id")
     .notNull()
     .references(() => profile.id, { onDelete: "cascade" }),
-  inviteeId: uuid("invitee_id").references(() => profile.id, {
+  // UNIQUE (migration 0053): idempotency for linkOAuthReferral's onConflictDoNothing
+  // — the DB trigger's WHERE NOT EXISTS has no equivalent for app-code inserts.
+  inviteeId: uuid("invitee_id").unique().references(() => profile.id, {
     onDelete: "set null",
   }),
   code: text("code").notNull().unique(),

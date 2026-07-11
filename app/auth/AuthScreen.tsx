@@ -227,11 +227,18 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
 
   // OAuth-вход через клиентский Supabase: штатный путь, AuthScreen уже client.
   // redirectTo несёт исходный next — callback/route.ts обменяет код и уведёт туда.
+  // ref тоже кладём в redirectTo (не в OAuth options.data — Google сам пишет
+  // raw_user_meta_data своими полями, наш ref_code туда не проехал бы): callback
+  // читает его из query и линкует реферала сам, т.к. signup-триггер получает от
+  // Google метадату без ref_code (был gap — реферал терялся у каждого, кто
+  // регистрируется через Google, а не email-форму).
   const googleSignIn = async () => {
     const supabase = createClient();
+    const params = new URLSearchParams({ next });
+    if (refCode) params.set("ref", refCode);
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+      options: { redirectTo: `${location.origin}/auth/callback?${params.toString()}` },
     });
   };
 
