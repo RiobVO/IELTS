@@ -28,6 +28,7 @@ import {
   audioTooLargeMessage,
   MAX_IMPORT_AUDIO_MB,
 } from "@/lib/import/audio-cap";
+import { audioObjectKey } from "@/lib/import/audio-key";
 
 /**
  * Telegram-бот импорта контента (admin-канал, аналог /admin). Умеет:
@@ -218,7 +219,7 @@ async function handleHtmlUpload(
     const isListening = r.hasAudio || /listening/i.test(r.title);
     const audioHint = r.audioTooLarge
       ? `\n🎧 Аудио в файле больше ${MAX_IMPORT_AUDIO_MB} MB и НЕ прикреплено — ` +
-        "пережми mp3 (≤64–96 kbps mono) и пришли отдельным файлом."
+        "пережми mp3 (mono, 48 kbps, 32 kHz) и пришли отдельным файлом."
       : !r.hasAudio && isListening
         ? "\n🎧 Это Listening без аудио в файле — пришли mp3 следующим файлом."
         : r.hasAudio
@@ -262,12 +263,14 @@ async function handleHtmlUpload(
 /**
  * mp3 -> Supabase Storage -> привязка к последнему Listening-тесту. Аудио одно на
  * тест; пишем его в passage order=1 (страница экзамена берёт первый passage с
- * audio_path). Путь в bucket = `<contentItemId>.mp3` (upsert идемпотентен).
+ * audio_path). Путь в bucket = `<contentItemId>-<hash>.mp3` (см. audioObjectKey) —
+ * версия в имени нужна из-за годового CDN-кэша (см. storage.ts); upsert по
+ * итоговому пути остаётся идемпотентным (те же байты -> тот же путь).
  */
 async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
   // Ранний size-гейт ПО заявленному Telegram file_size — ДО поиска теста и скачивания
   // (образец — vocab-гейт). Бюджет Storage 1 GB: несжатый/стерео mp3 в bucket не пускаем.
-  // Actionable-ответ (пережать до ≤64–96 kbps mono) вместо тихого падения на аплоаде.
+  // Actionable-ответ (пережать до mono, 48 kbps, 32 kHz) вместо тихого падения на аплоаде.
   if (typeof file.file_size === "number" && !withinAudioCap(file.file_size)) {
     await sendMessage(chatId, audioTooLargeMessage(file.file_size));
     return;
@@ -317,7 +320,7 @@ async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
       return;
     }
     const url = await uploadAudio(
-      `${test.id}.mp3`,
+      audioObjectKey(test.id, bytes),
       bytes,
       file.mime_type ?? "audio/mpeg",
     );
