@@ -11,7 +11,9 @@ import { db } from "@/db";
 import { attempt, contentItem, leaderboardEntry } from "@/db/schema";
 import { categoryLabel, qtypeLabel, LISTENING_CATEGORIES } from "@/lib/labels";
 import { computeBandPlan, type BandPlan, type BandPlanWeakType } from "@/lib/progress/band-plan";
+import { getExamCountdown, type ExamCountdown } from "@/lib/progress/exam-countdown";
 import { AppShell } from "./_AppShell";
+import { ExamDateEditor } from "./ExamDateEditor";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
 import { Icon, type IconName } from "@/components/core/icons";
@@ -161,6 +163,10 @@ export default async function Dashboard() {
   const xp = profile?.xp ?? 0;
   const rating = profile?.rating ?? 1000;
   const bandTarget = profile?.target_band != null ? Number(profile.target_band) : null;
+  const examDate = (profile?.exam_date as string | null) ?? null;
+  // profile.timezone defaults to "UTC" at the DB level (schema.ts) — the ?? here
+  // is just a defensive fallback for a stale/null-select edge, not the real default.
+  const examCountdown = examDate ? getExamCountdown(examDate, new Date(), (profile?.timezone as string | null) ?? "UTC") : null;
   const globalRank = rankRows[0]?.rank ?? null;
   // Ранг читается свежим запросом, знаменатель — из 5-минутного data-cache: у
   // нового участника лиги кэш может отставать («#N+1 of N»). Кламп снизу по
@@ -352,6 +358,9 @@ export default async function Dashboard() {
         <div className="dash-col-rail">
           {/* Band readout */}
           <BandReadout band={bandLatest} target={bandTarget} source={bandSrc} hasAttempts={hasAttempts} />
+
+          {/* Exam-date countdown (BRIEF §12.3) — set at onboarding, editable here */}
+          <ExamCountdownCard examDate={examDate} countdown={examCountdown} />
 
           {/* Plan to target band (W2-5) — дистанция + дрилл недели из bandPlan */}
           <PlanCard plan={bandPlan} hasAttempts={hasAttempts} />
@@ -701,6 +710,55 @@ function BandReadout({
   );
 }
 
+/* Exam-date countdown (BRIEF §12.3) — three honest states: no date set (soft CTA
+   to set one), an upcoming/today date (headline day-count + small Edit toggle),
+   and a passed date (prompt to pick a new one). The countdown itself is computed
+   server-side (getExamCountdown); only the edit form is a client island. */
+function ExamCountdownCard({ examDate, countdown }: { examDate: string | null; countdown: ExamCountdown | null }) {
+  if (!examDate || !countdown) {
+    return (
+      <div style={{ ...S.card, ...S.examCard }}>
+        <div style={S.examTitle}>Set your exam date</div>
+        <p style={S.examText}>
+          We&apos;ll count down to it and shape your weekly plan around the time you have left.
+        </p>
+        <ExamDateEditor initialDate={null} autoOpen />
+      </div>
+    );
+  }
+
+  if (countdown.status === "past") {
+    return (
+      <div style={{ ...S.card, ...S.examCard }}>
+        <div style={S.examTitle}>Your exam date has passed</div>
+        <p style={S.examText}>Set a new date to keep tracking your countdown.</p>
+        <ExamDateEditor initialDate={examDate} autoOpen />
+      </div>
+    );
+  }
+
+  const dateLabel = new Date(`${examDate}T00:00:00Z`).toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
+  return (
+    <div style={{ ...S.card, ...S.examCard }}>
+      <div style={S.examHead}>
+        <div>
+          <div style={S.examNum}>{countdown.days}</div>
+          <div style={S.examSub}>
+            {countdown.days === 0 ? "Exam day is today!" : `day${countdown.days === 1 ? "" : "s"} until your exam`}
+          </div>
+        </div>
+        <ExamDateEditor initialDate={examDate} />
+      </div>
+      <div style={S.examDateLabel}>{dateLabel}</div>
+    </div>
+  );
+}
+
 /* Plan to target band (W2-5, BRIEF §12.3 шаг 2) — компакт-ридаут дистанции до
    target + рекомендованный drill недели по слабейшему типу. Общее ядро с weekly
    digest (computeBandPlan, src/lib/progress/band-plan.ts) — тот же дрилл юзер
@@ -974,6 +1032,15 @@ const S: Record<string, React.CSSProperties> = {
   vocabBadgeStreak: { display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--streak)", background: "var(--streak-subtle)", borderRadius: "var(--radius-full)", padding: "4px 10px" },
   vocabBadgeGoal: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-secondary)", background: "var(--surface-inset)", borderRadius: "var(--radius-full)", padding: "4px 10px" },
   vocabCta: { alignSelf: "flex-start" },
+
+  /* Exam-date countdown rail card */
+  examCard: { padding: 18, display: "flex", flexDirection: "column", gap: 10 },
+  examTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)" },
+  examText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.5, color: "var(--text-muted)", margin: 0 },
+  examHead: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  examNum: { fontFamily: "var(--font-mono)", fontSize: 40, lineHeight: 1, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" },
+  examSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)", marginTop: 4 },
+  examDateLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)" },
 
   /* Plan-to-target rail card */
   planCard: { padding: 18, display: "flex", flexDirection: "column", gap: 10 },

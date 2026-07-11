@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { profile } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { captureServer } from "@/lib/analytics/server";
+import { validExamDate } from "@/lib/progress/exam-countdown";
 
 function fail(message: string): never {
   redirect(`/app/onboarding?error=${encodeURIComponent(message)}`);
@@ -26,6 +27,7 @@ export async function completeOnboarding(formData: FormData) {
   const displayName = String(formData.get("display_name") ?? "").trim();
   const regionId = String(formData.get("region_id") ?? "").trim();
   const targetBand = String(formData.get("target_band") ?? "").trim();
+  const examDateRaw = String(formData.get("exam_date") ?? "").trim();
 
   if (displayName.length < 2 || displayName.length > 40) {
     fail("Enter a display name (2–40 characters).");
@@ -35,6 +37,9 @@ export async function completeOnboarding(formData: FormData) {
   if (!Number.isFinite(band) || band < 4 || band > 9 || (band * 2) % 1 !== 0) {
     fail("Pick a target band.");
   }
+  // exam_date is optional — an invalid/out-of-range value is dropped silently
+  // (null) rather than failing onboarding over a non-essential field.
+  const examDate = validExamDate(examDateRaw) ? examDateRaw : null;
 
   try {
     await db
@@ -44,6 +49,7 @@ export async function completeOnboarding(formData: FormData) {
         // numeric column → Drizzle expects a string; empty select → no region.
         regionId: regionId === "" ? null : regionId,
         targetBand: band.toFixed(1),
+        examDate,
         onboardedAt: new Date(),
       })
       .where(eq(profile.id, user.id));

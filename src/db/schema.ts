@@ -166,6 +166,11 @@ export const profile = pgTable(
     longestStreak: integer("longest_streak").notNull().default(0),
     lastActivityDate: date("last_activity_date"),
     targetBand: numeric("target_band", { precision: 2, scale: 1 }),
+    // Exam date for the dashboard countdown (migration 0049, BRIEF §12.3). NULL =
+    // not set (no countdown shown). Plain calendar date, no time component — the
+    // countdown is computed against profile.timezone in exam-countdown.ts, not
+    // stored pre-converted.
+    examDate: date("exam_date"),
     timezone: text("timezone").notNull().default("UTC"),
     referralCode: text("referral_code").notNull().unique(),
     referredBy: uuid("referred_by").references((): any => profile.id, {
