@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { skinRunnerGate, skinRunnerBrand, runnerBrandResidue } from "./skin-runner";
+import {
+  skinRunnerGate,
+  skinRunnerBrand,
+  skinRunnerTableScroll,
+  runnerBrandResidue,
+} from "./skin-runner";
 
 describe("skinRunnerGate", () => {
   const gate =
@@ -137,6 +142,53 @@ describe("skinRunnerBrand", () => {
     const r = skinRunnerBrand(newSource);
     expect(r).not.toMatch(/t\.me\//i);
     expect(r).not.toContain("SomeNewChannel");
+  });
+});
+
+describe("skinRunnerTableScroll", () => {
+  const withTable =
+    '<html><head><style>.matching-table{width:100%;overflow:hidden}</style></head>' +
+    '<body><div class="question-content"><table class="matching-table" data-letters="A,B,C,D,E,F,G,H,I"></table></div></body></html>';
+
+  it("инжектит мобильный table-scroll style перед </head> при наличии .matching-table", () => {
+    const out = skinRunnerTableScroll(withTable);
+    expect(out).toContain("bando-mtable-scroll");
+    expect(out.indexOf("bando-mtable-scroll")).toBeLessThan(out.indexOf("</head>"));
+    // после оригинального стиля файла → override выигрывает по порядку источника
+    expect(out.indexOf(".matching-table{width:100%")).toBeLessThan(out.indexOf("bando-mtable-scroll"));
+    expect(out).toMatch(/@media\(max-width:680px\)\{\.matching-table\{display:block;overflow-x:auto;max-width:100%\}\}/);
+  });
+
+  it("no-op без .matching-table (шаблоны без сеток / listening)", () => {
+    const noTable = '<html><head></head><body><table class="score-table"></table></body></html>';
+    expect(skinRunnerTableScroll(noTable)).toBe(noTable);
+  });
+
+  it("no-op без </head> (нет безопасной точки инъекции)", () => {
+    const noHead = '<div><table class="matching-table"></table></div>';
+    expect(skinRunnerTableScroll(noHead)).toBe(noHead);
+  });
+
+  it("идемпотентно — повторный инжект исключён маркером", () => {
+    const once = skinRunnerTableScroll(withTable);
+    expect(skinRunnerTableScroll(once)).toBe(once);
+  });
+
+  it("skinRunnerBrand подхватывает table-scroll в пайплайне (гейт на .matching-table)", () => {
+    const out = skinRunnerBrand(withTable);
+    expect(out).toContain("bando-mtable-scroll");
+  });
+
+  // Codex 2026-07-11: brand-ранний-return срабатывал ДО table-инжекта — уже
+  // ребрендированный html (double-skin путь) оставался без мобильного фикса.
+  it("уже ребрендированный html (bando-brand-skin) всё равно получает table-scroll", () => {
+    const branded =
+      '<html><head><style id="bando-brand-skin"></style></head>' +
+      '<body><table class="matching-table"></table></body></html>';
+    const out = skinRunnerBrand(branded);
+    expect(out).toContain("bando-mtable-scroll");
+    // и идемпотентность цепочки целиком: повторный прогон ничего не добавляет
+    expect(skinRunnerBrand(out)).toBe(out);
   });
 });
 

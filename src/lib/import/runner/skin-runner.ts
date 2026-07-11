@@ -42,6 +42,39 @@ export function skinRunnerGate(html: string): string {
   return html.replace(/<\/head>/i, `${GATE_SKIN}</head>`);
 }
 
+// RUNTIME (read-time) фикс мобильного горизонтального скролла широких matching-таблиц.
+// Симптом (второй published reading — таблица A–I, вопросы 14-19): 9-колоночная
+// .matching-table шире мобильного вьюпорта (~479px min-content > ~343px панель вопросов).
+// В этом шаблоне таблица лежит ПРЯМО в .question-content (overflow:visible), поэтому её
+// переполнение всплывает до .questions-container — а у него overflow-y:auto, что по
+// CSS-спеке ДЕЛАЕТ overflow-x вычисляемым в auto → именно он становится горизонтальным
+// скроллером. В .questions-container же сидит .question-rubric с инструкцией, поэтому
+// свайп по таблице уносит текст «Reading Passage 2 has nine paragraphs» из вьюпорта.
+// Фикс: делаем САМУ таблицу собственным горизонтальным скроллером (display:block +
+// overflow-x:auto) — её переполнение больше не всплывает наверх, .questions-container не
+// скроллится, инструкция стоит на месте, а колонки таблицы доступны свайпом внутри неё.
+// Селектор узкий — .matching-table, НЕ .question-content и НЕ table в целом: не трогает
+// full-width результат/score-таблицы (<table style="width:100%">) и прочие типы вопросов.
+// Только ≤680px (существующий брейкпоинт раннера): на desktop переполнения нет, а
+// display:block там сжал бы full-width таблицу до min-content — фикс не нужен и вреден.
+// Инъекция перед </head> (после стилей файла → выигрывает по порядку источника; longhand
+// overflow-x перекрывает shorthand overflow:hidden таблицы в passage-шаблоне). Гейт на
+// наличие .matching-table: без сеток — no-op (listening/шаблоны без таблиц не пачкаем,
+// контракт no-op их тестов сохранён). Идемпотентно (маркер), no-op без </head>.
+const TABLE_SCROLL_MARK = "bando-mtable-scroll";
+const TABLE_SCROLL_STYLE = `<style id="${TABLE_SCROLL_MARK}">@media(max-width:680px){.matching-table{display:block;overflow-x:auto;max-width:100%}}</style>`;
+
+/**
+ * Изолирует горизонтальный скролл широких `.matching-table` на самой таблице (мобайл).
+ * No-op, если в html нет `.matching-table`, нет `</head>`, или уже пропатчено (маркер).
+ */
+export function skinRunnerTableScroll(html: string): string {
+  if (html.includes(TABLE_SCROLL_MARK)) return html; // уже пропатчено
+  if (!/class=["'][^"']*matching-table/.test(html)) return html; // нет широких сеток
+  if (!/<\/head>/i.test(html)) return html; // нет безопасной точки инъекции
+  return html.replace(/<\/head>/i, `${TABLE_SCROLL_STYLE}</head>`);
+}
+
 // RUNTIME (read-time) bando re-brand шапки раннера. Импортированные computer-IELTS
 // файлы несут В ШАПКЕ чужой брендинг: картинку-логотип источника (img.brand-logo),
 // стилизованный вордмарк «IELTS™» (span.logo) и КЛИКАБЕЛЬНЫЙ чужой telegram-канал
@@ -91,9 +124,13 @@ const RE_LOGO_TEXT = /<(span|div)\b[^>]*class=["'](?:ielts-)?logo["'][^>]*>[\s\S
  * трафик-очистка — no-op (резать уже нечего).
  */
 export function skinRunnerBrand(html: string): string {
-  if (html.includes("bando-brand-skin")) return html; // уже ребрендировано
-
-  let out = html.replace(RE_TELEGRAM, ""); // тег чужого канала в шапке
+  // Мобильный скролл широких matching-таблиц — ДО brand-раннего-return: у него
+  // СВОЙ маркер идемпотентности (bando-mtable-scroll), и уже ребрендированный
+  // html (double-skin путь) обязан получить table-CSS (Codex 2026-07-11). Гейт
+  // на .matching-table внутри → на шаблонах без таблиц это no-op.
+  let out = skinRunnerTableScroll(html);
+  if (out.includes("bando-brand-skin")) return out; // уже ребрендировано
+  out = out.replace(RE_TELEGRAM, ""); // тег чужого канала в шапке
   out = out.replace(RE_TME_ANCHOR, "");
   // Чужой канал живёт ещё и в JS «share-result card» (CHANNEL/CHANNEL_URL =
   // '@chan'/'t.me/chan') + любых остаточных t.me-ссылках. Вычищаем везде, иначе
