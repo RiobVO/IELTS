@@ -118,11 +118,18 @@ export default async function AdminPage({
         <p style={S.sub}>
           {profile.email} · {items.length} test(s)
         </p>
-        {/* Sprint pilot cohort (BRIEF §12.3) isn't on the AdminNav tab-bar — a direct
-            link is the only path in besides typing the URL. */}
+        {/* Sprint pilot cohort (BRIEF §12.3) — /app/sprint is deliberately NOT on the
+            main site nav (it's meant to be shared only via a direct link posted in the
+            owner's Telegram channel, so it filters to genuinely interested people).
+            Keeping the join link here too — admin-only, easy to find without hunting
+            for the URL, still invisible to regular site visitors. */}
         <p style={S.sub}>
           <Link href="/admin/sprint" style={{ color: "var(--text-link)", fontWeight: 700 }}>
             Exam sprint signups →
+          </Link>
+          {" · "}
+          <Link href="/app/sprint" style={{ color: "var(--text-link)", fontWeight: 700 }}>
+            Join page (share this URL in Telegram) →
           </Link>
         </p>
 
