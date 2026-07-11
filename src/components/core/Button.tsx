@@ -69,7 +69,7 @@ export function Button({
     display: "inline-flex", alignItems: "center", justifyContent: "center", gap: s.gap,
     height: s.height, minWidth: s.height, padding: s.padding, width: fullWidth ? "100%" : undefined,
     marginBottom: edge && !pressed ? edge : 0,
-    fontFamily: "var(--font-ui)", fontSize: s.font, fontWeight: "var(--weight-extrabold)",
+    fontFamily: "var(--font-ui)", fontSize: s.font, fontWeight: "var(--weight-bold)",
     letterSpacing: "0.01em", lineHeight: 1,
     whiteSpace: "nowrap",
     color: cfg.fg, background: hover && !isOff ? cfg.hover : cfg.bg,
