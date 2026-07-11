@@ -3,7 +3,7 @@
 // explanationRu,evidence}]}; не-массив accept → [], отсутствующие
 // explanation/explanationRu/evidence → null.
 import { describe, it, expect } from "vitest";
-import { buildReviewSnapshot } from "./review-snapshot";
+import { buildReviewSnapshot, normalizeEvidence } from "./review-snapshot";
 
 describe("buildReviewSnapshot", () => {
   it("маппит строки ключа в snapshot (accept/explanation/explanationRu/evidence)", () => {
@@ -56,5 +56,25 @@ describe("buildReviewSnapshot", () => {
     expect(snap.questions[0].explanation).toBeNull();
     expect(snap.questions[0].explanationRu).toBeNull();
     expect(snap.questions[0].evidence).toBeNull();
+  });
+});
+
+describe("normalizeEvidence — {part, text} alias (импорт кладёт evidence несогласованно)", () => {
+  it("канон {para, snippet} проходит как есть", () => {
+    expect(normalizeEvidence({ para: "p1", snippet: "s" })).toEqual({ para: "p1", snippet: "s" });
+  });
+
+  it("{part, text} нормализуется в {para, snippet} (part — число)", () => {
+    expect(normalizeEvidence({ part: 1, text: "It had to be playable" })).toEqual({
+      para: "1",
+      snippet: "It had to be playable",
+    });
+  });
+
+  it("нет snippet/text ни в каком виде → null (реально пусто)", () => {
+    expect(normalizeEvidence({ para: "p1" })).toBeNull();
+    expect(normalizeEvidence({})).toBeNull();
+    expect(normalizeEvidence(null)).toBeNull();
+    expect(normalizeEvidence("garbage")).toBeNull();
   });
 });

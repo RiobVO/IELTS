@@ -144,11 +144,13 @@ export async function locateEvidence(
     if (!key) return null;
     // qtype-гейт на СЕРВЕРЕ: для matching_info/matching_headings para ≡ ответ.
     if (LOCATE_BLOCKED_QTYPES.has(key.qtype)) return null;
-    const raw = key.evidence as { para?: unknown } | null;
-    if (raw && typeof raw === "object" && typeof raw.para === "string" && raw.para) {
-      return { para: raw.para };
-    }
-    return null;
+    // Только para (не snippet) — normalizeEvidence требует непустой snippet, что
+    // отсекло бы законный кейс «para/part есть, snippet/text пуст» для локатора,
+    // которому snippet вообще не нужен. Тот же alias part→para, что в normalizeEvidence.
+    const raw = key.evidence as { para?: unknown; part?: unknown } | null;
+    const para = raw?.para ?? raw?.part;
+    const paraStr = typeof para === "string" ? para : typeof para === "number" ? String(para) : "";
+    return paraStr ? { para: paraStr } : null;
   } catch (e) {
     console.error("locateEvidence failed", e);
     return null;
@@ -187,12 +189,19 @@ export async function revealQuestion(
     const key = await loadPracticeKey(attemptId, questionNumber);
     if (!key) return null;
 
-    const raw = key.evidence as { para?: unknown; snippet?: unknown } | null;
+    // part/text — тот же ключевой alias, что normalizeEvidence (review-snapshot.ts):
+    // часть импортированных файлов кладёт evidence как {part, text}, не {para, snippet}.
+    // Тут держим оригинальную «либо-либо»-семантику (para ИЛИ snippet), не строгий
+    // normalizeEvidence — RevealResult.evidence оба поля делает опциональными нарочно.
+    const raw = key.evidence as { para?: unknown; part?: unknown; snippet?: unknown; text?: unknown } | null;
     let evidence: RevealResult["evidence"] = null;
     if (raw && typeof raw === "object") {
+      const paraRaw = raw.para ?? raw.part;
+      const snippetRaw = raw.snippet ?? raw.text;
       const e: { para?: string; snippet?: string } = {};
-      if (typeof raw.para === "string" && raw.para) e.para = raw.para;
-      if (typeof raw.snippet === "string" && raw.snippet) e.snippet = raw.snippet;
+      if (typeof paraRaw === "string" && paraRaw) e.para = paraRaw;
+      else if (typeof paraRaw === "number") e.para = String(paraRaw);
+      if (typeof snippetRaw === "string" && snippetRaw) e.snippet = snippetRaw;
       if (e.para || e.snippet) evidence = e;
     }
 

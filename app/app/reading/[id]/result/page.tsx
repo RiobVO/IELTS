@@ -10,7 +10,7 @@ import { getContentMeta } from "@/lib/content/exam-content";
 import { getProfile, getUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { grade, type GradeKey } from "@/lib/grading/grade";
-import type { ReviewSnapshot } from "@/lib/exam/review-snapshot";
+import { normalizeEvidence, type ReviewSnapshot } from "@/lib/exam/review-snapshot";
 import {
   blindSpotTag,
   buildShareHeadline,
@@ -288,7 +288,7 @@ export default async function ResultPage({
         accept: (r.accept as string[]) ?? [],
         explanation: r.explanation,
         explanationRu: r.explanationRu,
-        evidence: (r.evidence as { para: string; snippet: string } | null) ?? null,
+        evidence: normalizeEvidence(r.evidence),
       }));
 
   const keys: GradeKey[] = rows.map((r) => ({
