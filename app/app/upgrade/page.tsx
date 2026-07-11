@@ -66,6 +66,7 @@ export default async function UpgradePage({
         speakingEnabled={speakingFeatureEnabled()}
         paymentsLive={paymentsLive()}
         preordered={preordered}
+        sourcePage="upgrade"
         error={error}
       />
     </AppShell>

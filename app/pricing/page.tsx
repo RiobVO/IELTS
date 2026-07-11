@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Logo } from "@/components/core/Logo";
 import { findPlan } from "@/lib/payments/plans";
+import { paymentsLive } from "@/lib/payments";
 import { speakingFeatureEnabled } from "@/env";
 import PricingScreen from "../app/upgrade/PricingScreen";
 
@@ -32,9 +33,21 @@ const footLink: React.CSSProperties = {
  * auth-gated). Static — prices come from the PLANS catalog at build/request.
  */
 export default function PricingPage() {
+  // Early-bird цены (§12) — та же ветка, что и /app/upgrade: гость на /pricing
+  // теперь тоже видит зачёркнутую регулярную цену + бейдж, пока paymentsLive=false.
   const price = {
-    premium: { monthly: findPlan("premium", 1)!.amount, annual: findPlan("premium", 12)!.amount },
-    ultra: { monthly: findPlan("ultra", 1)!.amount, annual: findPlan("ultra", 12)!.amount },
+    premium: {
+      monthly: findPlan("premium", 1)!.amount,
+      annual: findPlan("premium", 12)!.amount,
+      earlyBirdMonthly: findPlan("premium", 1)!.earlyBirdAmount,
+      earlyBirdAnnual: findPlan("premium", 12)!.earlyBirdAmount,
+    },
+    ultra: {
+      monthly: findPlan("ultra", 1)!.amount,
+      annual: findPlan("ultra", 12)!.amount,
+      earlyBirdMonthly: findPlan("ultra", 1)!.earlyBirdAmount,
+      earlyBirdAnnual: findPlan("ultra", 12)!.earlyBirdAmount,
+    },
   };
 
   return (
@@ -50,7 +63,7 @@ export default function PricingPage() {
       </header>
 
       <main style={{ flex: 1, width: "100%", maxWidth: 1000, margin: "0 auto" }}>
-        <PricingScreen current="basic" price={price} ctaHref="/auth?next=/app/upgrade" speakingEnabled={speakingFeatureEnabled()} />
+        <PricingScreen current="basic" price={price} ctaHref="/auth?next=/app/upgrade" speakingEnabled={speakingFeatureEnabled()} paymentsLive={paymentsLive()} sourcePage="pricing" />
       </main>
 
       <footer style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
