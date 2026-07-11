@@ -128,15 +128,18 @@ export const UNKNOWN_TYPE_FALLBACK: QuestionType = "short_answer";
 const UNKNOWN_TYPE_MARK = "→ fell back to";
 
 export function unknownTypeWarning(n: number, rawLabel: string): string {
-  return `Q${n}: unknown type ${JSON.stringify(rawLabel)} ${UNKNOWN_TYPE_MARK} ${UNKNOWN_TYPE_FALLBACK}`;
+  // Кап на label: warning оседает в import_warnings и уходит в Telegram-сообщение —
+  // мусорный мегабайтный ярлык не должен раздувать ни БД, ни ответ бота (лимит 4096).
+  const label = rawLabel.length > 120 ? `${rawLabel.slice(0, 120)}…` : rawLabel;
+  return `Q${n}: unknown type ${JSON.stringify(label)} ${UNKNOWN_TYPE_MARK} ${UNKNOWN_TYPE_FALLBACK}`;
 }
 
-// P1: источник вовсе не указал тип (пустой/whitespace label) — informational, НЕ блок.
-// Грейдинг маршрутизируется по answer_key.mode (exact/text_accept/mcq_set), не по qtype,
-// поэтому пустой тип безвреден для оценки (ломается лишь вкладка "By type" на /result —
-// техдолг). Намеренно БЕЗ UNKNOWN_TYPE_MARK, чтобы isUnknownTypeWarning его не ловил.
+// Источник вовсе не указал тип (пустой/whitespace label) — отдельный от unknownTypeWarning
+// envelope (не несёт UNKNOWN_TYPE_MARK, поэтому FALLBACK_ENVELOPE его не ловит), но с
+// QTYPE hard-block (docs/authoring-spec.md, 2026-07-11) публикация блокируется наравне с
+// непустым нераспознанным типом — см. isUnresolvedQuestionTypeWarning ниже.
 export function blankTypeWarning(n: number): string {
-  return `Q${n}: no question type provided in source — informational, grading unaffected`;
+  return `Q${n}: no question type provided in source — publish blocked, add QTYPE and re-import`;
 }
 
 // Матчит ТОЛЬКО полный сгенерированный envelope unknownTypeWarning:
@@ -144,12 +147,23 @@ export function blankTypeWarning(n: number): string {
 // bare includes маркера) убирают два дефекта (Codex 2026-07-09): (1) ложный блок, когда маркер
 // лежит ВНУТРИ label чужого low-confidence warning; (2) first-match-обход при склейке warning'ов.
 // `→ fell back to` встречается лишь в хвосте envelope, поэтому greedy (.*) корректно берёт label.
-const FALLBACK_ENVELOPE = /^Q\d+: unknown type "(.*)" → fell back to \S+$/;
+// Флаг s (dotAll): JSON.stringify НЕ экранирует U+2028/U+2029, а `.` без dotAll их не матчит —
+// такой label разорвал бы матч и warning проскочил бы мимо гейта (Codex 2026-07-11).
+const FALLBACK_ENVELOPE = /^Q\d+: unknown type "(.*)" → fell back to \S+$/s;
 
-// Блокирует publish ТОЛЬКО непустой нераспознанный тип (реальная authoring-ошибка). Пустой label
-// (в т.ч. в УЖЕ сохранённых драфтах) → informational, публикация разрешена (P1). Парсер эмитит
-// blankTypeWarning для пустого/whitespace label, поэтому whitespace-escaped label тут не возникает.
-export function isUnknownTypeWarning(w: string): boolean {
-  const m = FALLBACK_ENVELOPE.exec(w);
-  return m ? m[1]!.trim() !== "" : false;
+// Матчит envelope blankTypeWarning по префиксу (не по хвосту — текст после "in source" не
+// часть контракта), поэтому старые persisted-строки (до правки текста выше) тоже матчатся.
+const BLANK_ENVELOPE = /^Q\d+: no question type provided in source/;
+
+/**
+ * QTYPE hard-block (2026-07-11, BACKLOG W2-3b): публикация блокируется, если источник не
+ * указал тип вопроса (blankTypeWarning) ИЛИ указал нераспознанный (unknownTypeWarning) — с
+ * принятием authoring-спеки (docs/authoring-spec.md) QTYPE обязателен для КАЖДОГО вопроса,
+ * обе ветки — authoring-ошибка клиента, требующая перезаливки файла. Раньше (P1, 2026-07-09)
+ * пустой label был смягчён до informational, пока спеки не было. Ловит и envelope СТАРОГО
+ * формата с ПУСТЫМ label внутри unknownTypeWarning (persisted до появления blankTypeWarning) —
+ * FALLBACK_ENVELOPE больше не разбирает label на пусто/непусто, любой матч envelope блокирует.
+ */
+export function isUnresolvedQuestionTypeWarning(w: string): boolean {
+  return BLANK_ENVELOPE.test(w) || FALLBACK_ENVELOPE.test(w);
 }

@@ -15,6 +15,10 @@ export interface ImportRunnerResult {
   title: string;
   questions: number;
   warnings: number;
+  /** Полный текст парсер-warnings (тот же массив, что уходит в content_item.import_warnings) —
+   *  нужен вызывающей стороне для preflight-фильтрации (напр. бот показывает qtype-класс отдельно
+   *  от общего счётчика, см. isUnresolvedQuestionTypeWarning). */
+  warningTexts: string[];
   /** Чужой бренд/ссылки, НЕ вычищенные read-time ребрендом (новый источник). */
   brandWarnings: string[];
   /** Аудио (listening) перезалито из HTML в наш Storage. false → нужен отдельный mp3. */
@@ -142,6 +146,7 @@ export async function importRunner(
     title: parsed.title,
     questions: parsed.questions.length,
     warnings: parsed.warnings.length,
+    warningTexts: parsed.warnings,
     brandWarnings,
     hasAudio: !!audioUrl,
     audioTooLarge,

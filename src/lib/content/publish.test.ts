@@ -130,24 +130,61 @@ describe("publishReviewedContentItem", () => {
     expect(update).toHaveBeenCalledOnce();
   });
 
-  // P1 (softening at the gate): пустой QTYPE, УЖЕ сохранённый в драфте со старым блок-
-  // маркером, больше не блокирует publish (разблокировка persisted-драфтов без реимпорта).
-  it("publishes a draft whose only unknown-type warning is a blank label (P1)", async () => {
+  // QTYPE hard-block (2026-07-11): пустой QTYPE, УЖЕ сохранённый в драфте со старым блок-
+  // маркером (unknownTypeWarning с пустым label, persisted до появления blankTypeWarning),
+  // блокирует publish наравне с непустым нераспознанным типом — реверс P1-смягчения.
+  it("refuses to publish a draft whose only unknown-type warning is a blank label (#13)", async () => {
+    select.mockReturnValueOnce(
+      contentChain([
+        {
+          reviewedAt: new Date(),
+          title: "Listening blank",
+          section: "reading",
+          importWarnings: ['Q1: unknown type "" → fell back to short_answer'],
+        },
+      ]),
+    );
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "unresolved_question_type" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // Тот же гейт для текущего формата blankTypeWarning (генератор parse-runner.ts).
+  it("refuses to publish a draft with a current-format blankTypeWarning (#13)", async () => {
+    select.mockReturnValueOnce(
+      contentChain([
+        {
+          reviewedAt: new Date(),
+          title: "Listening blank 2",
+          section: "reading",
+          importWarnings: ["Q1: no question type provided in source — publish blocked, add QTYPE and re-import"],
+        },
+      ]),
+    );
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "unresolved_question_type" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // Кейс "как раньше": валидные типы (нет blank/unknown warning'ов вообще) публикуются
+  // без изменений — QTYPE hard-block не задевает чистый импорт.
+  it("publishes a draft with only valid question types and no qtype warnings, as before (#13)", async () => {
     select
       .mockReturnValueOnce(
         contentChain([
           {
             reviewedAt: new Date(),
-            title: "Listening blank",
+            title: "Clean reading",
             section: "reading",
-            importWarnings: ['Q1: unknown type "" → fell back to short_answer'],
+            importWarnings: [],
           },
         ]),
       )
-      .mockReturnValueOnce(integrityChain([q(1, ["A"])]));
+      .mockReturnValueOnce(integrityChain([q(1, ["A"]), q(2, ["B"])]));
     update.mockReturnValue(updateChain());
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: true, title: "Listening blank" });
+    expect(res).toEqual({ ok: true, title: "Clean reading" });
+    expect(update).toHaveBeenCalledOnce();
   });
 
   // (а) номера вопросов без дыр и без дублей — offset-agnostic.

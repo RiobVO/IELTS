@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { db } from "@/db";
 import { answerKey, contentItem, passage, question } from "@/db/schema";
 import { contentTag } from "@/lib/content/exam-content";
-import { isUnknownTypeWarning } from "@/lib/import/question-types";
+import { isUnresolvedQuestionTypeWarning } from "@/lib/import/question-types";
 
 export type PublishResult =
   | { ok: true; title: string }
@@ -55,18 +55,17 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
   if (!row) return { ok: false, reason: "not_found" };
   if (!row.reviewedAt) return { ok: false, reason: "not_reviewed" };
 
-  // Machine hard-gate (#13): refuse to publish a test where a NON-EMPTY question-type label
-  // mapped to no canon type (real authoring error — admin must resolve). qtype in the DB is
-  // already the short_answer fallback, so the persisted import warning is the only durable
-  // trace — read it back rather than the column. isUnknownTypeWarning is blank-aware.
+  // Machine hard-gate (#13, QTYPE hard-block 2026-07-11): refuse to publish a test where a
+  // question type is missing OR unrecognized — both are an authoring error the client must
+  // fix in the source file and re-import (docs/authoring-spec.md makes QTYPE mandatory).
+  // qtype in the DB is already the short_answer fallback, so the persisted import warning is
+  // the only durable trace — read it back rather than the column.
   //
-  // TECH-DEBT (P1, 2026-07-09): an EMPTY QTYPE is softened to informational — 8 listening
-  // tests are published WITHOUT a questionType (grading is correct, it routes by answer-key
-  // mode, not qtype; only the /result "by type" tab is broken for them). Re-import them and
-  // restore the empty type to a hard-block once the client adopts an authoring spec with a
-  // MANDATORY QTYPE. See BACKLOG.md.
+  // Was softened to let an empty QTYPE through as informational (P1, 2026-07-09) while the
+  // client had no authoring spec requiring it — that softening is reverted now that the spec
+  // exists (BACKLOG W2-3b); see question-types.ts for the blank/unknown predicate.
   const warnings = (row.importWarnings as string[] | null) ?? [];
-  if (warnings.some(isUnknownTypeWarning)) {
+  if (warnings.some(isUnresolvedQuestionTypeWarning)) {
     return { ok: false, reason: "unresolved_question_type" };
   }
 

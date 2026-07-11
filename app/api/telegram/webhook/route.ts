@@ -18,6 +18,7 @@ import { uploadAudio } from "@/lib/telegram/storage";
 import { importRunner } from "@/lib/import/runner/import-runner";
 import { setRunnerAudioSrc } from "@/lib/import/runner/sanitize-runner";
 import { RegradeRequiredError, DuplicateTestError } from "@/lib/import/persist";
+import { isUnresolvedQuestionTypeWarning } from "@/lib/import/question-types";
 import { contentTag } from "@/lib/content/exam-content";
 import { publishReviewedContentItem } from "@/lib/content/publish";
 import { importVocabDeck } from "@/lib/import/vocab/persist-vocab";
@@ -194,7 +195,23 @@ async function handleHtmlUpload(
     await triggerL1Generation(r.id).catch((e) =>
       console.error("telegram l1 trigger failed", r.id, e),
     );
-    const warn = r.warnings ? `\n⚠️ предупреждений: ${r.warnings}` : "";
+    // QTYPE hard-block preflight (2026-07-11): warnings голым счётчиком прячут именно ту
+    // ошибку, которая теперь блокирует publish (blank/unknown question type). Вычленяем
+    // такие warning'и отдельно и показываем текстом (до 5 штук) с actionable-подсказкой;
+    // остальные warning'и (низкая уверенность, отсутствие explanation/evidence и т.п.)
+    // остаются просто счётчиком — их полный список всё ещё смотрится в /admin review.
+    const qtypeIssues = r.warningTexts.filter(isUnresolvedQuestionTypeWarning);
+    const restCount = r.warnings - qtypeIssues.length;
+    const warn = qtypeIssues.length
+      ? `\n🚫 тип вопроса пуст или не распознан (${qtypeIssues.length}) — публикация будет ` +
+        `заблокирована, почини QTYPE по authoring-спеке и перезалей файл:\n` +
+        // Обрезка каждой строки: warning несёт сырой label из источника, а лимит
+        // сообщения Telegram — 4096 символов на всё сообщение целиком.
+        qtypeIssues.slice(0, 5).map((w) => `  · ${w.length > 160 ? `${w.slice(0, 160)}…` : w}`).join("\n") +
+        (restCount > 0 ? `\n⚠️ остальных предупреждений: ${restCount}` : "")
+      : r.warnings
+        ? `\n⚠️ предупреждений: ${r.warnings}`
+        : "";
     const brand = r.brandWarnings.length
       ? `\n🚩 бренд не вычищен (новый источник?): ${r.brandWarnings.join("; ")} — проверь шапку в раннере.`
       : "";
@@ -397,7 +414,9 @@ async function handleVocabUpload(
 const PUBLISH_FAIL_MSG: Record<string, string> = {
   not_reviewed: "Сначала подтверди ключ в /admin (review), затем публикуй.",
   empty_answer_key: "Нельзя опубликовать: у вопроса пустой ключ — почини импорт.",
-  unresolved_question_type: "Нельзя опубликовать: тип вопроса не распознан (см. warnings) — почини импорт.",
+  unresolved_question_type:
+    "Нельзя опубликовать: тип вопроса пуст или не распознан — публикация запрещена; " +
+    "добавь QTYPE по authoring-спеке и перезалей файл.",
   question_number_gap: "Нельзя опубликовать: дыра или дубль в номерах вопросов — почини импорт.",
   answer_key_count_mismatch: "Нельзя опубликовать: у вопроса нет ключа — почини импорт.",
   missing_listening_audio: "Нельзя опубликовать: у listening-теста ещё нет аудио — прикрепи mp3.",
