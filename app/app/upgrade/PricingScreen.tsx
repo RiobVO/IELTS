@@ -5,11 +5,15 @@ import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
 import { Icon } from "@/components/core/icons";
 import type { Tier } from "@/lib/tiers";
-import { initiatePayment, joinPaymentWaitlist } from "./actions";
+import { initiatePayment, preorderPlan } from "./actions";
 
 interface Price {
   monthly: number;
   annual: number;
+  /** Early-bird pre-order цена (§12) — фиксированная скидка каталога, см. plans.ts.
+   *  Опционально: guest-режим (/pricing) early-bird не показывает и это поле не шлёт. */
+  earlyBirdMonthly?: number;
+  earlyBirdAnnual?: number;
 }
 
 type CardId = "basic" | "premium" | "ultra";
@@ -95,7 +99,7 @@ const fmt = (tiyin: number) => new Intl.NumberFormat("en-US").format(Math.round(
 /** Inline-алерт из ?error= (initiatePayment fail-closed): честное сообщение вместо
  *  сырого HTTP. `unavailable` — оплата не запущена (гейт paymentsLive). */
 const ERROR_COPY: Record<string, string> = {
-  unavailable: "Paid plans aren't live yet. Tap “Notify me” on a plan and we'll email you the moment they open.",
+  unavailable: "Paid plans aren't live yet. Tap “Lock in early-bird price” on a plan to keep your discount.",
   provider: "Something went wrong starting checkout. Please try again.",
   plan: "That plan isn't available right now. Please pick another.",
 };
@@ -106,6 +110,7 @@ export default function PricingScreen({
   ctaHref,
   speakingEnabled = false,
   paymentsLive = true,
+  preordered = [],
   error,
 }: {
   current: Tier;
@@ -117,9 +122,12 @@ export default function PricingScreen({
    *  the feature is actually reachable (false until launch). */
   speakingEnabled?: boolean;
   /** Платёжный гейт (§12): false в production без мерчант-ключа — платный CTA
-   *  прячем за waitlist, чтобы не вести в тупик оплаты. Guest-режим не затрагивает.
+   *  прячем за pre-order, чтобы не вести в тупик оплаты. Guest-режим не затрагивает.
    *  Default true — публичная /pricing и dev рендерят обычный CTA. */
   paymentsLive?: boolean;
+  /** Планы, уже зафиксированные юзером по early-bird цене (§12) — ключи
+   *  `${tier}:${periodMonths}`. Guest-режим не передаёт (не залогинен). */
+  preordered?: string[];
   /** ?error= из initiatePayment fail-closed → inline-алерт. */
   error?: string;
 }) {
@@ -166,7 +174,7 @@ export default function PricingScreen({
       {/* Plans */}
       <div style={S.plans}>
         {CARDS.map((card) => (
-          <PlanCard key={card.id} card={card} current={current} annual={annual} price={price} ctaHref={ctaHref} paymentsLive={paymentsLive} />
+          <PlanCard key={card.id} card={card} current={current} annual={annual} price={price} ctaHref={ctaHref} paymentsLive={paymentsLive} preordered={preordered} />
         ))}
       </div>
 
@@ -197,6 +205,7 @@ function PlanCard({
   price,
   ctaHref,
   paymentsLive,
+  preordered,
 }: {
   card: PlanCardMeta;
   current: Tier;
@@ -204,6 +213,7 @@ function PlanCard({
   price: { premium: Price; ultra: Price };
   ctaHref?: string;
   paymentsLive: boolean;
+  preordered: string[];
 }) {
   const pop = !!card.popular;
   const guest = !!ctaHref;
@@ -211,6 +221,11 @@ function PlanCard({
   const paid = card.id !== "basic";
   const p = paid ? price[card.id as "premium" | "ultra"] : null;
   const perMonth = p ? (annual ? Math.round(p.annual / 12) : p.monthly) : 0;
+  const earlyBirdPerMonth = p ? (annual ? Math.round((p.earlyBirdAnnual ?? 0) / 12) : (p.earlyBirdMonthly ?? 0)) : 0;
+  // Та же ветка, что решает CTA ниже (paid && !isCurrent && !paymentsLive):
+  // early-bird ценник показываем только там, где реально предлагаем pre-order.
+  const showEarlyBird = paid && !guest && !isCurrent && !paymentsLive;
+  const months = annual ? 12 : 1;
 
   return (
     <div
@@ -238,10 +253,10 @@ function PlanCard({
         {isCurrent && <Badge>Current</Badge>}
       </div>
       <div style={S.tagline}>{card.tagline}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6, margin: "10px 0 18px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap", margin: showEarlyBird ? "10px 0 4px" : "10px 0 18px" }}>
         {paid ? (
           <>
-            <span style={{ ...S.price, color: pop ? "var(--brand)" : "var(--text-primary)" }}>{fmt(perMonth)}</span>
+            <span style={{ ...S.price, color: pop ? "var(--brand)" : "var(--text-primary)" }}>{fmt(showEarlyBird ? earlyBirdPerMonth : perMonth)}</span>
             <span style={S.priceUnit}>UZS{annual ? " / mo · billed yearly" : " / month"}</span>
           </>
         ) : (
@@ -251,6 +266,12 @@ function PlanCard({
           </>
         )}
       </div>
+      {showEarlyBird && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 14px" }}>
+          <span style={S.priceStrike}>{fmt(perMonth)} UZS</span>
+          <Badge tone="success">Early bird −30%</Badge>
+        </div>
+      )}
 
       {guest ? (
         // Public /pricing: not logged in — send every CTA to sign-up, no payment.
@@ -261,15 +282,15 @@ function PlanCard({
         paymentsLive ? (
           <form action={initiatePayment}>
             <input type="hidden" name="tier" value={card.id} />
-            <input type="hidden" name="months" value={annual ? 12 : 1} />
+            <input type="hidden" name="months" value={months} />
             <input type="hidden" name="provider" value="payme" />
             <Button type="submit" size="lg" fullWidth variant={pop ? "primary" : "secondary"} trailingIcon="arrow-right">
               {card.cta}
             </Button>
           </form>
         ) : (
-          // Оплата ещё не запущена (§12): вместо тупика — сбор интереса (waitlist).
-          <WaitlistCta tier={card.id} months={annual ? 12 : 1} pop={pop} />
+          // Оплата ещё не запущена (§12): вместо тупика — pre-order по early-bird цене.
+          <PreorderCta tier={card.id} months={months} pop={pop} preordered={preordered.includes(`${card.id}:${months}`)} />
         )
       ) : (
         <Button size="lg" fullWidth variant="secondary" disabled>
@@ -292,30 +313,46 @@ function PlanCard({
 }
 
 /**
- * Waitlist-CTA (§12): пока оплата не запущена, вместо покупки собираем интерес.
- * Оптимистично переходим в "joined" сразу по клику — событие payment_waitlist
- * best-effort (аналитика не критична), ошибку глушим и состояние не откатываем:
- * повторно давить кнопку смысла нет, а «сорвавшийся» лог не должен пугать юзера.
+ * Pre-order-CTA (§12): пока оплата не запущена, вместо покупки фиксируем намерение
+ * по early-bird цене. `preordered` — уже записан на сервере (owner-path SELECT в
+ * page.tsx) — рендерит locked-состояние сразу, без лишнего клика. В отличие от
+ * бывшего waitlist (чистая телеметрия) здесь durable-обещание цены, поэтому БЕЗ
+ * оптимизма: locked ставится только по {ok:true} от action; сбой возвращает
+ * кнопку в активное состояние с «Try again» — юзер не остаётся с ложным
+ * «Price locked» без строки в БД.
  */
-function WaitlistCta({ tier, months, pop }: { tier: CardId; months: number; pop: boolean }) {
-  const [joined, setJoined] = useState(false);
+function PreorderCta({ tier, months, pop, preordered }: { tier: CardId; months: number; pop: boolean; preordered: boolean }) {
+  const [locked, setLocked] = useState(preordered);
+  const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState(false);
   return (
     <>
       <Button
         size="lg"
         fullWidth
-        variant={joined ? "secondary" : pop ? "primary" : "secondary"}
-        disabled={joined}
-        icon={joined ? "circle-check" : "bell"}
+        variant={locked ? "secondary" : pop ? "primary" : "secondary"}
+        disabled={locked || pending}
+        icon={locked ? "circle-check" : "lock"}
         onClick={() => {
-          if (joined) return;
-          setJoined(true);
-          void joinPaymentWaitlist({ tier, months }).catch(() => {});
+          if (locked || pending) return;
+          setPending(true);
+          setFailed(false);
+          preorderPlan({ tier, months })
+            .then((r) => {
+              setLocked(r.ok);
+              if (!r.ok) setFailed(true);
+            })
+            .catch(() => setFailed(true))
+            .finally(() => setPending(false));
         }}
       >
-        {joined ? "You're on the list" : "Notify me when paid plans launch"}
+        {locked ? "Price locked ✓" : pending ? "Locking…" : failed ? "Try again" : "Lock in early-bird price"}
       </Button>
-      <p style={S.waitNote}>Paid plans aren't live yet — free plan works in full.</p>
+      <p style={S.waitNote}>
+        {failed
+          ? "Something went wrong — your price isn't locked yet. Please try again."
+          : "No charge now. Pay when billing launches — your discount stays locked."}
+      </p>
     </>
   );
 }
@@ -351,6 +388,7 @@ const S: Record<string, React.CSSProperties> = {
   tagline: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", minHeight: 38, lineHeight: 1.4 },
   price: { fontFamily: "var(--font-ui)", fontSize: 40, fontWeight: 900, letterSpacing: "-0.03em" },
   priceUnit: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
+  priceStrike: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", textDecoration: "line-through" },
 
   trust: { display: "flex", justifyContent: "center", gap: 22, flexWrap: "wrap", margin: "30px 0 38px", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
   faqHead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--text-primary)", textAlign: "center", margin: "0 0 12px" },

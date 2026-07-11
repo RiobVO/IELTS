@@ -10,6 +10,12 @@ export interface Plan {
   tier: "premium" | "ultra";
   months: number;
   amount: number; // тийин (минорные единицы UZS)
+  /**
+   * Early-bird цена pre-order (§12) до запуска биллинга — фиксированное значение
+   * каталога, НЕ формула в рантайме (−30% от amount на момент утверждения прайса,
+   * дальше живёт независимо). Источник правды суммы — сервер: клиент её не диктует.
+   */
+  earlyBirdAmount: number;
   currency: "UZS";
   label: string;
 }
@@ -23,6 +29,7 @@ export const PLANS: Plan[] = [
     tier: "premium",
     months: 1,
     amount: 4_900_000, // 49 000 UZS
+    earlyBirdAmount: 3_430_000, // 34 300 UZS (−30%)
     currency: "UZS",
     label: "Premium · 1 month",
   },
@@ -30,6 +37,7 @@ export const PLANS: Plan[] = [
     tier: "premium",
     months: 12,
     amount: 49_000_000, // 490 000 UZS (≈ 2 месяца в подарок)
+    earlyBirdAmount: 34_300_000, // 343 000 UZS (−30%)
     currency: "UZS",
     label: "Premium · 12 months",
   },
@@ -37,6 +45,7 @@ export const PLANS: Plan[] = [
     tier: "ultra",
     months: 1,
     amount: 9_900_000, // 99 000 UZS
+    earlyBirdAmount: 6_930_000, // 69 300 UZS (−30%)
     currency: "UZS",
     label: "Ultra · 1 month",
   },
@@ -44,6 +53,7 @@ export const PLANS: Plan[] = [
     tier: "ultra",
     months: 12,
     amount: 99_000_000, // 990 000 UZS (≈ 2 месяца в подарок)
+    earlyBirdAmount: 69_300_000, // 693 000 UZS (−30%)
     currency: "UZS",
     label: "Ultra · 12 months",
   },

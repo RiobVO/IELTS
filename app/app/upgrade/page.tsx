@@ -4,6 +4,7 @@ import { getHeaderData } from "@/lib/notifications/header-data";
 import { effectiveTier, type Tier } from "@/lib/tiers";
 import { findPlan } from "@/lib/payments/plans";
 import { paymentsLive } from "@/lib/payments";
+import { createClient } from "@/lib/supabase/server";
 import { speakingFeatureEnabled } from "@/env";
 import { AppShell } from "../_AppShell";
 import { Button } from "@/components/core/Button";
@@ -26,11 +27,30 @@ export default async function UpgradePage({
     ? effectiveTier({ tier: profile.tier, premium_until: profile.premium_until })
     : "basic";
 
-  // Цены — из единого каталога PLANS (клиент не диктует сумму).
+  // Цены — из единого каталога PLANS (клиент не диктует сумму), earlyBird — та же
+  // early-bird цена из каталога, что и preorderPlan пишет в БД (§12).
   const price = {
-    premium: { monthly: findPlan("premium", 1)!.amount, annual: findPlan("premium", 12)!.amount },
-    ultra: { monthly: findPlan("ultra", 1)!.amount, annual: findPlan("ultra", 12)!.amount },
+    premium: {
+      monthly: findPlan("premium", 1)!.amount,
+      annual: findPlan("premium", 12)!.amount,
+      earlyBirdMonthly: findPlan("premium", 1)!.earlyBirdAmount,
+      earlyBirdAnnual: findPlan("premium", 12)!.earlyBirdAmount,
+    },
+    ultra: {
+      monthly: findPlan("ultra", 1)!.amount,
+      annual: findPlan("ultra", 12)!.amount,
+      earlyBirdMonthly: findPlan("ultra", 1)!.earlyBirdAmount,
+      earlyBirdAnnual: findPlan("ultra", 12)!.earlyBirdAmount,
+    },
   };
+
+  // Owner-path чтение своих pre-order (§12): RLS сам скопит на user.id, доп.
+  // .eq не нужен (см. тот же паттерн у payment в /app/profile).
+  const supabase = await createClient();
+  const { data: preorderRows } = await supabase
+    .from("preorder")
+    .select("tier,period_months");
+  const preordered = (preorderRows ?? []).map((r) => `${r.tier}:${r.period_months}`);
 
   return (
     <AppShell active="pricing">
@@ -45,6 +65,7 @@ export default async function UpgradePage({
         price={price}
         speakingEnabled={speakingFeatureEnabled()}
         paymentsLive={paymentsLive()}
+        preordered={preordered}
         error={error}
       />
     </AppShell>
