@@ -17,7 +17,7 @@ import { and, count, desc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
-import { attempt, contentItem, profile } from "@/db/schema";
+import { attempt, contentItem, profile, trialClaim } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
 import { BASIC_DAILY_LIMIT, effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { FULL_CATEGORIES, isFullCategory, trialAllows } from "./trial";
@@ -247,9 +247,10 @@ export async function startAttempt(
   modeIfNew: AttemptMode,
   /**
    * H3: доступ выдан trial-лейном (§4.8), не по тиру. Создание НОВОЙ попытки тогда
-   * атомарно по юзеру — advisory-xact-lock + перепроверка расхода в транзакции,
-   * иначе два параллельных старта РАЗНЫХ full mock оба пройдут (unique-индекс
-   * держит только (user,item)). Резюм существующей попытки — БЕЗ лока.
+   * атомарно по юзеру — claim единственного trial-слота через trial_claim
+   * (PK user_id, ON CONFLICT DO NOTHING), иначе два параллельных старта РАЗНЫХ full
+   * mock оба пройдут (partial-индекс 0007 держит только (user,item)). Резюм
+   * существующей попытки — БЕЗ claim (ранний return по `resume`).
    */
   isTrial = false,
   /**
@@ -291,15 +292,29 @@ export async function startAttempt(
     }
   }
 
-  // Trial-старт: атомарный claim под advisory-xact-lock (снимается на commit/rollback
-  // — не течёт через pgbouncer). Внутри лока перепроверяем расход: параллельный старт
-  // ДРУГОГО full mock мог занять единственный слот, пока ждали лок → проигравший
-  // на upgrade (redirect роняет транзакцию, попытка не создаётся). Ключ — hashtext
-  // (text→int4→bigint), raw sql без Date-параметров (prepare:false safe).
+  // Trial-старт: атомарный claim единственного trial-слота юзера через trial_claim
+  // (0054) вместо блокирующего advisory-xact-lock. PK(user_id) сериализует
+  // конкурентные старты РАЗНЫХ full mock: второй INSERT ждёт row-lock ключа до
+  // commit первого, затем ловит ON CONFLICT DO NOTHING (пустой RETURNING) — без
+  // удержания advisory-лока на server-connection пула pgbouncer.
   if (isTrial) {
     return db.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`trial:${userId}`}))`);
-      if (await hasConsumedTrial(userId, contentItemId, tx)) redirect("/app/upgrade");
+      const claimed = await tx
+        .insert(trialClaim)
+        .values({ userId, contentItemId })
+        .onConflictDoNothing({ target: trialClaim.userId })
+        .returning({ userId: trialClaim.userId });
+      // Проиграл claim → слот уже занят (победителем гонки или прежним стартом этой
+      // же сессии). Источник правды решения — прежний hasConsumedTrial (READ
+      // COMMITTED: после commit победителя его attempt виден): расход на другом/
+      // сданном тесте → redirect; собственный in_progress текущего item он
+      // пропускает, а openNewAttempt резюмит его по partial-индексу 0007. Так claim
+      // НЕ может дать ложный deny — только отсечь двойное открытие. Победитель
+      // (claim создан) открывает сразу: enforceAccess уже прошёл (trial не
+      // израсходован), а конкурентный расход был бы виден как проигрыш claim.
+      if (claimed.length === 0 && (await hasConsumedTrial(userId, contentItemId, tx))) {
+        redirect("/app/upgrade");
+      }
       return openNewAttempt(tx, userId, contentItemId, modeIfNew);
     });
   }
