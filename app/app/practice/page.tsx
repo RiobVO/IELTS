@@ -231,6 +231,12 @@ export default async function PracticePage({
   const answeredById = new Map<string, number>();
   for (const ip of inProgress) answeredById.set(ip.content_item_id, countAnswers(ip.answers));
 
+  // Бейдж «New» (F15) — свежесть считаем здесь, вне unstable_cache-обёртки
+  // getPublishedTests (created_at там только сырое поле, кэш тегирован content_item
+  // и живёт до publish/revalidate — «now» внутри него протухал бы).
+  const NEW_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+  const newCutoff = Date.now() - NEW_WINDOW_MS;
+
   const tests: PracticeTest[] = all.map(({ t, section }) => {
     const gated = !meetsTier(userTier, t.tier_required);
     // Trial-лейн (§4.8): Basic видит ОДИН полный gated-тест как бесплатный. Карта
@@ -258,6 +264,8 @@ export default async function PracticePage({
       progress: answered != null && t.question_count > 0 ? `Resume · ${answered} / ${t.question_count}` : null,
       done: bestRaw != null && t.question_count > 0 ? `Done · ${bestRaw} / ${t.question_count}` : null,
       isWeakType: t.question_types.some((qt) => weakTypeSet.has(qt)),
+      // created_at — ISO-строка (сериализована в getPublishedTests под кэш), не Date.
+      isNew: Date.parse(t.created_at) > newCutoff,
     };
   });
 

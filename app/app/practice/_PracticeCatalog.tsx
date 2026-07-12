@@ -59,6 +59,8 @@ export interface PracticeTest {
   done: string | null;
   /** questionTypes пересекается со слабейшими типами юзера (weakSpots из page.tsx). */
   isWeakType: boolean;
+  /** created_at моложе 7 дней (посчитано в page.tsx, не в кэше) — бейдж «New». */
+  isNew: boolean;
 }
 export interface HeroData {
   kind: "resume" | "recommended" | "first";
@@ -830,6 +832,7 @@ function TestRow({ t }: { t: PracticeTest }) {
           <span style={S.rowMeta}>{cat(t.category)} · {t.questionCount} Q</span>
           {t.trial && <Badge tone="brand">Free trial</Badge>}
           {t.isWeakType && <Badge tone="warn">Weak spot</Badge>}
+          {t.isNew && <Badge tone="success">New</Badge>}
         </div>
         <div style={S.rowTitle}>{t.title}</div>
         {typesLabel && <div style={S.rowTypes}>{typesLabel}</div>}
