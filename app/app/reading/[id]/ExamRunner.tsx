@@ -284,9 +284,17 @@ export default function ExamRunner({
   const [audioPhase, setAudioPhase] = useState<"gate" | "playing" | "transfer">("gate");
   const [buffered, setBuffered] = useState(0);
   const [canPlay, setCanPlay] = useState(false);
+  // F1 — честный error-state: 404/сетевой сбой/битый mp3 больше не маскируется под
+  // «Audio ready» (см. onError ниже) и не даёт play() тихо провалиться без объяснения.
+  const [audioError, setAudioError] = useState(false);
   const [audRemaining, setAudRemaining] = useState<number | null>(null);
   const [transferRemaining, setTransferRemaining] = useState<number | null>(null);
   const audioStartedAtRef = useRef<number | null>(null);
+  // F1 — generation-guard play-цикла: устаревший play() (вызванный до Retry) может
+  // реджектнуться ПОЗЖЕ успешного нового play() или уже в transfer — его then/catch
+  // не должны топтать актуальное состояние. Каждый play-жест/Retry инкрементирует
+  // поколение; then/catch с чужим поколением — no-op.
+  const playAttemptRef = useRef(0);
   const resumeDecided = useRef(false);
   // P8 (practice Listening Lab): аудио разлочено — play/pause/seek/replay/скорость. mock
   // остаётся строгим single-pass (anchor/transfer/авто-сабмит ниже гейтятся mode==="mock").
@@ -701,24 +709,32 @@ export default function ExamRunner({
   const playAudio = () => {
     const a = audioRef.current;
     if (!a) return;
+    // Новый play-жест открывает новое поколение: then/catch предыдущих вызовов
+    // становятся stale и не трогают состояние (см. playAttemptRef).
+    const generation = ++playAttemptRef.current;
     // P8 practice: аудио разлочено — старт с текущей позиции (0 при первом жесте), без
     // single-pass anchor/forward-seek. Дальше управление через AudioPlayer/ListeningLab.
     if (mode === "practice") {
       setAudioPhase("playing");
-      void a.play().catch(() => setAudioPhase("gate"));
+      void a.play().catch(() => {
+        // stale-reject прежнего цикла не должен флипать фазу нового playback attempt.
+        if (generation !== playAttemptRef.current) return;
+        setAudioPhase("gate");
+      });
       return;
     }
     const anchor = audioStartedAtRef.current;
     if (anchor == null) {
-      const now = Date.now();
-      audioStartedAtRef.current = now;
-      writeAudioStart(attemptId, now);
+      // Fresh start: сикаем на 0, но якорь ЕЩЁ не пишем — до успешного play() heartbeat
+      // не должен тикать (иначе reject после записи якоря украл бы время у ничего не
+      // игравшего пользователя, см. F1).
       try {
         a.currentTime = 0;
       } catch {
         /* seek до буфера может не пройти — не критично */
       }
     } else {
+      // Resume: якорь уже в storage (продолжение после refresh) — не трогаем.
       const elapsed = (Date.now() - anchor) / 1000;
       try {
         a.currentTime = Math.max(0, elapsed);
@@ -727,10 +743,43 @@ export default function ExamRunner({
       }
     }
     setAudioPhase("playing");
-    void a.play().catch(() => {
-      /* воспроизведение не стартовало — вернём gate, пользователь попробует снова */
-      setAudioPhase("gate");
-    });
+    void a.play()
+      .then(() => {
+        // stale-резолв (после Retry уже идёт новый цикл) — не сбрасываем error нового цикла.
+        if (generation !== playAttemptRef.current) return;
+        setAudioError(false);
+        // Якорь single-pass пишем только теперь — play() реально стартовал. Ре-чек по
+        // ref (синхронный источник правды), а не по замкнутому anchor: два быстрых
+        // клика Play до ре-рендера оба видят anchor===null, и без ре-чека второй
+        // резолв перезаписал бы якорь первого, сдвинув single-pass-таймер вперёд.
+        // Первый резолв пишет, остальные — no-op.
+        if (audioStartedAtRef.current == null) {
+          const now = Date.now();
+          audioStartedAtRef.current = now;
+          writeAudioStart(attemptId, now);
+        }
+      })
+      .catch(() => {
+        // stale-reject (устаревший play() реджектнулся уже ПОСЛЕ успешного нового play()
+        // или после перехода в transfer) — не топчем актуальное состояние ошибкой.
+        if (generation !== playAttemptRef.current) return;
+        // Свежий reject: play() не стартовал — честная ошибка, якорь не пишем.
+        // transfer не откатываем (functional update): запись уже кончилась.
+        setAudioPhase((p) => (p === "playing" ? "gate" : p));
+        setAudioError(true);
+      });
+  };
+
+  // F1 — Retry из error-гейта: форсируем пере-запрос записи (сброс сетевой/декод-ошибки)
+  // и снимаем error-state; canPlay ждём заново от onCanPlay/onLoadedMetadata.
+  // Инкремент поколения инвалидирует then/catch зависших play() прежнего цикла.
+  const retryAudio = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    playAttemptRef.current++;
+    setAudioError(false);
+    setCanPlay(false);
+    a.load();
   };
 
   // P8 practice-контролы аудио (вызываются только из practice-ветки Listening Lab).
@@ -983,7 +1032,19 @@ export default function ExamRunner({
                       }
                     }}
                     onCanPlay={() => setCanPlay(true)}
-                    onError={() => setCanPlay(true)}
+                    // F1: раньше ошибка (404/сеть/битый mp3) молча выставляла canPlay=true —
+                    // гейт врал «Audio ready», Play флипал в playing и мгновенно откатывался
+                    // без объяснения. Теперь честный error-state, canPlay не трогаем.
+                    // Mid-playback ошибка (decode/сеть ПОСЛЕ старта): error-UI живёт только
+                    // на gate-оверлее → возвращаем фазу из playing в gate, иначе юзер
+                    // смотрит на замершую фазу playing до авто-сабмита. Якорь не трогаем —
+                    // single-pass честно тикает; Retry затем resume-путём forward-seek'ает
+                    // на реальный elapsed. transfer не откатываем (запись уже кончилась).
+                    onError={(e) => {
+                      e.currentTarget.pause(); // элемент после fatal error и так стоит — фиксируем явно
+                      setAudioError(true);
+                      setAudioPhase((p) => (p === "playing" ? "gate" : p));
+                    }}
                     onEnded={() => {
                       // mock: конец записи → transfer-окно. practice: replay разрешён —
                       // просто гасим «играет», фаза остаётся playing (gate уже пройден).
@@ -1093,7 +1154,9 @@ export default function ExamRunner({
           practice={mode === "practice"}
           buffered={buffered}
           canPlay={canPlay}
+          error={audioError}
           onPlay={playAudio}
+          onRetry={retryAudio}
         />
       )}
 
@@ -1798,36 +1861,51 @@ function ListeningGate({
   practice,
   buffered,
   canPlay,
+  error,
   onPlay,
+  onRetry,
 }: {
   resume: boolean;
   /** P8: practice-запись разлочена → честная копия «можно паузить/повторять». */
   practice?: boolean;
   buffered: number;
   canPlay: boolean;
+  /** F1 — аудио-элемент словил error (404/сеть/битый файл): Play скрыта, только Retry. */
+  error: boolean;
   onPlay: () => void;
+  onRetry: () => void;
 }) {
-  const title = practice ? "Listening practice" : resume ? "Continue the recording" : "Listening test";
-  const desc = practice
-    ? "Practice mode — you can pause, seek, replay, and change the speed. Take your time."
-    : resume
-      ? "The recording kept playing while you were away. It resumes from the current point — no rewind or replay."
-      : "The recording plays once. You can't pause, rewind, or replay it — answer as you listen.";
+  const title = error ? "Audio couldn't load" : practice ? "Listening practice" : resume ? "Continue the recording" : "Listening test";
+  const desc = error
+    ? "Audio failed to load. Check your connection and retry."
+    : practice
+      ? "Practice mode — you can pause, seek, replay, and change the speed. Take your time."
+      : resume
+        ? "The recording kept playing while you were away. It resumes from the current point — no rewind or replay."
+        : "The recording plays once. You can't pause, rewind, or replay it — answer as you listen.";
   return (
     <div className="exam-overlay" style={SS.overlay} role="dialog" aria-modal="true" aria-label="Listening recording">
       <div style={{ ...SS.panel, maxWidth: 460, textAlign: "center" }}>
-        <span style={{ ...SS.cardIcon, width: 52, height: 52, margin: "0 auto 14px", background: "var(--brand-subtle)", color: "var(--brand)" }}>
-          <Icon name="headphones" size={26} />
+        <span style={{ ...SS.cardIcon, width: 52, height: 52, margin: "0 auto 14px", background: error ? "var(--error-subtle)" : "var(--brand-subtle)", color: error ? "var(--error)" : "var(--brand)" }}>
+          <Icon name={error ? "alert-triangle" : "headphones"} size={26} />
         </span>
         <h1 style={SS.startTitle}>{title}</h1>
-        <p style={SS.startMeta}>{desc}</p>
-        <div style={SS.bufferTrack} aria-hidden="true">
-          <div style={{ ...SS.bufferFill, width: `${Math.round(buffered * 100)}%` }} />
-        </div>
-        <p style={SS.bufferLabel}>{canPlay ? "Audio ready" : `Loading audio… ${Math.round(buffered * 100)}%`}</p>
-        <Button variant="primary" fullWidth disabled={!canPlay} trailingIcon="arrow-right" onClick={onPlay}>
-          {resume && !practice ? "Resume" : "Play recording"}
-        </Button>
+        <p style={{ ...SS.startMeta, color: error ? "var(--error-text)" : SS.startMeta.color }}>{desc}</p>
+        {error ? (
+          <Button variant="secondary" fullWidth onClick={onRetry}>
+            Retry
+          </Button>
+        ) : (
+          <>
+            <div style={SS.bufferTrack} aria-hidden="true">
+              <div style={{ ...SS.bufferFill, width: `${Math.round(buffered * 100)}%` }} />
+            </div>
+            <p style={SS.bufferLabel}>{canPlay ? "Audio ready" : `Loading audio… ${Math.round(buffered * 100)}%`}</p>
+            <Button variant="primary" fullWidth disabled={!canPlay} trailingIcon="arrow-right" onClick={onPlay}>
+              {resume && !practice ? "Resume" : "Play recording"}
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
