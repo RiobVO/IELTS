@@ -165,6 +165,12 @@ export default function OnboardingForm({
 
           {step === "diagnostic" && result && (
             <div>
+              {/* F9: результат диагностики едет на сервер hidden-полями — отдельного
+                  server action между шагами нет, так что completeOnboarding сам
+                  капчурит onboarding_diagnostic_complete рядом с onboarding_complete. */}
+              <input type="hidden" name="diag_correct" value={result.correct} />
+              <input type="hidden" name="diag_total" value={result.total} />
+              <input type="hidden" name="diag_weak_type" value={result.weakType ?? ""} />
               <div style={S.resultCard}>
                 <div style={S.resultScore}>
                   {result.correct}<span style={S.resultScoreTot}>/{result.total}</span>

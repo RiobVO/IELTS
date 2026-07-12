@@ -10,9 +10,31 @@ import { requireUser } from "@/lib/auth";
 import { captureServer } from "@/lib/analytics/server";
 import { logError } from "@/lib/monitoring/log-error";
 import { validExamDate } from "@/lib/progress/exam-countdown";
+import { QUESTION_TYPES } from "@/lib/import/question-types";
 
 function fail(message: string): never {
   redirect(`/app/onboarding?error=${encodeURIComponent(message)}`);
+}
+
+/**
+ * F9: санитизация мини-диагностики (OnboardingForm hidden-поля diag_*). Клиент шлёт
+ * их напрямую, не через типизированный server action — значит мусор (подделанная
+ * форма, руками отправленный POST) не должен ронять completeOnboarding, только
+ * молча не породить событие. `diag_total` отсутствует (поле не существовало на
+ * сабмите — юзер нажал "Skip for now" до диагностики) → null, событие не шлём.
+ */
+function sanitizeDiagnostic(formData: FormData): { correct: number; total: number; weak_type: string } | null {
+  const totalField = formData.get("diag_total");
+  if (totalField === null) return null;
+  const totalRaw = Number(totalField);
+  if (!Number.isFinite(totalRaw)) return null;
+  // Диагностика фиксированно 6 вопросов; клэмп до 0..10 — запас на будущее, не жёсткое "=6".
+  const total = Math.min(10, Math.max(0, Math.trunc(totalRaw)));
+  const correctRaw = Number(formData.get("diag_correct"));
+  const correct = Number.isFinite(correctRaw) ? Math.min(total, Math.max(0, Math.trunc(correctRaw))) : 0;
+  const weakTypeRaw = String(formData.get("diag_weak_type") ?? "").trim();
+  const weak_type = (QUESTION_TYPES as readonly string[]).includes(weakTypeRaw) ? weakTypeRaw : "";
+  return { correct, total, weak_type };
 }
 
 /**
@@ -66,9 +88,19 @@ export async function completeOnboarding(formData: FormData) {
     fail("Could not save your profile. Try again.");
   }
 
+  // F9: результат мини-диагностики (если пройдена — hidden-поля пришли непустыми).
+  const diagnostic = sanitizeDiagnostic(formData);
+
   // onboarding_complete — событие воронки (§11), best-effort в after() (как test_start),
-  // не блокирует редирект. display_name не шлём (PII).
-  after(async () => captureServer("onboarding_complete", user.id, { target_band: band, has_region: regionId !== "" }));
+  // не блокирует редирект. display_name не шлём (PII). onboarding_diagnostic_complete —
+  // отдельным событием РЯДОМ, чтобы weak_type первого касания попал в аналитику ещё до
+  // первого реального теста; шлём только если диагностика реально пройдена (не Skip).
+  after(async () => {
+    await captureServer("onboarding_complete", user.id, { target_band: band, has_region: regionId !== "" });
+    if (diagnostic) {
+      await captureServer("onboarding_diagnostic_complete", user.id, diagnostic);
+    }
+  });
 
   revalidatePath("/app", "layout");
   redirect("/app");

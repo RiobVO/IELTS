@@ -13,6 +13,7 @@ export const AnalyticsEvent = {
   TestSubmit: "test_submit",
   Upgrade: "upgrade",
   OnboardingComplete: "onboarding_complete",
+  OnboardingDiagnosticComplete: "onboarding_diagnostic_complete",
   ResultView: "result_view",
   CheckoutStart: "checkout_start",
   CheckoutBlocked: "checkout_blocked",
@@ -53,6 +54,11 @@ export type EventProperties = {
   };
   upgrade: { provider: string; tier: string; period_months: number };
   onboarding_complete: { target_band: number; has_region: boolean };
+  /** F9: результат мини-диагностики онбординга (W1-2b) — первое касание качества
+   *  студента ДО первого реального теста. `weak_type` — канон-слаг qtype (см.
+   *  question-types.ts) или "" (диагностика пройдена без ошибок / пропущена целиком —
+   *  событие тогда вообще не шлётся, см. completeOnboarding). */
+  onboarding_diagnostic_complete: { correct: number; total: number; weak_type: string };
   result_view: { content_item_id: string; mode: "practice" | "mock"; banded: boolean; raw_score: number; total: number };
   checkout_start: { provider: string; tier: string; period_months: number; amount: number };
   /** Оплата недоступна на гейте (paymentsLive=false) — воронка не должна молча
