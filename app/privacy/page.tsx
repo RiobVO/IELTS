@@ -42,12 +42,12 @@ export default function PrivacyPage() {
       <h2>Your rights</h2>
       <p>
         You can request access to, correction of, or deletion of your personal data. Email
-        <a href="mailto:privacy@bando.app"> privacy@bando.app</a> and we&apos;ll help.
+        <a href="mailto:privacy@bando.study"> privacy@bando.study</a> and we&apos;ll help.
       </p>
 
       <h2>Contact</h2>
       <p>
-        Questions about this policy? Reach us at <a href="mailto:privacy@bando.app">privacy@bando.app</a>.
+        Questions about this policy? Reach us at <a href="mailto:privacy@bando.study">privacy@bando.study</a>.
       </p>
     </InfoPage>
   );

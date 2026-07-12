@@ -42,7 +42,7 @@ export default function TermsPage() {
       <p>We may update these Terms as the product evolves. Material changes will be reflected by the &quot;last updated&quot; date above. Continued use after a change means you accept the updated Terms.</p>
 
       <h2>9. Contact</h2>
-      <p>Questions about these Terms? Reach us at <a href="mailto:hello@bando.app">hello@bando.app</a>.</p>
+      <p>Questions about these Terms? Reach us at <a href="mailto:hello@bando.study">hello@bando.study</a>.</p>
     </InfoPage>
   );
 }
