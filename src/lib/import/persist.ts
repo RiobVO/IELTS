@@ -5,6 +5,7 @@ import {
   attempt,
   contentItem,
   passage as passageT,
+  profile,
   question as questionT,
 } from "../../db/schema";
 import { testFingerprint } from "./fingerprint";
@@ -28,6 +29,19 @@ export class RegradeRequiredError extends Error {
     );
     this.name = "RegradeRequiredError";
   }
+}
+
+/**
+ * F4 "Sit as student": true, если КАЖДАЯ строка — попытка админа. Пустой список
+ * тоже true (некого блокировать). Fail-safe: `role == null` (dangling attempt без
+ * строки profile из LEFT JOIN, или NULL-роль) трактуется как НЕ-admin — при любой
+ * неоднозначности провенанса попытки деструктивный re-import отклоняется.
+ * Чистая функция — юнит-тестируется без мока транзакции; persistTest ниже
+ * использует её, чтобы решить, можно ли считать существующие попытки безопасным
+ * QA-мусором (снести и продолжить re-import) вместо отказа RegradeRequiredError.
+ */
+export function allAttemptsAdminOnly(rows: { role: string | null }[]): boolean {
+  return rows.every((r) => r.role === "admin");
 }
 
 /**
@@ -109,17 +123,32 @@ export async function persistTest(
         .from(contentItem)
         .where(eq(contentItem.sourceFilePath, opts.sourceFilePath));
       if (existing.length > 0) {
-        const [row] = await tx
-          .select({ n: sql<number>`count(*)::int` })
+        // F4 "Sit as student": кто держит существующие попытки решает, безопасен ли
+        // re-import. Студент хоть один → отказ, как раньше. ТОЛЬКО admin (QA-прогоны
+        // черновика через «Sit as student») → безопасно продолжить: явного DELETE
+        // попыток здесь не нужно — обычный delete(content_item) чуть ниже и так
+        // каскадит на attempt (FK onDelete cascade, migration 0000_init) →
+        // attempt_review_snapshot (cascade от attempt, migration 0021), а
+        // mistake_resolution/mistake_review каскадят от content_item НАПРЯМУЮ
+        // (migrations 0040/0044) — тот же путь, что и у обычного чистого re-import.
+        //
+        // LEFT JOIN (не INNER): dangling attempt без строки profile НЕ должен
+        // выпадать из выборки — иначе оставшиеся выглядели бы admin-only и
+        // деструктивный re-import прошёл бы ложно. role=null у такой строки →
+        // allAttemptsAdminOnly fail-safe даёт отказ.
+        const existingAttempts = await tx
+          .select({ role: profile.role })
           .from(attempt)
+          .leftJoin(profile, eq(profile.id, attempt.userId))
           .where(
             inArray(
               attempt.contentItemId,
               existing.map((r) => r.id),
             ),
           );
-        const n = row?.n ?? 0;
-        if (n > 0) throw new RegradeRequiredError(n);
+        if (existingAttempts.length > 0 && !allAttemptsAdminOnly(existingAttempts)) {
+          throw new RegradeRequiredError(existingAttempts.length);
+        }
       }
       await tx
         .delete(contentItem)

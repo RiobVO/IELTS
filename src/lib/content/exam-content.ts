@@ -65,57 +65,82 @@ export interface ExamContent {
  *    `id` — обычная строка (зеркалит published.ts / badges.ts).
  * `revalidate` — фолбэк; теги — основная, немедленная инвалидация.
  */
+/**
+ * Общая незакэшированная загрузка. `requirePublished=true` (обычный путь) держит
+ * тот же published-гейт, что был инлайн в getExamContent; `false` (F4 admin-preview
+ * ниже) читает тест ЛЮБОГО статуса. Вынесено в отдельную функцию, чтобы не
+ * дублировать запрос пассажей/вопросов между кэшированным и admin-путём.
+ */
+async function loadExamContent(
+  id: string,
+  requirePublished: boolean,
+): Promise<ExamContent | null> {
+  const [test] = await db
+    .select({
+      id: contentItem.id,
+      title: contentItem.title,
+      category: sql<string>`${contentItem.category}::text`,
+      duration_seconds: contentItem.durationSeconds,
+      tier_required: sql<string>`${contentItem.tierRequired}::text`,
+    })
+    .from(contentItem)
+    .where(
+      requirePublished
+        ? and(eq(contentItem.id, id), eq(contentItem.status, "published"))
+        : eq(contentItem.id, id),
+    )
+    .limit(1);
+  if (!test) return null;
+
+  const [passages, questions] = await Promise.all([
+    db
+      .select({
+        title: passage.title,
+        body_html: passage.bodyHtml,
+        order: passage.order,
+        audio_path: passage.audioPath,
+        questions_html: passage.questionsHtml,
+      })
+      .from(passage)
+      .where(eq(passage.contentItemId, id))
+      .orderBy(asc(passage.order)),
+    db
+      .select({
+        id: question.id,
+        number: question.number,
+        qtype: sql<string>`${question.qtype}::text`,
+        prompt_html: question.promptHtml,
+        options: question.options,
+        group_key: question.groupKey,
+        passage_id: question.passageId,
+      })
+      .from(question)
+      .where(eq(question.contentItemId, id))
+      .orderBy(asc(question.number)),
+  ]);
+
+  return { test, passages, questions } as ExamContent;
+}
+
 export function getExamContent(id: string): Promise<ExamContent | null> {
   return unstable_cache(
-    async (): Promise<ExamContent | null> => {
-      // Published-гейт ПЕРВЫМ: draft/несуществующий тест → null (страница 404-ит),
-      // и мы не тащим тела draft-контента в кэш. Только после гейта читаем пассажи +
-      // вопросы одним параллельным слоем (на cold-miss; на hit БД не бьётся вовсе).
-      const [test] = await db
-        .select({
-          id: contentItem.id,
-          title: contentItem.title,
-          category: sql<string>`${contentItem.category}::text`,
-          duration_seconds: contentItem.durationSeconds,
-          tier_required: sql<string>`${contentItem.tierRequired}::text`,
-        })
-        .from(contentItem)
-        .where(and(eq(contentItem.id, id), eq(contentItem.status, "published")))
-        .limit(1);
-      if (!test) return null;
-
-      const [passages, questions] = await Promise.all([
-        db
-          .select({
-            title: passage.title,
-            body_html: passage.bodyHtml,
-            order: passage.order,
-            audio_path: passage.audioPath,
-            questions_html: passage.questionsHtml,
-          })
-          .from(passage)
-          .where(eq(passage.contentItemId, id))
-          .orderBy(asc(passage.order)),
-        db
-          .select({
-            id: question.id,
-            number: question.number,
-            qtype: sql<string>`${question.qtype}::text`,
-            prompt_html: question.promptHtml,
-            options: question.options,
-            group_key: question.groupKey,
-            passage_id: question.passageId,
-          })
-          .from(question)
-          .where(eq(question.contentItemId, id))
-          .orderBy(asc(question.number)),
-      ]);
-
-      return { test, passages, questions } as ExamContent;
-    },
+    // Published-гейт ПЕРВЫМ (внутри loadExamContent): draft/несуществующий тест →
+    // null (страница 404-ит), и мы не тащим тела draft-контента в кэш.
+    () => loadExamContent(id, true),
     ["exam-content", id],
     { tags: ["content_item", contentTag(id)], revalidate: 600 },
   )();
+}
+
+/**
+ * F4 "Sit as student": draft-вариант getExamContent — БЕЗ unstable_cache и БЕЗ
+ * published-гейта. Тот же shape (ExamContent | null), обычный per-request DB read,
+ * НЕ мемоизируется. Вызывать ТОЛЬКО после того как caller сам подтвердил isAdmin
+ * — иначе черновик утёк бы студентам через общий кэш-ключ ["exam-content", id].
+ * answer_key по-прежнему не читается (как и в published-пути).
+ */
+export function getExamContentForAdminPreview(id: string): Promise<ExamContent | null> {
+  return loadExamContent(id, false);
 }
 
 export interface ContentMeta {

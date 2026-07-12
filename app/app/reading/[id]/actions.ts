@@ -176,6 +176,7 @@ export async function submitAttempt(
     accessData.category,
     contentItemId,
     null,
+    accessData.adminDraftBypass, // F4: admin-draft QA-прогон вне монетизации
   );
 
   if (rows.length === 0) redirect(`/app/reading/${contentItemId}`);

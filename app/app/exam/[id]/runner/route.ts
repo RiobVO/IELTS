@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { attempt, contentItem, profile } from "@/db/schema";
 import { env } from "@/env";
-import { getUser } from "@/lib/auth";
+import { getUser, isAdminProfile } from "@/lib/auth";
 import { retargetBridgeOrigin } from "@/lib/import/runner/bridge";
 import { forceRunnerMode } from "@/lib/import/runner/force-mode";
 import { polyfillRunnerStorage } from "@/lib/import/runner/runner-storage";
@@ -40,7 +40,7 @@ export async function GET(
 
   const [[prof], [item], [att]] = await Promise.all([
     db
-      .select({ tier: profile.tier, premiumUntil: profile.premiumUntil })
+      .select({ tier: profile.tier, premiumUntil: profile.premiumUntil, role: profile.role })
       .from(profile)
       .where(eq(profile.id, user.id)),
     db
@@ -48,10 +48,10 @@ export async function GET(
         tierRequired: contentItem.tierRequired,
         category: contentItem.category,
         html: contentItem.runnerHtml,
+        status: contentItem.status,
       })
       .from(contentItem)
-      // Published-only (owner-path bypasses RLS): a draft id -> 404, never served.
-      .where(and(eq(contentItem.id, id), eq(contentItem.status, "published"))),
+      .where(eq(contentItem.id, id)),
     // P0: серверный режим попытки — для синхронизации внутреннего Practice/Mock
     // раннера (forceRunnerMode ниже). Owner-scoped запрос по partial-индексу 0007.
     db
@@ -70,13 +70,21 @@ export async function GET(
 
   if (!item?.html) return new Response("Not found", { status: 404 });
 
+  // F4 "Sit as student": admin может открыть черновик; для всех остальных — тот же
+  // 404, что раньше давал WHERE status='published' (byte-identical для не-админа).
+  const isAdmin = isAdminProfile(prof);
+  const isDraftPreview = item.status !== "published";
+  if (isDraftPreview && !isAdmin) return new Response("Not found", { status: 404 });
+
   const userTier = prof
     ? effectiveTier({ tier: prof.tier, premium_until: prof.premiumUntil })
     : "basic";
   // Tier-гейт + trial-лейн (§4.8), зеркалит enforceAccess: Basic может открыть ОДИН
   // полный тест без апгрейда. Без этого iframe-раннер отдал бы 403 на легитимном
   // trial-старте (страница уже пропустила), и trial сломался бы на середине.
-  if (!meetsTier(userTier, item.tierRequired)) {
+  // F4: черновик ещё не продаётся — тир-гейт неприменим к admin-preview (та же
+  // логика, что enforceAccess.adminDraftBypass на странице /app/exam/[id]).
+  if (!isDraftPreview && !meetsTier(userTier, item.tierRequired)) {
     const maybeTrial = userTier === "basic" && isFullCategory(item.category);
     const trialConsumed = maybeTrial ? await hasConsumedTrial(user.id, id) : true;
     // C2: trial отдаёт runner-HTML ТОЛЬКО при существующей in_progress-попытке юзера

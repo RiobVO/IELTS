@@ -53,6 +53,9 @@ export default async function AdminPage({
       reviewedAt: contentItem.reviewedAt,
       importWarnings: contentItem.importWarnings,
       l1Status: contentItem.l1Status,
+      // F4 "Sit as student": роутинг ссылки превью зеркалит каталог
+      // (examHref = has_runner ? /app/exam/:id : /app/reading/:id).
+      hasRunner: sql<boolean>`${contentItem.runnerHtml} IS NOT NULL`,
       // Внешняя ссылка написана ТЕКСТОМ (content_item.id): drizzle рендерит
       // ${contentItem.id} в raw-sql как неквалифицированный "id", который внутри
       // подзапроса резолвится в question.id → самосравнение → всегда 0.
@@ -317,6 +320,20 @@ export default async function AdminPage({
                     )}
                   </div>
                   <div style={S.actions}>
+                    {/* F4 "Sit as student": админ проходит ЛЮБОЙ тест (draft ИЛИ
+                        published) как студент — ключ/аудио/рендер до публикации.
+                        ?preview=1 форсит practice-режим и на published (иначе
+                        админская сдача mock загрязнила бы рейтинг/лидерборд); сам
+                        флаг ничего не даёт не-админу — роль перепроверяется
+                        сервером на странице. target=_blank — не терять админку. */}
+                    <a
+                      href={`${it.hasRunner ? `/app/exam/${it.id}` : `/app/reading/${it.id}`}?preview=1`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={S.sitLink}
+                    >
+                      Sit as student →
+                    </a>
                     {it.status === "published" ? (
                       <form action={setStatus}>
                         <input type="hidden" name="id" value={it.id} />
@@ -392,7 +409,8 @@ const S: Record<string, React.CSSProperties> = {
   row: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 16px" },
   rowTitle: { fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   meta: { display: "flex", gap: 8, alignItems: "center", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", marginTop: 6, flexWrap: "wrap" },
-  actions: { flexShrink: 0 },
+  actions: { flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 },
+  sitLink: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-link)", textDecoration: "none", whiteSpace: "nowrap" },
   summary: { marginTop: 10, background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 },
   sumRow: { display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" },
   sumLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-secondary)", minWidth: 72 },

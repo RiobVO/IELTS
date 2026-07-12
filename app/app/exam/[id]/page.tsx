@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { and, eq, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { contentItem, passage } from "@/db/schema";
+import { attempt, contentItem, passage } from "@/db/schema";
+import { DraftPreviewBadge } from "@/components/exam/DraftPreviewBadge";
 import { ModeStart } from "@/components/exam/ModeStart";
-import { getProfile, requireUser } from "@/lib/auth";
+import { getProfile, isAdminProfile, requireUser } from "@/lib/auth";
 import {
   type AttemptMode,
   enforceAccess,
@@ -42,7 +43,7 @@ export default async function ExamPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ mode?: string; min?: string; focus?: string }>;
+  searchParams: Promise<{ mode?: string; min?: string; focus?: string; preview?: string }>;
 }) {
   const user = await requireUser();
   const { id } = await params;
@@ -69,11 +70,10 @@ export default async function ExamPage({
         title: contentItem.title,
         section: contentItem.section,
         category: contentItem.category,
+        status: contentItem.status,
       })
       .from(contentItem)
-      // Published-only: owner-path bypasses RLS, so a draft id must notFound() here
-      // too (parity with the catalog's content_item_select_published policy).
-      .where(and(eq(contentItem.id, id), eq(contentItem.status, "published"))),
+      .where(eq(contentItem.id, id)),
     getProfile(),
     findInProgressAttempt(user.id, id),
     hasSubmittedAttempt(user.id, id),
@@ -90,7 +90,18 @@ export default async function ExamPage({
       .where(and(eq(passage.contentItemId, id), isNotNull(passage.audioPath)))
       .limit(1),
   ]);
-  if (!test?.runnerHtml) notFound();
+  if (!test) notFound();
+  // F4 "Sit as student": owner-path запрос выше больше не фильтрует status=
+  // 'published' в SQL — гейт применяется здесь, admin исключается. Byte-identical
+  // для не-админа (draft/несуществующий id -> тот же notFound()).
+  const isAdmin = isAdminProfile(profile);
+  const isDraftPreview = test.status !== "published";
+  if (isDraftPreview && !isAdmin) notFound();
+  if (!test.runnerHtml) notFound();
+  // F4: admin-preview = черновик ЛИБО явный ?preview=1 на published (ссылка «Sit as
+  // student» из админки). Роль проверяется СЕРВЕРОМ — сам флаг не-админу ничего не
+  // даёт (для него preview просто игнорируется, поведение обычное).
+  const adminPreview = isAdmin && (isDraftPreview || sp.preview === "1");
 
   // Tier-гейт §4.8 (effectiveTier понижает истёкший premium до basic) + дневной
   // Basic-кап (P0: только mock; на экране выбора mode=null → кап не применим,
@@ -99,10 +110,44 @@ export default async function ExamPage({
   const userTier = profile
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
     : "basic";
-  const mode = existing?.mode ?? modeParam;
+  // F4: admin-preview форсирует practice БЕЗУСЛОВНО — и для новой попытки, и для
+  // резюма. Резюмируемая mock-попытка конвертится в practice ПРЯМО В БД: submit
+  // читает attempt.mode из БД (shouldRateAttempt рейтингует mock), поэтому
+  // in-memory релейбл не защитил бы рейтинг. Update — owner-scoped, только
+  // in_progress; создать вторую practice-попытку рядом нельзя (partial-индекс 0007
+  // держит одну in_progress на (user, test)), значит конверсия — единственный
+  // способ резюмить без mock-хвоста.
+  let resume = existing;
+  if (adminPreview && existing && existing.mode === "mock") {
+    const converted = await db
+      .update(attempt)
+      .set({ mode: "practice" })
+      .where(
+        and(
+          eq(attempt.id, existing.id),
+          eq(attempt.userId, user.id),
+          eq(attempt.status, "in_progress"),
+        ),
+      )
+      .returning({ id: attempt.id });
+    // 0 строк — попытка уже не in_progress (конкурентный submit из другого таба):
+    // resume из устаревшего снапшота строить нельзя (in-memory разошёлся бы с
+    // БД-строкой) → идём путём «existing отсутствует»: startAttempt создаст свежую
+    // practice-попытку обычной механикой, остаток гонки разрулит ON CONFLICT (0007).
+    resume = converted.length > 0 ? { ...existing, mode: "practice" } : null;
+  }
+  const mode = adminPreview ? "practice" : (existing?.mode ?? modeParam);
   // Кап — только на создание НОВОГО mock; резюм существующей попытки не расходует
   // слот и не должен блокироваться (tier-гейт применяется всегда).
-  await enforceAccess(user.id, userTier, test.tierRequired, test.category, id, existing ? null : modeParam);
+  await enforceAccess(
+    user.id,
+    userTier,
+    test.tierRequired,
+    test.category,
+    id,
+    existing ? null : modeParam,
+    isDraftPreview, // adminDraftBypass — только когда isAdmin уже подтверждён выше
+  );
 
   // Practice → атомизированный раннер (стратегия A), если тесту есть на чём жить:
   // пассажи с телом, а для listening ещё и привязанное аудио (легаси-раннер играет
@@ -112,7 +157,10 @@ export default async function ExamPage({
   const practiceServable =
     !!atomized && (test.section === "reading" || !!withAudio);
   if (mode === "practice" && practiceServable) {
-    redirect(`/app/reading/${id}?mode=practice${focusQS}`);
+    // preview-флаг протаскивается в атомизированный раннер (там та же серверная
+    // проверка роли) — иначе admin-preview потерялся бы на редиректе.
+    const previewQS = adminPreview ? "&preview=1" : "";
+    redirect(`/app/reading/${id}?mode=practice${previewQS}${focusQS}`);
   }
 
   if (!mode) {
@@ -128,10 +176,13 @@ export default async function ExamPage({
   }
 
   // Пройти enforceAccess с !meetsTier можно только по trial-лейну (§4.8) → это
-  // trial-старт: H3-атомарный claim в startAttempt.
-  const isTrial = !meetsTier(userTier, test.tierRequired);
-  // `existing` из батча выше — резюм без повторного SELECT той же строки.
-  const { attemptId } = await startAttempt(user.id, id, mode, isTrial, existing);
+  // trial-старт: H3-атомарный claim в startAttempt. Admin-draft-preview — НЕ trial
+  // (доступ дан bypass'ом, не расходом слота): forced false, иначе admin с
+  // tier < tierRequired молча съел бы свой единственный trial на QA-прогоне.
+  const isTrial = !isDraftPreview && !meetsTier(userTier, test.tierRequired);
+  // `resume` из батча выше (с mock→practice конверсией admin-preview) — резюм без
+  // повторного SELECT той же строки.
+  const { attemptId } = await startAttempt(user.id, id, mode, isTrial, resume);
   // Лимит mock из URL (?min=) — от пресетов ModeStart; clamp против ручных значений
   // (та же валидация, что в /app/reading). В iframe уходит только для mock: раннер
   // синхронизирует внутренний mock-таймер с этим значением (forceRunnerMode).
@@ -140,10 +191,13 @@ export default async function ExamPage({
     ? Math.min(180, Math.max(5, minRaw))
     : null;
   return (
-    <ExamFrame
-      attemptId={attemptId}
-      contentItemId={id}
-      mockMinutes={mode === "mock" ? mockMinutes : null}
-    />
+    <>
+      {isDraftPreview && <DraftPreviewBadge />}
+      <ExamFrame
+        attemptId={attemptId}
+        contentItemId={id}
+        mockMinutes={mode === "mock" ? mockMinutes : null}
+      />
+    </>
   );
 }
