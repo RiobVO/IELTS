@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { profile } from "@/db/schema";
 import { cronSecret } from "@/env";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { logError } from "@/lib/monitoring/log-error";
 
 /**
  * Cron-даунгрейд просроченных подписок (BRIEF §11). Профили, у которых
@@ -43,8 +44,19 @@ export async function POST(request: Request) {
   if (!authorized(request)) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
-  const downgraded = await downgradeExpired();
-  return NextResponse.json({ ok: true, downgraded }, { status: 200 });
+  try {
+    const downgraded = await downgradeExpired();
+    return NextResponse.json({ ok: true, downgraded }, { status: 200 });
+  } catch (e) {
+    await logError({
+      source: "server",
+      message: `expire-premium cron failed: ${e instanceof Error ? e.message : String(e)}`,
+      stack: e instanceof Error ? e.stack : null,
+      url: request.url,
+      context: { route: "/api/cron/expire-premium" },
+    });
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
 }
 
 // Vercel Cron вызывает endpoints методом GET — поддерживаем оба.

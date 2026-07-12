@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { leaderboardEntry, leaderboardSnapshot } from "@/db/schema";
 import { cronSecret } from "@/env";
+import { logError } from "@/lib/monitoring/log-error";
 
 /**
  * Cron-снапшот рангов лидерборда для движения ▲/▼ (League). `leaderboard_entry`
@@ -54,10 +55,21 @@ export async function POST(request: Request) {
   if (!authorized(request)) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
-  const snapshotted = await snapshotRanks();
-  // Weekly digest раньше ехал отсюда piggyback'ом; теперь у него собственный cron
-  // (/api/cron/weekly-digest в vercel.json) — снапшот и рассылка независимы.
-  return NextResponse.json({ ok: true, snapshotted }, { status: 200 });
+  try {
+    const snapshotted = await snapshotRanks();
+    // Weekly digest раньше ехал отсюда piggyback'ом; теперь у него собственный cron
+    // (/api/cron/weekly-digest в vercel.json) — снапшот и рассылка независимы.
+    return NextResponse.json({ ok: true, snapshotted }, { status: 200 });
+  } catch (e) {
+    await logError({
+      source: "server",
+      message: `snapshot-ranks cron failed: ${e instanceof Error ? e.message : String(e)}`,
+      stack: e instanceof Error ? e.stack : null,
+      url: request.url,
+      context: { route: "/api/cron/snapshot-ranks" },
+    });
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
 }
 
 // Vercel Cron вызывает endpoints методом GET — поддерживаем оба.
