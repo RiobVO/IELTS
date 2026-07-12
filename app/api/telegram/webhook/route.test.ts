@@ -82,6 +82,19 @@ describe("telegram publish gate (#1)", () => {
     await flushAfterTasks();
     expect(dbUpdate).toHaveBeenCalledOnce();
   });
+
+  // F14-мин: reason-текст в answerCallback дополнен detail'ом гейта (какой номер пропущен),
+  // а полная версия дублируется отдельным sendMessage в чат — callback ограничен 200
+  // символами Bot API, chat-сообщение — нет.
+  it("appends the gate's detail to the callback text and mirrors it via sendMessage (F14-мин)", async () => {
+    dbSelect
+      .mockReturnValueOnce(selectChain([{ reviewedAt: new Date(), title: "T", section: "reading" }]))
+      .mockReturnValueOnce(integrityChain([{ number: 1, keyId: "k1", accept: ["A"] }, { number: 3, keyId: "k3", accept: ["B"] }])); // gap at #2
+    await POST(publishCallback());
+    await flushAfterTasks();
+    expect(answerCallback).toHaveBeenCalledWith("c1", expect.stringContaining("missing #2"));
+    expect(sendMessage).toHaveBeenCalledWith(7, expect.stringContaining("missing #2"));
+  });
 });
 
 describe("prod webhook secret guard (#4)", () => {

@@ -59,7 +59,8 @@ describe("publishReviewedContentItem", () => {
       .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "Reading 1", section: "reading" }]))
       .mockReturnValueOnce(integrityChain([q(1, ["A"]), q(2, [""])])); // one blank key
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "empty_answer_key" });
+    // F14-мин: detail называет КОНКРЕТНЫЙ номер вопроса с пустым ключом.
+    expect(res).toEqual({ ok: false, reason: "empty_answer_key", detail: "empty key for #2" });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -70,7 +71,7 @@ describe("publishReviewedContentItem", () => {
       .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "Reading 1", section: "reading" }]))
       .mockReturnValueOnce(integrityChain([{ number: 1, keyId: "k1", accept: {} }]));
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "empty_answer_key" });
+    expect(res).toEqual({ ok: false, reason: "empty_answer_key", detail: "empty key for #1" });
   });
 
   it("refuses to publish when a question type didn't resolve (unknown-type fallback) (#13)", async () => {
@@ -85,7 +86,12 @@ describe("publishReviewedContentItem", () => {
       ]),
     );
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "unresolved_question_type" });
+    // F14-мин: detail — сам проблемный warning (уже читан из importWarnings).
+    expect(res).toEqual({
+      ok: false,
+      reason: "unresolved_question_type",
+      detail: 'Q2: unknown type "Frobnicate" → fell back to short_answer',
+    });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -145,7 +151,11 @@ describe("publishReviewedContentItem", () => {
       ]),
     );
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "unresolved_question_type" });
+    expect(res).toEqual({
+      ok: false,
+      reason: "unresolved_question_type",
+      detail: 'Q1: unknown type "" → fell back to short_answer',
+    });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -162,7 +172,11 @@ describe("publishReviewedContentItem", () => {
       ]),
     );
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "unresolved_question_type" });
+    expect(res).toEqual({
+      ok: false,
+      reason: "unresolved_question_type",
+      detail: "Q1: no question type provided in source — publish blocked, add QTYPE and re-import",
+    });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -193,7 +207,19 @@ describe("publishReviewedContentItem", () => {
       .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "R", section: "reading" }]))
       .mockReturnValueOnce(integrityChain([q(1, ["A"]), q(3, ["B"])]));
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "question_number_gap" });
+    // F14-мин: detail называет ИМЕННО пропущенный номер.
+    expect(res).toEqual({ ok: false, reason: "question_number_gap", detail: "missing #2" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // Codex-ревью волны G: пустой набор вопросов реджектился без detail — «дыра в номерах»
+  // при нуле вопросов молча теряла диагностику.
+  it("refuses to publish a test with zero questions and says so in detail (P1a)", async () => {
+    select
+      .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "R", section: "reading" }]))
+      .mockReturnValueOnce(integrityChain([]));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "question_number_gap", detail: "no questions found" });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -202,7 +228,7 @@ describe("publishReviewedContentItem", () => {
       .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "R", section: "reading" }]))
       .mockReturnValueOnce(integrityChain([q(1, ["A"]), q(1, ["B"])]));
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "question_number_gap" });
+    expect(res).toEqual({ ok: false, reason: "question_number_gap", detail: "duplicate #1" });
   });
 
   // Codex-ревью (2026-07-09): offset-agnostic формула пропускала неположительные номера
@@ -212,7 +238,7 @@ describe("publishReviewedContentItem", () => {
       .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "R", section: "reading" }]))
       .mockReturnValueOnce(integrityChain([q(-1, ["A"]), q(0, ["B"]), q(1, ["C"])]));
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "question_number_gap" });
+    expect(res).toEqual({ ok: false, reason: "question_number_gap", detail: "non-positive #-1, #0" });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -234,7 +260,7 @@ describe("publishReviewedContentItem", () => {
       .mockReturnValueOnce(contentChain([{ reviewedAt: new Date(), title: "R", section: "reading" }]))
       .mockReturnValueOnce(integrityChain([q(1, ["A"]), { number: 2, keyId: null, accept: null }]));
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "answer_key_count_mismatch" });
+    expect(res).toEqual({ ok: false, reason: "answer_key_count_mismatch", detail: "missing key for #2" });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -272,7 +298,7 @@ describe("publishReviewedContentItem", () => {
       )
       .mockReturnValueOnce(integrityChain(rows));
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "full_missing_band_scale" });
+    expect(res).toEqual({ ok: false, reason: "full_missing_band_scale", detail: "band scale missing" });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -288,7 +314,7 @@ describe("publishReviewedContentItem", () => {
       )
       .mockReturnValueOnce(integrityChain(rows));
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "full_missing_band_scale" });
+    expect(res).toEqual({ ok: false, reason: "full_missing_band_scale", detail: "band scale empty" });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -310,7 +336,7 @@ describe("publishReviewedContentItem", () => {
       )
       .mockReturnValueOnce(integrityChain(rows));
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "full_wrong_question_count" });
+    expect(res).toEqual({ ok: false, reason: "full_wrong_question_count", detail: "39 questions (need 40)" });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -332,7 +358,7 @@ describe("publishReviewedContentItem", () => {
       )
       .mockReturnValueOnce(integrityChain(rows));
     const res = await publishReviewedContentItem("id1");
-    expect(res).toEqual({ ok: false, reason: "full_wrong_question_count" });
+    expect(res).toEqual({ ok: false, reason: "full_wrong_question_count", detail: "41 questions (need 40)" });
     expect(update).not.toHaveBeenCalled();
   });
 

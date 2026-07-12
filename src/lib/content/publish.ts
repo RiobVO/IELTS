@@ -19,7 +19,33 @@ export type PublishResult =
         | "missing_listening_audio"
         | "full_missing_band_scale"
         | "full_wrong_question_count";
+      /** F14-мин: конкретика отказа (номера/диапазон/факт. число) — из данных,
+       *  УЖЕ прочитанных гейтом (ни один reason не тянет лишний запрос ради detail).
+       *  Бот/админка приклеивают его к статическому тексту причины. */
+      detail?: string;
     };
+
+/**
+ * F14-мин: какие номера сломали questionNumbersOk — неположительные / дубли / дыра
+ * (та же приоритетность проверок, что в questionNumbersOk, чтобы detail описывал
+ * ИМЕННО ту причину, из-за которой сработал гейт).
+ */
+function describeNumberIssue(numbers: number[]): string {
+  // Пустой набор реджектится первым же чеком questionNumbersOk — без этой ветки
+  // detail молча исчезал бы (все списки ниже пусты, Math.min([]) = Infinity).
+  if (numbers.length === 0) return "no questions found";
+  const invalid = [...new Set(numbers.filter((n) => !Number.isInteger(n) || n <= 0))].sort((a, b) => a - b);
+  if (invalid.length > 0) return `non-positive #${invalid.join(", #")}`;
+  const counts = new Map<number, number>();
+  for (const n of numbers) counts.set(n, (counts.get(n) ?? 0) + 1);
+  const dupes = [...counts.keys()].filter((n) => (counts.get(n) ?? 0) > 1).sort((a, b) => a - b);
+  if (dupes.length > 0) return `duplicate #${dupes.join(", #")}`;
+  const min = Math.min(...numbers);
+  const max = Math.max(...numbers);
+  const missing: number[] = [];
+  for (let n = min; n <= max; n++) if (!counts.has(n)) missing.push(n);
+  return missing.length > 0 ? `missing #${missing.join(", #")}` : "";
+}
 
 /**
  * Offset-agnostic: валидные ОДИНОЧНЫЕ пассажи нумеруются НЕ с 1 (passage_2 → 14-26,
@@ -69,8 +95,10 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
   // client had no authoring spec requiring it — that softening is reverted now that the spec
   // exists (BACKLOG W2-3b); see question-types.ts for the blank/unknown predicate.
   const warnings = (row.importWarnings as string[] | null) ?? [];
-  if (warnings.some(isUnresolvedQuestionTypeWarning)) {
-    return { ok: false, reason: "unresolved_question_type" };
+  const qtypeIssues = warnings.filter(isUnresolvedQuestionTypeWarning);
+  if (qtypeIssues.length > 0) {
+    // detail — сами проблемные warning'и (до 3, уже лежат в importWarnings — без нового запроса).
+    return { ok: false, reason: "unresolved_question_type", detail: qtypeIssues.slice(0, 3).join("; ") };
   }
 
   // (г) Machine hard-gate (F3-min, 2026-07-12): a full test (category full_reading /
@@ -82,7 +110,7 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
   if (isFullCategory) {
     const scale = row.bandScale as Record<string, unknown> | null;
     if (!scale || Object.keys(scale).length === 0) {
-      return { ok: false, reason: "full_missing_band_scale" };
+      return { ok: false, reason: "full_missing_band_scale", detail: scale === null ? "band scale missing" : "band scale empty" };
     }
   }
 
@@ -96,8 +124,9 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
     .where(eq(question.contentItemId, id));
 
   // (а) Machine hard-gate: question numbers with no gaps and no duplicates (offset-agnostic).
-  if (!questionNumbersOk(rows.map((r) => r.number))) {
-    return { ok: false, reason: "question_number_gap" };
+  const numbers = rows.map((r) => r.number);
+  if (!questionNumbersOk(numbers)) {
+    return { ok: false, reason: "question_number_gap", detail: describeNumberIssue(numbers) };
   }
 
   // (д) Machine hard-gate (F3-min, 2026-07-12): a full test is exactly 40 questions
@@ -106,24 +135,29 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
   // question (e.g. 1..39) through as a valid contiguous range. This catches it specifically
   // for full_* categories, without touching the offset-agnostic behavior for single passages.
   if (isFullCategory && rows.length !== 40) {
-    return { ok: false, reason: "full_wrong_question_count" };
+    return { ok: false, reason: "full_wrong_question_count", detail: `${rows.length} questions (need 40)` };
   }
 
   // (б) Machine hard-gate: every question carries an answer_key row (else grading has nothing
   // to compare against). answer_key.question_id is UNIQUE → a surplus is impossible, so this
   // only catches a missing row. Distinct from empty_answer_key (row present, accept blank).
-  if (rows.some((r) => r.keyId === null)) {
-    return { ok: false, reason: "answer_key_count_mismatch" };
+  const noKeyRows = rows.filter((r) => r.keyId === null);
+  if (noKeyRows.length > 0) {
+    const nums = noKeyRows.map((r) => r.number).sort((a, b) => a - b);
+    return { ok: false, reason: "answer_key_count_mismatch", detail: `missing key for #${nums.join(", #")}` };
   }
 
   // (#17) Machine hard-gate: no answer key is empty. An empty accept grades as always-wrong
   // (grade.ts never matches), silently deflating every student's score.
-  const hasEmptyKey = rows.some((r) => {
+  const emptyKeyRows = rows.filter((r) => {
     // jsonb column; parser writes string[] — но не-массив (напр. {}) уронил бы .some.
     const acc = Array.isArray(r.accept) ? (r.accept as string[]) : [];
     return !acc.some((a) => (a ?? "").trim() !== "");
   });
-  if (hasEmptyKey) return { ok: false, reason: "empty_answer_key" };
+  if (emptyKeyRows.length > 0) {
+    const nums = emptyKeyRows.map((r) => r.number).sort((a, b) => a - b);
+    return { ok: false, reason: "empty_answer_key", detail: `empty key for #${nums.join(", #")}` };
+  }
 
   // (в) Machine hard-gate: a listening test must have audio before it goes live (separate
   // invariant from qtype). Read live audioPath — the mp3 may be attached as a separate file
