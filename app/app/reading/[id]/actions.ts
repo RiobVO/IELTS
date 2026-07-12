@@ -22,9 +22,21 @@ import { enforceAccess, loadAccessData } from "@/lib/exam/access";
 import { bandForScore } from "@/lib/grading/band";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { buildReviewSnapshot } from "@/lib/exam/review-snapshot";
+import { logError } from "@/lib/monitoring/log-error";
 import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
 import { recomputeLeaderboard } from "@/lib/progress/leaderboard";
 import { isUuid } from "@/lib/uuid";
+
+// saveProgress тикает автосейвом раз в ~1.5с (§4.3) — офлайн-юзер за минуту простоя
+// без сэмплирования дал бы сотни строк в error_log. Module-level Map(attemptId ->
+// последний лог) держит минимальный интервал между записями per attempt; best-effort,
+// не переживает холодный старт функции — это ок, цель лишь не залить error_log.
+const SAVE_PROGRESS_LOG_INTERVAL_MS = 60_000;
+// Eviction-кап: без него долгоживущий инстанс копил бы attemptId бесконечно.
+// Грубый clear() при переполнении — достаточная защита от роста; редкий лишний
+// лог сразу после сброса приемлем.
+const SAVE_PROGRESS_LOG_MAP_MAX = 500;
+const lastSaveProgressLogAt = new Map<string, number>();
 
 /**
  * Persist in-progress answers (autosave, §4.3). Owner-checked, only while the
@@ -49,7 +61,20 @@ export async function saveProgress(
         ),
       );
   } catch (e) {
-    console.error("saveProgress failed", e);
+    const now = Date.now();
+    const last = lastSaveProgressLogAt.get(attemptId) ?? 0;
+    if (now - last >= SAVE_PROGRESS_LOG_INTERVAL_MS) {
+      if (lastSaveProgressLogAt.size > SAVE_PROGRESS_LOG_MAP_MAX) {
+        lastSaveProgressLogAt.clear();
+      }
+      lastSaveProgressLogAt.set(attemptId, now);
+      await logError({
+        source: "server",
+        message: "saveProgress failed",
+        stack: e instanceof Error ? e.stack : null,
+        context: { op: "saveProgress", attemptId },
+      });
+    }
   }
 }
 
@@ -200,7 +225,12 @@ export async function submitAttempt(
       .values({ attemptId, snapshot: buildReviewSnapshot(rows) })
       .onConflictDoNothing();
   } catch (e) {
-    console.error("submitAttempt: review snapshot insert failed", e);
+    await logError({
+      source: "server",
+      message: "submitAttempt: review snapshot insert failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "reviewSnapshotInsert", attemptId, contentItemId, userId: user.id },
+    });
   }
 
   // test_submit — событие воронки (§11). Регистрируется ПОСЛЕ выигранного single-fire
@@ -242,7 +272,12 @@ export async function submitAttempt(
       try {
         await recomputeLeaderboard();
       } catch (e) {
-        console.error("submitAttempt: deferred recomputeLeaderboard failed", e);
+        await logError({
+          source: "server",
+          message: "submitAttempt: deferred recomputeLeaderboard failed",
+          stack: e instanceof Error ? e.stack : null,
+          context: { op: "recomputeLeaderboard", attemptId, userId: user.id },
+        });
       }
     });
   }
@@ -289,7 +324,12 @@ export async function addAnnotation(input: {
       .returning({ id: annotation.id });
     return row ? { id: row.id } : null;
   } catch (e) {
-    console.error("addAnnotation failed", e);
+    await logError({
+      source: "server",
+      message: "addAnnotation failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "addAnnotation", userId: user.id, contentItemId: input.contentItemId },
+    });
     return null;
   }
 }
@@ -303,7 +343,12 @@ export async function updateAnnotationNote(id: string, note: string): Promise<vo
       .set({ note: note.slice(0, 4000) || null, kind: note.trim() ? "note" : "highlight" })
       .where(and(eq(annotation.id, id), eq(annotation.userId, user.id)));
   } catch (e) {
-    console.error("updateAnnotationNote failed", e);
+    await logError({
+      source: "server",
+      message: "updateAnnotationNote failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "updateAnnotationNote", userId: user.id, annotationId: id },
+    });
   }
 }
 
@@ -315,6 +360,11 @@ export async function deleteAnnotation(id: string): Promise<void> {
       .delete(annotation)
       .where(and(eq(annotation.id, id), eq(annotation.userId, user.id)));
   } catch (e) {
-    console.error("deleteAnnotation failed", e);
+    await logError({
+      source: "server",
+      message: "deleteAnnotation failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "deleteAnnotation", userId: user.id, annotationId: id },
+    });
   }
 }

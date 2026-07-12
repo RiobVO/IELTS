@@ -3,6 +3,7 @@ import { and, count, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { speakingSubmission, speakingFeedback, speakingFeedbackDebug, speakingTask } from "@/db/schema";
 import { speakingInternalSecret, publicSiteUrl } from "@/env";
+import { logError } from "@/lib/monitoring/log-error";
 import { logAudioEvent } from "./events";
 import type { EvaluateResult } from "./evaluator";
 import type { TranscriptTiming } from "./transcript-align";
@@ -235,7 +236,13 @@ export function triggerEvaluate(submissionId: string): void {
         body: JSON.stringify({ submissionId }),
       });
     } catch (e) {
-      console.error("triggerEvaluate (speaking) failed", submissionId, e);
+      // Submission виснет в pending, если этот fetch не долетел — важный сигнал.
+      await logError({
+        source: "server",
+        message: "triggerEvaluate (speaking) failed",
+        stack: e instanceof Error ? e.stack : null,
+        context: { op: "speakingTriggerEvaluate", submissionId },
+      });
     }
   });
 }

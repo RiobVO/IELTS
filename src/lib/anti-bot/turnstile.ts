@@ -9,6 +9,7 @@
  * transient siteverify failure should not silently wave bots through.
  */
 import { turnstileConfig } from "@/env";
+import { logError } from "@/lib/monitoring/log-error";
 
 const SITEVERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
@@ -27,7 +28,12 @@ export async function verifyTurnstile(token: string | null): Promise<boolean> {
     return data.success === true;
   } catch (e) {
     // Gate is ON but Cloudflare is unreachable — fail closed (reject), logged.
-    console.error("verifyTurnstile failed", e);
+    await logError({
+      source: "server",
+      message: "verifyTurnstile failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "verifyTurnstile" },
+    });
     return false;
   }
 }

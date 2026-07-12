@@ -27,6 +27,7 @@ import {
 } from "@/db/schema";
 import { getUser } from "@/lib/auth";
 import { gradeOne, type AnswerMode } from "@/lib/grading/grade";
+import { logError } from "@/lib/monitoring/log-error";
 import { isUuid } from "@/lib/uuid";
 import { reviewCard, type Grade } from "@/lib/vocab/srs";
 
@@ -152,7 +153,12 @@ export async function locateEvidence(
     const paraStr = typeof para === "string" ? para : typeof para === "number" ? String(para) : "";
     return paraStr ? { para: paraStr } : null;
   } catch (e) {
-    console.error("locateEvidence failed", e);
+    await logError({
+      source: "server",
+      message: "locateEvidence failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "locateEvidence", attemptId, questionNumber },
+    });
     return null;
   }
 }
@@ -172,7 +178,12 @@ export async function checkAnswer(
     if (!key) return null;
     return { correct: gradeOne(key, value) };
   } catch (e) {
-    console.error("checkAnswer failed", e);
+    await logError({
+      source: "server",
+      message: "checkAnswer failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "checkAnswer", attemptId, questionNumber },
+    });
     return null;
   }
 }
@@ -207,7 +218,12 @@ export async function revealQuestion(
 
     return { accept: key.accept, explanation: key.explanation, explanationRu: key.explanationRu, evidence };
   } catch (e) {
-    console.error("revealQuestion failed", e);
+    await logError({
+      source: "server",
+      message: "revealQuestion failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "revealQuestion", attemptId, questionNumber },
+    });
     return null;
   }
 }
@@ -392,13 +408,23 @@ export async function reviewMistake(
             set: { resolvedAt: now },
           });
       } catch (e) {
-        console.error("reviewMistake graduation insert failed", e);
+        await logError({
+          source: "server",
+          message: "reviewMistake graduation insert failed",
+          stack: e instanceof Error ? e.stack : null,
+          context: { op: "reviewMistakeGraduation", userId: key.userId, contentItemId: key.contentItemId, questionNumber },
+        });
       }
     }
 
     return { correct, dueAt: dueAt.toISOString() };
   } catch (e) {
-    console.error("reviewMistake failed", e);
+    await logError({
+      source: "server",
+      message: "reviewMistake failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "reviewMistake", attemptId, questionNumber },
+    });
     return null;
   }
 }

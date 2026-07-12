@@ -9,6 +9,7 @@ import { speakingFeatureEnabled } from "@/env";
 import { isUuid } from "@/lib/uuid";
 import { signedUploadUrl, audioSize, deleteAudio } from "@/lib/speaking/storage";
 import { logAudioEvent } from "@/lib/speaking/events";
+import { logError } from "@/lib/monitoring/log-error";
 import {
   insertUploadingSubmission, markUploaded, triggerEvaluate, completedCounts,
   countRecentSubmissions, loadSpeakingTaskForSubmissionGate, readOwnSubmission,
@@ -157,7 +158,12 @@ export async function deleteSpeakingRecording(submissionId: string): Promise<{ o
     await deleteAudio(audioPath);
   } catch (e) {
     await markAudioDeleteFailed(submissionId, String(e));
-    console.error("speaking audio delete failed (user)", submissionId, e);
+    await logError({
+      source: "server",
+      message: "speaking audio delete failed (user)",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "deleteSpeakingRecording", userId: user.id, submissionId },
+    });
     return { ok: false };
   }
   await markAudioDeleted(submissionId, user.id, "user");

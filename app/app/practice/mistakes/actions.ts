@@ -13,6 +13,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { mistakeResolution, question } from "@/db/schema";
 import { getUser } from "@/lib/auth";
+import { logError } from "@/lib/monitoring/log-error";
 import { isUuid } from "@/lib/uuid";
 
 /**
@@ -53,6 +54,11 @@ export async function resolveMistake(
       });
     revalidatePath("/app/practice/mistakes");
   } catch (e) {
-    console.error("resolveMistake failed", e);
+    await logError({
+      source: "server",
+      message: "resolveMistake failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "resolveMistake", userId: user.id, contentItemId, questionNumber },
+    });
   }
 }

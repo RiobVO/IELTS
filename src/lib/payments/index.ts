@@ -19,6 +19,7 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import { captureServer } from "@/lib/analytics/server";
 import { captureError } from "@/lib/monitoring/capture";
+import { logError } from "@/lib/monitoring/log-error";
 import { db } from "@/db";
 import { payment, profile } from "@/db/schema";
 import { type PaymentProviderKey, paymentSecret } from "@/env";
@@ -71,17 +72,19 @@ export function paymentsLive(provider: PaymentProviderKey = "payme"): boolean {
  * (Payme: Basic-auth, Click: md5-конкатенация, Uzum: свой HMAC). Заменить на
  * провайдер-специфичную проверку при онбординге. Сравнение — timingSafeEqual.
  */
-export function verifyWebhook(
+export async function verifyWebhook(
   provider: PaymentProviderKey,
   request: Request,
   rawBody: string,
-): boolean {
+): Promise<boolean> {
   const secret = paymentSecret(provider);
   if (secret === null) {
     if (isProduction()) {
-      console.error(
-        `verifyWebhook: REFUSING "${provider}" — no merchant key configured in production (fail closed).`,
-      );
+      await logError({
+        source: "server",
+        message: `verifyWebhook: REFUSING "${provider}" — no merchant key configured in production (fail closed)`,
+        context: { op: "verifyWebhook", provider },
+      });
       return false;
     }
     console.warn(
@@ -92,7 +95,11 @@ export function verifyWebhook(
 
   const sent = request.headers.get("x-payment-signature");
   if (!sent) {
-    console.error(`verifyWebhook: missing x-payment-signature for "${provider}"`);
+    await logError({
+      source: "server",
+      message: `verifyWebhook: missing x-payment-signature for "${provider}"`,
+      context: { op: "verifyWebhook", provider },
+    });
     return false;
   }
 
@@ -271,8 +278,14 @@ export async function applyCompletedPayment(
     return outcome;
   } catch (e) {
     // Денежный путь: ошибка глотается в "error" (провайдер ретраит), но молча
-    // терять её из мониторинга нельзя — шлём в Sentry с ключом платежа (§11).
-    console.error("applyCompletedPayment failed", e);
+    // терять её из мониторинга нельзя — logError (error_log) + captureError
+    // (Sentry, пока no-op) с ключом платежа (§11).
+    await logError({
+      source: "server",
+      message: "applyCompletedPayment failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "applyCompletedPayment", provider, providerTransactionId },
+    });
     captureError(e, { provider, providerTransactionId });
     // Тот же отвал — в продуктовую воронку, если владелец успел определиться до сбоя.
     if (subjectUserId) {

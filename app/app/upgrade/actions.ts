@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { payment, preorder } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { captureServer } from "@/lib/analytics/server";
+import { logError } from "@/lib/monitoring/log-error";
 import { findPlan, PENDING_TTL_MS } from "@/lib/payments/plans";
 import { paymentsLive } from "@/lib/payments";
 import type { PaymentProviderKey } from "@/env";
@@ -140,7 +141,13 @@ export async function preorderPlan(input: {
   } catch (e) {
     // Durable-обещание цены: о сбое честно сообщаем клиенту ({ok:false} → кнопка
     // остаётся активной), событие воронки не шлём — строки нет, врать метрике незачем.
-    console.error("preorderPlan insert failed", e);
+    // money-сигнал — контекст обязателен (userId, tier/plan).
+    await logError({
+      source: "server",
+      message: "preorderPlan insert failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "preorderPlan", userId: user.id, tier: plan.tier, periodMonths: plan.months },
+    });
     return { ok: false };
   }
 

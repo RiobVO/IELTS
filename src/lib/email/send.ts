@@ -1,4 +1,5 @@
 import "server-only";
+import { logError } from "@/lib/monitoring/log-error";
 
 const BREVO_URL = "https://api.brevo.com/v3/smtp/email";
 const TIMEOUT_MS = 10_000;
@@ -13,10 +14,10 @@ function emailDomain(email: string): string {
 /**
  * Отправка письма через Brevo transactional API. НИКОГДА не бросает — вызывающий
  * (cron/дайджест) не должен падать на разовом сбое провайдера/сети/таймауте;
- * возвращаем false и логируем через console.error (в проекте нет winston/pino,
- * console.error — и есть проектный логгер, см. log-error.ts). List-Unsubscribe-
- * заголовки добавляются только когда есть ссылка отписки (one-click unsubscribe
- * в почтовых клиентах, поддерживающих RFC 8058).
+ * возвращаем false и логируем через logError (structured console.error + строка
+ * в error_log, см. log-error.ts). List-Unsubscribe-заголовки добавляются только
+ * когда есть ссылка отписки (one-click unsubscribe в почтовых клиентах,
+ * поддерживающих RFC 8058).
  */
 export async function sendEmail(
   cfg: { apiKey: string; from: string; fromName?: string },
@@ -47,14 +48,20 @@ export async function sendEmail(
       signal: controller.signal,
     });
     if (!res.ok) {
-      console.error("sendEmail: brevo non-2xx", { status: res.status, to: emailDomain(msg.to) });
+      await logError({
+        source: "server",
+        message: "sendEmail: brevo non-2xx",
+        context: { op: "sendEmail", status: res.status, to: emailDomain(msg.to) },
+      });
       return false;
     }
     return true;
   } catch (e) {
-    console.error("sendEmail: request failed", {
-      error: e instanceof Error ? e.message : String(e),
-      to: emailDomain(msg.to),
+    await logError({
+      source: "server",
+      message: "sendEmail: request failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "sendEmail", to: emailDomain(msg.to) },
     });
     return false;
   } finally {
