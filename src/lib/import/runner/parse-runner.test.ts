@@ -66,6 +66,16 @@ describe("parseRunner — full-категория по числу вопросо
     expect(parsed.category).toBe("full_reading");
     expect(parsed.durationSeconds).toBe(60 * 60);
   });
+  // F3-min (2026-07-12): парсер сам не блокирует (publish-гейт — фактический блокер), но
+  // должен поднять warning для review-экрана, когда full-тест остался без band-шкалы.
+  it("reading 40q без getBandFor40 → warning про отсутствующую band-шкалу", () => {
+    const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":"TRUE"`).join(",");
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>const correctAnswers = {${entries}};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    expect(parsed.bandScale).toBeNull();
+    expect(parsed.warnings.some((w) => /band scale/i.test(w))).toBe(true);
+  });
   it("listening 40q без band() → full_listening / 30m", () => {
     const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":["w${i}"]`).join(",");
     const html = `<!doctype html><html><head><title>L</title></head><body><audio></audio>
@@ -73,6 +83,14 @@ describe("parseRunner — full-категория по числу вопросо
     const { parsed } = parseRunner(html);
     expect(parsed.category).toBe("full_listening");
     expect(parsed.durationSeconds).toBe(30 * 60);
+  });
+  it("listening 40q без band() → warning про отсутствующую band-шкалу", () => {
+    const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":["w${i}"]`).join(",");
+    const html = `<!doctype html><html><head><title>L</title></head><body><audio></audio>
+<script>const KEY = {${entries}};</script></body></html>`;
+    const { parsed } = parseRunner(html);
+    expect(parsed.bandScale).toBeNull();
+    expect(parsed.warnings.some((w) => /band scale/i.test(w))).toBe(true);
   });
   it("одиночный пассаж 13q остаётся passage_1", () => {
     const entries = Array.from({ length: 13 }, (_, i) => `"${i + 1}":"TRUE"`).join(",");

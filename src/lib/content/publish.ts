@@ -16,7 +16,9 @@ export type PublishResult =
         | "question_number_gap"
         | "answer_key_count_mismatch"
         | "empty_answer_key"
-        | "missing_listening_audio";
+        | "missing_listening_audio"
+        | "full_missing_band_scale"
+        | "full_wrong_question_count";
     };
 
 /**
@@ -48,6 +50,8 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
       title: contentItem.title,
       importWarnings: contentItem.importWarnings,
       section: contentItem.section,
+      category: contentItem.category,
+      bandScale: contentItem.bandScale,
     })
     .from(contentItem)
     .where(eq(contentItem.id, id))
@@ -69,6 +73,19 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
     return { ok: false, reason: "unresolved_question_type" };
   }
 
+  // (г) Machine hard-gate (F3-min, 2026-07-12): a full test (category full_reading /
+  // full_listening) must carry a band-scale table, else the result page has no percent→band
+  // conversion and shows a raw percent instead of a band score (confirmed in prod). The
+  // runner parser only warns on this (isFull is a heuristic, not authoritative) — the gate is
+  // the actual blocker. Empty object counts as missing too (degenerate persisted value).
+  const isFullCategory = (row.category ?? "").startsWith("full_");
+  if (isFullCategory) {
+    const scale = row.bandScale as Record<string, unknown> | null;
+    if (!scale || Object.keys(scale).length === 0) {
+      return { ok: false, reason: "full_missing_band_scale" };
+    }
+  }
+
   // One LEFT JOIN serves three structural gates: numbering (all questions), one key per
   // question (#б), and non-empty key (#17). An INNER JOIN would drop key-less questions
   // past gate (б), so it must be a left join from question.
@@ -81,6 +98,15 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
   // (а) Machine hard-gate: question numbers with no gaps and no duplicates (offset-agnostic).
   if (!questionNumbersOk(rows.map((r) => r.number))) {
     return { ok: false, reason: "question_number_gap" };
+  }
+
+  // (д) Machine hard-gate (F3-min, 2026-07-12): a full test is exactly 40 questions
+  // (IELTS invariant). questionNumbersOk above is offset-agnostic on purpose (single
+  // passages don't start at 1) — that same leniency lets a full test missing a head/tail
+  // question (e.g. 1..39) through as a valid contiguous range. This catches it specifically
+  // for full_* categories, without touching the offset-agnostic behavior for single passages.
+  if (isFullCategory && rows.length !== 40) {
+    return { ok: false, reason: "full_wrong_question_count" };
   }
 
   // (б) Machine hard-gate: every question carries an answer_key row (else grading has nothing

@@ -116,6 +116,12 @@ export async function setStatus(formData: FormData) {
       if (res.reason === "missing_listening_audio") {
         fail("Can't publish: this listening test has no audio yet — attach the mp3 first.");
       }
+      if (res.reason === "full_missing_band_scale") {
+        fail("Can't publish: a full test needs a band scale table (getBandFor40) — fix the import first.");
+      }
+      if (res.reason === "full_wrong_question_count") {
+        fail("Can't publish: a full test must have exactly 40 questions — fix the import first.");
+      }
       redirect("/admin"); // not_found
     }
   } else {
