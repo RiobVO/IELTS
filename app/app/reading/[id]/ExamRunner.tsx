@@ -13,6 +13,7 @@ import { PassagePane, type AnnotationRow } from "./PassagePane";
 import { saveProgress, submitAttempt } from "./actions";
 import { checkAnswer, locateEvidence, reviewMistake, revealQuestion, type RevealResult } from "./practice-actions";
 import { reportClientError } from "@/lib/monitoring/report-client-error";
+import { isNextRedirectError } from "@/lib/exam/is-redirect-error";
 import { countWords, parseChoiceCount, parseWordLimit } from "@/lib/exam/format-guard";
 import { strategyHints } from "@/lib/exam/strategy-hints";
 import { parseConfidenceMap, type ConfidenceLevel } from "@/lib/practice/confidence-calibration";
@@ -258,6 +259,8 @@ export default function ExamRunner({
   // Десктоп игнорирует это (обе панели видны, см. .exam-split CSS).
   const [pane, setPane] = useState<"passage" | "questions">("passage");
   const [pending, startSubmit] = useTransition();
+  // F11 — виден, только пока последний submitAttempt реально провалился (не redirect).
+  const [submitError, setSubmitError] = useState(false);
   const qScrollRef = useRef<HTMLDivElement>(null);
 
   const isListening = !!audioSrc;
@@ -311,15 +314,83 @@ export default function ExamRunner({
   // change (skips the initial render); started_at is server-stamped so the timer
   // keeps running server-side regardless.
   const saved = useRef(JSON.stringify(initialAnswers));
+  // F13 — честный индикатор «Progress not saved». Провал = transport-reject
+  // (офлайн, запрос не дошёл до сервера) ЛИБО `ok:false` от saveProgress (сервер
+  // поймал ошибку записи — он best-effort и не бросает, но сообщает результат).
+  // Успешное сохранение гасит индикатор.
+  const [saveFailed, setSaveFailed] = useState(false);
+  // Сэмплирование репорта: не на каждый неудачный тик офлайн-минуты, только на
+  // первый провал подряд (сбрасывается при следующем успешном сохранении).
+  const saveFailReported = useRef(false);
+  // Watermark `saved` двигается ТОЛЬКО по подтверждённому успеху — иначе провал
+  // «замораживал» бы снапшот как сохранённый: юзер перестал править → эффект
+  // больше не стреляет → сейв не повторится после возврата сети, тост залипнет.
+  // После провала — retry-таймер (~10с); answers к моменту ретрая берём из ref
+  // (замыкание могло устареть), сам повтор — через ref на актуальный runAutosave
+  // (self-reference внутри useCallback невозможен).
+  const saveRetryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const answersRef = useRef(answers);
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+  // Generation-guard конкурентных сейвов (тот же приём, что playAttemptRef волны B):
+  // then/catch УСТАРЕВШЕГО поколения — полный no-op (ни watermark, ни fail, ни
+  // таймеров, ни сброса индикатора). Иначе поздний успех СТАРОГО снапшота гасил бы
+  // retry-таймер/индикатор сразу после провала НОВОГО — повтор новейших
+  // несохранённых ответов молча терялся. mountedRef — тот же no-op после анмаунта:
+  // fail() от запроса, зарезолвившегося после cleanup, спавнил бы новый retry-таймер
+  // уже после его очистки (утечка таймера на снятом компоненте).
+  const saveGenRef = useRef(0);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true; // true и на StrictMode-ремаунте (cleanup ставит false)
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(saveRetryTimer.current);
+    };
+  }, []);
+  const runAutosaveRef = useRef<() => void>(() => {});
+  const runAutosave = useCallback(() => {
+    const payload = answersRef.current;
+    const snapshot = JSON.stringify(payload);
+    if (snapshot === saved.current) return;
+    const gen = ++saveGenRef.current;
+    // Актуален ли ещё исход ЭТОГО запроса: новый runAutosave (свежий payload)
+    // или анмаунт обесценивают и успех, и провал старого.
+    const stale = () => gen !== saveGenRef.current || !mountedRef.current;
+    // transport-reject и ok:false — один путь: индикатор + отложенный повтор.
+    const fail = (e: unknown) => {
+      if (stale()) return;
+      setSaveFailed(true);
+      // ok:false сервер уже залогировал сам (logError в экшене) — клиентский
+      // репорт только для transport-ошибок, до сервера не дошедших.
+      if (e != null && !saveFailReported.current) {
+        saveFailReported.current = true;
+        reportClientError(e, "saveProgress call failed");
+      }
+      clearTimeout(saveRetryTimer.current);
+      saveRetryTimer.current = setTimeout(() => runAutosaveRef.current(), 10_000);
+    };
+    saveProgress(attemptId, payload)
+      .then((res) => {
+        if (stale()) return;
+        if (!res.ok) return fail(null);
+        saved.current = snapshot;
+        setSaveFailed(false);
+        saveFailReported.current = false;
+        clearTimeout(saveRetryTimer.current);
+      })
+      .catch(fail);
+  }, [attemptId]);
+  useEffect(() => {
+    runAutosaveRef.current = runAutosave;
+  });
   useEffect(() => {
     const snapshot = JSON.stringify(answers);
     if (snapshot === saved.current) return;
-    const t = setTimeout(() => {
-      saved.current = snapshot;
-      void saveProgress(attemptId, answers);
-    }, 1500);
+    const t = setTimeout(runAutosave, 1500);
     return () => clearTimeout(t);
-  }, [answers, attemptId]);
+  }, [answers, attemptId, runAutosave]);
 
   // P6/P7 — обучающая петля practice: клиентские, НЕ персистятся (в отличие от answers).
   // verdict = результат мгновенной проверки, reveal = раскрытый ключ, checkBusy = pending
@@ -515,9 +586,32 @@ export default function ExamRunner({
   const answered = Object.values(answers).filter(isAnswered).length;
   const remaining = durationSeconds != null ? Math.max(0, durationSeconds - elapsed) : null;
 
+  // F11 — submitAttempt провал (сеть/БД) раньше не отлавливался и ронял страницу в
+  // error boundary. try/catch + submitError-панель держат студента на месте с явным
+  // Retry; успешный сабмит по-прежнему завершается redirect() (пробрасываем как есть).
+  // Guard `autoSubmitted` при провале НЕ сбрасывается здесь: listening-heartbeat
+  // тикает каждую секунду, и при прошедшем transfer-дедлайне сброшенный guard дал бы
+  // немедленный повторный авто-сабмит (в офлайне — бесконечный шторм). Авто-ветки
+  // дополнительно гейтятся !submitError; повтор — ТОЛЬКО явный клик Retry.
   const submit = () => {
     if (pending) return;
-    startSubmit(() => submitAttempt(attemptId, answers));
+    setSubmitError(false);
+    startSubmit(async () => {
+      try {
+        await submitAttempt(attemptId, answers);
+      } catch (e) {
+        if (isNextRedirectError(e)) throw e; // успешный сабмит — не ошибка, доносим редирект
+        console.error("submitAttempt call failed", e);
+        reportClientError(e, "submitAttempt call failed");
+        setSubmitError(true);
+      }
+    });
+  };
+  // Явный Retry: единственное место, где guard авто-сабмита сбрасывается — после
+  // успеха уйдёт redirect, после нового провала submitError снова гейтит авто-ветки.
+  const retrySubmit = () => {
+    autoSubmitted.current = false;
+    submit();
   };
 
   // useCallback → стабильная ссылка onJump, чтобы memo(QuestionNavigator) не ломался
@@ -628,12 +722,13 @@ export default function ExamRunner({
   }, [isListening, started, mode]);
 
   // Mock авто-сабмит при 0 (единожды). Клиент лишь инициирует — сервер считает время и грейдит.
+  // !submitError: после провала сабмита авто-ветка молчит, повтор — только явный Retry.
   useEffect(() => {
-    if (mode === "mock" && started && mockRemaining === 0 && !autoSubmitted.current) {
+    if (mode === "mock" && started && mockRemaining === 0 && !autoSubmitted.current && !submitError) {
       autoSubmitted.current = true;
       submitRef.current();
     }
-  }, [mode, started, mockRemaining]);
+  }, [mode, started, mockRemaining, submitError]);
 
   const togglePause = () => setPaused((p) => !p);
   const restart = () => {
@@ -657,6 +752,8 @@ export default function ExamRunner({
 
   // Listening single-pass (MOCK only): при возврате после refresh решаем фазу по реальному
   // времени. В practice запись разлочена (нет transfer/авто-сабмита), эффект не работает.
+  // !submitError — как в heartbeat: ручной сабмит мог провалиться до загрузки metadata,
+  // авто-ветка не должна стрелять поверх открытой error-панели.
   useEffect(() => {
     if (!isListening || mode !== "mock" || audioDur <= 0 || resumeDecided.current) return;
     resumeDecided.current = true;
@@ -664,7 +761,7 @@ export default function ExamRunner({
     if (anchor == null) return; // свежий тест → остаёмся на gate (fresh)
     const elapsed = (Date.now() - anchor) / 1000;
     if (elapsed >= audioDur + TRANSFER_SECONDS) {
-      if (!autoSubmitted.current) {
+      if (!autoSubmitted.current && !submitError) {
         autoSubmitted.current = true;
         submitRef.current();
       }
@@ -673,10 +770,14 @@ export default function ExamRunner({
       setTransferRemaining(Math.max(0, Math.round(audioDur + TRANSFER_SECONDS - elapsed)));
     }
     // elapsed < audioDur → gate(resume): тап продолжит с позиции; время ведёт heartbeat ниже.
-  }, [isListening, mode, audioDur]);
+    // submitError в deps: перезапуск безвреден (resumeDecided-guard), линт честен.
+  }, [isListening, mode, audioDur, submitError]);
 
   // Listening heartbeat (MOCK only): остаток записи / transfer, переход в transfer и
   // авто-сабмит по wall-clock. В practice не работает — запись под ручным управлением.
+  // !submitError гейтит ТОЛЬКО авто-сабмит (не тики фазы/остатка): после провала
+  // сабмита посекундный tick при прошедшем дедлайне давал бы немедленный повтор
+  // (в офлайне — бесконечный шторм); повтор — только явный Retry.
   useEffect(() => {
     if (!isListening || mode !== "mock") return;
     const tick = () => {
@@ -688,7 +789,7 @@ export default function ExamRunner({
       } else {
         setTransferRemaining(Math.max(0, Math.round(audioDur + TRANSFER_SECONDS - elapsed)));
         setAudioPhase("transfer");
-        if (elapsed >= audioDur + TRANSFER_SECONDS && !autoSubmitted.current) {
+        if (elapsed >= audioDur + TRANSFER_SECONDS && !autoSubmitted.current && !submitError) {
           autoSubmitted.current = true;
           submitRef.current();
         }
@@ -697,7 +798,7 @@ export default function ExamRunner({
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [isListening, mode, audioDur]);
+  }, [isListening, mode, audioDur, submitError]);
 
   // В transfer звук останавливаем (на случай, если переход опередил событие ended).
   useEffect(() => {
@@ -975,6 +1076,28 @@ export default function ExamRunner({
   return (
     <div className="exam-cambridge" style={S.shell}>
       <style>{READING_CSS}</style>
+
+      {/* F11 — submitAttempt провалился (не redirect): панель с Retry поверх раннера.
+          Копирайт честный: сейв мог тоже провалиться (офлайн) — ответы гарантированно
+          живут только в state этой вкладки. */}
+      {submitError && (
+        <div className="exam-submit-error" role="alert">
+          <Icon name="info" size={16} strokeWidth={2.4} />
+          <span className="exam-submit-error-msg">
+            Submit failed — check your connection and retry. Your answers are kept in this tab.
+          </span>
+          <button type="button" className="exam-submit-error-retry" onClick={retrySubmit}>
+            Retry
+          </button>
+        </div>
+      )}
+      {/* F13 — автосейв (BRIEF §4.3) не дошёл до сервера; гаснет на следующем успешном тике. */}
+      {!submitError && saveFailed && (
+        <div className="exam-save-toast" role="status" aria-live="polite">
+          <Icon name="info" size={14} strokeWidth={2.4} />
+          <span className="exam-save-toast-msg">Progress not saved</span>
+        </div>
+      )}
 
       {/* Top bar */}
       <div className="exam-top" style={S.top}>
@@ -2184,6 +2307,21 @@ const READING_CSS = `
 @media (pointer:coarse){.exam-goal-chip{min-height:44px}.exam-goal-toast-x{width:44px;height:44px}}
 @keyframes nine-blink{0%,100%{opacity:1}50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){[style*="nine-blink"]{animation:none!important}}
+
+/* F11 — провал submitAttempt (сеть/БД, не redirect): фикс-панель с Retry, не роняем
+   раннер в error boundary. F13 — лёгкий индикатор провала автосейва (используется тот
+   же bottom:24 слот; одновременно оба не показываются — submitError бьёт после явного
+   клика Submit, saveFailed гаснет, как только следующий тик автосейва пройдёт). */
+.exam-submit-error{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:56;display:flex;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 24px));padding:11px 12px 11px 15px;border-radius:var(--radius-lg);border:1px solid var(--error-edge);background:var(--surface);box-shadow:var(--shadow-lg);animation:exam-reveal-in .24s cubic-bezier(.16,1,.3,1) both}
+.exam-submit-error svg{flex:none;color:var(--error)}
+.exam-submit-error-msg{font-family:var(--font-ui);font-size:var(--text-sm);font-weight:600;color:var(--text-primary);line-height:1.4}
+.exam-submit-error-retry{flex:none;height:32px;padding:0 14px;border-radius:var(--radius-sm);border:none;background:var(--error);color:#fff;font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.exam-submit-error-retry:hover{background:color-mix(in oklab, var(--error) 88%, white)}
+.exam-save-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:54;display:flex;align-items:center;gap:8px;padding:9px 13px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-lg);animation:exam-reveal-in .24s cubic-bezier(.16,1,.3,1) both}
+.exam-save-toast svg{flex:none;color:var(--warn-text)}
+.exam-save-toast-msg{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;color:var(--text-secondary);line-height:1.3}
+@media (prefers-reduced-motion:reduce){.exam-submit-error,.exam-save-toast{animation:none}}
+@media (pointer:coarse){.exam-submit-error-retry{min-height:44px}}
 
 /* --- Адаптив reading-раннера. База = мобильный: один full-width таб; ≥1024px =
    две панели бок-о-бок (десктоп без изменений). display/flex/width переключаемых
