@@ -831,10 +831,10 @@ export default function Home() {
           <div className="close">
             <h2>Sit your first mock free.</h2>
             <p>Your per-type breakdown in 20 minutes, and an honest band to train against.</p>
-            {/* честные цифры (бывший proofline) — соцдоказательство в момент решения */}
+            {/* соцдоказательство без числа тестов в каталоге — каталог сейчас перезаливается с нуля */}
             <ul className="close-pts">
               <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>No card</li>
-              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>6 real papers · 240+ questions</li>
+              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Real exam-format papers · new tests added weekly</li>
               <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Server-graded band</li>
             </ul>
             <a href="/auth" className="btn btn-v btn-lg">
