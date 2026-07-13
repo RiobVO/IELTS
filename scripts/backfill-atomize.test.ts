@@ -3,7 +3,10 @@ import {
   checkQuestionNumberGate,
   planPassages,
   findQtypeMismatches,
+  hasMapLabelling,
+  selectQtypeFixes,
   parserLabel,
+  type QtypeMismatch,
 } from "./backfill-atomize";
 
 describe("checkQuestionNumberGate", () => {
@@ -110,6 +113,59 @@ describe("findQtypeMismatches", () => {
       ],
     );
     expect(out.map((m) => m.number)).toEqual([2, 5]);
+  });
+});
+
+describe("hasMapLabelling", () => {
+  it("есть вопрос qtype=map_labelling -> true", () => {
+    expect(hasMapLabelling([{ qtype: "mcq_single" }, { qtype: "map_labelling" }])).toBe(true);
+  });
+
+  it("нет map_labelling -> false", () => {
+    expect(hasMapLabelling([{ qtype: "mcq_single" }, { qtype: "tfng" }])).toBe(false);
+  });
+
+  it("пустой список вопросов -> false", () => {
+    expect(hasMapLabelling([])).toBe(false);
+  });
+});
+
+describe("selectQtypeFixes", () => {
+  it("listening: промоутит только mcq_single -> mcq_multi, остальное не трогает", () => {
+    const mismatches: QtypeMismatch[] = [
+      { number: 1, dbQtype: "mcq_single", parsedQtype: "mcq_multi" },
+      { number: 2, dbQtype: "map_labelling", parsedQtype: "mcq_single" },
+      { number: 3, dbQtype: "matching_info", parsedQtype: "matching_features" },
+    ];
+    expect(selectQtypeFixes("listening", mismatches, false)).toEqual([1]);
+  });
+
+  it("listening: parsed=mcq_multi при db!=mcq_single НЕ промоутится (обе стороны пары обязаны совпасть)", () => {
+    const mismatches: QtypeMismatch[] = [
+      { number: 7, dbQtype: "matching_features", parsedQtype: "mcq_multi" },
+    ];
+    expect(selectQtypeFixes("listening", mismatches, false)).toEqual([]);
+  });
+
+  it("listening: --fix-qtype флаг не участвует в решении (промоушен применяется независимо от него)", () => {
+    const mismatches: QtypeMismatch[] = [
+      { number: 1, dbQtype: "mcq_single", parsedQtype: "mcq_multi" },
+      { number: 2, dbQtype: "matching_info", parsedQtype: "matching_features" },
+    ];
+    expect(selectQtypeFixes("listening", mismatches, true)).toEqual([1]);
+  });
+
+  it("reading: без --fix-qtype ничего не применяется", () => {
+    const mismatches: QtypeMismatch[] = [{ number: 1, dbQtype: "unknown", parsedQtype: "note_completion" }];
+    expect(selectQtypeFixes("reading", mismatches, false)).toEqual([]);
+  });
+
+  it("reading: с --fix-qtype применяются ВСЕ расхождения", () => {
+    const mismatches: QtypeMismatch[] = [
+      { number: 1, dbQtype: "unknown", parsedQtype: "note_completion" },
+      { number: 2, dbQtype: "mcq_single", parsedQtype: "mcq_multi" },
+    ];
+    expect(selectQtypeFixes("reading", mismatches, true)).toEqual([1, 2]);
   });
 });
 

@@ -24,12 +24,24 @@
  *    затирания вручную правленного); отсутствующий order -> INSERT; DELETE
  *    никогда; audio_path НИКОГДА не трогаем (у listening уже может быть привязан).
  *  - question: UPDATE по (content_item_id, number): prompt_html/options/
- *    group_key/passage_id. qtype по умолчанию НЕ пишем — расхождение только в
- *    отчёт; флаг --fix-qtype дополнительно выравнивает qtype по распарсенному
- *    (runner-импорт типизировал хуже парсера: choose-TWO лежал как mcq_single и
- *    атомизированный рендер давал radio вместо checkbox — валидный двухбуквенный
- *    ответ невозможно ввести). Исторические per_type_breakdown — снапшоты в
- *    attempt, их это не переписывает; будущие попытки типизируются точнее.
+ *    group_key/passage_id. qtype-политика различается по секции (тот же контракт,
+ *    что живой импорт — см. src/lib/import/runner/atomize-merge.ts):
+ *      - reading: qtype по умолчанию НЕ пишем — расхождение только в отчёт; флаг
+ *        --fix-qtype дополнительно выравнивает ВСЕ расхождения по распарсенному
+ *        (runner-импорт типизировал хуже парсера: choose-TWO лежал как mcq_single и
+ *        атомизированный рендер давал radio вместо checkbox — валидный двухбуквенный
+ *        ответ невозможно ввести).
+ *      - listening: --fix-qtype не участвует — ВСЕГДА применяется ТОЛЬКО promotion
+ *        db mcq_single -> parsed mcq_multi (choose-TWO/THREE член группы); прочие
+ *        расхождения (напр. map_labelling vs mcq_single, matching_info vs
+ *        matching_features) остаются runner qtype — только в отчёт. См.
+ *        selectQtypeFixes. content_item.question_types для listening
+ *        пересчитывается из ИТОГОВЫХ qtype строк после этого апдейта.
+ *    Исторические per_type_breakdown — снапшоты в attempt, их это не переписывает;
+ *    будущие попытки типизируются точнее.
+ *  - listening map-гейт: item с хотя бы одним вопросом qtype='map_labelling' в БД
+ *    пропускается целиком (карта — inline-SVG раннера, атомизированный рендер без
+ *    неё делает вопрос нерешаемым) — см. hasMapLabelling.
  *  - answer_key НЕ читается и НЕ пишется вообще.
  *  - Повторный прогон стабилен: passages с непустым body_html пропускаются
  *    (skip-has-content), question-поля перезаписываются ТЕМИ ЖЕ распарсенными
@@ -113,7 +125,11 @@ export interface QtypeMismatch {
   parsedQtype: string;
 }
 
-/** qtype НЕ пишем никогда — только собираем расхождения для отчёта. */
+/**
+ * Собирает qtype-расхождения parsed vs БД — сами по себе это только отчёт.
+ * Запись происходит отдельно и только через selectQtypeFixes: reading — по флагу
+ * --fix-qtype, listening — строго promotion mcq_single -> mcq_multi.
+ */
 export function findQtypeMismatches(
   parsedQuestions: { number: number; qtype: string }[],
   dbQuestions: { number: number; qtype: string }[],
@@ -127,6 +143,41 @@ export function findQtypeMismatches(
     }
   }
   return out.sort((a, b) => a.number - b.number);
+}
+
+/**
+ * Listening map-гейт: qtype='map_labelling' в БД рендерится раннером как inline-SVG
+ * карта — атомизированный рендер вопроса без карты делает его нерешаемым. Пока нет
+ * map-фичи в атомизированном UI, весь item пропускаем целиком (владелец: ждать
+ * фичу, не публиковать частично сломанный тест). Reading этой проблемы не имеет.
+ */
+export function hasMapLabelling(dbQuestions: { qtype: string }[]): boolean {
+  return dbQuestions.some((q) => q.qtype === "map_labelling");
+}
+
+/**
+ * Какие qtype-расхождения реально применять (номера вопросов) — политика различается
+ * по секции, тот же контракт, что живой импорт (src/lib/import/runner/atomize-merge.ts):
+ *  - reading: без --fix-qtype ничего не применяется (только отчёт); с флагом —
+ *    применяются ВСЕ расхождения.
+ *  - listening: флаг --fix-qtype не участвует — ВСЕГДА применяется ТОЛЬКО promotion
+ *    db mcq_single -> parsed mcq_multi (член choose-TWO/THREE группы, без которой
+ *    атомизированный рендер даёт radio вместо checkbox). Любое другое расхождение
+ *    (map_labelling vs mcq_single, matching_info vs matching_features и т.п.)
+ *    остаётся runner qtype — источник (.q-instruction) семантически точнее
+ *    структурного HTML-парса atom.
+ */
+export function selectQtypeFixes(
+  section: "reading" | "listening",
+  mismatches: QtypeMismatch[],
+  fixQtypeFlag: boolean,
+): number[] {
+  if (section === "listening") {
+    return mismatches
+      .filter((m) => m.dbQtype === "mcq_single" && m.parsedQtype === "mcq_multi")
+      .map((m) => m.number);
+  }
+  return fixQtypeFlag ? mismatches.map((m) => m.number) : [];
 }
 
 /** Метка для отчёта — какой парсер реально сработал (по итогу parseTest, не по DB-полям). */
@@ -150,7 +201,11 @@ if (invokedDirectly) {
 
   const { db } = await import("../src/db/index.ts");
   const { eq, and, sql } = await import("drizzle-orm");
-  const { passage: passageT, question: questionT } = await import("../src/db/schema.ts");
+  const {
+    passage: passageT,
+    question: questionT,
+    contentItem: contentItemT,
+  } = await import("../src/db/schema.ts");
   const { parseTest } = await import("../src/lib/import/parse-test.ts");
   const { createServiceClient } = await import("../src/lib/supabase/service.ts");
 
@@ -158,15 +213,23 @@ if (invokedDirectly) {
     id: string;
     title: string;
     source_file_path: string | null;
+    section: "reading" | "listening";
   }
 
-  // Reading-only: атомизация listening сознательно вне scope (нет текста пассажа,
-  // расходящаяся типизация — см. import-runner reading-гейт). Держим backfill в тех
-  // же рамках, что и живой импорт, чтобы не оживить listening-practice случайно.
+  // Reading: только published (как было). Listening: published + draft — "Day 6
+  // Full Test 6" и published в целом можно бэкфиллить сразу, а draft "Cambridge 21
+  // Test 3" атомизируем заранее, аудио владелец привяжет позже (публикация решается
+  // отдельно от атомизации). Оба section идут через один и тот же 1:1-гейт и
+  // planPassages; qtype/question_types-политика для listening — см. selectQtypeFixes
+  // и hasMapLabelling ниже.
   const rows = (await db.execute(sql`
-    SELECT id, title, source_file_path
+    SELECT id, title, source_file_path, section
     FROM content_item
-    WHERE status = 'published' AND runner_html IS NOT NULL AND section = 'reading'
+    WHERE runner_html IS NOT NULL
+      AND (
+        (section = 'reading' AND status = 'published') OR
+        (section = 'listening' AND status IN ('published', 'draft'))
+      )
     ORDER BY title
   `)) as unknown as DbRow[];
 
@@ -184,6 +247,7 @@ if (invokedDirectly) {
   let skippedNoSource = 0;
   let skippedParseError = 0;
   let skippedGate = 0;
+  let skippedMapLabelling = 0;
 
   for (const row of rows) {
     const html = await loadSourceHtml(row);
@@ -211,6 +275,14 @@ if (invokedDirectly) {
       .from(questionT)
       .where(eq(questionT.contentItemId, row.id));
 
+    if (row.section === "listening" && hasMapLabelling(dbQuestions)) {
+      skippedMapLabelling++;
+      console.log(
+        `SKIP ${row.id} "${row.title}" — map_labelling questions need the map image (deferred)`,
+      );
+      continue;
+    }
+
     const gate = checkQuestionNumberGate(
       parsed.questions.map((q) => q.number),
       dbQuestions.map((q) => q.number),
@@ -233,6 +305,9 @@ if (invokedDirectly) {
       parsed.questions.map((q) => ({ number: q.number, qtype: q.qtype })),
       dbQuestions.map((q) => ({ number: q.number, qtype: q.qtype })),
     );
+    // listening: --fix-qtype игнорируется, только mcq_single -> mcq_multi promotion.
+    // reading: поведение --fix-qtype не изменилось (см. selectQtypeFixes).
+    const selectedFixNumbers = new Set(selectQtypeFixes(row.section, qtypeMismatches, fixQtype));
 
     const inserts = passagePlan.filter((p) => p.action === "insert").length;
     const updates = passagePlan.filter((p) => p.action === "update").length;
@@ -245,7 +320,24 @@ if (invokedDirectly) {
         (qtypeMismatches.length ? `; qtype mismatches=${qtypeMismatches.length}` : ""),
     );
     for (const m of qtypeMismatches) {
-      console.log(`    Q${m.number}: db=${m.dbQtype} -> parsed=${m.parsedQtype}`);
+      const applying = selectedFixNumbers.has(m.number) ? " (applying)" : "";
+      console.log(`    Q${m.number}: db=${m.dbQtype} -> parsed=${m.parsedQtype}${applying}`);
+    }
+
+    // content_item.question_types (каталог-фильтр) для listening пересчитывается
+    // из ИТОГОВЫХ qtype строк БД после апдейта (та же логика, что atomize-merge.ts:
+    // [...new Set(...)]) — не изменённые qtype остаются db-значением, применённые
+    // фиксы (selectedFixNumbers) берутся из parsed. Reading не трогаем.
+    let listeningQuestionTypes: string[] | null = null;
+    if (row.section === "listening") {
+      const dbQtypeByNumber = new Map(dbQuestions.map((q) => [q.number, q.qtype]));
+      const finalQtypes = parsed.questions.map((q) =>
+        selectedFixNumbers.has(q.number) ? q.qtype : dbQtypeByNumber.get(q.number)!,
+      );
+      listeningQuestionTypes = [...new Set(finalQtypes)];
+      console.log(
+        `    ${dry ? "[dry] would set" : "question_types ->"} [${listeningQuestionTypes.join(", ")}]`,
+      );
     }
 
     if (!dry) {
@@ -278,7 +370,6 @@ if (invokedDirectly) {
         }
 
         const fallbackPassageId = passageIdByOrder.get(1) ?? [...passageIdByOrder.values()][0]!;
-        const mismatched = new Set(qtypeMismatches.map((m) => m.number));
         for (const q of parsed.questions) {
           await tx
             .update(questionT)
@@ -287,14 +378,22 @@ if (invokedDirectly) {
               options: q.options,
               groupKey: q.groupKey,
               passageId: passageIdByOrder.get(q.passageOrder) ?? fallbackPassageId,
-              // --fix-qtype: выравниваем ТОЛЬКО расхождения (см. шапку файла).
-              // Каст безопасен: parsed qtype прошёл канон-маппинг question-types.ts,
-              // просто ParsedQuestion типизирует поле как string.
-              ...(fixQtype && mismatched.has(q.number)
+              // Применяем ТОЛЬКО выбранные selectQtypeFixes (см. шапку файла): reading
+              // — все расхождения под --fix-qtype, listening — только mcq_single ->
+              // mcq_multi promotion. Каст безопасен: parsed qtype прошёл канон-маппинг
+              // question-types.ts, просто ParsedQuestion типизирует поле как string.
+              ...(selectedFixNumbers.has(q.number)
                 ? { qtype: q.qtype as NonNullable<(typeof questionT.$inferInsert)["qtype"]> }
                 : {}),
             })
             .where(and(eq(questionT.contentItemId, row.id), eq(questionT.number, q.number)));
+        }
+
+        if (listeningQuestionTypes) {
+          await tx
+            .update(contentItemT)
+            .set({ questionTypes: listeningQuestionTypes })
+            .where(eq(contentItemT.id, row.id));
         }
       });
     }
@@ -303,11 +402,14 @@ if (invokedDirectly) {
   }
 
   console.log(`\n--- summary ---`);
-  console.log(`candidates (published, runner_html IS NOT NULL): ${rows.length}`);
+  console.log(
+    `candidates (runner_html IS NOT NULL; reading published, listening published+draft): ${rows.length}`,
+  );
   console.log(`${dry ? "would process" : "processed"}: ${processed}`);
   console.log(`skipped — no source: ${skippedNoSource}`);
   console.log(`skipped — parse error: ${skippedParseError}`);
   console.log(`skipped — question-number gate mismatch: ${skippedGate}`);
+  console.log(`skipped — map_labelling (deferred, listening only): ${skippedMapLabelling}`);
 
   process.exit(0);
 }
