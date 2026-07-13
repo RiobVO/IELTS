@@ -11,14 +11,41 @@ export interface MergeResult {
 
 /**
  * Прищепляет атомизацию (реальный текст пассажей + prompt/options) из parseTest к
- * базовому ParsedTest из parseRunner. Runner остаётся source of truth для всего, от
- * чего зависят mock и каталог: answer_key, qtype, groupKey, number, category,
- * duration, bandScale, tierRequired — из atom берутся ТОЛЬКО презентационные поля.
+ * базовому ParsedTest из parseRunner. Runner остаётся source of truth для answer_key
+ * (грейдинг-путь) и для meta уровня content_item (number, category, duration,
+ * bandScale, tierRequired) — это НИКОГДА не берётся из atom, для обеих секций.
+ * Исключение — questionTypes: для listening пересчитывается из итоговых qtype
+ * (после promotion, см. ниже), для reading остаётся runner как есть.
+ *
+ * audioPath пассажей — ТОЛЬКО от runner: atom-пассажи parse-listening несут исходный
+ * внешний <audio src> (хотлинк), который не должен утечь в persist; Storage-URL
+ * присваивает import-runner после мержа.
+ *
+ * Презентационные поля (promptHtml/options/passageOrder) — всегда из atom, для
+ * reading и listening одинаково.
+ *
+ * qtype/groupKey расходятся по секции:
+ *  - reading: оба поля из runner, без изменений (runner mcqGroups уже даёт и
+ *    groupKey, и однозначный qtype для choose-TWO/THREE — atom тут ничего не
+ *    добавляет).
+ *  - listening: groupKey ВСЕГДА из atom — runner-парсер listening (parse-runner.ts)
+ *    не строит группировку вообще (groupKey у него голый null для каждого вопроса).
+ *    qtype — из atom ТОЛЬКО когда runner дал mcq_single, а atom — mcq_multi (это
+ *    член choose-TWO/THREE группы: runner видит его как одиночный radio/text,
+ *    потому что не парсит .mcq.multi[data-qs]; без promotion атомизированный
+ *    рендер даёт radio вместо checkbox, и валидный двухбуквенный ответ
+ *    невозможен). Любое другое расхождение qtype (map_labelling vs mcq_single,
+ *    matching_features vs mcq_single и т.п.) остаётся runner qtype — источник
+ *    (.q-instruction) семантически точнее структурного HTML-парса atom.
+ *
+ * answer — ВСЕГДА из runner, для reading и listening без исключений: это единственный
+ * путь к ключу, который видит грейдинг (mock choose-TWO для listening в проде лежит
+ * как text_accept с обеими буквами per-member — трогать нельзя).
  *
  * Гейт: множества номеров вопросов должны совпасть 1:1 (без пропусков, лишних и
  * дублей в atom) — иначе доверять частичной атомизации нельзя, возвращаем runner
  * как есть (Practice остаётся practice-lite, mock не тронут). Тот же жёсткий гейт,
- * что в scripts/backfill-atomize.ts.
+ * что в scripts/backfill-atomize.ts. Применяется к обеим секциям одинаково.
  */
 export function mergeAtomization(runner: ParsedTest, atom: ParsedTest): MergeResult {
   const runnerNums = runner.questions.map((q) => q.number);
@@ -58,23 +85,46 @@ export function mergeAtomization(runner: ParsedTest, atom: ParsedTest): MergeRes
   }
 
   // passages: берём атомизированные (order/title/bodyHtml/questionsHtml), но
-  // audioPath НЕ затираем — он привязан на runner-пути (listening) и его у atom нет.
+  // audioPath — ТОЛЬКО от runner, atom не источник аудио вообще: parse-listening
+  // пишет в свои пассажи исходный внешний <audio src> (хотлинк), а раздача обязана
+  // идти из нашего Storage — URL первому пассажу присваивает import-runner ПОСЛЕ
+  // мержа (сбой fetch/превышение капа = честный null, не внешний линк).
   const runnerAudioByOrder = new Map<number, string | null>(
     runner.passages.map((p) => [p.order, p.audioPath]),
   );
   const passages: ParsedPassage[] = atom.passages.map((p) => ({
     ...p,
-    audioPath: runnerAudioByOrder.get(p.order) ?? p.audioPath ?? null,
+    audioPath: runnerAudioByOrder.get(p.order) ?? null,
   }));
 
-  // questions: базовый ряд из runner (answer/qtype/groupKey/number/evidenceRef),
-  // поверх — ТОЛЬКО презентация из atom, сматченная по номеру.
+  // questions: базовый ряд из runner (answer/number/evidenceRef — неприкосновенны),
+  // поверх — презентация из atom, сматченная по номеру. groupKey/qtype: reading
+  // остаётся runner как есть; listening — см. doc-комментарий функции.
+  const isListening = runner.section === "listening";
   const atomByNum = new Map(atom.questions.map((q) => [q.number, q]));
   const questions = runner.questions.map((rq) => {
     const aq = atomByNum.get(rq.number);
     if (!aq) return rq;
-    return { ...rq, promptHtml: aq.promptHtml, options: aq.options, passageOrder: aq.passageOrder };
+    // choose-TWO/THREE promotion (listening only): runner видит группового члена
+    // как одиночный mcq_single (не парсит .mcq.multi[data-qs]) — без этого атом
+    // рендерит radio вместо checkbox.
+    const promoteMcqMulti = isListening && rq.qtype === "mcq_single" && aq.qtype === "mcq_multi";
+    return {
+      ...rq,
+      promptHtml: aq.promptHtml,
+      options: aq.options,
+      passageOrder: aq.passageOrder,
+      groupKey: isListening ? aq.groupKey : rq.groupKey,
+      qtype: promoteMcqMulti ? aq.qtype : rq.qtype,
+    };
   });
 
-  return { parsed: { ...runner, passages, questions }, atomized: true };
+  // questionTypes персистится в content_item (каталог-фильтр) и у runner собран из
+  // ЕГО qtype — после listening-promotion (mcq_single→mcq_multi) он устаревает.
+  // Пересчёт из итоговых вопросов; reading — от runner как есть (байт-идентичность).
+  const questionTypes = isListening
+    ? [...new Set(questions.map((q) => q.qtype))]
+    : runner.questionTypes;
+
+  return { parsed: { ...runner, passages, questions, questionTypes }, atomized: true };
 }
