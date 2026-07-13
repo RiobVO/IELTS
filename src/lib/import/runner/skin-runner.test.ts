@@ -6,11 +6,14 @@ import {
   skinRunnerBrand,
   skinRunnerTableScroll,
   skinRunnerAudioDefer,
+  skinRunnerAudioLabel,
   runnerBrandResidue,
   audioDeferredKickJs,
   injectProgressBridge,
+  AUDIO_PRELOAD_JS_ANCHOR,
 } from "./skin-runner";
 import { READING_BRIDGE, LISTENING_BRIDGE } from "./bridge";
+import { forceRunnerMode } from "./force-mode";
 
 const FIX = join(__dirname, "fixtures");
 const listeningFixture = readFileSync(join(FIX, "listening.html"), "utf8");
@@ -285,6 +288,152 @@ describe("skinRunnerAudioDefer", () => {
     const patched = skinRunnerAudioDefer(twoAudio);
     expect(patched.match(/preload="auto"/g)).toBeNull();
     expect(patched.match(/preload="metadata"/g)).toHaveLength(2);
+  });
+});
+
+describe("skinRunnerAudioLabel", () => {
+  const out = skinRunnerAudioLabel(listeningFixture);
+
+  it("статус-строка «Downloading audio…» смягчена на «Preparing audio…» (реальная фикстура)", () => {
+    expect(out).not.toContain("Downloading audio");
+    expect(out).toContain("Preparing audio&hellip;");
+  });
+
+  it("JS-литерал markAudioReady('Download complete') смягчён на 'Audio ready'", () => {
+    expect(out).not.toContain("'Download complete'");
+    expect(out).toContain("'Audio ready'");
+  });
+
+  it("не трогает прочие тексты состояний и логику гейта", () => {
+    expect(out).toContain("Ready to play (still buffering)");
+    expect(out).toContain("Audio failed to load — check your connection.");
+    // Play-гейт остаётся гейтом — никакого автоскрытия оверлея не добавлено.
+    expect(out).toContain("playBtn.disabled=false");
+  });
+
+  it("идемпотентно — повторный вызов на уже пропатченном html ничего не меняет", () => {
+    expect(skinRunnerAudioLabel(out)).toBe(out);
+  });
+
+  it("no-op байт-в-байт без #playOverlay (reading-раннер)", () => {
+    expect(skinRunnerAudioLabel(READING_HEAD)).toBe(READING_HEAD);
+  });
+
+  it("естественный no-op, если искомых строк нет (гейт есть, текстов нет)", () => {
+    const gateOnlyNoText =
+      '<html><head></head><body><div id="playOverlay">gate</div>' +
+      "<script>markAudioReady('Ready to play');</script></body></html>";
+    expect(skinRunnerAudioLabel(gateOnlyNoText)).toBe(gateOnlyNoText);
+  });
+
+  it("толерантно к вариантам многоточия (... и …), не только &hellip;", () => {
+    const dots =
+      '<html><head></head><body><div id="playOverlay">' +
+      '<span id="dlStatus">Downloading audio...</span></div></body></html>';
+    const ellipsisChar =
+      '<html><head></head><body><div id="playOverlay">' +
+      '<span id="dlStatus">Downloading audio…</span></div></body></html>';
+    expect(skinRunnerAudioLabel(dots)).toContain("Preparing audio&hellip;");
+    expect(skinRunnerAudioLabel(dots)).not.toContain("Downloading audio");
+    expect(skinRunnerAudioLabel(ellipsisChar)).toContain("Preparing audio&hellip;");
+    expect(skinRunnerAudioLabel(ellipsisChar)).not.toContain("Downloading audio");
+  });
+
+  // Часовой контекстного сужения: те же строки ВНЕ разрешённых зон (текст пассажа/
+  // транскрипта, посторонняя JS-переменная) обязаны остаться нетронутыми — гейт
+  // #playOverlay подтверждает наличие оверлея, но зону замены ограничивают якоря
+  // #dlStatus / markAudioReady(...). Сравниваем ВЕСЬ выход с ожидаемым, отличающимся
+  // ровно двумя разрешёнными заменами.
+  it("часовой: совпадения в контенте теста не тронуты — меняются ровно две зоны", () => {
+    const contentPara =
+      "<p>Transcript: the screen said Downloading audio... and then 'Download complete'.</p>";
+    const foreignJs = "var x='Download complete';";
+    const before =
+      '<html><head></head><body><div id="playOverlay">' +
+      '<span id="dlStatus">Downloading audio&hellip;</span></div>' +
+      contentPara +
+      `<script>${foreignJs}markAudioReady('Download complete');</script>` +
+      "</body></html>";
+    const after =
+      '<html><head></head><body><div id="playOverlay">' +
+      '<span id="dlStatus">Preparing audio&hellip;</span></div>' +
+      contentPara +
+      `<script>${foreignJs}markAudioReady('Audio ready');</script>` +
+      "</body></html>";
+    expect(skinRunnerAudioLabel(before)).toBe(after);
+  });
+
+  it("markAudioReady с двойными кавычками — замена работает, вид кавычек сохранён", () => {
+    const dq =
+      '<html><head></head><body><div id="playOverlay">gate</div>' +
+      '<script>markAudioReady("Download complete");</script></body></html>';
+    const patched = skinRunnerAudioLabel(dq);
+    expect(patched).toContain('markAudioReady("Audio ready")');
+    expect(patched).not.toContain("Download complete");
+  });
+
+  it("два вызова markAudioReady — заменены оба (глобальный флаг не потерян)", () => {
+    const twice =
+      '<html><head></head><body><div id="playOverlay">gate</div>' +
+      "<script>markAudioReady('Download complete');" +
+      "if(fast)markAudioReady('Download complete');</script></body></html>";
+    const patched = skinRunnerAudioLabel(twice);
+    expect(patched.match(/markAudioReady\('Audio ready'\)/g)).toHaveLength(2);
+    expect(patched).not.toContain("Download complete");
+  });
+});
+
+describe("skin-runner composition (route.ts pipeline order)", () => {
+  // Сырая фикстура — ДО-импортный HTML без bridge.ts (его сплайсит sanitizeRunner при
+  // импорте); чтобы injectProgressBridge распознал SEND/хвост, сплайсим LISTENING_BRIDGE
+  // перед </body> — так же, как это делает реальный импорт-пайплайн.
+  const fixtureWithBridge = listeningFixture.replace(
+    "</body>",
+    `${LISTENING_BRIDGE}\n</body>`,
+  );
+
+  it("полная цепочка как в route.ts: все маркеры соседей на месте, текст гейта смягчён", () => {
+    const withBridge = injectProgressBridge(fixtureWithBridge);
+    const out = skinRunnerAudioLabel(
+      skinRunnerAudioDefer(skinRunnerBrand(skinRunnerGate(withBridge))),
+    );
+    expect(out).toContain("bando-gate-skin");
+    expect(out).toContain("bando-audio-defer");
+    expect(out).toContain("bando-progress-bridge");
+    expect(out).not.toContain("Downloading audio");
+    expect(out).toContain("Preparing audio&hellip;");
+    expect(out).not.toContain("'Download complete'");
+    expect(out).toContain("'Audio ready'");
+    // route.ts завершает цепочку forceRunnerMode; фикстура — не семейство A/B (нет
+    // pendingMode / mode-card-btn / mode-switcher) → контрактный fail-open no-op
+    // байт-в-байт: label-выход не сбивает его детект.
+    expect(forceRunnerMode(out, "mock", 60)).toBe(out);
+  });
+
+  it("порядок не важен: label ДО defer тоже даёт оба эффекта (текст смягчён + preload отложен)", () => {
+    const labelFirst = skinRunnerAudioDefer(skinRunnerAudioLabel(listeningFixture));
+    expect(labelFirst).toContain("Preparing audio&hellip;");
+    expect(labelFirst).toContain("'Audio ready'");
+    expect(labelFirst).toContain("bando-audio-defer");
+    const audioTag = labelFirst.match(/<audio\b[^>]*>/i)?.[0] ?? "";
+    expect(audioTag).toMatch(/preload="metadata"/);
+  });
+
+  // Часовой на якоря соседей: label — чисто текстовые замены, они НЕ должны задевать
+  // ни смежную пару preload/load (якорь skinRunnerAudioDefer), ни хвосты bridge-IIFE
+  // (якоря injectProgressBridge). Хвосты продублированы литерально из skin-runner.ts
+  // (READING_TAIL/LISTENING_TAIL — приватные константы).
+  it("label-патч не съедает якоря соседей: preload-якорь defer и хвосты bridge целы", () => {
+    const labeled = skinRunnerAudioLabel(listeningFixture);
+    expect(AUDIO_PRELOAD_JS_ANCHOR.test(labeled)).toBe(true);
+
+    const labeledBridge = skinRunnerAudioLabel(fixtureWithBridge);
+    expect(labeledBridge).toContain("__hook();\n})();</script>"); // LISTENING_TAIL
+    // READING_TAIL: reading-bridge html без #playOverlay — label no-op, хвост цел.
+    const readingBridgeHtml = `<html><head></head><body>${READING_BRIDGE}</body></html>`;
+    expect(skinRunnerAudioLabel(readingBridgeHtml)).toContain(
+      "window.showResults = function(){ __send(); };\n})();</script>", // READING_TAIL
+    );
   });
 });
 

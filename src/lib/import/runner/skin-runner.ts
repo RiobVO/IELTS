@@ -198,7 +198,9 @@ const AUDIO_DEFER_MARK = "bando-audio-defer";
 
 // Смежная пара из оригинального раннера: `audio.preload='auto';` сразу за которой
 // (после опциональных пробелов/комментариев) идёт `audio.load();`.
-const AUDIO_PRELOAD_JS_ANCHOR =
+// Экспортирован для composition-теста (skin-runner.test.ts проверяет, что текстовые
+// патчи-соседи — skinRunnerAudioLabel — не съедают этот якорь).
+export const AUDIO_PRELOAD_JS_ANCHOR =
   /audio\.preload\s*=\s*(['"])auto\1\s*;(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*audio\.load\s*\(\s*\)\s*;/;
 
 // ES5-совместимо (var/function) — исполняется в sandbox-iframe раннера без транспиляции.
@@ -252,6 +254,44 @@ export function skinRunnerAudioDefer(html: string): string {
   return patchedJs.replace(/<audio\b[^>]*>/gi, (tag) =>
     tag.replace(/preload=(["'])auto\1/gi, 'preload="metadata"'),
   );
+}
+
+// RUNTIME (read-time) фикс вводящего в заблуждение текста аудио-гейта listening-раннера
+// (#playOverlay). Аудио реально отдаётся с тёплого CF edge-кэша (мгновенная буферизация
+// на прогретом кэше — см. audio bridge P1/P2), но два оригинальных текста читаются как
+// «качаю файл целиком заново при каждом открытии»: статус-строка «Downloading audio…»
+// на старте и то же прочтение у markAudioReady('Download complete') при завершении
+// буферизации — на тёплом кэше оно всплывает почти мгновенно и сильнее всего создаёт
+// впечатление повторной перекачки. Правка чисто текстовая: НИКАКОЙ логики не меняем
+// (никакого автоскрытия оверлея — это Play-гейт), прочие тексты состояний ('Ready to
+// play', 'Ready to play (still buffering)', текст ошибки) не трогаем — они точны как
+// есть. Толерантно к вариантам многоточия (&hellip; / ... / …) на случай другого
+// источника разметки; канонический вывод всегда с &hellip; (как в фикстуре).
+// Замены контекстно СУЖЕНЫ (ревью 2026-07-13): гейт #playOverlay лишь подтверждает
+// наличие оверлея где-то в документе, но не ограничивает зону замены — голая
+// глобальная замена задела бы случайные совпадения в КОНТЕНТЕ теста (транскрипт/
+// пассаж со словами «Downloading audio...», посторонний inline-JS со своим
+// 'Download complete'). Поэтому видимая строка меняется ТОЛЬКО внутри статус-
+// элемента #dlStatus, а JS-литерал — ТОЛЬКО как аргумент markAudioReady(...);
+// вид кавычек (одинарные/двойные) сохраняется backreference'ом.
+const AUDIO_LABEL_DOWNLOADING_RE =
+  /(<span\b[^>]*id=["']dlStatus["'][^>]*>)\s*Downloading audio(?:&hellip;|\.{3}|…)/g;
+const AUDIO_LABEL_COMPLETE_JS_RE = /markAudioReady\((["'])Download complete\1\)/g;
+
+/**
+ * Смягчает вводящий в заблуждение текст аудио-гейта («Downloading…» / «Download
+ * complete») на нейтральные формулировки — файл реально отдаётся мгновенно с тёплого
+ * edge-кэша, полной перекачки при каждом открытии нет. Зона замены контекстная:
+ * статус в `#dlStatus` и аргумент `markAudioReady(...)` — те же строки в контенте
+ * теста не трогаются. No-op байт-в-байт, если в html нет `#playOverlay`
+ * (reading-раннер / нет гейта). Естественно идемпотентно: после замены исходных
+ * строк в выводе не остаётся, повторный вызов ничего не меняет — маркер не нужен.
+ */
+export function skinRunnerAudioLabel(html: string): string {
+  if (!/id=["']playOverlay["']/.test(html)) return html; // не listening-gate
+  return html
+    .replace(AUDIO_LABEL_DOWNLOADING_RE, "$1Preparing audio&hellip;")
+    .replace(AUDIO_LABEL_COMPLETE_JS_RE, "markAudioReady($1Audio ready$1)");
 }
 
 // RUNTIME (read-time) периодический автосейв-мост iframe → parent (волна E, F2-минимал).
