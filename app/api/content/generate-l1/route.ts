@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cronSecret, l1GenConfig } from "@/env";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { logError } from "@/lib/monitoring/log-error";
 import { generateL1ForPassage } from "@/lib/content/l1/generate";
 import { claimL1, loadTestForL1, markL1Status, persistL1 } from "@/lib/content/l1/store";
 
@@ -49,7 +50,12 @@ export async function POST(request: Request) {
       total += p.questions.length;
       const res = results[i];
       if (res.status !== "fulfilled") {
-        console.error("l1 generation failed for passage", p.passageId, res.reason);
+        await logError({
+          source: "server",
+          message: `l1 passage generation failed: ${res.reason instanceof Error ? res.reason.message : String(res.reason)}`,
+          stack: res.reason instanceof Error ? res.reason.stack : null,
+          context: { op: "l1Generate", contentItemId, passageId: p.passageId },
+        });
         continue;
       }
       const questionIdByNumber = new Map(p.questions.map((q) => [q.number, q.questionId]));
@@ -68,8 +74,20 @@ export async function POST(request: Request) {
     await markL1Status(contentItemId, persisted === total && total > 0 ? "done" : "failed");
     return NextResponse.json({ ok: true, claimed: true, persisted, total }, { status: 200 });
   } catch (e) {
-    console.error("l1 generation failed", contentItemId, e);
-    await markL1Status(contentItemId, "failed").catch(() => {});
+    await logError({
+      source: "server",
+      message: `l1 generation failed: ${e instanceof Error ? e.message : String(e)}`,
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "l1Generate", contentItemId },
+    });
+    await markL1Status(contentItemId, "failed").catch((me) =>
+      logError({
+        source: "server",
+        message: `l1 markL1Status(failed) failed: ${me instanceof Error ? me.message : String(me)}`,
+        stack: me instanceof Error ? me.stack : null,
+        context: { op: "l1MarkFailed", contentItemId },
+      }),
+    );
     return NextResponse.json({ ok: false, error: "generation_failed" }, { status: 500 });
   }
 }
