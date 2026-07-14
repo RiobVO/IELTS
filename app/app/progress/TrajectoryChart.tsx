@@ -153,6 +153,14 @@ export function TrajectoryChart({
   // единственной сплит-линии — гасить нечего, а подпись не должна называть отсутствующую).
   const hasSplit = !!reading && !!listening;
 
+  // Мягкая заливка-wash под Combined-линией к базовой линии плота — глубина без
+  // шума (série-hue ~10%, dataviz marks-spec). Только при ≥2 точках (иначе линии нет).
+  const baseline = h - padB;
+  const areaPoints =
+    combined.length >= 2
+      ? `${combined[0].x.toFixed(1)},${baseline.toFixed(1)} ${combinedAttr} ${combined[combined.length - 1].x.toFixed(1)},${baseline.toFixed(1)}`
+      : null;
+
   return (
     <>
     <div className="ov-chart">
@@ -172,6 +180,13 @@ export function TrajectoryChart({
         onBlur={onLeave}
         onKeyDown={onKey}
       >
+        <defs>
+          <linearGradient id="ov-area-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.14" />
+            <stop offset="100%" stopColor="var(--brand)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
         {/* Только ЛИНИИ сетки/цели/экзамена — подписи вынесены в HTML-оверлей ниже
             (фикс-кегль на любой ширине; SVG-текст на 360px схлопывался до ~4.8px). */}
         {grid.map((g) => (
@@ -202,6 +217,9 @@ export function TrajectoryChart({
             />
           </>
         )}
+
+        {/* Wash под Combined — над recessive-сеткой, под data-линиями (премиум-слои). */}
+        {areaPoints && <polygon points={areaPoints} fill="url(#ov-area-grad)" pointerEvents="none" />}
 
         {reading && !hidden.has("reading") && (
           <polyline data-draw={reading.len} points={reading.attr} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.5}

@@ -169,10 +169,10 @@ export async function OverviewPanel() {
 
 const CHART_W = 680;
 const CHART_H = 230;
-const PAD_L = 32;
-const PAD_R = 16;
-const PAD_T = 16;
-const PAD_B = 24;
+const PAD_L = 44;
+const PAD_R = 18;
+const PAD_T = 18;
+const PAD_B = 28;
 const PLOT_W = CHART_W - PAD_L - PAD_R;
 const PLOT_H = CHART_H - PAD_T - PAD_B;
 
@@ -560,12 +560,14 @@ const OV_CSS = `
 .ov-tip-dot{width:8px;height:8px;border-radius:50%;flex:none}
 .ov-tip-delta{font-size:var(--text-2xs);font-weight:700;font-family:var(--font-mono);margin-top:3px}
 .ov-labels{position:absolute;inset:0;pointer-events:none;font-family:var(--font-ui)}
-.ov-lbl{position:absolute;font-size:var(--text-2xs);line-height:1;white-space:nowrap}
-.ov-lbl-grid{font-family:var(--font-mono);color:var(--text-muted);transform:translate(-100%,-50%)}
-.ov-lbl-target{color:var(--warn-text);font-weight:700;transform:translate(-100%,-135%)}
+.ov-lbl{position:absolute;font-size:var(--text-xs);line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ov-lbl-grid{font-family:var(--font-mono);font-weight:600;color:var(--text-secondary);transform:translate(-100%,-50%)}
+.ov-lbl-target{color:var(--warn-text);font-weight:700;transform:translate(-100%,-140%)}
 .ov-lbl-exam{color:var(--brand-active);font-weight:700}
-.ov-lbl-latest{font-family:var(--font-mono);font-weight:700;color:var(--text-primary);transform:translate(calc(-100% - 8px),-120%)}
-.ov-lbl-axis{color:var(--text-muted)}
+/* Текущий балл — не бледная цифра у линии, а brand-пилюля слева от последней точки:
+   белым по фиолетовому это самый читаемый и главный числовой акцент графика. */
+.ov-lbl-latest{font-family:var(--font-mono);font-weight:800;color:var(--text-on-brand);background:var(--brand);padding:2px 8px;border-radius:var(--radius-full);box-shadow:var(--shadow-sm);transform:translate(calc(-100% - 11px),-50%)}
+.ov-lbl-axis{color:var(--text-secondary);font-weight:600}
 .ov-lbl-axis-r{transform:translate(-100%,0)}
 .ov-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
 .ov-leg-item{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:600}
