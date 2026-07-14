@@ -41,7 +41,7 @@ export interface TrajectoryChartProps {
   grid: { band: number; y: number }[];
   target: { y: number; band: number } | null;
   exam: { x: number; rightEdge: boolean } | null;
-  forecast: { lastX: number; lastY: number; horizonX: number; projY: number; lowY: number; highY: number } | null;
+  forecast: { lastX: number; lastY: number; horizonX: number; projY: number } | null;
   xLabelLeft: string;
   xLabelRight: string;
   latestBand: number;
@@ -212,18 +212,13 @@ export function TrajectoryChart({
         )}
 
         {forecast && (
-          <>
-            <polygon
-              data-fade
-              points={`${forecast.lastX.toFixed(1)},${forecast.lastY.toFixed(1)} ${forecast.horizonX.toFixed(1)},${forecast.highY.toFixed(1)} ${forecast.horizonX.toFixed(1)},${forecast.lowY.toFixed(1)}`}
-              fill="color-mix(in oklab, var(--brand) 9%, transparent)"
-            />
-            <line
-              data-fade
-              x1={forecast.lastX} y1={forecast.lastY} x2={forecast.horizonX} y2={forecast.projY}
-              stroke="var(--brand)" strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round"
-            />
-          </>
+          // Короткий пунктирный стаб-прогноз к правому краю окна (без большого конуса —
+          // полный интервал в карточке Forecast). «Compact marker», как и договорились.
+          <line
+            data-fade
+            x1={forecast.lastX} y1={forecast.lastY} x2={forecast.horizonX} y2={forecast.projY}
+            stroke="var(--brand)" strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round"
+          />
         )}
 
         {/* Wash под Combined — над recessive-сеткой, под data-линиями (премиум-слои). */}
