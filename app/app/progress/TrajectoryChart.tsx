@@ -47,14 +47,15 @@ export interface TrajectoryChartProps {
   latestBand: number;
 }
 
-// Цвета серий на БЕЛОМ плоте — тёмные, чтобы пройти 3:1 (WCAG 1.4.11): reading —
-// тёмно-синий (--info-text), listening — тёмно-фиолетовый (--violet-700). Combined
-// несёт brand-фиолет отдельно; форма точек (круг/ромб) различает серии при
-// дальтонизме, цвет отвечает только за видимость.
-const SECTION_COLOR = { reading: "var(--info-text)", listening: "var(--violet-700)" } as const;
-// На ТЁМНОМ фоне тултипа те же тёмные цвета слились бы — точке-свотчу даём светлые
-// варианты (текст рядом всё равно называет секцию явно).
-const SECTION_DOT = { reading: "var(--sky-500)", listening: "var(--violet-300)" } as const;
+// Три РАЗНЫХ hue на белом плоте, каждый ≥3:1 (WCAG 1.4.11): reading — синий
+// (--info-text, hue 232), listening — зелёный (--green-600, hue 158), combined
+// несёт brand-фиолет (hue 292) отдельно. Раньше listening был фиолетовым и сливался
+// с brand-линией Combined; развели по hue. Форма точек (круг/ромб) дублирует
+// различение при дальтонизме, цвет — вторичный сигнал.
+const SECTION_COLOR = { reading: "var(--info-text)", listening: "var(--green-600)" } as const;
+// На ТЁМНОМ фоне тултипа тёмные цвета слились бы — точке-свотчу даём светлые
+// варианты того же hue (текст рядом всё равно называет секцию явно).
+const SECTION_DOT = { reading: "var(--sky-500)", listening: "var(--green-500)" } as const;
 const SECTION_LABEL = { reading: "Reading", listening: "Listening" } as const;
 
 function fmtFull(ms: number): string {
@@ -111,8 +112,16 @@ export function TrajectoryChart({
   const act = active != null ? combined[active] : null;
   const prev = active != null && active > 0 ? combined[active - 1] : null;
   const delta = act && prev ? act.band - prev.band : null;
-  const leftPct = act ? Math.max(15, Math.min(85, (act.x / w) * 100)) : 0;
-  const topPct = act ? (act.y / h) * 100 : 0;
+  // Тултип ставится РОВНО над точкой (left/top = координата точки в %); от overflow
+  // спасаем не клампом центра (он рассинхронил бы стрелку), а сменой якоря: у левого
+  // края бокс растёт вправо (стрелка у левого края), у правого — влево; по вертикали
+  // у верха плота бокс флипается ВНИЗ, чтобы не наехать на заголовок карты.
+  const pointXPct = act ? (act.x / w) * 100 : 0;
+  const pointYPct = act ? (act.y / h) * 100 : 0;
+  const tipEdge = pointXPct < 20 ? "left" : pointXPct > 80 ? "right" : "center";
+  const tipBelow = pointYPct < 26;
+  const tipTx = tipEdge === "left" ? "16px" : tipEdge === "right" ? "calc(-100% + 16px)" : "-50%";
+  const tipTy = tipBelow ? "16px" : "calc(-100% - 14px)";
 
   return (
     <div className="ov-chart">
@@ -139,7 +148,9 @@ export function TrajectoryChart({
         ))}
 
         {target && (
-          <line x1={padL} x2={w - padR} y1={target.y} y2={target.y} stroke="var(--gold-600)" strokeWidth={1.5} strokeDasharray="5 4" />
+          // --warn-text (L0.520 ≈3.9:1), не сырой gold: линия — значимый индикатор,
+          // применяется 1.4.11 (3:1); пунктир и так отличает её от data-линий.
+          <line x1={padL} x2={w - padR} y1={target.y} y2={target.y} stroke="var(--warn-text)" strokeWidth={1.5} strokeDasharray="5 4" />
         )}
 
         {exam && (
@@ -239,7 +250,11 @@ export function TrajectoryChart({
       </div>
 
       {act && (
-        <div className="ov-tip" role="status" style={{ left: `${leftPct}%`, top: `${topPct}%` }}>
+        <div
+          className={`ov-tip ov-tip-${tipEdge}${tipBelow ? " ov-tip-below" : ""}`}
+          role="status"
+          style={{ left: `${pointXPct}%`, top: `${pointYPct}%`, transform: `translate(${tipTx}, ${tipTy})` }}
+        >
           <div className="ov-tip-date">{fmtFull(act.dateMs)}</div>
           <div className="ov-tip-band">
             <span className="ov-tip-dot" style={{ background: SECTION_DOT[act.section] }} />
