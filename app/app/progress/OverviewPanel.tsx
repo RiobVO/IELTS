@@ -320,29 +320,7 @@ function TrajectoryHero({
         latestBand={last.band}
       />
 
-      <div style={S.legend}>
-        <LegendDot color="var(--brand)" label="Combined" shape="line" />
-        <LegendDot color="var(--info-text)" label="Reading" shape="circle" />
-        <LegendDot color="var(--green-600)" label="Listening" shape="diamond" />
-      </div>
     </div>
-  );
-}
-
-// Форма свотча повторяет форму точек на графике (круг/ромб) — легенда перестаёт
-// быть color-only, читается при дальтонизме.
-function LegendDot({ color, label, shape }: { color: string; label: string; shape: "line" | "circle" | "diamond" }) {
-  const swatch: React.CSSProperties =
-    shape === "line"
-      ? { width: 14, height: 3, borderRadius: "var(--radius-full)" }
-      : shape === "diamond"
-        ? { width: 9, height: 9, borderRadius: 2, transform: "rotate(45deg)" }
-        : { width: 9, height: 9, borderRadius: "50%" };
-  return (
-    <span style={S.legendItem}>
-      <span style={{ ...S.legendSwatch, ...swatch, background: color }} />
-      {label}
-    </span>
   );
 }
 
@@ -408,6 +386,13 @@ function ForecastCard({ forecast }: { forecast: Forecast }) {
         <p style={S.forecastRange}>
           {forecast.interval.low.toFixed(1)}–{forecast.interval.high.toFixed(1)} likely by{" "}
           {forecast.horizonDate ? fmtDate(Date.parse(`${forecast.horizonDate}T00:00:00Z`)) : "then"}
+        </p>
+      )}
+      {forecast.interval && (
+        // Объясняем, ЧТО такое диапазон и на чём он построен — не-native аудитории
+        // «likely range» не самоочевиден; заодно закрывает methodology-пробел.
+        <p style={S.forecastBasis}>
+          The band you&apos;re 80% likely to hit, from your last {forecast.pointCount} {forecast.pointCount === 1 ? "mock" : "mocks"} — it narrows as you sit more.
         </p>
       )}
       {forecast.slopePerWeek != null && forecast.slopePerWeek > 0 && (
@@ -582,6 +567,18 @@ const OV_CSS = `
 .ov-lbl-latest{font-family:var(--font-mono);font-weight:700;color:var(--text-primary);transform:translate(calc(-100% - 8px),-120%)}
 .ov-lbl-axis{color:var(--text-muted)}
 .ov-lbl-axis-r{transform:translate(-100%,0)}
+.ov-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px}
+.ov-leg-item{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:600;color:var(--text-secondary)}
+.ov-leg-btn{background:none;border:0;padding:2px 3px;margin:-2px -3px;border-radius:6px;cursor:pointer;transition:opacity .12s}
+.ov-leg-btn[aria-pressed="false"]{opacity:.4;text-decoration:line-through}
+.ov-leg-btn:hover{opacity:.75}
+.ov-leg-btn[aria-pressed="false"]:hover{opacity:.6}
+.ov-leg-btn:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 40%,transparent)}
+.ov-leg-swatch{flex:none}
+.ov-leg-line{width:14px;height:3px;border-radius:var(--radius-full)}
+.ov-leg-circle{width:9px;height:9px;border-radius:50%}
+.ov-leg-diamond{width:9px;height:9px;border-radius:2px;transform:rotate(45deg)}
+.ov-legend-note{font-family:var(--font-ui);font-size:var(--text-2xs);color:var(--text-muted);line-height:1.45;margin:8px 0 0;max-width:60ch}
 @media (min-width:768px){
   .ov-wrap{padding:26px 28px 44px}
   .ov-grid{grid-template-columns:1.15fr 1fr}
@@ -590,6 +587,7 @@ const OV_CSS = `
 @media (prefers-reduced-motion:reduce){
   .ov-preview{transition:none}
   .ov-cross{transition:none}
+  .ov-leg-btn{transition:none}
 }
 `;
 
@@ -603,9 +601,6 @@ const S: Record<string, React.CSSProperties> = {
   heroHead: { marginBottom: 10 },
   heroTitle: { display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--text-primary)", margin: 0 },
   heroSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", margin: "3px 0 0" },
-  legend: { display: "flex", flexWrap: "wrap", gap: 16, marginTop: 10 },
-  legendItem: { display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--text-secondary)" },
-  legendSwatch: { width: 9, height: 9, borderRadius: "50%", flex: "none" },
 
   heroEmptyIcon: { width: 48, height: 48, borderRadius: 14, display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)", marginBottom: 12 },
   heroEmptyTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 6px" },
@@ -624,7 +619,8 @@ const S: Record<string, React.CSSProperties> = {
   forecastBig: { fontFamily: "var(--font-mono)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" },
   forecastApprox: { fontSize: 28, fontWeight: 700, color: "var(--text-muted)", marginRight: 2, verticalAlign: "0.06em" },
   forecastUnit: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
-  forecastRange: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "6px 0 6px" },
+  forecastRange: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "6px 0 4px" },
+  forecastBasis: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "0 0 10px", lineHeight: 1.45, maxWidth: "46ch" },
   forecastPace: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "0 0 12px", lineHeight: 1.4 },
   verdictGood: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--success-text)", background: "var(--success-subtle)", borderRadius: "var(--radius-md)", padding: "9px 13px" },
   verdictWarn: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", background: "var(--surface-inset)", borderRadius: "var(--radius-md)", padding: "9px 13px" },

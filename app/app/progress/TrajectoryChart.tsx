@@ -70,6 +70,17 @@ export function TrajectoryChart({
 }: TrajectoryChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [active, setActive] = useState<number | null>(null);
+  // Видимость сплит-серий: обе включены по умолчанию, тап по легенде гасит шумную
+  // Reading/Listening, оставляя чистую Combined-линию (Combined не гасится).
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const toggle = useCallback((s: string) => {
+    setHidden((h) => {
+      const n = new Set(h);
+      if (n.has(s)) n.delete(s);
+      else n.add(s);
+      return n;
+    });
+  }, []);
 
   // clientX → ближайшая точка по X (в системе viewBox через отношение rect).
   const pick = useCallback(
@@ -124,6 +135,7 @@ export function TrajectoryChart({
   const tipTy = tipBelow ? "16px" : "calc(-100% - 14px)";
 
   return (
+    <>
     <div className="ov-chart">
       <svg
         ref={svgRef}
@@ -172,11 +184,11 @@ export function TrajectoryChart({
           </>
         )}
 
-        {reading && (
+        {reading && !hidden.has("reading") && (
           <polyline data-draw={reading.len} points={reading.attr} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.5}
             strokeDasharray={reading.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
-        {listening && (
+        {listening && !hidden.has("listening") && (
           <polyline data-draw={listening.len} points={listening.attr} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={1.5}
             strokeDasharray={listening.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
@@ -184,9 +196,10 @@ export function TrajectoryChart({
           strokeDasharray={combinedLen} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
 
         {/* Секцию несёт НЕ только цвет: Reading — круг, Listening — ромб. Форма
-            остаётся различимой при дальтонизме (WCAG 1.4.1); цвет — вторичный сигнал. */}
+            остаётся различимой при дальтонизме (WCAG 1.4.1); цвет — вторичный сигнал.
+            Точки погашенной серии не рисуем. */}
         {combined.map((p, i) =>
-          p.section === "listening" ? (
+          hidden.has(p.section) ? null : p.section === "listening" ? (
             <rect
               key={i}
               x={p.x - 2.6}
@@ -280,5 +293,28 @@ export function TrajectoryChart({
         </div>
       )}
     </div>
+
+      {/* Кликабельная легенда: Combined всегда, R/L можно погасить тапом (декластер
+          на 230px-боксе). Легенда — сиблинг .ov-chart, не внутри, иначе % оверлея
+          подписей считались бы от более высокого контейнера. */}
+      <div className="ov-legend">
+        <span className="ov-leg-item ov-leg-static">
+          <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--brand)" }} /> Combined
+        </span>
+        {reading && (
+          <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("reading")} onClick={() => toggle("reading")}>
+            <span className="ov-leg-swatch ov-leg-circle" style={{ background: SECTION_COLOR.reading }} /> Reading
+          </button>
+        )}
+        {listening && (
+          <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("listening")} onClick={() => toggle("listening")}>
+            <span className="ov-leg-swatch ov-leg-diamond" style={{ background: SECTION_COLOR.listening }} /> Listening
+          </button>
+        )}
+      </div>
+      {(reading || listening) && (
+        <p className="ov-legend-note">Combined is your band across every mock; Reading and Listening split it by section. Tap a label to hide it.</p>
+      )}
+    </>
   );
 }
