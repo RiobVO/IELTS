@@ -41,6 +41,9 @@ function total(b: Breakdown): number {
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
+// Индекс стаггера как CSS-переменную (TS не пускает кастомное «--i» в CSSProperties).
+const iVar = (i: number) => ({ "--i": i }) as React.CSSProperties;
+
 // Знаменатель лиги («of N», §6) одинаков для всех юзеров и меняется только
 // пересчётом лидерборда — полный count() по leaderboard_entry на каждый рендер
 // дашборда (пост-логин landing) не нужен и растёт с числом юзеров. Data-cache
@@ -322,7 +325,7 @@ export default async function Dashboard() {
       <style>{DASH_CSS}</style>
       <div className="dash-wrap" style={S.wrap}>
         {/* Greeting — span на обе колонки */}
-        <div className="dash-grid-span" style={S.greet}>
+        <div className="dash-grid-span dash-rise" style={{ ...S.greet, ...iVar(0) }}>
           <div>
             <h1 className="dash-hi" style={S.hi}>Hi, {name}</h1>
           </div>
@@ -332,7 +335,7 @@ export default async function Dashboard() {
         {/* Focus — единственный визуальный якорь, full-width */}
         <FocusCard weakest={weakest} weakCount={weak.length} seenTests={seenTests} bandPill={bandPill} drillMin={drillMin} hasAttempts={attempts.length > 0} />
 
-        <div className="dash-col-main">
+        <div className="dash-col-main dash-rise" style={iVar(2)}>
           {/* Today's plan — дневной чек-лист, первым в колонке (BRIEF §12) */}
           <TodayPlanCard plan={dailyPlan} catalogEmpty={!catalogAvailability.hasPublishedTests} />
 
@@ -394,7 +397,7 @@ export default async function Dashboard() {
           </div>
         </div>
 
-        <div className="dash-col-rail">
+        <div className="dash-col-rail dash-rise" style={iVar(3)}>
           {/* Band readout */}
           <BandReadout band={bandLatest} target={bandTarget} source={bandSrc} hasAttempts={hasAttempts} />
 
@@ -425,7 +428,7 @@ function FocusCard({
   const zero = weakest ? weakest.correct === 0 : false;
   const pct = weakest ? Math.round((weakest.correct / weakest.total) * 100) : 0;
   return (
-    <div className="dash-focus dash-grid-span" style={S.focus}>
+    <div className="dash-focus dash-grid-span dash-rise" style={{ ...S.focus, ...iVar(1) }}>
       <div style={S.focusInner}>
         <div style={S.focusEyebrow}>
           <Icon name="target" size={15} strokeWidth={2.6} /> Today&apos;s focus
@@ -453,7 +456,7 @@ function FocusCard({
                 </div>
               ) : (
                 <div aria-hidden="true" style={S.focusTrack}>
-                  <div style={{ ...S.focusFill, width: `${pct}%` }} />
+                  <div className="dash-fill" style={{ ...S.focusFill, width: `${pct}%` }} />
                 </div>
               )}
             </div>
@@ -557,8 +560,9 @@ function WeekCard({
               tabIndex={0}
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}
             >
-              <div aria-hidden="true" style={{
+              <div aria-hidden="true" className="dash-weekbar" style={{
                 width: "100%", height: barH(w.count), borderRadius: 9, background: barFill(w.count),
+                ...iVar(i),
                 ...(w.state === "today"
                   ? { outline: "2px solid color-mix(in oklab, var(--streak) 35%, var(--surface))", outlineOffset: 2 }
                   : null),
@@ -735,7 +739,7 @@ function BandReadout({
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* §8 — a11y: шкала как единый образ со смыслом. */}
         <div role="img" aria-label={ariaLabel} style={S.bandScale}>
-          <div style={{ ...S.bandFill, width: `${fillPct}%` }} />
+          <div className="dash-fill" style={{ ...S.bandFill, width: `${fillPct}%` }} />
           {showMile && <div style={{ ...S.bandTickMile, left: `calc(${(nextStop / 9) * 100}% - 2px)` }} />}
           {target != null && <div style={{ ...S.bandTick, left: `calc(${(target / 9) * 100}% - 2px)` }} />}
         </div>
@@ -922,7 +926,7 @@ function LossRow({ item, idx }: { item: BandPlanWeakType; idx: number }) {
             Один резкий акцент = бар худшей строки (full brand), остальные — спокойный
             brand-border; красный остаётся только на ранге худшей (lossRankWorst). */}
         <div aria-hidden="true" style={S.lossTrack}>
-          <div style={{ height: "100%", width: `${pct}%`, borderRadius: "var(--radius-full)", background: worst ? "var(--brand)" : "var(--brand-border)" }} />
+          <div className="dash-fill" style={{ height: "100%", width: `${pct}%`, borderRadius: "var(--radius-full)", background: worst ? "var(--brand)" : "var(--brand-border)" }} />
         </div>
       </div>
       <span style={S.lossScore}>
@@ -979,16 +983,17 @@ const DASH_CSS = `
 .dash-sect-tight{padding:18px 16px 8px}
 .dash-band{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
 .dash-band-num{font-size:50px}
-/* Loss / recent / today's plan rows — это ссылки: явный hover-фидбэк подтверждает кликабельность. */
-.dash-loss,.dash-trow,.dash-today-row{transition:background-color var(--duration-fast) var(--ease-standard)}
-.dash-loss:hover{background:var(--surface-inset)}
-.dash-trow:hover{background:var(--surface-inset)}
-.dash-today-row:hover{background:var(--surface-inset)}
+/* Loss / recent / today's plan rows — это ссылки: явный hover-фидбэк подтверждает
+   кликабельность (bg + лёгкий наклон к переходу). */
+.dash-loss,.dash-trow,.dash-today-row{transition:background-color var(--duration-fast) var(--ease-standard),transform var(--duration-fast) var(--ease-standard)}
+.dash-loss:hover{background:var(--surface-inset);transform:translateX(2px)}
+.dash-trow:hover{background:var(--surface-inset);transform:translateX(2px)}
+.dash-today-row:hover{background:var(--surface-inset);transform:translateX(2px)}
 .dash-more summary{list-style:none;cursor:pointer}
 .dash-more summary::-webkit-details-marker{display:none}
 .dash-more summary svg{transition:transform .2s ease}
 .dash-more[open] summary svg{transform:rotate(180deg)}
-@media (prefers-reduced-motion:reduce){.dash-more summary svg,.dash-loss,.dash-trow,.dash-today-row{transition:none}}
+@media (prefers-reduced-motion:reduce){.dash-more summary svg,.dash-loss,.dash-trow,.dash-today-row{transition:none}.dash-loss:hover,.dash-trow:hover,.dash-today-row:hover{transform:none}.dash-rise,.dash-fill,.dash-weekbar{animation:none}}
 /* This week — полоса momentum: телефон = сегменты стопкой, десктоп = в ряд. */
 .dash-week{padding:16px}
 .dash-week-row{display:flex;flex-direction:column;gap:16px;align-items:flex-start}
@@ -1046,6 +1051,20 @@ const DASH_CSS = `
   .dash-chip{font-size:12px!important}
   .dash-week-lab{font-size:12px!important}
 }
+/* Entrance + метрики (signature-бит, confident). CSS-анимации бегут раз на маунте;
+   натуральное (без анимации) состояние элементов — уже видимое, keyframe лишь
+   добавляет вход, поэтому контент никогда не гейтится анимацией. fill:both держит
+   from-state в фазе delay (без мигания до старта). reduced-motion гасит их выше
+   (animation:none) — глобальный duration:0 не трогает delay, оставил бы pop. */
+@keyframes dashRise{from{opacity:0;transform:translateY(10px)}}
+.dash-rise{animation:dashRise var(--duration-slow) var(--ease-out) both;animation-delay:calc(var(--i,0)*70ms)}
+/* Метрики «наливаются»: clip-wipe по уже отрисованному фикс-бару (не анимируем
+   layout-ширину) — трек виден, заливка вытекает слева направо. */
+@keyframes dashWipeX{from{clip-path:inset(0 100% 0 0)}}
+.dash-fill{animation:dashWipeX var(--duration-deliberate) var(--ease-out) both;animation-delay:380ms}
+/* Неделя активности — столбцы растут снизу, лёгкий стаггер по дням. */
+@keyframes dashWipeUp{from{clip-path:inset(100% 0 0 0)}}
+.dash-weekbar{animation:dashWipeUp var(--duration-slow) var(--ease-out) both;animation-delay:calc(360ms+var(--i,0)*45ms)}
 `;
 
 const S: Record<string, React.CSSProperties> = {

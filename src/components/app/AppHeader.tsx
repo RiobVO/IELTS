@@ -87,6 +87,20 @@ const HEADER_CSS = `
 @media (max-width:430px){
   .ah-avatar::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
 }
+/* Логотип — тактильный отклик на бренд-плитке (hover-подъём, press-осадка). */
+.ah-logo-tile{transition:transform var(--duration-base) var(--ease-out)}
+.ah-logo:hover .ah-logo-tile{transform:scale(1.06)}
+.ah-logo:active .ah-logo-tile{transform:scale(.98)}
+/* Nav-ссылки — цвета + press-осадка (единый transition вместо inline COLORS_TRANSITION,
+   иначе inline перебил бы transform класса и осадка бы «щёлкала» без ease). */
+.ah-navlink{transition:background-color var(--duration-fast) var(--ease-standard),color var(--duration-fast) var(--ease-standard),transform var(--duration-fast) var(--ease-standard)}
+.ah-navlink:active{transform:scale(.96)}
+/* Активный раздел — подчёркивание «рисуется» при заходе: индикатор — новый DOM-узел
+   на активной ссылке, поэтому CSS-анимация проигрывается на каждой навигации (mount),
+   но только на самом индикаторе — рама не «дёргается». */
+.ah-active-underline{position:absolute;left:14px;right:14px;bottom:3px;height:2px;border-radius:2px;background:var(--brand);transform-origin:center;animation:ah-underline var(--duration-base) var(--ease-out) both}
+@keyframes ah-underline{from{transform:scaleX(0)}}
+@media (prefers-reduced-motion:reduce){.ah-active-underline{animation:none}}
 `;
 
 function NavLink({ link, active }: { link: (typeof LINKS)[number]; active: boolean }) {
@@ -94,8 +108,10 @@ function NavLink({ link, active }: { link: (typeof LINKS)[number]; active: boole
   return (
     <Link
       href={link.href}
+      className="ah-navlink"
       {...handlers}
       style={{
+        position: "relative",
         textDecoration: "none",
         background: active ? "var(--brand-subtle)" : hover ? "var(--surface-hover)" : "transparent",
         color: active ? "var(--text-link)" : "var(--text-secondary)",
@@ -104,10 +120,10 @@ function NavLink({ link, active }: { link: (typeof LINKS)[number]; active: boole
         fontWeight: 700,
         padding: "8px 14px",
         borderRadius: "var(--radius-md)",
-        transition: COLORS_TRANSITION,
       }}
     >
       {link.label}
+      {active && <span aria-hidden="true" className="ah-active-underline" />}
     </Link>
   );
 }
@@ -234,8 +250,8 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
       <style>{HEADER_CSS}</style>
 
       <div className="ah-bar" style={{ display: "flex", alignItems: "center", maxWidth: 1180, margin: "0 auto" }}>
-        <Link href="/app" style={{ display: "flex", alignItems: "center", gap: 11, textDecoration: "none" }}>
-          <span style={{ width: 34, height: 34, flex: "none", borderRadius: 10, display: "grid", placeItems: "center", background: "linear-gradient(165deg,var(--surface-logo),var(--surface-logo-deep))", border: "1px solid var(--surface-logo-border)" }}>
+        <Link href="/app" className="ah-logo" style={{ display: "flex", alignItems: "center", gap: 11, textDecoration: "none" }}>
+          <span className="ah-logo-tile" style={{ width: 34, height: 34, flex: "none", borderRadius: 10, display: "grid", placeItems: "center", background: "linear-gradient(165deg,var(--surface-logo),var(--surface-logo-deep))", border: "1px solid var(--surface-logo-border)" }}>
             {/* inline SVG (не <img>) — иначе currentColor рисует бары чёрными на тёмной плитке */}
             <svg width="19" height="19" viewBox="0 0 64 64" fill="none" aria-hidden="true">
               <rect x="9" y="18" width="34" height="9" rx="4.5" fill="var(--brand)" />
