@@ -15,6 +15,8 @@ import { getExamCountdown, isInCurrentTzWeek, isSameTzDay, type ExamCountdown } 
 import { computeDailyPlan, getCatalogAvailability, getMistakesDueSummary, type DailyPlan, type DailyPlanItem } from "@/lib/progress/daily-plan";
 import { AppShell } from "./_AppShell";
 import { ExamDateEditor } from "./ExamDateEditor";
+import { HeroMotion, TiltCard, BandGauge } from "./_DashMotion";
+import { CountUp } from "@/components/core/CountUp";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
 import { Icon, type IconName } from "@/components/core/icons";
@@ -38,8 +40,6 @@ function total(b: Breakdown): number {
   if (!b) return 0;
   return Object.values(b).reduce((s, x) => s + x.total, 0);
 }
-
-const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
 // Индекс стаггера как CSS-переменную (TS не пускает кастомное «--i» в CSSProperties).
 const iVar = (i: number) => ({ "--i": i }) as React.CSSProperties;
@@ -428,7 +428,7 @@ function FocusCard({
   const zero = weakest ? weakest.correct === 0 : false;
   const pct = weakest ? Math.round((weakest.correct / weakest.total) * 100) : 0;
   return (
-    <div className="dash-focus dash-grid-span dash-rise" style={{ ...S.focus, ...iVar(1) }}>
+    <HeroMotion className="dash-focus dash-grid-span dash-rise" style={{ ...S.focus, ...iVar(1) }}>
       <div style={S.focusInner}>
         <div style={S.focusEyebrow}>
           <Icon name="target" size={15} strokeWidth={2.6} /> Today&apos;s focus
@@ -494,7 +494,7 @@ function FocusCard({
           </>
         )}
       </div>
-    </div>
+    </HeroMotion>
   );
 }
 
@@ -542,11 +542,11 @@ function WeekCard({
             <Icon name="flame" size={24} strokeWidth={2.2} />
           </span>
           <div>
-            <div style={S.flameNum}>{streak}</div>
+            <div style={S.flameNum}><CountUp value={streak} /></div>
             <div style={S.flameSub}>day streak</div>
           </div>
           <div style={{ marginLeft: 6 }}>
-            <div style={{ ...S.flameNum, fontSize: 22 }}>{fmt(xp)}</div>
+            <div style={{ ...S.flameNum, fontSize: 22 }}><CountUp value={xp} locale /></div>
             <div style={S.flameSub}>XP</div>
           </div>
         </div>
@@ -698,13 +698,11 @@ function BandReadout({
     );
   }
 
-  const fillPct = (band / 9) * 100;
   // Value-aware calm: a low band is shown quietly (softer ink, no elevation) —
   // candid, not punishing; a band worth celebrating keeps the bold raised look.
   const low = band < 5;
   const reached = target != null && band >= target;
   const nextStop = target != null ? Math.min(band + 0.5, target) : Math.min(band + 0.5, 9);
-  const showMile = !reached && nextStop < (target ?? 9); // не дублируем target-тик
   const caption = reached
     ? "Target reached 🎯"
     : nextStop === target
@@ -717,39 +715,11 @@ function BandReadout({
         : `Band ${band} of 9, target ${target}, next stop ${nextStop}`
       : `Band ${band} of 9, next stop ${nextStop}`;
   return (
-    <div style={{ ...S.card, ...S.bandCard, ...(low ? null : S.bandCardFilled) }}>
-      <div style={{ flex: "none" }}>
-        <div style={S.bandLabel}>Your band</div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
-          <span className="dash-bandnum-wrap" tabIndex={0} aria-label={source ? `From ${source}` : undefined}>
-            <span className="dash-band-num" style={low ? { ...S.bandNum, color: "var(--text-secondary)" } : S.bandNum}>{band}</span>
-            {source && <span aria-hidden="true" className="daytip">{source}</span>}
-          </span>
-          {target != null ? (
-            <span style={S.bandTarget}>
-              / target <span style={{ fontFamily: "var(--font-mono)", color: "var(--brand)" }}>{target}</span>
-            </span>
-          ) : (
-            // Якорь шкалы для не-носителя, когда target ещё не задан. «out of 9»
-            // (а не «/ 9») — чтобы не путать со слэш-грамматикой «/ target N».
-            <span style={S.bandTarget}>out of 9</span>
-          )}
-        </div>
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {/* §8 — a11y: шкала как единый образ со смыслом. */}
-        <div role="img" aria-label={ariaLabel} style={S.bandScale}>
-          <div className="dash-fill" style={{ ...S.bandFill, width: `${fillPct}%` }} />
-          {showMile && <div style={{ ...S.bandTickMile, left: `calc(${(nextStop / 9) * 100}% - 2px)` }} />}
-          {target != null && <div style={{ ...S.bandTick, left: `calc(${(target / 9) * 100}% - 2px)` }} />}
-        </div>
-        <div style={S.bandLegend}>
-          <span>0</span>
-          <span style={{ color: reached ? "var(--success-text)" : "var(--brand-active)", fontWeight: 700 }}>{caption}</span>
-          <span>9</span>
-        </div>
-      </div>
-    </div>
+    // Band как рисующаяся круговая gauge-дуга (overdrive) + count-up в центре; карта
+    // наклоняется к курсору. Пустые состояния выше остаются плоскими серверными.
+    <TiltCard style={{ ...S.card, ...S.bandCard, ...S.bandGaugeCard, ...(low ? null : S.bandCardFilled) }}>
+      <BandGauge band={band} target={target} source={source} caption={caption} reached={reached} low={low} ariaLabel={ariaLabel} />
+    </TiltCard>
   );
 }
 
@@ -982,7 +952,6 @@ const DASH_CSS = `
 .dash-sect{padding:20px 16px}
 .dash-sect-tight{padding:18px 16px 8px}
 .dash-band{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
-.dash-band-num{font-size:50px}
 /* Loss / recent / today's plan rows — это ссылки: явный hover-фидбэк подтверждает
    кликабельность (bg + лёгкий наклон к переходу). */
 .dash-loss,.dash-trow,.dash-today-row{transition:background-color var(--duration-fast) var(--ease-standard),transform var(--duration-fast) var(--ease-standard)}
@@ -993,7 +962,6 @@ const DASH_CSS = `
 .dash-more summary::-webkit-details-marker{display:none}
 .dash-more summary svg{transition:transform .2s ease}
 .dash-more[open] summary svg{transform:rotate(180deg)}
-@media (prefers-reduced-motion:reduce){.dash-more summary svg,.dash-loss,.dash-trow,.dash-today-row{transition:none}.dash-loss:hover,.dash-trow:hover,.dash-today-row:hover{transform:none}.dash-rise,.dash-fill,.dash-weekbar{animation:none}}
 /* This week — полоса momentum: телефон = сегменты стопкой, десктоп = в ряд. */
 .dash-week{padding:16px}
 .dash-week-row{display:flex;flex-direction:column;gap:16px;align-items:flex-start}
@@ -1016,14 +984,10 @@ const DASH_CSS = `
 .weekday:focus-visible .daytip{opacity:1;visibility:visible;transform:translate(-50%,0)}
 .dash-week-dots .weekday:first-child:focus-visible .daytip{transform:translate(0,0)}
 .dash-week-dots .weekday:last-child:focus-visible .daytip{transform:translate(0,0)}
-.dash-bandnum-wrap{position:relative;display:inline-flex;cursor:help}
-.dash-bandnum-wrap:hover .daytip,.dash-bandnum-wrap:focus-visible .daytip{opacity:1;visibility:visible;transform:translate(-50%,0)}
-.dash-bandnum-wrap:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:8px}
 @media (min-width:768px){
   .dash-wrap{padding:32px 28px 56px}
   .dash-hi{font-size:32px;white-space:nowrap;letter-spacing:var(--tracking-tight)}
   .dash-focus-title{font-size:42px}
-  .dash-band-num{font-size:60px}
   .dash-band{flex-direction:row;align-items:center;gap:32px}
   .dash-focus{padding:38px}
   .dash-sect{padding:28px 30px}
@@ -1051,20 +1015,55 @@ const DASH_CSS = `
   .dash-chip{font-size:12px!important}
   .dash-week-lab{font-size:12px!important}
 }
-/* Entrance + метрики (signature-бит, confident). CSS-анимации бегут раз на маунте;
-   натуральное (без анимации) состояние элементов — уже видимое, keyframe лишь
-   добавляет вход, поэтому контент никогда не гейтится анимацией. fill:both держит
-   from-state в фазе delay (без мигания до старта). reduced-motion гасит их выше
-   (animation:none) — глобальный duration:0 не трогает delay, оставил бы pop. */
-@keyframes dashRise{from{opacity:0;transform:translateY(10px)}}
+/* ═══ Motion (overdrive) ═══ CSS-анимации бегут раз на маунте; натуральное (без
+   анимации) состояние элементов уже видимое, keyframe лишь добавляет вход —
+   контент никогда не гейтится. fill:both держит from-state в фазе delay. ВЕСЬ
+   reduced-motion — единым блоком В КОНЦЕ (после анимируемых правил), иначе поздние
+   определения перебили бы animation:none; глобальный duration:0 не трогает
+   delay/perspective, поэтому нужен явный сброс. */
+@keyframes dashRise{from{opacity:0;transform:translateY(14px) scale(.985);filter:blur(7px)}to{filter:blur(0)}}
 .dash-rise{animation:dashRise var(--duration-slow) var(--ease-out) both;animation-delay:calc(var(--i,0)*70ms)}
-/* Метрики «наливаются»: clip-wipe по уже отрисованному фикс-бару (не анимируем
-   layout-ширину) — трек виден, заливка вытекает слева направо. */
+/* Метрики «наливаются»: clip-wipe по фикс-бару (не анимируем layout-ширину) +
+   разовый глянец вслед. */
 @keyframes dashWipeX{from{clip-path:inset(0 100% 0 0)}}
-.dash-fill{animation:dashWipeX var(--duration-deliberate) var(--ease-out) both;animation-delay:380ms}
-/* Неделя активности — столбцы растут снизу, лёгкий стаггер по дням. */
+.dash-fill{position:relative;overflow:hidden;animation:dashWipeX var(--duration-deliberate) var(--ease-out) both;animation-delay:380ms}
+.dash-fill::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 32%,rgba(255,255,255,.55) 50%,transparent 68%);transform:translateX(-120%);animation:dashShimmer 1000ms var(--ease-out) 980ms both}
+@keyframes dashShimmer{to{transform:translateX(120%)}}
 @keyframes dashWipeUp{from{clip-path:inset(100% 0 0 0)}}
 .dash-weekbar{animation:dashWipeUp var(--duration-slow) var(--ease-out) both;animation-delay:calc(360ms+var(--i,0)*45ms)}
+/* Rail-виджеты приподнимаются на hover (band-gauge исключён — он наклоняется). */
+.dash-col-rail>div:not(.tilt-card){transition:transform var(--duration-base) var(--ease-out),box-shadow var(--duration-base) var(--ease-out)}
+.dash-col-rail>div:not(.tilt-card):hover{transform:translateY(-3px);box-shadow:var(--shadow-md)}
+/* Band-gauge — карта наклоняется к курсору (3D, весь frame). */
+.tilt-card{transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform 220ms var(--ease-out);transform-style:preserve-3d;will-change:transform}
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%}
+.gauge-label{font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;color:var(--text-secondary);align-self:flex-start}
+.gauge-stage{position:relative;flex:none}
+.gauge-val{stroke-dashoffset:0;animation:gaugeDraw var(--duration-deliberate) var(--ease-out) 260ms both}
+@keyframes gaugeDraw{from{stroke-dashoffset:var(--val-len)}}
+.gauge-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.gauge-num{font-family:var(--font-mono);font-size:46px;line-height:1;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em}
+.gauge-num-low{color:var(--text-secondary)}
+.gauge-sub{font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;color:var(--text-muted)}
+.gauge-caption{font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;text-align:center;text-wrap:balance;max-width:210px}
+/* Focus-hero (overdrive): дрейф-аврора + свет за курсором + 3D-наклон контента.
+   Аврора/спот — за текстом (z-index) и в правых/угловых зонах, левый ink остаётся
+   на тёмной базе → белый текст держит контраст. */
+.hero-motion{perspective:1000px}
+.hero-aurora{position:absolute;inset:-12%;border-radius:inherit;pointer-events:none;z-index:0;opacity:.5;background:radial-gradient(38% 52% at 16% 22%,color-mix(in oklab,var(--violet-400) 40%,transparent),transparent 60%),radial-gradient(52% 60% at 84% 4%,rgba(255,255,255,.20),transparent 60%),radial-gradient(64% 74% at 94% 98%,color-mix(in oklab,var(--violet-500) 60%,transparent),transparent 66%);animation:heroAurora 15s var(--ease-in-out) infinite alternate}
+@keyframes heroAurora{0%{transform:translate3d(-3%,-2%,0) scale(1.04)}50%{transform:translate3d(3%,2%,0) scale(1.12)}100%{transform:translate3d(-1%,3%,0) scale(1.05)}}
+.hero-spot{position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:1;opacity:var(--spot,0);transition:opacity 280ms var(--ease-out);background:radial-gradient(460px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.16),transparent 62%)}
+.hero-tilt{position:relative;z-index:2;flex:1;min-height:0;display:flex;flex-direction:column;transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transform-style:preserve-3d;transition:transform 220ms var(--ease-out)}
+@media (prefers-reduced-motion:reduce){
+  .dash-more summary svg,.dash-loss,.dash-trow,.dash-today-row{transition:none}
+  .dash-loss:hover,.dash-trow:hover,.dash-today-row:hover{transform:none}
+  .dash-rise,.dash-fill,.dash-weekbar,.gauge-val,.hero-aurora{animation:none}
+  .dash-fill::after{display:none}
+  .dash-col-rail>div:not(.tilt-card){transition:none}
+  .dash-col-rail>div:not(.tilt-card):hover{transform:none;box-shadow:var(--shadow-md)}
+  .tilt-card,.hero-tilt{transform:none;transition:none}
+  .hero-spot{display:none}
+}
 `;
 
 const S: Record<string, React.CSSProperties> = {
@@ -1199,19 +1198,12 @@ const S: Record<string, React.CSSProperties> = {
   // brand-рамка — presence без «нажимаемого» solid-канта (band-ридаут не кликабелен).
   // ТОЛЬКО в заполненном состоянии (пустой band остаётся тихим, см. bandEmptyNum).
   bandCardFilled: { boxShadow: "var(--shadow-md)", borderColor: "var(--brand-border)" },
-  bandNum: { fontFamily: "var(--font-mono)", lineHeight: 1, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em" },
-  bandTarget: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-muted)" },
+  // Заполненное состояние — круговой gauge по центру карты (BandGauge, overdrive).
+  bandGaugeCard: { display: "flex", justifyContent: "center", padding: "20px 20px 22px" },
   // Пустое состояние band: absence намеренно тихая (34px, не 56px) — disabled-«—»
   // не должно быть одним из крупнейших элементов экрана и читаться как «сломано».
   bandEmptyNum: { fontFamily: "var(--font-mono)", fontSize: 34, lineHeight: 1, fontWeight: 600, color: "var(--text-disabled)", letterSpacing: "-0.02em", marginTop: 8 },
   bandEmptyText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", lineHeight: 1.5, color: "var(--text-muted)", margin: 0, maxWidth: 460 },
-  // Шкала band — гридлайны по целым (0…9) поверх трека: slim-бар читается как
-  // измерительная шкала IELTS, а не безымянный progress (committed density).
-  bandScale: { position: "relative", height: 14, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", backgroundImage: "repeating-linear-gradient(90deg, transparent 0, transparent calc(100% / 9 - 1px), var(--border) calc(100% / 9 - 1px), var(--border) calc(100% / 9))" },
-  bandFill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: "var(--radius-full)", background: "linear-gradient(90deg, var(--brand-active), var(--brand))" },
-  bandTick: { position: "absolute", top: -6, width: 4, height: 26, borderRadius: 3, background: "var(--text-primary)" },
-  bandTickMile: { position: "absolute", top: -4, width: 4, height: 22, borderRadius: 3, background: "var(--brand)" },
-  bandLegend: { display: "flex", justifyContent: "space-between", marginTop: 9, fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
 
   /* Sections */
   sectionTitle: {
