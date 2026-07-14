@@ -322,8 +322,8 @@ function TrajectoryHero({
 
       <div style={S.legend}>
         <LegendDot color="var(--brand)" label="Combined" shape="line" />
-        <LegendDot color="var(--sky-500)" label="Reading" shape="circle" />
-        <LegendDot color="var(--violet-300)" label="Listening" shape="diamond" />
+        <LegendDot color="var(--info-text)" label="Reading" shape="circle" />
+        <LegendDot color="var(--violet-700)" label="Listening" shape="diamond" />
       </div>
     </div>
   );
@@ -571,6 +571,14 @@ const OV_CSS = `
 .ov-tip-band b{font-family:var(--font-mono);font-weight:700}
 .ov-tip-dot{width:8px;height:8px;border-radius:50%;flex:none}
 .ov-tip-delta{font-size:var(--text-2xs);font-weight:700;font-family:var(--font-mono);margin-top:3px}
+.ov-labels{position:absolute;inset:0;pointer-events:none;font-family:var(--font-ui)}
+.ov-lbl{position:absolute;font-size:var(--text-2xs);line-height:1;white-space:nowrap}
+.ov-lbl-grid{font-family:var(--font-mono);color:var(--text-muted);transform:translate(-100%,-50%)}
+.ov-lbl-target{color:var(--warn-text);font-weight:700;transform:translate(-100%,-135%)}
+.ov-lbl-exam{color:var(--brand-active);font-weight:700}
+.ov-lbl-latest{font-family:var(--font-mono);font-weight:700;color:var(--text-primary);transform:translate(calc(-100% - 8px),-120%)}
+.ov-lbl-axis{color:var(--text-muted)}
+.ov-lbl-axis-r{transform:translate(-100%,0)}
 @media (min-width:768px){
   .ov-wrap{padding:26px 28px 44px}
   .ov-grid{grid-template-columns:1.15fr 1fr}

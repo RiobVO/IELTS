@@ -47,7 +47,14 @@ export interface TrajectoryChartProps {
   latestBand: number;
 }
 
-const SECTION_COLOR = { reading: "var(--sky-500)", listening: "var(--violet-300)" } as const;
+// Цвета серий на БЕЛОМ плоте — тёмные, чтобы пройти 3:1 (WCAG 1.4.11): reading —
+// тёмно-синий (--info-text), listening — тёмно-фиолетовый (--violet-700). Combined
+// несёт brand-фиолет отдельно; форма точек (круг/ромб) различает серии при
+// дальтонизме, цвет отвечает только за видимость.
+const SECTION_COLOR = { reading: "var(--info-text)", listening: "var(--violet-700)" } as const;
+// На ТЁМНОМ фоне тултипа те же тёмные цвета слились бы — точке-свотчу даём светлые
+// варианты (текст рядом всё равно называет секцию явно).
+const SECTION_DOT = { reading: "var(--sky-500)", listening: "var(--violet-300)" } as const;
 const SECTION_LABEL = { reading: "Reading", listening: "Listening" } as const;
 
 function fmtFull(ms: number): string {
@@ -125,35 +132,18 @@ export function TrajectoryChart({
         onBlur={onLeave}
         onKeyDown={onKey}
       >
+        {/* Только ЛИНИИ сетки/цели/экзамена — подписи вынесены в HTML-оверлей ниже
+            (фикс-кегль на любой ширине; SVG-текст на 360px схлопывался до ~4.8px). */}
         {grid.map((g) => (
-          <g key={g.band}>
-            <line x1={padL} x2={w - padR} y1={g.y} y2={g.y} stroke="var(--border-subtle)" strokeWidth={1} />
-            <text x={padL - 6} y={g.y + 3} textAnchor="end" fontSize={9} fontFamily="var(--font-mono)" fill="var(--text-muted)">
-              {g.band}
-            </text>
-          </g>
+          <line key={g.band} x1={padL} x2={w - padR} y1={g.y} y2={g.y} stroke="var(--border-subtle)" strokeWidth={1} />
         ))}
 
         {target && (
-          <>
-            <line x1={padL} x2={w - padR} y1={target.y} y2={target.y} stroke="var(--gold-500)" strokeWidth={1.5} strokeDasharray="5 4" />
-            <text x={w - padR} y={target.y - 5} textAnchor="end" fontSize={9} fontFamily="var(--font-ui)" fontWeight={700} fill="var(--gold-500)">
-              Target {target.band}
-            </text>
-          </>
+          <line x1={padL} x2={w - padR} y1={target.y} y2={target.y} stroke="var(--gold-600)" strokeWidth={1.5} strokeDasharray="5 4" />
         )}
 
         {exam && (
-          <>
-            <line x1={exam.x} x2={exam.x} y1={padT} y2={h - padB} stroke="var(--brand-active)" strokeWidth={1.5} strokeDasharray="3 3" />
-            {/* Подпись уводим ниже верхней рамки (padT+16), чтобы не липла к краю
-                плота и первой линии сетки; у правого края — anchor=end влево от линии. */}
-            {exam.rightEdge ? (
-              <text x={exam.x - 5} y={padT + 16} textAnchor="end" fontSize={9} fontFamily="var(--font-ui)" fontWeight={700} fill="var(--brand-active)">Exam</text>
-            ) : (
-              <text x={exam.x + 5} y={padT + 16} fontSize={9} fontFamily="var(--font-ui)" fontWeight={700} fill="var(--brand-active)">Exam</text>
-            )}
-          </>
+          <line x1={exam.x} x2={exam.x} y1={padT} y2={h - padB} stroke="var(--brand-active)" strokeWidth={1.5} strokeDasharray="3 3" />
         )}
 
         {forecast && (
@@ -172,12 +162,12 @@ export function TrajectoryChart({
         )}
 
         {reading && (
-          <polyline data-draw={reading.len} points={reading.attr} fill="none" stroke="var(--sky-500)" strokeWidth={1.5}
-            strokeDasharray={reading.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" opacity={0.65} />
+          <polyline data-draw={reading.len} points={reading.attr} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.5}
+            strokeDasharray={reading.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
         {listening && (
-          <polyline data-draw={listening.len} points={listening.attr} fill="none" stroke="var(--violet-300)" strokeWidth={1.5}
-            strokeDasharray={listening.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" opacity={0.65} />
+          <polyline data-draw={listening.len} points={listening.attr} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={1.5}
+            strokeDasharray={listening.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
         <polyline data-draw={combinedLen} points={combinedAttr} fill="none" stroke="var(--brand)" strokeWidth={2.5}
           strokeDasharray={combinedLen} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
@@ -212,31 +202,62 @@ export function TrajectoryChart({
         <circle data-pop cx={combined[combined.length - 1].x} cy={combined[combined.length - 1].y} r={5}
           fill="var(--brand)" stroke="var(--surface)" strokeWidth={2}
           style={{ transformBox: "fill-box", transformOrigin: "center" }} />
-        {!act && (
-          <text x={Math.min(combined[combined.length - 1].x + 8, w - padR - 24)} y={combined[combined.length - 1].y - 8}
-            fontSize={10} fontWeight={700} fontFamily="var(--font-mono)" fill="var(--text-primary)">
-            {latestBand.toFixed(1)}
-          </text>
-        )}
-
-        <text x={padL} y={h - 6} fontSize={9} fontFamily="var(--font-ui)" fill="var(--text-muted)">{xLabelLeft}</text>
-        <text x={w - padR} y={h - 6} textAnchor="end" fontSize={9} fontFamily="var(--font-ui)" fill="var(--text-muted)">{xLabelRight}</text>
 
         {/* Прозрачная область-приёмник поверх — ловит курсор и между линиями. */}
         <rect x={padL} y={padT} width={w - padL - padR} height={h - padT - padB} fill="transparent" style={{ cursor: "crosshair" }} />
       </svg>
 
+      {/* HTML-оверлей подписей: фикс-кегль (var(--text-2xs)) на любой ширине контейнера,
+          позиционирование в % от того же viewBox (та же техника, что у тултипа). SVG-текст
+          масштабировался вместе с viewBox и на узком телефоне падал до ~4.8px. */}
+      <div className="ov-labels" aria-hidden="true">
+        {grid.map((g) => (
+          <span key={g.band} className="ov-lbl ov-lbl-grid" style={{ left: `${((padL - 7) / w) * 100}%`, top: `${(g.y / h) * 100}%` }}>
+            {g.band}
+          </span>
+        ))}
+        {target && (
+          <span className="ov-lbl ov-lbl-target" style={{ left: `${((w - padR) / w) * 100}%`, top: `${(target.y / h) * 100}%` }}>
+            Target {target.band}
+          </span>
+        )}
+        {exam && (
+          <span
+            className="ov-lbl ov-lbl-exam"
+            style={{ left: `${(exam.x / w) * 100}%`, top: `${((padT + 4) / h) * 100}%`, transform: exam.rightEdge ? "translate(-100%, 0)" : "translate(0, 0)", paddingInline: 4 }}
+          >
+            Exam
+          </span>
+        )}
+        {!act && (
+          <span className="ov-lbl ov-lbl-latest" style={{ left: `${(combined[combined.length - 1].x / w) * 100}%`, top: `${(combined[combined.length - 1].y / h) * 100}%` }}>
+            {latestBand.toFixed(1)}
+          </span>
+        )}
+        <span className="ov-lbl ov-lbl-axis" style={{ left: `${(padL / w) * 100}%`, bottom: 0 }}>{xLabelLeft}</span>
+        <span className="ov-lbl ov-lbl-axis ov-lbl-axis-r" style={{ left: `${((w - padR) / w) * 100}%`, bottom: 0 }}>{xLabelRight}</span>
+      </div>
+
       {act && (
         <div className="ov-tip" role="status" style={{ left: `${leftPct}%`, top: `${topPct}%` }}>
           <div className="ov-tip-date">{fmtFull(act.dateMs)}</div>
           <div className="ov-tip-band">
-            <span className="ov-tip-dot" style={{ background: SECTION_COLOR[act.section] }} />
+            <span className="ov-tip-dot" style={{ background: SECTION_DOT[act.section] }} />
             {SECTION_LABEL[act.section]} · <b>{act.band.toFixed(1)}</b>
           </div>
           {delta != null && (
             <div
               className="ov-tip-delta"
-              style={{ color: delta > 0 ? "var(--success-text)" : delta < 0 ? "var(--error-text)" : "color-mix(in oklab, var(--surface-inverse-ink) 62%, transparent)" }}
+              style={{
+                // Тултип тёмный (--surface-inverse) — тёмные *-text (для светлых
+                // поверхностей) давали ~2.6:1. На тёмном берём светлые варианты.
+                color:
+                  delta > 0
+                    ? "var(--green-500)"
+                    : delta < 0
+                      ? "color-mix(in oklab, var(--red-500) 72%, white)"
+                      : "color-mix(in oklab, var(--surface-inverse-ink) 62%, transparent)",
+              }}
             >
               {delta === 0 ? "No change vs previous mock" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} vs previous mock`}
             </div>
