@@ -97,10 +97,26 @@ const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 /**
  * How close `stats` is to satisfying `criteria` — same thresholds as `isMet`,
  * surfaced as a ratio + hint for the locked-badge rings. Two-condition criteria
- * (accuracy: enough answered AND high enough %) track the visible "answered"
- * gate; the % is enforced by `isMet` at award time.
+ * (accuracy: enough answered AND high enough %) are tracked in two phases: while
+ * below `minQuestions` the answered count is the gate; once enough are answered
+ * the gate becomes accuracy vs `minPct`. Tracking only the answered gate wrongly
+ * showed a low-accuracy user who'd answered plenty as "100% there" with a
+ * nonsensical "76 / 20 answered" hint (numerator past the threshold).
+ *
+ * A not-yet-earned badge is capped strictly below 1: consumers render
+ * `Math.round(pct * 100)` as "X% there", so a fine-grained ratio just under the
+ * threshold (rating 1195/1200, accuracy 89.6%/90%) would round up to a false
+ * "100% there". The `isMet` gate is the single source of truth for 100%.
  */
 export function badgeProgress(criteria: Criteria, stats: UserStats): BadgeProgress {
+  const raw = rawBadgeProgress(criteria, stats);
+  return isMet(criteria, stats)
+    ? { ...raw, pct: 1 }
+    : { ...raw, pct: Math.min(0.99, raw.pct) };
+}
+
+/** Сырой прогресс по типу критерия — до капа «не 100%, пока isMet не подтвердит». */
+function rawBadgeProgress(criteria: Criteria, stats: UserStats): BadgeProgress {
   switch (criteria.type) {
     case "volume":
       return { pct: clamp01(stats.volume / criteria.tests), hint: `${stats.volume} / ${criteria.tests} tests` };
@@ -113,7 +129,20 @@ export function badgeProgress(criteria: Criteria, stats: UserStats): BadgeProgre
     case "accuracy": {
       const agg = stats.perQtype.get(criteria.qtype);
       const answered = agg?.total ?? 0;
-      return { pct: clamp01(answered / criteria.minQuestions), hint: `${answered} / ${criteria.minQuestions} answered` };
+      // Пока вопросов меньше порога — гейт по количеству. Как только их достаточно,
+      // единственное, что осталось для награды, — точность, поэтому прогресс
+      // переключается на неё (иначе наотвечавший много, но мимо, читался бы как
+      // «100% there» с бессмысленным «76 / 20 answered»). isMet держит оба условия.
+      if (answered < criteria.minQuestions) {
+        return { pct: clamp01(answered / criteria.minQuestions), hint: `${answered} / ${criteria.minQuestions} answered` };
+      }
+      const accPct = answered > 0 ? ((agg?.correct ?? 0) / answered) * 100 : 0;
+      const accMet = accPct >= criteria.minPct; // гейт количества в этой ветке уже пройден
+      // minPct<=0 — вырожденный критерий (годна любая точность): избегаем 0/0=NaN.
+      const ratio = criteria.minPct > 0 ? accPct / criteria.minPct : 1;
+      // Незаработанную точность округляем ВНИЗ, чтобы 89.6% не читалось «90% / 90%».
+      const shown = accMet ? Math.round(accPct) : Math.floor(accPct);
+      return { pct: clamp01(ratio), hint: `${shown}% / ${criteria.minPct}% accuracy` };
     }
     case "first_place":
       return {

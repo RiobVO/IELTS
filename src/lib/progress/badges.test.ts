@@ -191,6 +191,69 @@ describe("badgeProgress", () => {
     expect(r.hint).toBe("0 / 20 answered");
   });
 
+  it("accuracy: набрал вопросы, но точность низкая → прогресс по точности, не ложные 100%", () => {
+    // 40 отвечено (≥20), 12 верных = 30% при пороге 80% → 0.375, а не 1.0
+    const perQtype = new Map([["tfng", { correct: 12, total: 40 }]]);
+    const r = badgeProgress(
+      { type: "accuracy", qtype: "tfng", minQuestions: 20, minPct: 80 },
+      { ...base, perQtype },
+    );
+    expect(r.pct).toBeCloseTo(0.375);
+    expect(r.hint).toBe("30% / 80% accuracy");
+  });
+
+  it("accuracy: числитель answered не пробивает знаменатель в хинте (репро прод-бага 76/20)", () => {
+    // Ровно прод-случай: наотвечал 76 при пороге 20, но мимо → не «76 / 20», не 100%
+    const perQtype = new Map([["tfng", { correct: 30, total: 76 }]]);
+    const r = badgeProgress(
+      { type: "accuracy", qtype: "tfng", minQuestions: 20, minPct: 90 },
+      { ...base, perQtype },
+    );
+    expect(r.hint).not.toContain("76");
+    expect(r.pct).toBeLessThan(1);
+    expect(r.hint).toBe("39% / 90% accuracy");
+  });
+
+  it("accuracy: набрал вопросы И точность → 100% (порог достигнут)", () => {
+    const perQtype = new Map([["tfng", { correct: 38, total: 40 }]]);
+    const r = badgeProgress(
+      { type: "accuracy", qtype: "tfng", minQuestions: 20, minPct: 80 },
+      { ...base, perQtype },
+    );
+    expect(r.pct).toBe(1);
+    expect(r.hint).toBe("95% / 80% accuracy");
+  });
+
+  it("accuracy: у самого порога не показывает ложные 100% (89.6% из 224/250 при minPct 90)", () => {
+    // isMet=false (89.6 < 90); округление pct*100 в hero не должно дать 100%,
+    // а хинт — не «90% / 90%» (округление вверх пересекло бы порог).
+    const perQtype = new Map([["tfng", { correct: 224, total: 250 }]]);
+    const r = badgeProgress(
+      { type: "accuracy", qtype: "tfng", minQuestions: 20, minPct: 90 },
+      { ...base, perQtype },
+    );
+    expect(r.pct).toBeLessThanOrEqual(0.99);
+    expect(Math.round(r.pct * 100)).toBeLessThan(100);
+    expect(r.hint).toBe("89% / 90% accuracy");
+  });
+
+  it("accuracy: minPct=0 (вырожденный критерий) → без NaN", () => {
+    const perQtype = new Map([["tfng", { correct: 0, total: 40 }]]);
+    const r = badgeProgress(
+      { type: "accuracy", qtype: "tfng", minQuestions: 20, minPct: 0 },
+      { ...base, perQtype },
+    );
+    expect(Number.isFinite(r.pct)).toBe(true);
+    expect(r.pct).toBe(1); // любая точность удовлетворяет порог 0 → isMet=true
+  });
+
+  it("rating: у самого порога незаработанный бейдж не округляется до 100% (1195/1200)", () => {
+    const r = badgeProgress({ type: "rating", min: 1200 }, { ...base, rating: 1195 });
+    expect(r.pct).toBeLessThanOrEqual(0.99);
+    expect(Math.round(r.pct * 100)).toBeLessThan(100);
+    expect(r.hint).toBe("1195 / 1200 rating");
+  });
+
   it("first_place: 0/подсказка пока не #1, 1/Earned после", () => {
     const c: Criteria = { type: "first_place", scope: "global", period: "all_time" };
     const locked = badgeProgress(c, base);
