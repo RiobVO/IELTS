@@ -26,6 +26,7 @@ import { Button } from "@/components/core/Button";
 import { Icon, type IconName } from "@/components/core/icons";
 import { OverviewMotion } from "./OverviewMotion";
 import { ProgressTabs } from "./ProgressTabs";
+import { TrajectoryChart } from "./TrajectoryChart";
 
 const DAY_MS = 86_400_000;
 
@@ -279,137 +280,45 @@ function TrajectoryHero({
   const lowY = showForecast ? yScale(forecast.interval!.low) : null;
   const highY = showForecast ? yScale(forecast.interval!.high) : null;
 
+  // Геометрия готова — передаём в клиентский график плоскими числами/строками.
+  // Он рисует тот же SVG (SSR-идентично) и добавляет визир + hover-подсказку.
+  const combined = pts.map((p, i) => ({
+    x: combinedPts[i].x,
+    y: combinedPts[i].y,
+    band: p.band,
+    dateMs: p.t,
+    section: p.section,
+  }));
+
   return (
     <div className="ov-hero" style={S.heroCard}>
       <div style={S.heroHead}>
         <h2 style={S.heroTitle}>
           <Icon name="bar-chart" size={18} strokeWidth={2.4} style={{ color: "var(--brand)" }} /> Trajectory
         </h2>
-        <p style={S.heroSub}>Band across every full mock, mixed reading + listening.</p>
+        <p style={S.heroSub}>Band across every full mock — hover any point for the detail.</p>
       </div>
 
-      <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} width="100%" height="auto" role="img" aria-label={`Band trajectory, latest ${last.band}`} style={S.svg}>
-        {gridBands.map((b) => (
-          <g key={b}>
-            <line x1={PAD_L} x2={CHART_W - PAD_R} y1={yScale(b)} y2={yScale(b)} stroke="var(--border-subtle)" strokeWidth={1} />
-            <text x={PAD_L - 6} y={yScale(b) + 3} textAnchor="end" fontSize={9} fontFamily="var(--font-mono)" fill="var(--text-muted)">
-              {b}
-            </text>
-          </g>
-        ))}
-
-        {targetY != null && (
-          <>
-            <line x1={PAD_L} x2={CHART_W - PAD_R} y1={targetY} y2={targetY} stroke="var(--gold-500)" strokeWidth={1.5} strokeDasharray="5 4" />
-            <text x={CHART_W - PAD_R} y={targetY - 5} textAnchor="end" fontSize={9} fontFamily="var(--font-ui)" fontWeight={700} fill="var(--gold-500)">
-              Target {targetBand}
-            </text>
-          </>
-        )}
-
-        {examX != null && (
-          <>
-            <line x1={examX} x2={examX} y1={PAD_T} y2={CHART_H - PAD_B} stroke="var(--brand-active)" strokeWidth={1.5} strokeDasharray="3 3" />
-            {/* Возле правого края подпись "Exam" справа от линии обрежется — уводим
-                её влево от линии и меняем anchor, чтобы текст остался в кадре. */}
-            {examX > CHART_W - PAD_R - 28 ? (
-              <text x={examX - 5} y={PAD_T + 9} textAnchor="end" fontSize={9} fontFamily="var(--font-ui)" fontWeight={700} fill="var(--brand-active)">
-                Exam
-              </text>
-            ) : (
-              <text x={examX + 5} y={PAD_T + 9} fontSize={9} fontFamily="var(--font-ui)" fontWeight={700} fill="var(--brand-active)">
-                Exam
-              </text>
-            )}
-          </>
-        )}
-
-        {showForecast && (
-          <>
-            <polygon
-              data-fade
-              points={`${lastScaled.x.toFixed(1)},${lastScaled.y.toFixed(1)} ${horizonX!.toFixed(1)},${highY!.toFixed(1)} ${horizonX!.toFixed(1)},${lowY!.toFixed(1)}`}
-              fill="color-mix(in oklab, var(--brand) 16%, transparent)"
-              opacity={1}
-            />
-            <line
-              data-fade
-              x1={lastScaled.x}
-              y1={lastScaled.y}
-              x2={horizonX!}
-              y2={projY!}
-              stroke="var(--brand)"
-              strokeWidth={2}
-              strokeDasharray="5 4"
-              strokeLinecap="round"
-              opacity={1}
-            />
-          </>
-        )}
-
-        {readingPts && (
-          <polyline
-            data-draw={polylineLength(readingPts).toFixed(1)}
-            points={pointsAttr(readingPts)}
-            fill="none"
-            stroke="var(--sky-500)"
-            strokeWidth={1.5}
-            strokeDasharray={polylineLength(readingPts)}
-            strokeDashoffset={0}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity={0.65}
-          />
-        )}
-        {listeningPts && (
-          <polyline
-            data-draw={polylineLength(listeningPts).toFixed(1)}
-            points={pointsAttr(listeningPts)}
-            fill="none"
-            stroke="var(--violet-300)"
-            strokeWidth={1.5}
-            strokeDasharray={polylineLength(listeningPts)}
-            strokeDashoffset={0}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity={0.65}
-          />
-        )}
-        <polyline
-          data-draw={combinedLen.toFixed(1)}
-          points={pointsAttr(combinedPts)}
-          fill="none"
-          stroke="var(--brand)"
-          strokeWidth={2.5}
-          strokeDasharray={combinedLen}
-          strokeDashoffset={0}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {combinedPts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={2.5} fill={pts[i].section === "listening" ? "var(--violet-300)" : "var(--sky-500)"} />
-        ))}
-        <circle
-          data-pop
-          cx={lastScaled.x}
-          cy={lastScaled.y}
-          r={5}
-          fill="var(--brand)"
-          stroke="var(--surface)"
-          strokeWidth={2}
-          style={{ transformBox: "fill-box", transformOrigin: "center" }}
-        />
-        <text x={Math.min(lastScaled.x + 8, CHART_W - PAD_R - 24)} y={lastScaled.y - 8} fontSize={10} fontWeight={700} fontFamily="var(--font-mono)" fill="var(--text-primary)">
-          {last.band.toFixed(1)}
-        </text>
-
-        <text x={PAD_L} y={CHART_H - 6} fontSize={9} fontFamily="var(--font-ui)" fill="var(--text-muted)">
-          {fmtDate(xMin)}
-        </text>
-        <text x={CHART_W - PAD_R} y={CHART_H - 6} textAnchor="end" fontSize={9} fontFamily="var(--font-ui)" fill="var(--text-muted)">
-          {fmtDate(xMax)}
-        </text>
-      </svg>
+      <TrajectoryChart
+        w={CHART_W}
+        h={CHART_H}
+        padL={PAD_L}
+        padR={PAD_R}
+        padT={PAD_T}
+        padB={PAD_B}
+        combined={combined}
+        combinedAttr={pointsAttr(combinedPts)}
+        combinedLen={Number(combinedLen.toFixed(1))}
+        reading={readingPts ? { attr: pointsAttr(readingPts), len: Number(polylineLength(readingPts).toFixed(1)) } : null}
+        listening={listeningPts ? { attr: pointsAttr(listeningPts), len: Number(polylineLength(listeningPts).toFixed(1)) } : null}
+        grid={gridBands.map((b) => ({ band: b, y: yScale(b) }))}
+        target={targetY != null ? { y: targetY, band: targetBand! } : null}
+        exam={examX != null ? { x: examX, rightEdge: examX > CHART_W - PAD_R - 28 } : null}
+        forecast={showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: horizonX!, projY: projY!, lowY: lowY!, highY: highY! } : null}
+        xLabelLeft={fmtDate(xMin)}
+        xLabelRight={fmtDate(xMax)}
+        latestBand={last.band}
+      />
 
       <div style={S.legend}>
         <LegendDot color="var(--brand)" label="Combined" />
@@ -435,13 +344,24 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 
 function ForecastCard({ forecast }: { forecast: Forecast }) {
   if (forecast.status === "insufficient") {
+    // Не «замок», а трек прогресса к прогнозу: показываем сколько моков уже
+    // сдано из трёх нужных — момент движения вперёд, а не заглушка «данных нет».
+    const done = Math.min(forecast.pointCount, 3);
     const remaining = Math.max(0, 3 - forecast.pointCount);
     return (
       <div style={S.card}>
         <h2 style={S.sectionTitle}>Forecast</h2>
         <p style={S.forecastEmpty}>
-          Forecasts unlock after 3 full mocks — sit {remaining} more to see where you&apos;re headed.
+          {remaining === 0
+            ? "Crunching your first projection — sit one more mock to refine it."
+            : `${remaining} more full ${remaining === 1 ? "mock" : "mocks"} and we'll project your exam-day band.`}
         </p>
+        <div style={S.unlockRow} role="img" aria-label={`${done} of 3 mocks toward your first forecast`}>
+          {[0, 1, 2].map((i) => (
+            <span key={i} style={{ ...S.unlockPip, ...(i < done ? S.unlockPipOn : null) }} />
+          ))}
+          <span style={S.unlockMeta}>{done}/3 mocks</span>
+        </div>
         <Button trailingIcon="arrow-right" href="/app/reading?category=full_reading" variant="secondary" style={{ color: "var(--brand-active)" }}>
           Sit a full mock
         </Button>
@@ -496,10 +416,17 @@ const SKILL_META: Record<Skill, { label: string; icon: IconName; href: string }>
 };
 
 function ReadinessCard({ readiness }: { readiness: Readiness }) {
+  const started = readiness.skills.filter((s) => s.band != null).length;
   return (
     <div style={S.card}>
-      <h2 style={S.sectionTitle}>Readiness</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
+      <div style={S.readyHead}>
+        <h2 style={S.sectionTitle}>Readiness</h2>
+        <span style={S.readyCount}>{started}/4 skills</span>
+      </div>
+      {started === 0 && (
+        <p style={S.readySub}>Four skills, one target. Sit any test to light up its bar.</p>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
         {readiness.skills.map((s) => (
           <ReadinessRow key={s.skill} s={s} targetBand={readiness.targetBand} />
         ))}
@@ -510,25 +437,31 @@ function ReadinessCard({ readiness }: { readiness: Readiness }) {
 
 function ReadinessRow({ s, targetBand }: { s: SkillReadiness; targetBand: number | null }) {
   const meta = SKILL_META[s.skill];
+  const tickPct = targetBand != null ? Math.max(0, Math.min(100, (targetBand / 9) * 100)) : null;
+
+  // Пустой скилл — не «No data yet», а тихий goal-трек: приглушённый лейбл,
+  // призрачная дорожка с тиком цели и тонкий «Start». Вся строка — ссылка,
+  // одна affordance вместо повторяющегося текста + отдельной CTA.
   if (s.band == null) {
     return (
-      <div data-row style={S.readyRow}>
-        <span style={S.readyIcon}>
+      <Link data-row href={meta.href} style={{ ...S.readyRow, textDecoration: "none" }}>
+        <span style={{ ...S.readyIcon, ...S.readyIconGhost }}>
           <Icon name={meta.icon} size={16} strokeWidth={2.2} />
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={S.readyLabel}>{meta.label}</div>
-          <div style={S.readyEmpty}>No data yet</div>
+          <div style={S.readyLabelRow}>
+            <span style={{ ...S.readyLabel, color: "var(--text-secondary)" }}>{meta.label}</span>
+            <span style={S.readyStart}>Start →</span>
+          </div>
+          <div style={S.readyTrack}>
+            {tickPct != null && <span aria-hidden="true" style={{ ...S.readyTick, left: `${tickPct}%` }} />}
+          </div>
         </div>
-        <Link href={meta.href} style={S.readyCta}>
-          Practise →
-        </Link>
-      </div>
+      </Link>
     );
   }
 
   const pct = Math.max(0, Math.min(100, (s.band / 9) * 100));
-  const tickPct = targetBand != null ? Math.max(0, Math.min(100, (targetBand / 9) * 100)) : null;
 
   return (
     <div data-row style={S.readyRow}>
@@ -614,6 +547,16 @@ const OV_CSS = `
 .ov-preview{transition:transform .12s,box-shadow .12s}
 .ov-preview:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
 .ov-preview:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 45%,transparent)}
+.ov-chart{position:relative}
+.ov-chart-svg:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 40%,transparent);border-radius:var(--radius-md)}
+.ov-cross{transition:opacity .1s}
+.ov-tip{position:absolute;z-index:5;transform:translate(-50%,calc(-100% - 14px));pointer-events:none;background:var(--surface-inverse);color:var(--surface-inverse-ink);border-radius:10px;padding:8px 11px;box-shadow:var(--shadow-lg);white-space:nowrap;font-family:var(--font-ui)}
+.ov-tip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--surface-inverse)}
+.ov-tip-date{font-size:var(--text-2xs);color:color-mix(in oklab,var(--surface-inverse-ink) 68%,transparent);margin-bottom:3px}
+.ov-tip-band{font-size:var(--text-sm);font-weight:600;display:flex;align-items:center;gap:6px}
+.ov-tip-band b{font-family:var(--font-mono);font-weight:700}
+.ov-tip-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.ov-tip-delta{font-size:var(--text-2xs);font-weight:700;font-family:var(--font-mono);margin-top:3px}
 @media (min-width:768px){
   .ov-wrap{padding:26px 28px 44px}
   .ov-grid{grid-template-columns:1.15fr 1fr}
@@ -621,6 +564,7 @@ const OV_CSS = `
 }
 @media (prefers-reduced-motion:reduce){
   .ov-preview{transition:none}
+  .ov-cross{transition:none}
 }
 `;
 
@@ -634,7 +578,6 @@ const S: Record<string, React.CSSProperties> = {
   heroHead: { marginBottom: 10 },
   heroTitle: { display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--text-primary)", margin: 0 },
   heroSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", margin: "3px 0 0" },
-  svg: { display: "block", width: "100%", height: "auto" },
   legend: { display: "flex", flexWrap: "wrap", gap: 16, marginTop: 10 },
   legendItem: { display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--text-secondary)" },
   legendSwatch: { width: 9, height: 9, borderRadius: "50%", flex: "none" },
@@ -646,7 +589,11 @@ const S: Record<string, React.CSSProperties> = {
   card: { background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-sm)" },
   sectionTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)", margin: 0 },
 
-  forecastEmpty: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: 1.5, margin: "10px 0 14px" },
+  forecastEmpty: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: 1.5, margin: "10px 0 12px" },
+  unlockRow: { display: "flex", alignItems: "center", gap: 6, margin: "0 0 16px" },
+  unlockPip: { width: 30, height: 6, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", boxShadow: "inset 0 0 0 1px var(--border)" },
+  unlockPipOn: { background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", boxShadow: "0 0 8px -2px color-mix(in oklab, var(--brand) 70%, transparent)" },
+  unlockMeta: { marginLeft: 4, fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--text-muted)" },
   lowConf: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "8px 0 0", lineHeight: 1.4 },
   forecastRow: { display: "flex", alignItems: "baseline", gap: 8, marginTop: 12 },
   forecastBig: { fontFamily: "var(--font-mono)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" },
@@ -656,13 +603,16 @@ const S: Record<string, React.CSSProperties> = {
   verdictWarn: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", background: "var(--surface-inset)", borderRadius: "var(--radius-md)", padding: "9px 13px" },
   verdictNeutral: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--brand-active)", background: "var(--brand-subtle)", borderRadius: "var(--radius-md)", padding: "9px 13px" },
 
+  readyHead: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 },
+  readyCount: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-muted)", flex: "none" },
+  readySub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.45 },
   readyRow: { display: "flex", alignItems: "center", gap: 12 },
   readyIcon: { width: 32, height: 32, flex: "none", borderRadius: 9, display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)" },
+  readyIconGhost: { background: "var(--surface-inset)", color: "var(--text-muted)" },
   readyLabelRow: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 },
   readyLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-primary)" },
   readyBand: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-primary)", display: "inline-flex", alignItems: "center" },
-  readyEmpty: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
-  readyCta: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--brand-active)", textDecoration: "none", flex: "none" },
+  readyStart: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--brand-active)", flex: "none" },
   readyTrack: { position: "relative", height: 8, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden", marginTop: 6 },
   readyFill: { height: "100%", borderRadius: "var(--radius-full)", background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", transformOrigin: "left" },
   readyTick: { position: "absolute", top: -2, bottom: -2, width: 2, background: "var(--gold-500)" },
