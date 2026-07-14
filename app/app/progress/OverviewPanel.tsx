@@ -387,6 +387,9 @@ function ForecastCard({ forecast }: { forecast: Forecast }) {
       )}
       <div style={S.forecastRow}>
         <span style={S.forecastBig}>
+          {/* При низкой уверенности цифра приблизительная — честный «~», чтобы
+              её не читали как точный прогноз (коридор рядом несёт разброс). */}
+          {forecast.status === "low_confidence" && <span style={S.forecastApprox}>~</span>}
           <span data-countup={forecast.projectedBand ?? 0} data-decimals="1">
             {forecast.projectedBand?.toFixed(1)}
           </span>
@@ -597,6 +600,7 @@ const S: Record<string, React.CSSProperties> = {
   lowConf: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "8px 0 0", lineHeight: 1.4 },
   forecastRow: { display: "flex", alignItems: "baseline", gap: 8, marginTop: 12 },
   forecastBig: { fontFamily: "var(--font-mono)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" },
+  forecastApprox: { fontSize: 28, fontWeight: 700, color: "var(--text-muted)", marginRight: 2, verticalAlign: "0.06em" },
   forecastUnit: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
   forecastRange: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "6px 0 12px" },
   verdictGood: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--success-text)", background: "var(--success-subtle)", borderRadius: "var(--radius-md)", padding: "9px 13px" },

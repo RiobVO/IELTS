@@ -146,10 +146,12 @@ export function TrajectoryChart({
         {exam && (
           <>
             <line x1={exam.x} x2={exam.x} y1={padT} y2={h - padB} stroke="var(--brand-active)" strokeWidth={1.5} strokeDasharray="3 3" />
+            {/* Подпись уводим ниже верхней рамки (padT+16), чтобы не липла к краю
+                плота и первой линии сетки; у правого края — anchor=end влево от линии. */}
             {exam.rightEdge ? (
-              <text x={exam.x - 5} y={padT + 9} textAnchor="end" fontSize={9} fontFamily="var(--font-ui)" fontWeight={700} fill="var(--brand-active)">Exam</text>
+              <text x={exam.x - 5} y={padT + 16} textAnchor="end" fontSize={9} fontFamily="var(--font-ui)" fontWeight={700} fill="var(--brand-active)">Exam</text>
             ) : (
-              <text x={exam.x + 5} y={padT + 9} fontSize={9} fontFamily="var(--font-ui)" fontWeight={700} fill="var(--brand-active)">Exam</text>
+              <text x={exam.x + 5} y={padT + 16} fontSize={9} fontFamily="var(--font-ui)" fontWeight={700} fill="var(--brand-active)">Exam</text>
             )}
           </>
         )}
