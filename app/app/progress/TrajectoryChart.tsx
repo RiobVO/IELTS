@@ -34,10 +34,10 @@ export interface TrajectoryChartProps {
   padT: number;
   padB: number;
   combined: ChartPoint[];
-  combinedAttr: string;
+  combinedPath: string;
   combinedLen: number;
-  reading: { attr: string; len: number } | null;
-  listening: { attr: string; len: number } | null;
+  reading: { path: string; len: number } | null;
+  listening: { path: string; len: number } | null;
   grid: { band: number; y: number }[];
   target: { y: number; band: number } | null;
   exam: { x: number; rightEdge: boolean } | null;
@@ -64,7 +64,7 @@ function fmtFull(ms: number): string {
 
 export function TrajectoryChart({
   w, h, padL, padR, padT, padB,
-  combined, combinedAttr, combinedLen,
+  combined, combinedPath, combinedLen,
   reading, listening, grid, target, exam, forecast,
   xLabelLeft, xLabelRight, latestBand,
 }: TrajectoryChartProps) {
@@ -156,9 +156,9 @@ export function TrajectoryChart({
   // Мягкая заливка-wash под Combined-линией к базовой линии плота — глубина без
   // шума (série-hue ~10%, dataviz marks-spec). Только при ≥2 точках (иначе линии нет).
   const baseline = h - padB;
-  const areaPoints =
+  const areaD =
     combined.length >= 2
-      ? `${combined[0].x.toFixed(1)},${baseline.toFixed(1)} ${combinedAttr} ${combined[combined.length - 1].x.toFixed(1)},${baseline.toFixed(1)}`
+      ? `${combinedPath} L ${combined[combined.length - 1].x.toFixed(1)} ${baseline.toFixed(1)} L ${combined[0].x.toFixed(1)} ${baseline.toFixed(1)} Z`
       : null;
 
   // Пилюля текущего балла: всегда НАД последней точкой, с отступом от боковых краёв.
@@ -227,35 +227,38 @@ export function TrajectoryChart({
         )}
 
         {/* Wash под Combined — над recessive-сеткой, под data-линиями (премиум-слои). */}
-        {areaPoints && <polygon points={areaPoints} fill="url(#ov-area-grad)" pointerEvents="none" />}
+        {areaD && <path d={areaD} fill="url(#ov-area-grad)" pointerEvents="none" />}
 
         {reading && !hidden.has("reading") && (
-          <polyline data-draw={reading.len} points={reading.attr} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.5}
+          <path data-draw={reading.len} d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.5}
             strokeDasharray={reading.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
         {listening && !hidden.has("listening") && (
-          <polyline data-draw={listening.len} points={listening.attr} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={1.5}
+          <path data-draw={listening.len} d={listening.path} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={1.5}
             strokeDasharray={listening.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
-        <polyline data-draw={combinedLen} points={combinedAttr} fill="none" stroke="var(--brand)" strokeWidth={2.5}
+        <path data-draw={combinedLen} d={combinedPath} fill="none" stroke="var(--brand)" strokeWidth={2.5}
           strokeDasharray={combinedLen} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
 
-        {/* Секцию несёт НЕ только цвет: Reading — круг, Listening — ромб. Форма
-            остаётся различимой при дальтонизме (WCAG 1.4.1); цвет — вторичный сигнал.
-            Точки погашенной серии не рисуем. */}
+        {/* Маркер-кольцо на КАЖДОЙ реальной точке (заливка = surface, обводка = цвет
+            секции) — данные читаются точно, даже когда линия гладкая. Секцию несёт НЕ
+            только цвет: Reading — круг, Listening — ромб (различимо при дальтонизме,
+            WCAG 1.4.1). Точки погашенной серии не рисуем. */}
         {combined.map((p, i) =>
           hidden.has(p.section) ? null : p.section === "listening" ? (
             <rect
               key={i}
-              x={p.x - 2.6}
-              y={p.y - 2.6}
-              width={5.2}
-              height={5.2}
+              x={p.x - 3.2}
+              y={p.y - 3.2}
+              width={6.4}
+              height={6.4}
               transform={`rotate(45 ${p.x} ${p.y})`}
-              fill={SECTION_COLOR[p.section]}
+              fill="var(--surface)"
+              stroke={SECTION_COLOR[p.section]}
+              strokeWidth={2}
             />
           ) : (
-            <circle key={i} cx={p.x} cy={p.y} r={2.6} fill={SECTION_COLOR[p.section]} />
+            <circle key={i} cx={p.x} cy={p.y} r={3.4} fill="var(--surface)" stroke={SECTION_COLOR[p.section]} strokeWidth={2} />
           ),
         )}
 
