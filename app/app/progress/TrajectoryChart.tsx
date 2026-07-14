@@ -160,6 +160,9 @@ export function TrajectoryChart({
     combined.length >= 2
       ? `${combinedPath} L ${combined[combined.length - 1].x.toFixed(1)} ${baseline.toFixed(1)} L ${combined[0].x.toFixed(1)} ${baseline.toFixed(1)} Z`
       : null;
+  // Уникальный id градиента на размер холста — на странице два SVG (mobile/desktop),
+  // одинаковый id дал бы дубль в DOM и коллизию url(#…).
+  const gradId = `ov-area-grad-${w}`;
 
   // Пилюля текущего балла: всегда НАД последней точкой, с отступом от боковых краёв.
   // Последняя точка НЕ обязательно справа-сверху — когда все моки свежие, а ось тянется
@@ -189,7 +192,7 @@ export function TrajectoryChart({
         onKeyDown={onKey}
       >
         <defs>
-          <linearGradient id="ov-area-grad" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.14" />
             <stop offset="100%" stopColor="var(--brand)" stopOpacity="0" />
           </linearGradient>
@@ -222,7 +225,7 @@ export function TrajectoryChart({
         )}
 
         {/* Wash под Combined — над recessive-сеткой, под data-линиями (премиум-слои). */}
-        {areaD && <path d={areaD} fill="url(#ov-area-grad)" pointerEvents="none" />}
+        {areaD && <path d={areaD} fill={`url(#${gradId})`} pointerEvents="none" />}
 
         {reading && !hidden.has("reading") && (
           <path data-draw={reading.len} d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.5}
