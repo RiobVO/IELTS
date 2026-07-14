@@ -15,27 +15,11 @@ type Phase = "edit" | "queued" | "analyzing" | "failed" | "preview_used" | "dail
 
 const POLL_MS = 2500;
 
-// Per-part shape, ring target, timer and min-word copy. Task 1 = chart description
-// (overview-first, 150 words, ~20 min); Task 2 = essay (position-first, 250, ~40 min).
-const STRUCTURE: { title: string; hint: string }[] = [
-  { title: "Introduction", hint: "Paraphrase the prompt and state your position in one clear sentence." },
-  { title: "Body 1", hint: "Your strongest reason — explain it, then prove it with one specific example." },
-  { title: "Body 2", hint: "A second reason or the other side — one idea per paragraph." },
-  { title: "Conclusion", hint: "Restate your position; add nothing new." },
-];
-const TASK1_STRUCTURE: { title: string; hint: string }[] = [
-  { title: "Overview", hint: "One or two sentences on the main trend or overall pattern — no figures yet." },
-  { title: "Key features", hint: "Select the most significant points and report them with accurate figures." },
-  { title: "Comparisons", hint: "Group and compare — highest vs lowest, rising vs falling." },
-  { title: "Accuracy check", hint: "Every number and trend must match the visual. Add nothing that isn’t shown." },
-];
-
 export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: number }) {
   const router = useRouter();
   const isTask1 = task.taskPart === "task1";
   const timerTotal = (isTask1 ? 20 : 40) * 60;
   const ringRef = isTask1 ? 150 : 250;
-  const structure = isTask1 ? TASK1_STRUCTURE : STRUCTURE;
 
   const [phase, setPhase] = useState<Phase>("edit");
   const [essay, setEssay] = useState("");
@@ -141,21 +125,6 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
             <div style={S.targetTop}>Aiming for</div>
             <div style={S.targetBand}>{targetBand.toFixed(1)}</div>
             <p style={S.targetHelp}>Every fix in your report points at this band.</p>
-          </div>
-
-          <div style={S.structCard}>
-            <div style={S.structOver}>A solid {isTask1 ? "Task 1" : "Task 2"} shape</div>
-            <div style={S.structList}>
-              {structure.map((s, i) => (
-                <div key={s.title} style={S.structStep}>
-                  <span style={S.structNum}>{i + 1}</span>
-                  <div>
-                    <div style={S.structTitle}>{s.title}</div>
-                    <div style={S.structHint}>{s.hint}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -580,14 +549,6 @@ const S: Record<string, CSSProperties> = {
   targetTop: { fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-muted)" },
   targetBand: { fontFamily: "var(--font-mono)", fontSize: 34, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.1, marginTop: 4 },
   targetHelp: { margin: "8px 0 0", fontSize: 13, color: "var(--text-secondary)" },
-
-  structCard: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 18 },
-  structOver: { fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 14 },
-  structList: { display: "flex", flexDirection: "column", gap: 14 },
-  structStep: { display: "flex", gap: 12, alignItems: "flex-start" },
-  structNum: { flex: "none", width: 26, height: 26, borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, display: "grid", placeItems: "center" },
-  structTitle: { fontSize: 14, fontWeight: 700, color: "var(--text-primary)" },
-  structHint: { fontSize: 12.5, lineHeight: 1.45, color: "var(--text-muted)", marginTop: 2 },
 
   editor: { display: "flex", flexDirection: "column", gap: 12, minHeight: 0 },
   editorHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
