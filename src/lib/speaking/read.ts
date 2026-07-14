@@ -172,9 +172,13 @@ export interface SpeakingHistoryRow {
   audioDeleted: boolean;
 }
 
-/** Owner-scoped completed attempts (a feedback row exists), newest first. */
-export async function listUserHistory(userId: string): Promise<SpeakingHistoryRow[]> {
-  const rows = await db
+/**
+ * Owner-scoped completed attempts (a feedback row exists), newest first.
+ * limit — опционален (по умолчанию без LIMIT, как раньше); вызывающей стороне,
+ * которой нужна только последняя запись, не нужно тащить всю историю.
+ */
+export async function listUserHistory(userId: string, limit?: number): Promise<SpeakingHistoryRow[]> {
+  const query = db
     .select({
       submissionId: speakingFeedback.submissionId,
       prompt: speakingTask.prompt,
@@ -189,6 +193,7 @@ export async function listUserHistory(userId: string): Promise<SpeakingHistoryRo
     .innerJoin(speakingTask, eq(speakingTask.id, speakingSubmission.taskId))
     .where(eq(speakingSubmission.userId, userId))
     .orderBy(desc(speakingFeedback.createdAt));
+  const rows = await (limit != null ? query.limit(limit) : query);
   return rows.map((r) => ({
     submissionId: r.submissionId,
     prompt: r.prompt,

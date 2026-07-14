@@ -164,8 +164,11 @@ export interface HistoryRow {
   confidence: "low" | "medium" | "high";
 }
 
-export async function listUserHistory(userId: string): Promise<HistoryRow[]> {
-  const rows = await db
+// limit — опционален (по умолчанию без LIMIT, как раньше); вызывающей стороне,
+// которой нужна только последняя запись (например Overview-панели band-сводки),
+// не нужно тащить всю историю сабмитов ради одного числа.
+export async function listUserHistory(userId: string, limit?: number): Promise<HistoryRow[]> {
+  const query = db
     .select({
       submissionId: writingFeedback.submissionId,
       category: writingTask.category,
@@ -180,5 +183,6 @@ export async function listUserHistory(userId: string): Promise<HistoryRow[]> {
     .innerJoin(writingTask, eq(writingTask.id, writingSubmission.taskId))
     .where(eq(writingSubmission.userId, userId))
     .orderBy(desc(writingFeedback.createdAt));
+  const rows = await (limit != null ? query.limit(limit) : query);
   return rows.map((r) => ({ ...r, bandLow: Number(r.bandLow), bandHigh: Number(r.bandHigh) }));
 }
