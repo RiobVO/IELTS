@@ -1,0 +1,402 @@
+/**
+ * Чистое вычислительное ядро вкладки Overview раздела /app/progress (герой
+ * «Траектория» + секция «Прогноз»). Ни IO, ни env, ни БД — только уже загруженные
+ * строки на входе, как у computeBandPlan (src/lib/progress/band-plan.ts). UI-агент
+ * потребляет ЭТОТ контракт; owner-путь чтения (Drizzle) собирает вход на стороне
+ * страницы.
+ *
+ * Три независимые чистые функции:
+ *   buildTrajectory — история band mock-попыток → серии для линии (combined + split);
+ *   computeForecast — банд-точки с датами → проекция на день экзамена + коридор + вердикт;
+ *   buildReadiness  — последние band по 4 скиллам (R/L из траектории, W/S от UI) → бары.
+ *
+ * ЧЕСТНОСТЬ ДАННЫХ — сквозной принцип: band есть ТОЛЬКО у Full-40Q mock-попыток
+ * (одиночный passage/part band не даёт), а R и L — это РАЗНЫЕ полные тесты, поэтому
+ * «настоящего» единого overall-band из одной попытки не существует. Решения по
+ * математике задокументированы у каждой функции; при нехватке данных возвращается
+ * явный статус, а не выдуманное число.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Общие константы + помощники band-арифметики                                 */
+/* -------------------------------------------------------------------------- */
+
+const BAND_MIN = 4.0; // нижний кламп прогноза (по ТЗ; историю НЕ клампим — она правдива)
+const BAND_MAX = 9.0;
+const DAY_MS = 86_400_000;
+
+/** Округление к 0.5-шагу IELTS (6.25→6.5, 6.75→7.0 — как официальное округление overall). */
+function roundHalf(x: number): number {
+  return Math.round(x * 2) / 2;
+}
+
+/** Кламп в [4.0, 9.0] + округление к 0.5 — ТОЛЬКО для выходов прогноза (ТЗ). */
+function clampRoundBand(x: number): number {
+  return roundHalf(Math.min(BAND_MAX, Math.max(BAND_MIN, x)));
+}
+
+/** submittedAt (Date | ISO-строка | null) → epoch ms; невалидное/пустое → null. */
+function toMs(v: Date | string | null): number | null {
+  if (v == null) return null;
+  const ms = v instanceof Date ? v.getTime() : Date.parse(v);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** epoch ms → 'YYYY-MM-DD' по UTC (стабильно для маркера/горизонта, без tz-дрейфа). */
+function toIsoDate(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/* -------------------------------------------------------------------------- */
+/* buildTrajectory — история band для линии графика                            */
+/* -------------------------------------------------------------------------- */
+
+export interface TrajectoryAttempt {
+  /** band mock-попытки; null у не-Full тестов — такие точки отбрасываются. */
+  bandScore: number | null;
+  section: "reading" | "listening";
+  /** маппится вызывающей стороной из content_item.category (как в band-plan). */
+  submittedAt: Date | string | null;
+}
+
+export interface TrajectoryPoint {
+  /** момент сабмита (epoch ms) — сортируемый ключ; форматирует UI. */
+  t: number;
+  band: number;
+  section: "reading" | "listening";
+}
+
+export interface Trajectory {
+  /**
+   * ВСЕ banded-попытки одной хронологической серией (не сглаживание). Решение:
+   * честнее показать каждую реальную mock-точку, чем синтезировать «combined band»
+   * усреднением — единого overall из одной попытки не бывает (R и L — разные тесты).
+   * Серия смешивает R и L, потому что каждый mock-band = свидетельство общего уровня,
+   * а официальный overall IELTS = среднее секций, так что смешанная серия естественно
+   * центрируется на реальном overall. Цвет точки берёт UI из `section`.
+   */
+  combined: TrajectoryPoint[];
+  /** reading-подмножество combined — для split-линии/легенды. */
+  reading: TrajectoryPoint[];
+  /** listening-подмножество combined. */
+  listening: TrajectoryPoint[];
+}
+
+/**
+ * ЧИСТАЯ сборка серий из уже загруженных попыток. Отбрасывает точки без band или без
+ * submittedAt (нечего/некуда рисовать). Сортировка по возрастанию времени (линия
+ * слева→направо); детерминированный tiebreak (t, band, section) — одинаковый вход
+ * всегда даёт идентичный выход.
+ */
+export function buildTrajectory(attempts: TrajectoryAttempt[]): Trajectory {
+  const combined: TrajectoryPoint[] = [];
+  for (const a of attempts) {
+    if (a.bandScore == null) continue;
+    const t = toMs(a.submittedAt);
+    if (t == null) continue;
+    combined.push({ t, band: a.bandScore, section: a.section });
+  }
+  combined.sort(
+    (a, b) => a.t - b.t || a.band - b.band || a.section.localeCompare(b.section),
+  );
+  return {
+    combined,
+    reading: combined.filter((p) => p.section === "reading"),
+    listening: combined.filter((p) => p.section === "listening"),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* computeForecast — проекция band на день экзамена                            */
+/* -------------------------------------------------------------------------- */
+
+/** Уровень доверия по числу banded-точек. UI выбирает заглушку/дисклеймер. */
+export type ForecastStatus = "insufficient" | "low_confidence" | "ok";
+
+/** Вердикт темпа относительно target. */
+export type ForecastVerdict =
+  | "reached" // последний фактический band уже ≥ target
+  | "on_track" // проекция на день экзамена ≥ target
+  | "behind" // проекция < target
+  | "no_target" // target не задан
+  | "insufficient"; // данных < порога — темп судить нельзя
+
+export interface ForecastPoint {
+  /** epoch ms сабмита. */
+  t: number;
+  band: number;
+}
+
+export interface Forecast {
+  status: ForecastStatus;
+  pointCount: number;
+  /** clamp[4,9] + 0.5-шаг; null при insufficient. */
+  projectedBand: number | null;
+  /** доверительный коридор из разброса остатков; null при insufficient. */
+  interval: { low: number; high: number } | null;
+  verdict: ForecastVerdict;
+  trend: "up" | "down" | "flat";
+  /** наклон в band за 7 дней (для читаемой подписи «+0.3 band/нед»); null при insufficient. */
+  slopePerWeek: number | null;
+  /** дата, на которую спроецирован band ('YYYY-MM-DD' UTC); null при insufficient. */
+  horizonDate: string | null;
+  /** exam_date — если задана и в будущем; иначе прогноз на +30 дней от now. */
+  horizonSource: "exam_date" | "default_30d";
+  /** последний фактический band (хронологически поздняя точка); null при пустом входе. */
+  latestBand: number | null;
+  targetBand: number | null;
+}
+
+const MIN_POINTS_OK = 5; // ≥5 → 'ok'
+const MIN_POINTS_FORECAST = 3; // <3 → 'insufficient'
+const DEFAULT_HORIZON_DAYS = 30; // прогноз без exam_date
+const MIN_HALF_WIDTH = 0.5; // минимальный полукоридор — band нельзя предсказать точнее ±0.5
+const MIN_TIME_SPAN_DAYS = 1; // < суток разброса по времени → наклон неидентифицируем (вырождение)
+const FLAT_PER_MONTH = 0.25; // |наклон за 30 дней| < порога → тренд 'flat'
+
+/**
+ * Критические значения t-распределения Стьюдента для two-sided 80% доверия
+ * (верхний хвост 0.10, t_{0.90, df}). Захардкожены для малых df: вход капнут 20 у
+ * вызывающей стороны → df ≤ 19 (intercept-only n−1) / ≤ 18 (OLS n−2); таблица до 30 с
+ * запасом, за её пределами — z_{0.90}. Без внешних зависимостей: полноценная обратная
+ * t-CDF ради двух десятков строк не оправдана (YAGNI).
+ */
+const T_QUANTILE_80: Record<number, number> = {
+  1: 3.078, 2: 1.886, 3: 1.638, 4: 1.533, 5: 1.476,
+  6: 1.44, 7: 1.415, 8: 1.397, 9: 1.383, 10: 1.372,
+  11: 1.363, 12: 1.356, 13: 1.35, 14: 1.345, 15: 1.341,
+  16: 1.337, 17: 1.333, 18: 1.33, 19: 1.328, 20: 1.325,
+  21: 1.323, 22: 1.321, 23: 1.319, 24: 1.318, 25: 1.316,
+  26: 1.315, 27: 1.314, 28: 1.313, 29: 1.311, 30: 1.31,
+};
+const Z_QUANTILE_80 = 1.2817; // t при df→∞ (нормальное приближение)
+
+/** t_{0.90, df} для two-sided 80% интервала; вне таблицы — нормальный квантиль. */
+function tQuantile80(df: number): number {
+  return T_QUANTILE_80[df] ?? Z_QUANTILE_80;
+}
+
+/**
+ * ЧИСТАЯ проекция band на день экзамена по МНК-регрессии (band ~ время).
+ *
+ * Метод: обычная линейная регрессия (OLS) в единицах дней. Решение — не взвешивать
+ * к недавним: вход уже ограничен последним окном (cap 20 у вызывающей стороны),
+ * точек мало (3–20), а half-life рекуррентного веса — это скрытый тюнинг-параметр без
+ * основания на таком объёме данных (YAGNI). Коридор — доверительный интервал предсказания
+ * на объявленном уровне 80% (two-sided): halfWidth = t(df)·SE, где
+ * SE = residualStd·√(1 + 1/n + (x₀−x̄)²/Sₓₓ) для OLS. Уровень 80% выбран сознательно —
+ * для продукта это честный «вероятный коридор», а не почти-детерминированные 95%, которые
+ * на 3–5 точках раздули бы интервал до всей шкалы. Множитель t(df) сам расширяет коридор
+ * при малых df, поэтому отдельного ad-hoc-штрафа за low_confidence нет. Пол коридора ±0.5 —
+ * band в принципе не предсказуем точнее полушкалы даже при идеально линейной истории.
+ *
+ * Вырожденный вход (все попытки в пределах < суток, наклон по времени неидентифицируем):
+ * модель падает на intercept-only (плоская линия на среднем), df=n−1,
+ * SE = residualStd·√(1 + 1/n), а статус НЕ поднимается выше low_confidence при любом n —
+ * пять попыток в один день не дают доверия к темпу.
+ *
+ * @param points банд-точки с epoch-ms датами (обычно trajectory.combined).
+ * @param examDate 'YYYY-MM-DD' | null — целевая дата экзамена.
+ * @param targetBand целевой band | null.
+ * @param now опорное «сейчас» (для детерминированных ре-ранов и горизонта +30 дней).
+ */
+export function computeForecast(
+  points: ReadonlyArray<ForecastPoint>,
+  examDate: string | null,
+  targetBand: number | null,
+  now: Date = new Date(),
+): Forecast {
+  // Сортируем по времени по возрастанию — вход может прийти в любом порядке, а
+  // latestBand и origin зависят от хронологии.
+  const pts = [...points].sort((a, b) => a.t - b.t);
+  const n = pts.length;
+  const latestBand = n > 0 ? pts[n - 1].band : null;
+
+  // Горизонт: exam_date в будущем → на неё; иначе +30 дней от now. Прошедшая/битая
+  // дата экзамена бесполезна как горизонт — падаем на дефолт (честнее «~месяц», чем
+  // проекция в прошлое).
+  const nowMs = now.getTime();
+  const examMs = examDate ? Date.parse(`${examDate}T00:00:00Z`) : NaN;
+  const useExam = Number.isFinite(examMs) && examMs > nowMs;
+  const horizonMs = useExam ? examMs : nowMs + DEFAULT_HORIZON_DAYS * DAY_MS;
+  const horizonSource: Forecast["horizonSource"] = useExam ? "exam_date" : "default_30d";
+
+  // Порог данных: <3 точек — темп судить нельзя, отдаём заглушку без числа.
+  if (n < MIN_POINTS_FORECAST) {
+    return {
+      status: "insufficient",
+      pointCount: n,
+      projectedBand: null,
+      interval: null,
+      verdict: "insufficient",
+      trend: "flat",
+      slopePerWeek: null,
+      horizonDate: null,
+      horizonSource,
+      latestBand,
+      targetBand,
+    };
+  }
+
+  // OLS в днях от первой точки.
+  const originMs = pts[0].t;
+  const xs = pts.map((p) => (p.t - originMs) / DAY_MS);
+  const ys = pts.map((p) => p.band);
+  const xbar = mean(xs);
+  const ybar = mean(ys);
+
+  let sxx = 0;
+  let sxy = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - xbar;
+    sxx += dx * dx;
+    sxy += dx * (ys[i] - ybar);
+  }
+
+  // Разброс по времени = xs[n−1] (pts отсортированы, xs[0]=0). Меньше суток → наклон по
+  // времени неидентифицируем (sxx≈0, деление sxy/sxx взорвало бы наклон в дикую
+  // экстраполяцию): падаем на intercept-only (плоская линия на среднем) и НЕ поднимаем
+  // статус выше low_confidence, сколько бы точек ни было — пять попыток за один день не
+  // доказывают темп.
+  const degenerate = xs[n - 1] < MIN_TIME_SPAN_DAYS;
+
+  const status: ForecastStatus =
+    degenerate || n < MIN_POINTS_OK ? "low_confidence" : "ok";
+
+  const slope = degenerate ? 0 : sxy / sxx;
+  const intercept = ybar - slope * xbar;
+
+  let ssResid = 0;
+  for (let i = 0; i < n; i++) {
+    const r = ys[i] - (intercept + slope * xs[i]);
+    ssResid += r * r;
+  }
+  // df: OLS оценивает 2 параметра (наклон+сдвиг) → n−2; intercept-only — только среднее → n−1.
+  // Здесь n ≥ 3 (порог insufficient уже пройден), значит df ≥ 1 всегда.
+  const df = degenerate ? n - 1 : n - 2;
+  const residualStd = Math.sqrt(ssResid / df);
+
+  const x0 = (horizonMs - originMs) / DAY_MS;
+  const projectedRaw = intercept + slope * x0;
+
+  // Полуширина = t(df)·SE предсказания на 80% доверии. SE OLS растёт при малом n и
+  // экстраполяции за пределы данных; intercept-only — без leverage-члена (наклон не
+  // оценивался). t(df) сам расширяет коридор при малых df, поэтому прежний ×1.5 при
+  // low_confidence убран как двойной штраф. Пол ±0.5 оставлен — это утверждение о шкале
+  // band (точнее полушкалы не предскажешь), а не о размере выборки.
+  const sePred = degenerate
+    ? residualStd * Math.sqrt(1 + 1 / n)
+    : residualStd * Math.sqrt(1 + 1 / n + ((x0 - xbar) * (x0 - xbar)) / sxx);
+  const halfWidth = Math.max(MIN_HALF_WIDTH, tQuantile80(df) * sePred);
+
+  const projectedBand = clampRoundBand(projectedRaw);
+  const interval = {
+    low: clampRoundBand(projectedRaw - halfWidth),
+    high: clampRoundBand(projectedRaw + halfWidth),
+  };
+
+  // Тренд по наклону за 30 дней (порог ±0.25 отсекает шум как «flat»).
+  const perMonth = slope * 30;
+  const trend: Forecast["trend"] =
+    perMonth > FLAT_PER_MONTH ? "up" : perMonth < -FLAT_PER_MONTH ? "down" : "flat";
+
+  // Вердикт: reached — по ФАКТИЧЕСКОМУ последнему band (не проекции); on_track — если
+  // проекция дотягивает до target; иначе behind.
+  let verdict: ForecastVerdict;
+  if (targetBand == null) verdict = "no_target";
+  else if (latestBand != null && latestBand >= targetBand) verdict = "reached";
+  else if (projectedBand >= targetBand) verdict = "on_track";
+  else verdict = "behind";
+
+  return {
+    status,
+    pointCount: n,
+    projectedBand,
+    interval,
+    verdict,
+    trend,
+    slopePerWeek: Math.round(slope * 7 * 100) / 100,
+    horizonDate: toIsoDate(horizonMs),
+    horizonSource,
+    latestBand,
+    targetBand,
+  };
+}
+
+function mean(xs: number[]): number {
+  let s = 0;
+  for (const x of xs) s += x;
+  return xs.length > 0 ? s / xs.length : 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* buildReadiness — готовность по 4 скиллам                                    */
+/* -------------------------------------------------------------------------- */
+
+export type Skill = "reading" | "listening" | "writing" | "speaking";
+
+export interface ReadinessInput {
+  /** последний band reading-секции (из траектории). */
+  reading: number | null;
+  /** последний band listening-секции. */
+  listening: number | null;
+  /**
+   * последний band Writing-сабмита. Добывает UI-слой owner-путём из
+   * writing_feedback (band_low/band_high — числовые колонки; берётся представитель,
+   * например середина диапазона). Здесь — уже число/null.
+   */
+  writing: number | null;
+  /** последний band Speaking-сабмита (аналогично, из speaking_feedback). */
+  speaking: number | null;
+  targetBand: number | null;
+}
+
+export interface SkillReadiness {
+  skill: Skill;
+  band: number | null;
+  /** band ≥ target (оба заданы). */
+  met: boolean;
+  /** target − band (оба заданы): >0 — не дотянул, ≤0 — с запасом; null если чего-то нет. */
+  gap: number | null;
+}
+
+export interface Readiness {
+  /** всегда 4 записи в порядке R, L, W, S. */
+  skills: SkillReadiness[];
+  /**
+   * overall = среднее ДОСТУПНЫХ скилл-band, округлённое к 0.5 (как overall IELTS).
+   * При < 4 заданных — это ЧАСТИЧНАЯ оценка (см. skillsCounted), не настоящий overall.
+   * Не клампим в [4,9] — историческая правда важнее косметики (кламп — только у прогноза).
+   */
+  overallBand: number | null;
+  /** сколько из 4 скиллов имеют band (0–4). */
+  skillsCounted: number;
+  targetBand: number | null;
+}
+
+/**
+ * ЧИСТАЯ сборка готовности. Решение по R/L: берём ПОСЛЕДНИЙ band секции, не среднее
+ * последних двух — свежий полный mock честнее отражает текущий уровень, а усреднение
+ * размывает недавний рост. W/S приходят уже числом (их достаёт UI из *_feedback).
+ */
+export function buildReadiness(input: ReadinessInput): Readiness {
+  const { targetBand } = input;
+  const order: Array<[Skill, number | null]> = [
+    ["reading", input.reading],
+    ["listening", input.listening],
+    ["writing", input.writing],
+    ["speaking", input.speaking],
+  ];
+
+  const skills: SkillReadiness[] = order.map(([skill, band]) => ({
+    skill,
+    band,
+    met: band != null && targetBand != null && band >= targetBand,
+    gap: band != null && targetBand != null ? targetBand - band : null,
+  }));
+
+  const present = skills.map((s) => s.band).filter((b): b is number => b != null);
+  const overallBand = present.length > 0 ? roundHalf(mean(present)) : null;
+
+  return { skills, overallBand, skillsCounted: present.length, targetBand };
+}
