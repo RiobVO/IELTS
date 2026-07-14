@@ -30,6 +30,14 @@ function roundHalf(x: number): number {
   return Math.round(x * 2) / 2;
 }
 
+/** Округление к 0.5-сетке ВНИЗ / ВВЕРХ — для дожатия точки прогноза ВНУТРЬ окна капа. */
+function floorHalf(x: number): number {
+  return Math.floor(x * 2) / 2;
+}
+function ceilHalf(x: number): number {
+  return Math.ceil(x * 2) / 2;
+}
+
 /** Кламп в [4.0, 9.0] + округление к 0.5 — ТОЛЬКО для выходов прогноза (ТЗ). */
 function clampRoundBand(x: number): number {
   return roundHalf(Math.min(BAND_MAX, Math.max(BAND_MIN, x)));
@@ -153,6 +161,18 @@ const DEFAULT_HORIZON_DAYS = 30; // прогноз без exam_date
 const MIN_HALF_WIDTH = 0.5; // минимальный полукоридор — band нельзя предсказать точнее ±0.5
 const MIN_TIME_SPAN_DAYS = 1; // < суток разброса по времени → наклон неидентифицируем (вырождение)
 const FLAT_PER_MONTH = 0.25; // |наклон за 30 дней| < порога → тренд 'flat'
+
+/**
+ * Продуктовый предохранитель против extrapolation trap. Короткий крутой ранний тренд
+ * (напр. band 2.0→3.5 за пару недель), линейно продолженный OLS на дальний горизонт
+ * (~75 дней), упирается в верхний кламп и рисует «прогноз 9.0» ученику с band 3 —
+ * математически это честный OLS+кламп, но продуктово выглядит сломанным и подрывает
+ * доверие. Ограничиваем |проекция − последний фактический band| приростом, реально
+ * достижимым за оставшееся до горизонта время: щедрые ~1 полоса band за 30 дней
+ * интенсивной подготовки. Симметрично — гасит и неправдоподобно крутой прогнозный спад.
+ * Наклон/тренд НЕ капим: они отражают наблюдаемый факт, ограничивается только проекция.
+ */
+const MAX_BAND_GAIN_PER_DAY = 1 / 30;
 
 /**
  * Критические значения t-распределения Стьюдента для two-sided 80% доверия
@@ -289,10 +309,36 @@ export function computeForecast(
     : residualStd * Math.sqrt(1 + 1 / n + ((x0 - xbar) * (x0 - xbar)) / sxx);
   const halfWidth = Math.max(MIN_HALF_WIDTH, tQuantile80(df) * sePred);
 
-  const projectedBand = clampRoundBand(projectedRaw);
+  // Предохранитель от extrapolation trap (см. MAX_BAND_GAIN_PER_DAY): OLS на коротком
+  // крутом окне спроецировал бы нереальный прирост на дальний горизонт. Ограничиваем
+  // сдвиг проекции относительно ПОСЛЕДНЕГО фактического band темпом, достижимым за
+  // оставшееся до горизонта время (симметрично — гасит и дикий спад). И точку, И коридор
+  // центрируем на капнутом значении: уровень неопределённости (halfWidth) прежний,
+  // сдвигается только центр, иначе коридор остался бы вокруг дикого projectedRaw.
+  const lastActual = pts[n - 1].band;
+  const daysToHorizon = Math.max(0, (horizonMs - pts[n - 1].t) / DAY_MS);
+  const maxGain = MAX_BAND_GAIN_PER_DAY * daysToHorizon;
+  const projectedCapped = Math.min(
+    lastActual + maxGain,
+    Math.max(lastActual - maxGain, projectedRaw),
+  );
+
+  // clampRoundBand округляет к БЛИЖАЙШЕЙ 0.5 — на коротком горизонте это округлило бы
+  // капнутую точку НАРУЖУ окна капа (напр. lastActual 7.0, maxGain 0.267 → 7.267 → 7.5),
+  // пробив заявленный потолок прироста и ложно завысив вердикт. Дожимаем ТОЧКУ в окно
+  // капа, округлённое ВНУТРЬ к сетке 0.5 (коридор НЕ трогаем — он про неопределённость,
+  // ему шире окна можно). При band на сетке 0.5 gainLow ≤ lastActual ≤ gainHigh (инверсии
+  // нет); maxGain<0.5 схлопывает окно к lastActual — честно для ультра-короткого горизонта.
+  // Финальный clampRoundBand держит контракт [4,9] (дожатие к lastActual<4 иначе пробило бы
+  // нижний кламп на band-2–3 истории с коротким горизонтом).
+  const gainLow = ceilHalf(lastActual - maxGain);
+  const gainHigh = floorHalf(lastActual + maxGain);
+  const projectedBand = clampRoundBand(
+    Math.min(gainHigh, Math.max(gainLow, clampRoundBand(projectedCapped))),
+  );
   const interval = {
-    low: clampRoundBand(projectedRaw - halfWidth),
-    high: clampRoundBand(projectedRaw + halfWidth),
+    low: clampRoundBand(projectedCapped - halfWidth),
+    high: clampRoundBand(projectedCapped + halfWidth),
   };
 
   // Тренд по наклону за 30 дней (порог ±0.25 отсекает шум как «flat»).
