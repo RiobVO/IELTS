@@ -36,12 +36,21 @@ function medalColor(rank: number): string | null {
 }
 
 // Deterministic avatar tint from the user id — identity + visual variety without
-// stored avatars (the medal colours still override the top 3).
-const AVATAR_COLORS = ["var(--violet-600)", "var(--sky-500)", "var(--green-500)", "var(--gold-500)", "var(--orange-500)", "var(--error)"];
-function avatarColor(id: string): string {
+// stored avatars (the medal colours still override the top 3). Каждый тинт несёт
+// СВОЙ ink: тёмные фоны — белый текст, светлые (sky/green/gold/orange/violet-300) —
+// тёмный ink, чтобы инициалы всегда проходили AA (white-on-gold ≈1.3:1 — провал).
+const AVATAR_TINTS: { bg: string; ink: string }[] = [
+  { bg: "var(--brand-active)", ink: "var(--text-on-brand)" },
+  { bg: "var(--sky-500)", ink: "var(--surface-inverse)" },
+  { bg: "var(--green-500)", ink: "var(--surface-inverse)" },
+  { bg: "var(--gold-500)", ink: "var(--surface-inverse)" },
+  { bg: "var(--orange-500)", ink: "var(--surface-inverse)" },
+  { bg: "var(--violet-300)", ink: "var(--surface-inverse)" },
+];
+function avatarTint(id: string): { bg: string; ink: string } {
   let s = 0;
   for (let i = 0; i < id.length; i++) s += id.charCodeAt(i);
-  return AVATAR_COLORS[s % AVATAR_COLORS.length];
+  return AVATAR_TINTS[s % AVATAR_TINTS.length];
 }
 
 /**
@@ -58,7 +67,7 @@ const TIERS: Tier[] = [
   { key: "bronze", name: "Bronze", color: "var(--streak)", min: 0 },
   { key: "amethyst", name: "Amethyst", color: "var(--brand)", min: 950 },
   { key: "ruby", name: "Ruby", color: "var(--error)", min: 1150 },
-  { key: "diamond", name: "Diamond", color: "var(--gold-500)", min: 1350 },
+  { key: "diamond", name: "Diamond", color: "var(--sky-500)", min: 1350 },
 ];
 function tierIndex(rating: number): number {
   let idx = 0;
@@ -157,7 +166,7 @@ export async function LeaguePanel({
           <p style={S.scopeNote}>Compete locally first, then climb to your city, country, and global boards.</p>
 
           {rows.length === 0 ? (
-            <div style={S.empty}>No ranking yet — sit a rated test to enter the league.</div>
+            <div style={S.empty}>Not ranked yet — sit a rated test to enter the league.</div>
           ) : (
             <>
               {podium.length > 0 && <Podium top={podium} showScore={showScore} />}
@@ -215,6 +224,7 @@ function Podium({ top, showScore }: { top: LeaderRow[]; showScore: boolean }) {
     >
       {order.map((r) => {
         const medal = medalColor(r.rank)!;
+        const tint = avatarTint(r.userId);
         return (
           <div key={r.userId} style={S.pod}>
             {r.rank === 1 && (
@@ -222,7 +232,7 @@ function Podium({ top, showScore }: { top: LeaderRow[]; showScore: boolean }) {
                 <Icon name="crown" size={18} strokeWidth={2.2} />
               </span>
             )}
-            <div style={{ ...S.podAv, background: avatarColor(r.userId), ...(r.isViewer ? { boxShadow: "0 0 0 3px var(--brand)" } : null) }}>
+            <div style={{ ...S.podAv, background: tint.bg, color: tint.ink, ...(r.isViewer ? { boxShadow: "0 0 0 3px var(--brand)" } : null) }}>
               {initials(r.displayName)}
               <span style={{ ...S.podRk, background: medal }}>{r.rank}</span>
             </div>
@@ -266,13 +276,15 @@ function Delta({ d }: { d: number | null }) {
 
 function RowItem({ row, showScore }: { row: LeaderRow; showScore: boolean }) {
   const medal = medalColor(row.rank);
+  const tint = avatarTint(row.userId);
   return (
     <li data-row style={{ ...S.lrow, ...(row.isViewer ? S.lrowYou : null) }}>
       <div style={{ ...S.rk, ...(medal ? { color: medal } : null) }}>{row.rank}</div>
       <div
         style={{
           ...S.av,
-          background: avatarColor(row.userId),
+          background: tint.bg,
+          color: tint.ink,
           ...(medal ? { boxShadow: `0 0 0 2px ${medal}` } : null),
         }}
       >
@@ -351,7 +363,7 @@ function StandingCard({
     return (
       <div style={S.standing}>
         <div style={S.standingEyebrow}>Your standing</div>
-        <p style={S.standingEmpty}>You&apos;re not ranked yet — sit a rated test to claim your spot.</p>
+        <p style={S.standingEmpty}>Not ranked yet — sit a rated test to claim your spot.</p>
         <Button fullWidth trailingIcon="arrow-right" href="/app/reading" style={{ justifyContent: "center", marginTop: 14 }}>
           Practise
         </Button>
@@ -414,11 +426,11 @@ const S: Record<string, React.CSSProperties> = {
 
   podium: { display: "grid", gridTemplateColumns: "1fr 1.15fr 1fr", gap: 12, alignItems: "end", marginBottom: 18 },
   pod: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 },
-  podAv: { position: "relative", width: 58, height: 58, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-base)", color: "#fff", marginBottom: 8, boxShadow: "0 6px 16px -6px rgba(20,40,55,.4)" },
+  podAv: { position: "relative", width: 58, height: 58, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-base)", marginBottom: 8, boxShadow: "0 6px 16px -6px rgba(20,40,55,.4)" },
   podRk: { position: "absolute", bottom: -6, right: -6, width: 24, height: 24, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#1a1525", border: "2px solid var(--bg-base)" },
   podName: { fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-sm)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-primary)" },
   podXp: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)", marginBottom: 9 },
-  pedestal: { width: "100%", borderRadius: "var(--radius-md) var(--radius-md) 0 0", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 10, fontFamily: "var(--font-mono)", fontWeight: 700, color: "#fff", borderTop: "1px solid rgba(0,0,0,.05)" },
+  pedestal: { width: "100%", borderRadius: "var(--radius-md) var(--radius-md) 0 0", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 10, fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-primary)", borderTop: "1px solid rgba(0,0,0,.05)" },
 
   grid: { alignItems: "start" },
   list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 7 },
@@ -428,7 +440,7 @@ const S: Record<string, React.CSSProperties> = {
   lrow: { display: "flex", alignItems: "center", gap: 13, padding: "11px 15px", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-md)" },
   lrowYou: { background: "var(--brand-subtle)", borderColor: "var(--brand)", boxShadow: "0 0 28px -8px color-mix(in oklab, var(--brand) 70%, transparent)" },
   rk: { width: 24, flex: "none", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-muted)" },
-  av: { width: 38, height: 38, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, color: "#fff" },
+  av: { width: 38, height: 38, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700 },
   nm: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   region: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", marginTop: 1 },
   delta: { display: "inline-flex", alignItems: "center", gap: 1, flex: "none", fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 700, padding: "2px 6px", borderRadius: "var(--radius-full)" },
@@ -446,7 +458,7 @@ const S: Record<string, React.CSSProperties> = {
 
   standing: { background: "linear-gradient(180deg, var(--brand-subtle), var(--surface))", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-md)" },
   standingEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand-active)", marginBottom: 8 },
-  standingRank: { fontFamily: "var(--font-ui)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" },
+  standingRank: { fontFamily: "var(--font-mono)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" },
   standingOf: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
   standingTrack: { height: 9, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden", margin: "12px 0 8px" },
   standingHint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },

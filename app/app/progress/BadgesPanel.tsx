@@ -73,7 +73,9 @@ interface TrackNode {
 }
 
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-const heatLevel = [0, 30, 54, 78, 100];
+// Пол активного дня поднят (44%, не 30%): слабейшая «активная» ячейка теперь
+// отделима от дня отдыха (surface-inset) при дальтонизме/низком контрасте.
+const heatLevel = [0, 44, 62, 80, 100];
 const heatColor = (c: number) =>
   c === 0 ? "var(--surface-inset)" : `color-mix(in oklab, var(--brand) ${heatLevel[Math.min(c, 4)]}%, var(--surface-inset))`;
 const fmtDay = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -489,7 +491,7 @@ const S: Record<string, React.CSSProperties> = {
   hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "linear-gradient(150deg, var(--surface-inverse), var(--surface-inverse-deep))", color: "var(--surface-inverse-ink)", display: "flex", gap: 22, marginBottom: 26, boxShadow: "var(--shadow-lg)" },
   heroRing: { position: "relative", width: 96, height: 96, flex: "none", zIndex: 1 },
   heroMedal: { position: "absolute", inset: 11, borderRadius: "50%", display: "grid", placeItems: "center", background: "rgba(255,255,255,0.08)", color: "var(--surface-inverse-ink)" },
-  heroEyebrow: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", color: "var(--violet-300)", fontWeight: 600 },
+  heroEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--violet-300)", fontWeight: 600 },
   heroTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 700, margin: "7px 0 4px" },
   heroDesc: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.8)", lineHeight: 1.5 },
   heroB: { color: "var(--surface-inverse-ink)", fontFamily: "var(--font-mono)" },
