@@ -445,21 +445,21 @@ function Node({ n, current }: { n: TrackNode; current: boolean }) {
 
 // Адаптив + интерактив (hover/keyframes) — в классах; брейкпоинт-свойства не inline.
 const BDG_CSS = `
-.bdg-wrap{padding:22px 16px 48px}
+.bdg-wrap{padding:22px 16px 40px}
 .bdg-cols{display:grid;grid-template-columns:1fr;gap:14px}
 .bdg-hero{flex-wrap:wrap;padding:20px;align-items:center}
 .bdg-flame{animation:bdg-flicker 2.6s ease-in-out infinite}
 @keyframes bdg-flicker{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 .bdg-heat-cell{cursor:default;transition:transform .12s}
 .bdg-heat-cell:hover{transform:scale(1.22)}
-.bdg-heat-cell:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 45%,transparent);transform:scale(1.22)}
+.bdg-heat-cell:focus-visible{outline:none;box-shadow:var(--ring);transform:scale(1.22)}
 .bdg-wrap summary{list-style:none;display:inline-flex;align-items:center;gap:6px}
 .bdg-wrap summary::-webkit-details-marker{display:none}
-.bdg-wrap summary:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--gold-500) 45%,transparent);border-radius:6px}
+.bdg-wrap summary:focus-visible{outline:none;box-shadow:var(--ring);border-radius:6px}
 .bdg-wrap summary::after{content:"+";font-family:var(--font-mono);opacity:.7}
 .bdg-wrap details[open] summary::after{content:"–"}
 .bdg-node{cursor:default}
-.bdg-node:focus-visible{outline:none;box-shadow:0 0 0 4px color-mix(in oklab,var(--brand) 28%,transparent);border-radius:var(--radius-md)}
+.bdg-node:focus-visible{outline:none;box-shadow:var(--ring);border-radius:var(--radius-md)}
 .bdg-tip{position:fixed;z-index:90;pointer-events:none;background:var(--surface-inverse);color:var(--surface-inverse-ink);font-size:var(--text-xs);font-weight:600;line-height:1.4;padding:8px 11px;border-radius:10px;box-shadow:var(--shadow-lg);max-width:240px;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s var(--ease-out)}
 .bdg-tip.show{opacity:1;transform:translateY(0)}
 .bdg-tip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--surface-inverse)}
@@ -468,8 +468,11 @@ const BDG_CSS = `
 /* Узкие телефоны: кольцо+текст+кнопка в ряд не влезают — текст схлопывается, кнопка
    налезает. Стек в колонку, только на ≤430px. */
 @media (max-width:430px){ .bdg-hero{flex-direction:column;align-items:flex-start} }
+/* Gutter/ширина колонки — ОДИНАКОВЫЕ во всех трёх табах раздела (ov-wrap/lb-wrap
+   держат тот же 22/16/40 → 26/28/44). Иначе клик по табу, который сам не двигается,
+   двигал таб-бар: колонка прыгала 960→1080, бар уезжал ~60px влево и 4px вниз. */
+@media (min-width:768px){ .bdg-wrap{padding:26px 28px 44px} }
 @media (min-width:900px){
-  .bdg-wrap{padding:30px 28px 56px}
   .bdg-cols{grid-template-columns:1.65fr 1fr;align-items:start}
   .bdg-side{position:sticky;top:78px}
 }
@@ -481,7 +484,7 @@ const BDG_CSS = `
 `;
 
 const S: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 1080, margin: "0 auto" },
+  wrap: { maxWidth: 960, margin: "0 auto", width: "100%" },
   head: { display: "flex", alignItems: "flex-end", gap: 16, marginBottom: 22 },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 4px" },
   sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: 0 },
