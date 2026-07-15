@@ -119,6 +119,20 @@ export function TrajectoryChart({
 
   const onMove = useCallback((e: React.PointerEvent) => pick(e.clientX), [pick]);
   const onLeave = useCallback(() => setActive(null), []);
+
+  // Тап вне графика гасит тултип. На тач `onPointerLeave` практически не приходит,
+  // `Escape` есть только с клавиатуры, а сам тултип `pointer-events:none` — то есть
+  // на телефоне визир с подсказкой висел до следующего тапа ПО ГРАФИКУ. Слушатель
+  // живёт только пока точка активна; тап внутри svg отсеиваем — иначе он погасил бы
+  // то, что сам только что выбрал (onPointerDown на svg и этот обработчик — один жест).
+  useEffect(() => {
+    if (active == null) return;
+    const onDocDown = (e: PointerEvent) => {
+      if (!svgRef.current?.contains(e.target as Node)) setActive(null);
+    };
+    document.addEventListener("pointerdown", onDocDown);
+    return () => document.removeEventListener("pointerdown", onDocDown);
+  }, [active]);
   const onKey = useCallback(
     (e: React.KeyboardEvent) => {
       if (combined.length === 0) return;
@@ -182,7 +196,7 @@ export function TrajectoryChart({
         height="auto"
         role="img"
         tabIndex={0}
-        aria-label={`Band trajectory across ${combined.length} full ${combined.length === 1 ? "mock" : "mocks"}, latest band ${latestBand.toFixed(1)}. Use arrow keys to inspect each point.`}
+        aria-label={`Band trajectory across ${combined.length} full ${combined.length === 1 ? "mock" : "mocks"}, latest band ${latestBand.toFixed(1)}. Every point is listed in the table after this chart.`}
         className="ov-chart-svg"
         style={{ display: "block", width: "100%", height: "auto", touchAction: "pan-y" }}
         onPointerMove={onMove}
@@ -205,8 +219,10 @@ export function TrajectoryChart({
         ))}
 
         {target && (
-          // --warn-text (L0.520 ≈3.9:1), не сырой gold: линия — значимый индикатор,
-          // применяется 1.4.11 (3:1); пунктир и так отличает её от data-линий.
+          // --warn-text (#975800, 5.69:1 на белом), не сырой gold-500 (1.79:1): линия —
+          // значимый индикатор, ей хватило бы и 3:1 (1.4.11), но тот же токен красит
+          // подпись «Target N» рядом, а ей как мелкому тексту нужны 4.5:1 (1.4.3).
+          // Пунктир отличает её от data-линий независимо от цвета.
           <line x1={padL} x2={w - padR} y1={target.y} y2={target.y} stroke="var(--warn-text)" strokeWidth={1.5} strokeDasharray="5 4" />
         )}
 
@@ -343,17 +359,44 @@ export function TrajectoryChart({
       )}
     </div>
 
+      {/* Таблица — авторитетное текстовое представление данных для скринридера.
+          SVG остаётся `role="img"` с одной сводной подписью: стрелки по точкам мы
+          даём зрячему клавиатурному пользователю, но `img` не widget-роль, и в
+          browse-режиме NVDA/JAWS перехватят стрелки раньше компонента — обещать им
+          ридаут было нельзя. Второй экземпляр графика (mobile/desktop) скрыт через
+          display:none на обёртке, значит и его таблица из дерева доступности выпадает. */}
+      <table className="ov-sr-only">
+        <caption>Band by full mock, oldest first</caption>
+        <thead>
+          <tr><th scope="col">Date</th><th scope="col">Section</th><th scope="col">Band</th></tr>
+        </thead>
+        <tbody>
+          {combined.map((p, i) => (
+            <tr key={i}>
+              <td>{fmtFull(p.dateMs)}</td>
+              <td>{SECTION_LABEL[p.section]}</td>
+              <td>{p.band.toFixed(1)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
       {/* Легенда — сиблинг .ov-chart, не внутри, иначе % оверлея подписей считались
           бы от более высокого контейнера. Тогл R/L показываем ТОЛЬКО когда есть обе
           секции: при single-section combined совпадает со сплит-линией, гасить нечего,
-          а note не должна называть несуществующую серию. Combined-чип статичен;
-          R/L — bordered pill-кнопки, чтобы на тач было видно, что это контролы. */}
+          а note не должна называть несуществующую серию.
+
+          Combined — КЛЮЧ легенды (bare-текст), R/L — bordered pill-кнопки. Раньше все
+          трое несли общий `.ov-leg-item` и стояли в один ряд: три одинаковых на вид
+          чипа, из которых кликаются два, а Combined читался как disabled-кнопка.
+          Разделитель отбивает «ключ» от «контролов» — без лишней копирайт-подписи. */}
       <div className="ov-legend">
-        <span className="ov-leg-item ov-leg-static">
+        <span className="ov-leg-key">
           <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--brand)" }} /> Combined
         </span>
         {hasSplit && (
           <>
+            <span className="ov-leg-div" aria-hidden="true" />
             <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("reading")} aria-label={hidden.has("reading") ? "Show Reading line" : "Hide Reading line"} onClick={() => toggle("reading")}>
               <span className="ov-leg-swatch ov-leg-circle" style={{ background: SECTION_COLOR.reading }} /> Reading
             </button>
