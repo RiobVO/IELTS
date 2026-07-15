@@ -66,6 +66,10 @@ export async function OverviewPanel() {
       .select("band_score,submitted_at,content_item:content_item_id(category)")
       .eq("status", "submitted")
       .not("band_score", "is", null)
+      // band 0 = «did not attempt» по шкале IELTS — не уровень; нулевые
+      // сабмиты не рисуем и не кормим ими прогноз/готовность (страница
+      // результата band 0.0 по-прежнему показывает).
+      .gt("band_score", 0)
       // Нужны САМЫЕ СВЕЖИЕ 100 попыток (прогноз/readiness смотрят на хвост
       // истории), не самые старые — сортировка по убыванию перед limit;
       // buildTrajectory сам пересортирует в хронологический порядок.
