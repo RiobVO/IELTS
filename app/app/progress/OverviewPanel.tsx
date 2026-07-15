@@ -413,6 +413,15 @@ function ForecastCard({ forecast }: { forecast: Forecast }) {
     insufficient: "",
   };
   const verdictStyle = verdict === "reached" || verdict === "on_track" ? S.verdictGood : verdict === "behind" ? S.verdictWarn : S.verdictNeutral;
+  // Негативный вердикт обязан давать инструмент, а не только диагноз: «отстаёшь» и
+  // «цель не задана» — единственные две ветки, где студент упирался в текст без
+  // выхода (у `insufficient` кнопка есть с самого начала). reached/on_track выхода
+  // не требуют — там действие не нужно.
+  const verdictCta: Partial<Record<typeof verdict, { href: string; label: string }>> = {
+    behind: { href: "/app/practice", label: "Practice now" },
+    no_target: { href: "/app/profile", label: "Set your target band" },
+  };
+  const cta = verdictCta[verdict];
 
   return (
     <div style={S.card}>
@@ -448,6 +457,11 @@ function ForecastCard({ forecast }: { forecast: Forecast }) {
         <p style={S.forecastPace}>Improving ~{forecast.slopePerWeek.toFixed(2)} band per week lately</p>
       )}
       {verdictText[verdict] && <div style={verdictStyle}>{verdictText[verdict]}</div>}
+      {cta && (
+        <Button trailingIcon="arrow-right" href={cta.href} variant="secondary" style={{ marginTop: 12, color: "var(--brand-active)" }}>
+          {cta.label}
+        </Button>
+      )}
     </div>
   );
 }
@@ -592,9 +606,13 @@ const OV_CSS = `
 .ov-wrap{padding:22px 16px 40px}
 .ov-grid{display:grid;grid-template-columns:1fr;gap:14px;margin:16px 0}
 .ov-previews{display:grid;grid-template-columns:1fr;gap:12px}
-.ov-preview{transition:transform .12s,box-shadow .12s}
+/* Тень В КЛАССЕ, не инлайном на previewCard: инлайн бьёт любой селектор, поэтому
+   раньше он молча съедал и hover-тень, и кольцо фокуса — карточка не имела ring'а
+   вообще. Кольцо — общий токен --ring (solid 2px ядро ≥3:1 + гало), а не свой
+   полупрозрачный box-shadow: тот давал 1.88:1 при пороге 1.4.11 = 3:1. */
+.ov-preview{box-shadow:var(--shadow-sm);transition:transform .12s,box-shadow .12s}
 .ov-preview:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
-.ov-preview:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 45%,transparent)}
+.ov-preview:focus-visible{outline:none;box-shadow:var(--ring)}
 .ov-chart{position:relative}
 /* Мобильный портретный формат по умолчанию (mobile-first); широкий — с ≥768px. */
 .ov-chart-wide{display:none}
@@ -602,7 +620,7 @@ const OV_CSS = `
    и на узком мобильном холсте, и на широком десктопном. */
 .ov-chart-svg :is(path,line,circle,rect,polyline){vector-effect:non-scaling-stroke}
 .ov-chart-svg:focus{outline:none}
-.ov-chart-svg:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 40%,transparent);border-radius:var(--radius-md)}
+.ov-chart-svg:focus-visible{outline:none;box-shadow:var(--ring);border-radius:var(--radius-md)}
 .ov-cross{transition:opacity .1s}
 .ov-tip{position:absolute;z-index:5;pointer-events:none;background:var(--surface-inverse);color:var(--surface-inverse-ink);border-radius:10px;padding:8px 11px;box-shadow:var(--shadow-lg);white-space:nowrap;font-family:var(--font-ui)}
 .ov-tip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--surface-inverse)}
@@ -624,9 +642,16 @@ const OV_CSS = `
 .ov-lbl-latest{font-family:var(--font-mono);font-weight:800;color:var(--text-on-brand);background:var(--brand);padding:2px 8px;border-radius:var(--radius-full);box-shadow:var(--shadow-sm);transform:translate(calc(-100% - 11px),-50%)}
 .ov-lbl-axis{color:var(--text-secondary);font-weight:600}
 .ov-lbl-axis-r{transform:translate(-100%,0)}
+/* Текстовая альтернатива графика: вне экрана, но В дереве доступности (display:none
+   вырезал бы её и оттуда). clip+1px — стандартный приём; white-space:nowrap
+   обязателен, иначе строки таблицы схлопываются в одну колонку при переносе. */
+.ov-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;margin:-1px;padding:0}
 .ov-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
 .ov-leg-item{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:600}
-.ov-leg-static{color:var(--text-secondary);padding:3px 2px}
+/* Ключ легенды — НЕ .ov-leg-item: общая с кнопками база делала его похожим на
+   третий (disabled) контрол. Bare-текст + разделитель = «подпись», а не «кнопка». */
+.ov-leg-key{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:600;color:var(--text-secondary);padding:3px 2px}
+.ov-leg-div{width:1px;height:15px;background:var(--border);flex:none;margin:0 2px}
 /* R/L — bordered pill: явный контрол на тач, где нет hover. Off-состояние держит
    ТЕКСТ на --text-muted (≈4.9:1, AA), а состояние несёт пунктирная рамка +
    strikethrough + приглушённый свотч — без opacity на самом тексте (та давала ~1.5:1). */
@@ -634,7 +659,10 @@ const OV_CSS = `
 .ov-leg-btn:hover{background:var(--surface-inset)}
 .ov-leg-btn[aria-pressed="false"]{color:var(--text-muted);border-style:dashed;text-decoration:line-through}
 .ov-leg-btn[aria-pressed="false"] .ov-leg-swatch{opacity:.4}
-.ov-leg-btn:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 40%,transparent)}
+.ov-leg-btn:focus-visible{outline:none;box-shadow:var(--ring)}
+/* ~21px по высоте — вдвое меньше 44px, при том что note прямо зовёт «tap a section»,
+   а аудитория телефонная. Тот же приём, что у .pg-tab/.lc-tab. */
+@media (pointer:coarse){.ov-leg-btn{min-height:44px}}
 .ov-leg-swatch{flex:none}
 .ov-leg-line{width:14px;height:3px;border-radius:var(--radius-full)}
 .ov-leg-circle{width:9px;height:9px;border-radius:50%}
@@ -703,7 +731,7 @@ const S: Record<string, React.CSSProperties> = {
   readyFill: { height: "100%", borderRadius: "var(--radius-full)", background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", transformOrigin: "left" },
   readyTick: { position: "absolute", top: -2, bottom: -2, width: 2, background: "var(--gold-500)" },
 
-  previewCard: { display: "flex", alignItems: "center", gap: 13, padding: "15px 17px", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-lg)", textDecoration: "none", boxShadow: "var(--shadow-sm)" },
+  previewCard: { display: "flex", alignItems: "center", gap: 13, padding: "15px 17px", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-lg)", textDecoration: "none" },
   previewIcon: { width: 42, height: 42, flex: "none", borderRadius: 12, display: "grid", placeItems: "center" },
   previewLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-muted)" },
   previewValue: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
