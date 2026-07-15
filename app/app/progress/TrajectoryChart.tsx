@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { pickPointIndex } from "@/lib/progress/hit-test";
 
 export interface ChartPoint {
   x: number;
@@ -118,26 +119,25 @@ export function TrajectoryChart({
     });
   }, []);
 
-  // clientX → ближайшая точка по X (в системе viewBox через отношение rect).
+  // clientX/clientY → ближайшая точка (в системе viewBox через отношение rect).
+  // X первичен (см. hit-test.ts), Y довыбирает среди X-кандидатов — иначе два
+  // мока разных секций, сданных с разницей в минуты, неразличимы по X, и
+  // нижнюю точку было невозможно выбрать мышью/тапом.
   const pick = useCallback(
-    (clientX: number) => {
+    (clientX: number, clientY: number) => {
       const svg = svgRef.current;
       if (!svg || combined.length === 0) return;
       const rect = svg.getBoundingClientRect();
       if (rect.width === 0) return;
       const vx = ((clientX - rect.left) / rect.width) * w;
-      let best = 0;
-      let bestD = Infinity;
-      for (let i = 0; i < combined.length; i++) {
-        const d = Math.abs(combined[i].x - vx);
-        if (d < bestD) { bestD = d; best = i; }
-      }
-      setActive(best);
+      const vy = ((clientY - rect.top) / rect.height) * h;
+      const idx = pickPointIndex(combined, vx, vy);
+      if (idx != null) setActive(idx);
     },
-    [combined, w],
+    [combined, w, h],
   );
 
-  const onMove = useCallback((e: React.PointerEvent) => pick(e.clientX), [pick]);
+  const onMove = useCallback((e: React.PointerEvent) => pick(e.clientX, e.clientY), [pick]);
   const onLeave = useCallback(() => setActive(null), []);
 
   // Тап вне графика гасит тултип. На тач `onPointerLeave` практически не приходит,
