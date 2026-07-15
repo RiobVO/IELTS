@@ -278,10 +278,16 @@ export function TrajectoryChart({
         {/* Wash под Combined — над recessive-сеткой, под data-линиями (премиум-слои). */}
         {areaD && <path d={areaD} fill={`url(#${gradId})`} pointerEvents="none" />}
 
-        {/* Секционные тренды — ПОДЧИНЁННЫЕ: тонкий пунктир против сплошной overall.
-            Иначе они спорят с главной линией за внимание, а на участке, где overall
-            равен единственной известной секции, ещё и лежат ровно под ней — сплошная
-            поверх сплошной читалась бы как одна линия неясно чего.
+        {overall && (
+          <path data-draw={overall.len} d={overall.path} fill="none" stroke="var(--brand)" strokeWidth={2.5}
+            strokeDasharray={overall.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
+        )}
+
+        {/* Секционные тренды — ПОДЧИНЁННЫЕ (тонкий пунктир против сплошной overall), но
+            рисуются ПОВЕРХ неё, а не под. Пока известна одна секция, overall равен ей и
+            лежит ровно на её линии: сплошная 2.5px поверх пунктира 1.4px съедала его
+            целиком — легенда обещала Listening, а на графике от него были одни ромбы.
+            Сверху пунктир читается как «здесь overall и есть эта секция» — это правда.
             data-draw не ставим: draw-in гонит stroke-dashoffset, а он уже занят узором. */}
         {reading && !hidden.has("reading") && (
           <path d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.4}
@@ -290,10 +296,6 @@ export function TrajectoryChart({
         {listening && !hidden.has("listening") && (
           <path d={listening.path} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={1.4}
             strokeDasharray="4 3" opacity={0.85} strokeLinecap="round" strokeLinejoin="round" />
-        )}
-        {overall && (
-          <path data-draw={overall.len} d={overall.path} fill="none" stroke="var(--brand)" strokeWidth={2.5}
-            strokeDasharray={overall.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
 
         {/* Маркер-кольцо на КАЖДОЙ реальной точке (заливка = surface, обводка = цвет
