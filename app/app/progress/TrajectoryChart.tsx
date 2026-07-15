@@ -522,11 +522,11 @@ export function TrajectoryChart({
         <p className="ov-legend-note">
           Combined is your band across every full mock, in order.
           {reading && listening
-            ? " Reading and Listening show each section&apos;s own trend; tap or click one to hide its line."
+            ? " Reading and Listening show each section's own trend; tap or click one to hide its line."
             : reading
-              ? " Reading also shows the section&apos;s own trend."
+              ? " Reading also shows the section's own trend."
               : listening
-                ? " Listening also shows the section&apos;s own trend."
+                ? " Listening also shows the section's own trend."
                 : ""}
         </p>
       )}
