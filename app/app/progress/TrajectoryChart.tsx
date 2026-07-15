@@ -34,6 +34,8 @@ export interface TrajectoryChartProps {
   padT: number;
   padB: number;
   combined: ChartPoint[];
+  combinedPath: string;
+  combinedLen: number;
   reading: { path: string; len: number } | null;
   listening: { path: string; len: number } | null;
   grid: { band: number; y: number }[];
@@ -62,7 +64,7 @@ function fmtFull(ms: number): string {
 
 export function TrajectoryChart({
   w, h, padL, padR, padT, padB,
-  combined,
+  combined, combinedPath, combinedLen,
   reading, listening, grid, target, exam, forecast,
   xLabelLeft, xLabelRight, latestBand,
 }: TrajectoryChartProps) {
@@ -147,14 +149,20 @@ export function TrajectoryChart({
   const tipBelow = pointYPct < 26;
   const tipTx = tipEdge === "left" ? "16px" : tipEdge === "right" ? "calc(-100% + 16px)" : "-50%";
   const tipTy = tipBelow ? "16px" : "calc(-100% - 14px)";
-  // Тогл имеет смысл только когда реально есть ОБЕ секции (иначе гасить нечего —
-  // остался бы пустой график). Считаем по точкам, а не по линиям: секция с одним
-  // моком линии не даёт, но маркер и легенду заслуживает.
-  const hasReading = combined.some((p) => p.section === "reading");
-  const hasListening = combined.some((p) => p.section === "listening");
-  const hasSplit = hasReading && hasListening;
-  const soleSection: "reading" | "listening" = hasReading ? "reading" : "listening";
+  // Сплит-легенда/тогл имеют смысл только когда есть ОБЕ серии (иначе combined ==
+  // единственной сплит-линии — гасить нечего, а подпись не должна называть отсутствующую).
+  const hasSplit = !!reading && !!listening;
 
+  // Мягкая заливка-wash под Combined-линией к базовой линии плота — глубина без
+  // шума (série-hue ~10%, dataviz marks-spec). Только при ≥2 точках (иначе линии нет).
+  const baseline = h - padB;
+  const areaD =
+    combined.length >= 2
+      ? `${combinedPath} L ${combined[combined.length - 1].x.toFixed(1)} ${baseline.toFixed(1)} L ${combined[0].x.toFixed(1)} ${baseline.toFixed(1)} Z`
+      : null;
+  // Уникальный id градиента на размер холста — на странице два SVG (mobile/desktop),
+  // одинаковый id дал бы дубль в DOM и коллизию url(#…).
+  const gradId = `ov-area-grad-${w}`;
 
   // Пилюля текущего балла: всегда НАД последней точкой, с отступом от боковых краёв.
   // Последняя точка НЕ обязательно справа-сверху — когда все моки свежие, а ось тянется
@@ -183,6 +191,13 @@ export function TrajectoryChart({
         onBlur={onLeave}
         onKeyDown={onKey}
       >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.14" />
+            <stop offset="100%" stopColor="var(--brand)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
         {/* Только ЛИНИИ сетки/цели/экзамена — подписи вынесены в HTML-оверлей ниже
             (фикс-кегль на любой ширине; SVG-текст на 360px схлопывался до ~4.8px). */}
         {grid.map((g) => (
@@ -209,16 +224,19 @@ export function TrajectoryChart({
           />
         )}
 
-        {/* Reading и Listening — две самостоятельные линии-тренда (равнозначные,
-            а не «сплит» под общей): это разные тесты, общей линии между ними нет. */}
+        {/* Wash под Combined — над recessive-сеткой, под data-линиями (премиум-слои). */}
+        {areaD && <path d={areaD} fill={`url(#${gradId})`} pointerEvents="none" />}
+
         {reading && !hidden.has("reading") && (
-          <path data-draw={reading.len} d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={2.5}
+          <path data-draw={reading.len} d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.5}
             strokeDasharray={reading.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
         {listening && !hidden.has("listening") && (
-          <path data-draw={listening.len} d={listening.path} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={2.5}
+          <path data-draw={listening.len} d={listening.path} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={1.5}
             strokeDasharray={listening.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
+        <path data-draw={combinedLen} d={combinedPath} fill="none" stroke="var(--brand)" strokeWidth={2.5}
+          strokeDasharray={combinedLen} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
 
         {/* Маркер-кольцо на КАЖДОЙ реальной точке (заливка = surface, обводка = цвет
             секции) — данные читаются точно, даже когда линия гладкая. Секцию несёт НЕ
@@ -331,7 +349,10 @@ export function TrajectoryChart({
           а note не должна называть несуществующую серию. Combined-чип статичен;
           R/L — bordered pill-кнопки, чтобы на тач было видно, что это контролы. */}
       <div className="ov-legend">
-        {hasSplit ? (
+        <span className="ov-leg-item ov-leg-static">
+          <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--brand)" }} /> Combined
+        </span>
+        {hasSplit && (
           <>
             <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("reading")} aria-label={hidden.has("reading") ? "Show Reading line" : "Hide Reading line"} onClick={() => toggle("reading")}>
               <span className="ov-leg-swatch ov-leg-circle" style={{ background: SECTION_COLOR.reading }} /> Reading
@@ -340,15 +361,10 @@ export function TrajectoryChart({
               <span className="ov-leg-swatch ov-leg-diamond" style={{ background: SECTION_COLOR.listening }} /> Listening
             </button>
           </>
-        ) : (
-          // Одна секция — гасить нечего (остался бы пустой график): статичный чип.
-          <span className="ov-leg-item ov-leg-static">
-            <span className={`ov-leg-swatch ${soleSection === "listening" ? "ov-leg-diamond" : "ov-leg-circle"}`} style={{ background: SECTION_COLOR[soleSection] }} /> {SECTION_LABEL[soleSection]}
-          </span>
         )}
       </div>
       {hasSplit && (
-        <p className="ov-legend-note">Reading and Listening are different tests, so they run as separate lines rather than one merged score. Tap or click a section to hide its line.</p>
+        <p className="ov-legend-note">Combined is your band across every mock; Reading and Listening split it by section. Tap or click a section to hide its line.</p>
       )}
     </>
   );

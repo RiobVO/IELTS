@@ -337,10 +337,9 @@ function TrajectoryHero({
       padR: PAD.r,
       padT: PAD.t,
       padB: PAD.b,
-      // combined — только для маркеров/наведения (каждый реальный мок). Единой
-      // Combined-линии нет: Reading и Listening — разные тесты, склейка их в одну
-      // линию по времени давала пилу, а не тренд.
       combined: pts.map((p, i) => ({ x: cPts[i].x, y: cPts[i].y, band: p.band, dateMs: p.t, section: p.section })),
+      combinedPath: smoothD(cPts),
+      combinedLen: Number(smoothLen(cPts).toFixed(1)),
       reading: rPts ? { path: smoothD(rPts), len: Number(smoothLen(rPts).toFixed(1)) } : null,
       listening: lPts ? { path: smoothD(lPts), len: Number(smoothLen(lPts).toFixed(1)) } : null,
       grid: gridBands.map((b) => ({ band: b, y: yScale(b) })),
@@ -637,6 +636,7 @@ const OV_CSS = `
 .ov-leg-btn[aria-pressed="false"] .ov-leg-swatch{opacity:.4}
 .ov-leg-btn:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 40%,transparent)}
 .ov-leg-swatch{flex:none}
+.ov-leg-line{width:14px;height:3px;border-radius:var(--radius-full)}
 .ov-leg-circle{width:9px;height:9px;border-radius:50%}
 .ov-leg-diamond{width:9px;height:9px;border-radius:2px;transform:rotate(45deg)}
 .ov-legend-note{font-family:var(--font-ui);font-size:var(--text-2xs);color:var(--text-muted);line-height:1.45;margin:8px 0 0;max-width:60ch}
