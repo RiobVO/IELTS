@@ -191,7 +191,7 @@ describe("computeForecast — проекция, кламп, округление
   it("высокий band + дальний горизонт → точка упирается в финальный кламп шкалы 9.0", () => {
     // bands 6.0..8.0 (slope 0.05) дни 0..40; exam day240 (2026-08-29), 200 дней от day40.
     // lastActual=8.0, окно капа доходит до ~10 → projectedCapped упирается в потолок шкалы:
-    // clampRoundBand → 9.0. (Тут финальный [4,9]-кламп доминирует, abs-cap невидим — его
+    // clampRoundBand → 9.0. (Тут финальный [1,9]-кламп доминирует, abs-cap невидим — его
     // проявление проверяется отдельным интеграционным тестом с lastActual=6.0 ниже.)
     const rising8: ForecastPoint[] = [0, 10, 20, 30, 40].map((d, i) => ({
       t: day(d),
@@ -202,19 +202,21 @@ describe("computeForecast — проекция, кламп, округление
     expect(f.interval!.high).toBe(9.0);
   });
 
-  it("нисходящая серия: симметричный кап гасит спад, коридор клампится к 4.0", () => {
+  it("нисходящая серия: симметричный кап гасит спад, коридор.low=4.0 из округления (не кламп)", () => {
     const falling: ForecastPoint[] = RISING.map((p, i) => ({ t: p.t, band: 7.0 - i * 0.5 }));
     // intercept 7.0, наклон −0.05; day 80 → projectedRaw = 3.0. lastActual=5.0, tier <5.5 =
     // 0.5/мес, maxGain=0.5/30·40=0.6667 → окно [4.333,5.667]. projectedCapped=4.333 (кап
     // гасит спад до 3.0), дожатие → projectedBand=4.5 (НЕ 4.0). Коридор центрирован на 4.333,
-    // hw=0.5: low=round½(3.833)→кламп 4.0, high=round½(4.833)=5.0.
+    // hw=0.5: low=round½(3.833)=4.0. При новом полу 1.0 это НЕ кламп (3.833 » 1.0) — просто
+    // roundHalf(3.833) честно округляет к 4.0; совпадение с прежним значением случайно
+    // (раньше 3.833 клампилось СНИЗУ до 4.0, теперь округляется до той же цифры).
     const f = computeForecast(falling, "2026-03-22", 5, NOW_AT_LAST); // day(80)
     expect(f.projectedBand).toBe(4.5);
-    expect(f.interval!.low).toBe(4.0); // нижний кламп прогноза держит коридор
+    expect(f.interval!.low).toBe(4.0); // округление 3.833→4.0, кламп здесь не участвует
     expect(f.trend).toBe("down"); // тренд от наблюдаемого наклона — не капится
   });
 
-  it("projectedBand всегда на сетке 0.5 (кап + дожатие внутрь + кламп [4,9])", () => {
+  it("projectedBand всегда на сетке 0.5 (кап + дожатие внутрь + кламп [1,9])", () => {
     // Инвариант округления: при любом сочетании фикстуры/горизонта точка на 0.5-сетке.
     const flat: ForecastPoint[] = [0, 10, 20, 30, 40].map((d) => ({ t: day(d), band: 6.0 }));
     const steepLow: ForecastPoint[] = [0, 5, 10, 15].map((d, i) => ({ t: day(d), band: 2.0 + i }));
@@ -225,6 +227,92 @@ describe("computeForecast — проекция, кламп, округление
         expect(Number.isFinite(f.projectedBand!)).toBe(true);
       }
     }
+  });
+});
+
+describe("computeForecast — нижний кламп 1.0 (новый контракт: честный пол, не 4.0)", () => {
+  it("низкобандовая история → projectedBand честно ниже 4.0, но не ниже 1.0 (сетка 0.5)", () => {
+    // Слабый студент: band 2.0..2.5 за 3 недели (дни 0,5,10,15,20), now = день последней
+    // попытки, горизонт по умолчанию +30д (нет exam_date) → x0=50.
+    // OLS: xbar=10, ybar=2.2, sxx=250, sxy=5 → slope=0.02, intercept=2.0.
+    // projectedRaw=2.0+0.02*50=3.0. ssResid=0.2, df=3, residualStd=√(0.2/3)=0.258199.
+    // Кап: lastActual=2.5, tier<5.5 → 0.5/мес, daysToHorizon=30 → maxGain=0.5. Окно
+    // [2.0,3.0] ⊇ projectedRaw=3.0 → кап инертен, projectedCapped=3.0.
+    // gainLow=ceilHalf(2.0)=2.0, gainHigh=floorHalf(3.0)=3.0 → projectedBand=clampRoundBand(3.0)=3.0.
+    // Со старым полом 4.0 clampRoundBand задрал бы точку до 4.0 (соврав про уровень); честный
+    // пол 1.0 её не трогает — 3.0 выше 1.0, клампу нечего делать.
+    const lowBand: ForecastPoint[] = [0, 5, 10, 15, 20].map((d, i) => ({
+      t: day(d),
+      band: [2.0, 2.0, 2.5, 2.0, 2.5][i],
+    }));
+    const now = new Date(day(20));
+    const f = computeForecast(lowBand, null, null, now);
+    expect(f.projectedBand).toBe(3.0);
+    expect(f.projectedBand!).toBeLessThan(4.0);
+    expect(f.projectedBand!).toBeGreaterThanOrEqual(1.0);
+    expect(f.projectedBand! % 0.5).toBe(0);
+  });
+
+  it("interval.low честно проваливается под 4.0 (раньше упирался в старый пол)", () => {
+    // Нисходящая серия band 4.5→2.9 (дни 0,10,20,30,40, шаг −0.4 — идеальный фит,
+    // ssResid=0). now=день40, exam=день110 (x0=110). projectedRaw=4.5−0.04·110=0.1.
+    // Кап: lastActual=2.9, tier<5.5 → 0.5/мес, daysToHorizon=70 → maxGain=1.16667 → окно
+    // [1.73333,4.06667] гасит спад: projectedCapped=1.73333 (нижняя граница окна).
+    // halfWidth=0.5 (residualStd=0 → пол MIN_HALF_WIDTH). Коридор центрирован на 1.73333:
+    // low=roundHalf(1.73333−0.5)=roundHalf(1.23333)=1.0, high=roundHalf(1.73333+0.5)=
+    // roundHalf(2.23333)=2.0. Со старым полом 4.0 low клампился бы до 4.0 (лживый
+    // «коридор не ниже 4» слабому студенту); честно — 1.0.
+    const declining: ForecastPoint[] = [0, 10, 20, 30, 40].map((d, i) => ({
+      t: day(d),
+      band: 4.5 - i * 0.4,
+    }));
+    const now = new Date(day(40));
+    const f = computeForecast(declining, "2026-04-21", 5, now); // day(110)
+    expect(f.interval!.low).toBe(1.0);
+    expect(f.interval!.low).toBeGreaterThanOrEqual(1.0);
+    expect(f.interval!.low).toBeLessThan(4.0);
+    expect(f.projectedBand).toBe(2.0);
+  });
+
+  it("target 4.0 + честная проекция ~2.5 → behind (со старым полом было бы ложное on_track)", () => {
+    // Плоская низкая история band=2.5 (дни 0,10,20,30,40), now=день40, горизонт по
+    // умолчанию +30д (x0=70). slope=0 (идеально плоско) → projectedRaw=2.5. Кап:
+    // lastActual=2.5, maxGain=0.5/30·30=0.5 → окно [2.0,3.0] ⊇ 2.5 → инертен,
+    // projectedCapped=2.5 → projectedBand=clampRoundBand(2.5)=2.5.
+    // target=4.0: latestBand=2.5 < 4.0 (не reached), projectedBand=2.5 < 4.0 → behind.
+    // Со старым полом 4.0 clampRoundBand задрал бы 2.5 до 4.0 → projectedBand(4.0) ≥
+    // target(4.0) дал бы ложный on_track студенту, который на деле идёт на band ~2.5.
+    const flatLow: ForecastPoint[] = [0, 10, 20, 30, 40].map((d) => ({ t: day(d), band: 2.5 }));
+    const now = new Date(day(40));
+    const f = computeForecast(flatLow, null, 4.0, now);
+    expect(f.projectedBand).toBe(2.5);
+    expect(f.verdict).toBe("behind");
+  });
+
+  it("экстремальный спад далеко за горизонт → projectedBand упирается РОВНО в 1.0 (кламп жив)", () => {
+    // Свободное падение band 6.0→4.0→2.0 (дни 0,10,20, шаг −2.0/10дней — идеальный фит,
+    // ssResid=0). now=день20, exam=день170 (150 дней от последней точки — экзамен ещё
+    // очень далеко). OLS: slope=−0.2/день, intercept=6.0 → projectedRaw=6.0−0.2·170=−28
+    // (дикая экстраполяция без капа). Кап: lastActual=2.0, tier<5.5 → 0.5/мес,
+    // daysToHorizon=150 → tier·days=2.5, но ABS_MAX_BAND_GAIN=2.0 связывает первым →
+    // maxGain=2.0 → окно [0.0,4.0]. projectedCapped=max(0.0,−28)=0.0 (кап держит НИЗ
+    // окна, а не сам ноль — окно допускает падение вплоть до 0.0, тировый кап тут не
+    // защита от боттома).
+    // gainLow=ceilHalf(0.0)=0.0, gainHigh=floorHalf(4.0)=4.0. clampRoundBand(0.0) —
+    // здесь впервые реально РАБОТАЕТ пол: clamp(0.0,1.0,9.0)=1.0 → roundHalf(1.0)=1.0.
+    // Дожатие в окно [0.0,4.0] не трогает 1.0 (оно внутри) → projectedBand=1.0.
+    // Коридор: halfWidth=0.5 (residualStd=0) → low=clampRoundBand(0.0−0.5)=1.0 (пол),
+    // high=clampRoundBand(0.0+0.5)=1.0 (тоже пол — окно коридора целиком под полом).
+    // Со старым полом 4.0 это давало бы projectedBand=4.0 — предсказание ВОССТАНОВЛЕНИЯ
+    // до 4.0 посреди свободного падения с band 2.0. Новый пол 1.0 не лжёт про темп.
+    const freefall: ForecastPoint[] = [0, 10, 20].map((d, i) => ({
+      t: day(d),
+      band: 6.0 - i * 2.0,
+    }));
+    const now = new Date(day(20));
+    const f = computeForecast(freefall, "2026-06-20", 7, now); // day(170)
+    expect(f.projectedBand).toBe(1.0);
+    expect(f.interval).toEqual({ low: 1.0, high: 1.0 });
   });
 });
 
