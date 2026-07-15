@@ -90,20 +90,3 @@ export function smoothD(pts: Scaled[]): string {
   }
   return d;
 }
-
-/**
- * Длина кривой сэмплированием — для draw-in (stroke-dashoffset). С запасом (×1.02),
- * чтобы dasharray статик-рендера гарантированно перекрывал путь без разрывов до гидрации.
- */
-export function smoothLen(pts: Scaled[]): number {
-  let len = 0;
-  for (const s of monotoneSegs(pts)) {
-    let prev = s.p1;
-    for (let i = 1; i <= 40; i++) {
-      const p = bezierAt(s, i / 40);
-      len += Math.hypot(p.x - prev.x, p.y - prev.y);
-      prev = p;
-    }
-  }
-  return len * 1.02;
-}

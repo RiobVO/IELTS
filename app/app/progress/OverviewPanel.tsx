@@ -18,7 +18,7 @@ import {
   type SkillReadiness,
   type Skill,
 } from "@/lib/progress/overview";
-import { smoothD, smoothLen, type Scaled } from "@/lib/progress/curve";
+import { smoothD, type Scaled } from "@/lib/progress/curve";
 import { computeStats, badgeProgress, type Criteria } from "@/lib/progress/badges";
 import { getActiveBadges, type ActiveBadge } from "@/lib/content/badges";
 import { listUserHistory as listWritingHistory } from "@/lib/writing/read";
@@ -307,10 +307,10 @@ function TrajectoryHero({
       padB: PAD.b,
       combined: pts.map((p, i) => ({ x: cPts[i].x, y: cPts[i].y, band: p.band, dateMs: p.t, section: p.section })),
       overall: oPts
-        ? { path: smoothD(oPts), len: Number(smoothLen(oPts).toFixed(1)), firstX: oPts[0].x, lastX: oPts[oPts.length - 1].x }
+        ? { path: smoothD(oPts), firstX: oPts[0].x, lastX: oPts[oPts.length - 1].x }
         : null,
-      reading: rPts ? { path: smoothD(rPts), len: Number(smoothLen(rPts).toFixed(1)) } : null,
-      listening: lPts ? { path: smoothD(lPts), len: Number(smoothLen(lPts).toFixed(1)) } : null,
+      reading: rPts ? { path: smoothD(rPts) } : null,
+      listening: lPts ? { path: smoothD(lPts) } : null,
       grid: gridBands.map((b) => ({ band: b, y: yScale(b) })),
       target: targetY != null ? { y: targetY, band: targetBand! } : null,
       exam: examX != null ? { x: examX, rightEdge: examX > CW - PAD.r - 28 } : null,
