@@ -8,6 +8,7 @@ import { leaderboardEntry } from "@/db/schema";
 import { LISTENING_CATEGORIES } from "@/lib/labels";
 import {
   buildTrajectory,
+  buildOverallSeries,
   computeForecast,
   buildReadiness,
   type Trajectory,
@@ -217,9 +218,17 @@ function TrajectoryHero({
   // проекция, + запас, округлённо по сетке 0.5, в пределах band [1,9]. Раньше ось
   // жёстко держала весь диапазон 4–9 → низкие плоские данные вжимались в самый низ,
   // а верх пустовал. Это окно обзора, НЕ шкала грейдинга — числа не меняются.
+  // Overall-линия («твой band» = среднее последних R и L) — то единственное, что честно
+  // тянется через время. Сырой combined остаётся облаком свидетельств под маркерами и
+  // кормит прогноз ровно как раньше.
+  const overall = buildOverallSeries(pts);
+
   const yVals = pts.map((p) => p.band);
   if (targetBand != null) yVals.push(targetBand);
   if (forecast.projectedBand != null) yVals.push(forecast.projectedBand);
+  // Округление к 0.5 может вытолкнуть overall на четверть балла за среднее — окно
+  // обзора должно вместить линию, иначе она упрётся в край. Это вид, не грейдинг.
+  for (const p of overall) yVals.push(p.band);
   let yMin = Math.max(1, Math.floor((Math.min(...yVals) - 0.5) * 2) / 2);
   let yMax = Math.min(9, Math.ceil((Math.max(...yVals) + 0.5) * 2) / 2);
   // Гарантируем минимум ~2.5 балла по вертикали, иначе на плоских данных сетка
@@ -268,7 +277,16 @@ function TrajectoryHero({
     const cPts = scalePoints(pts, xScale, yScale);
     const rPts = trajectory.reading.length >= 2 ? scalePoints(trajectory.reading, xScale, yScale) : null;
     const lPts = trajectory.listening.length >= 2 ? scalePoints(trajectory.listening, xScale, yScale) : null;
+    // Overall — ЕДИНСТВЕННАЯ линия, которую честно тянуть через время: одна величина.
+    // Линия из одной точки не рисуется, отсюда >= 2.
+    const oPts = overall.length >= 2 ? overall.map((p) => ({ x: xScale(p.t), y: yScale(p.band) })) : null;
     const lastScaled = cPts[cPts.length - 1];
+    // Пилюля текущего балла показывает OVERALL, когда он есть: это и есть «твой band».
+    // Раньше она несла band последнего мока — то есть половину картины, подписанную как целое.
+    const lastOverall = overall.length > 0 ? overall[overall.length - 1] : null;
+    const latest = lastOverall
+      ? { x: xScale(lastOverall.t), y: yScale(lastOverall.band), band: lastOverall.band, isOverall: true }
+      : { x: lastScaled.x, y: lastScaled.y, band: last.band, isOverall: false };
     const targetY = targetBand != null ? yScale(Math.min(Math.max(targetBand, yMin), yMax)) : null;
     const examX = examInWindow ? xScale(examMs) : null;
     const projY = showForecast ? yScale(forecast.projectedBand!) : null;
@@ -280,8 +298,9 @@ function TrajectoryHero({
       padT: PAD.t,
       padB: PAD.b,
       combined: pts.map((p, i) => ({ x: cPts[i].x, y: cPts[i].y, band: p.band, dateMs: p.t, section: p.section })),
-      combinedPath: smoothD(cPts),
-      combinedLen: Number(smoothLen(cPts).toFixed(1)),
+      overall: oPts
+        ? { path: smoothD(oPts), len: Number(smoothLen(oPts).toFixed(1)), firstX: oPts[0].x, lastX: oPts[oPts.length - 1].x }
+        : null,
       reading: rPts ? { path: smoothD(rPts), len: Number(smoothLen(rPts).toFixed(1)) } : null,
       listening: lPts ? { path: smoothD(lPts), len: Number(smoothLen(lPts).toFixed(1)) } : null,
       grid: gridBands.map((b) => ({ band: b, y: yScale(b) })),
@@ -290,7 +309,7 @@ function TrajectoryHero({
       forecast: showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: CW - PAD.r, projY: projY! } : null,
       xLabelLeft: fmtDate(xMin),
       xLabelRight: fmtDate(xMax),
-      latestBand: last.band,
+      latest,
     };
   };
 

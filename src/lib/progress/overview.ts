@@ -82,6 +82,11 @@ export interface Trajectory {
    * Серия смешивает R и L, потому что каждый mock-band = свидетельство общего уровня,
    * а официальный overall IELTS = среднее секций, так что смешанная серия естественно
    * центрируется на реальном overall. Цвет точки берёт UI из `section`.
+   *
+   * ВНИМАНИЕ: это облако СВИДЕТЕЛЬСТВ, а не временной ряд одной величины — соседние
+   * точки бывают из разных тестов. Ломаная через него врёт про переход, которого не
+   * было (Reading 3.5 сразу за Listening 2.0 рисовался «башней»). Для ЛИНИИ есть
+   * `buildOverallSeries`; для дельт — сравнивать в пределах своей секции.
    */
   combined: TrajectoryPoint[];
   /** reading-подмножество combined — для split-линии/легенды. */
@@ -112,6 +117,55 @@ export function buildTrajectory(attempts: TrajectoryAttempt[]): Trajectory {
     reading: combined.filter((p) => p.section === "reading"),
     listening: combined.filter((p) => p.section === "listening"),
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* buildOverallSeries — «настоящий» overall во времени (линия графика)         */
+/* -------------------------------------------------------------------------- */
+
+/** Точка overall-линии. Секции нет: величина ДЕРИВАТИВНАЯ, а не отдельный мок. */
+export interface OverallPoint {
+  t: number;
+  band: number;
+}
+
+/**
+ * Overall band во времени: на момент каждого мока — среднее ПОСЛЕДНЕГО Reading и
+ * ПОСЛЕДНЕГО Listening, округлённое к 0.5 (как официальный overall IELTS).
+ *
+ * Зачем отдельно от `combined`: линия имеет смысл только для ОДНОЙ измеряемой
+ * величины. `combined` — две переплетённые (R и L — разные тесты), поэтому любая
+ * ломаная через него кодирует несуществующий переход. Здесь величина одна, и отрезок
+ * между точками честно значит «твой overall изменился вот так».
+ *
+ * Почему это НЕ противоречит «единого overall из одной попытки не бывает» (см. docblock
+ * модуля): мы и не берём его из одной попытки. Официальный overall = среднее секций,
+ * сданных на РАЗНЫХ тестах одной сессии; здесь ровно тот же приём — последний
+ * известный результат по каждой секции. Это оценка, а не выдумка, и она существует
+ * только когда обе секции реально сданы: до первого мока второй секции overall'а нет,
+ * и мы его не подменяем половиной (это и была бы выдумка).
+ *
+ * Прогноз (`computeForecast`) сознательно продолжает есть сырой `combined`: регрессия
+ * через смешанное облако центрируется на overall, и трогать её не просили.
+ */
+export function buildOverallSeries(combined: TrajectoryPoint[]): OverallPoint[] {
+  const out: OverallPoint[] = [];
+  let lastReading: number | null = null;
+  let lastListening: number | null = null;
+
+  for (const p of combined) {
+    if (p.section === "reading") lastReading = p.band;
+    else lastListening = p.band;
+    // Пока вторая секция не сдана — overall не существует. Не выдумываем.
+    if (lastReading == null || lastListening == null) continue;
+
+    const band = roundHalf((lastReading + lastListening) / 2);
+    // Два мока с одним timestamp дали бы две точки на одном x — вертикальный отрезок,
+    // которого линия не описывает. Держим последнее известное состояние на момент t.
+    if (out.length > 0 && out[out.length - 1].t === p.t) out[out.length - 1] = { t: p.t, band };
+    else out.push({ t: p.t, band });
+  }
+  return out;
 }
 
 /* -------------------------------------------------------------------------- */
