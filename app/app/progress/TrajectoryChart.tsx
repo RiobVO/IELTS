@@ -35,18 +35,26 @@ export interface TrajectoryChartProps {
   padB: number;
   /** Облако СВИДЕТЕЛЬСТВ: каждый реальный мок. Маркеры + приёмник наведения — НЕ линия. */
   combined: ChartPoint[];
-  /** Единственная линия «твоего band» во времени. null, пока сдана лишь одна секция. */
-  overall: { path: string; firstX: number; lastX: number } | null;
+  /** Сквозная линия — band каждого мока подряд, хронологически (вариант 3
+   *  «научный/точный»): прямые сегменты, без интерполяции. null только когда сдан
+   *  один-единственный мок (линии из одной точки не бывает). */
+  line: { path: string } | null;
   reading: { path: string } | null;
   listening: { path: string } | null;
+  /** x-координаты всех моков — бледные вертикали сетки на каждой точке, отдельно
+   *  от равномерных xTicks. */
+  pointXs: number[];
   grid: { band: number; y: number }[];
   target: { y: number; band: number } | null;
+  /** Цель ВНЕ окна обзора Y — бейдж у кромки плота вместо кламп-линии (см. коммент у SVG-линии target). */
+  targetEdge: { band: number; above: boolean } | null;
   exam: { x: number; rightEdge: boolean } | null;
   forecast: { lastX: number; lastY: number; horizonX: number; projY: number } | null;
   /** Засечки/подписи оси X — равномерно по домену (4 на десктопе, 3 в портрете). */
   xTicks: { x: number; label: string }[];
-  /** Пилюля текущего балла: overall, если он есть; иначе последний мок единственной секции. */
-  latest: { x: number; y: number; band: number; isOverall: boolean };
+  /** Пилюля текущего балла: band последнего мока. section — форма маркера «ты
+   *  здесь» должна совпадать с формой секции (круг/ромб), а не всегда быть кругом. */
+  latest: { x: number; y: number; band: number; section: "reading" | "listening" };
 }
 
 // Три РАЗНЫХ hue на белом плоте, каждый ≥3:1 (WCAG 1.4.11): reading — синий
@@ -76,8 +84,8 @@ function prevSameSection(pts: ChartPoint[], i: number): ChartPoint | null {
 
 export function TrajectoryChart({
   w, h, padL, padR, padT, padB,
-  combined, overall,
-  reading, listening, grid, target, exam, forecast,
+  combined, line,
+  reading, listening, pointXs, grid, target, targetEdge, exam, forecast,
   xTicks, latest,
 }: TrajectoryChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -186,21 +194,14 @@ export function TrajectoryChart({
     combined.some((p) => p.section === s),
   );
 
-  // Мягкая заливка-wash под overall-линией к базовой линии плота — глубина без шума
-  // (série-hue ~10%, dataviz marks-spec). Только под overall: заливать площадь под
-  // облаком из двух разных тестов нечем — это не одна величина.
-  const baseline = h - padB;
-  const areaD = overall
-    ? `${overall.path} L ${overall.lastX.toFixed(1)} ${baseline.toFixed(1)} L ${overall.firstX.toFixed(1)} ${baseline.toFixed(1)} Z`
-    : null;
-  // Уникальный id градиента на размер холста — на странице два SVG (mobile/desktop),
-  // одинаковый id дал бы дубль в DOM и коллизию url(#…).
-  const gradId = `ov-area-grad-${w}`;
+  // Ключ «Target N» в легенде — короткий золотой свотч, когда цель нарисована (линией
+  // внутри окна) ИЛИ бейджем у кромки (вне окна): обе формы — про одну и ту же цель.
+  const targetLegendBand = target ? target.band : targetEdge ? targetEdge.band : null;
 
-  // Пилюля текущего балла: НАД точкой `latest` (конец overall-линии, либо последний мок,
-  // если overall'а ещё нет), с отступом от боковых краёв. Точка НЕ обязательно
-  // справа-сверху — когда все моки свежие, а ось тянется до экзамена, она сидит
-  // слева-внизу, и центрированная пилюля роняется на подпись оси X.
+  // Пилюля текущего балла: НАД точкой `latest` (последний мок), с отступом от боковых
+  // краёв. Точка НЕ обязательно справа-сверху — когда все моки свежие, а ось тянется
+  // до экзамена, она сидит слева-внизу, и центрированная пилюля роняется на подпись
+  // оси X.
   const lastLblXPct = (latest.x / w) * 100;
   const lastLblYPct = (latest.y / h) * 100;
   const latestTx = lastLblXPct < 18 ? "0%" : lastLblXPct > 82 ? "-100%" : "-50%";
@@ -215,7 +216,7 @@ export function TrajectoryChart({
         height="auto"
         role="img"
         tabIndex={0}
-        aria-label={`Band trajectory across ${combined.length} full ${combined.length === 1 ? "mock" : "mocks"}. ${latest.isOverall ? `Overall band now ${latest.band.toFixed(1)}` : `Latest mock band ${latest.band.toFixed(1)}`}. Every mock is listed in the table after this chart.`}
+        aria-label={`Band trajectory across ${combined.length} full ${combined.length === 1 ? "mock" : "mocks"}. Latest mock band ${latest.band.toFixed(1)}. Every mock is listed in the table after this chart.`}
         className="ov-chart-svg"
         style={{ display: "block", width: "100%", height: "auto", touchAction: "pan-y" }}
         onPointerMove={onMove}
@@ -224,13 +225,6 @@ export function TrajectoryChart({
         onBlur={onLeave}
         onKeyDown={onKey}
       >
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.14" />
-            <stop offset="100%" stopColor="var(--brand)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-
         {/* Каркас графика (вариант «научный/точный»): сетка по обеим осям + рамка осей
             + засечки. Без него маркеры висели в белом поле — «точки», а не график:
             уровень точки читался только по бледной горизонтали, а положение во времени
@@ -238,6 +232,12 @@ export function TrajectoryChart({
             ширине; SVG-текст на 360px схлопывался до ~4.8px). */}
         {grid.map((g) => (
           <line key={g.band} x1={padL} x2={w - padR} y1={g.y} y2={g.y} stroke="var(--border-subtle)" strokeWidth={1} />
+        ))}
+        {/* Бледная вертикаль на КАЖДОЙ реальной точке (вариант 3 «научный/точный») —
+            тоньше тоном, чем засечки xTicks ниже: нет отдельного более бледного
+            border-токена, поэтому смешиваем border-subtle с поверхностью. */}
+        {pointXs.map((x, i) => (
+          <line key={`pt${i}`} x1={x} x2={x} y1={padT} y2={h - padB} stroke="color-mix(in oklab, var(--border-subtle) 55%, var(--surface))" strokeWidth={1} />
         ))}
         {xTicks.map((tk, i) => (
           <line key={i} x1={tk.x} x2={tk.x} y1={padT} y2={h - padB} stroke="var(--border-subtle)" strokeWidth={1} />
@@ -254,10 +254,15 @@ export function TrajectoryChart({
         ))}
 
         {target && (
-          // --warn-text (#975800, 5.69:1 на белом), не сырой gold-500 (1.79:1): линия —
-          // значимый индикатор, ей хватило бы и 3:1 (1.4.11), но тот же токен красит
-          // подпись «Target N» рядом, а ей как мелкому тексту нужны 4.5:1 (1.4.3).
-          // Пунктир отличает её от data-линий независимо от цвета.
+          // Линия рисуется ТОЛЬКО когда цель внутри окна обзора Y. Раньше цель вне окна
+          // клампилась на кромку тем же приёмом, что и прогноз-стаб, — но клампнутая
+          // линия читалась как «target почти достигнут», хотя реальный разрыв — в
+          // несколько банд. Для такого случая цель несёт бейдж у кромки (targetEdge,
+          // HTML-оверлей ниже), не линия. --warn-text (#975800, 5.69:1 на белом), не
+          // сырой gold-500 (1.79:1): линия — значимый индикатор, ей хватило бы и 3:1
+          // (1.4.11), но тот же токен красит подпись «Target N» рядом, а ей как
+          // мелкому тексту нужны 4.5:1 (1.4.3). Пунктир отличает её от data-линий
+          // независимо от цвета.
           <line x1={padL} x2={w - padR} y1={target.y} y2={target.y} stroke="var(--warn-text)" strokeWidth={1.5} strokeDasharray="5 4" />
         )}
 
@@ -274,21 +279,14 @@ export function TrajectoryChart({
           />
         )}
 
-        {/* Wash под Combined — над recessive-сеткой, под data-линиями (премиум-слои). */}
-        {areaD && <path d={areaD} fill={`url(#${gradId})`} pointerEvents="none" />}
-
-        {overall && (
-          <path d={overall.path} fill="none" stroke="var(--brand)" strokeWidth={2.5}
-            strokeLinecap="round" strokeLinejoin="round" />
-        )}
-
-        {/* Секционные тренды — ПОДЧИНЁННЫЕ (тонкий пунктир против сплошной overall), но
-            рисуются ПОВЕРХ неё, а не под. Пока известна одна секция, overall равен ей и
-            лежит ровно на её линии: сплошная 2.5px поверх пунктира 1.4px съедала его
-            целиком — легенда обещала Listening, а на графике от него были одни ромбы.
-            Сверху пунктир читается как «здесь overall и есть эта секция» — это правда.
-            Линии статичны с первого кадра (без draw-in): запись экрана на первой
-            загрузке не должна ловить кадр без данных или с недорисованной линией. */}
+        {/* Reading/Listening — подчинённый пунктирный контекст, ПОД сквозной линией
+            (вариант 3 «научный/точный»): комбинированная линия — главный сигнал
+            графика, тренды секций лишь поясняют, из чего сложен каждый сегмент. Пока
+            известна одна секция, сквозная линия совпадает с ней ровно — под сплошной
+            2.2px пунктир 1.4px не виден целиком, и это ожидаемо (одна величина, один
+            трек). Линии статичны с первого кадра (без draw-in): запись экрана на
+            первой загрузке не должна ловить кадр без данных или с недорисованной
+            линией. */}
         {reading && !hidden.has("reading") && (
           <path d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.4}
             strokeDasharray="4 3" opacity={0.85} strokeLinecap="round" strokeLinejoin="round" />
@@ -296,6 +294,17 @@ export function TrajectoryChart({
         {listening && !hidden.has("listening") && (
           <path d={listening.path} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={1.4}
             strokeDasharray="4 3" opacity={0.85} strokeLinecap="round" strokeLinejoin="round" />
+        )}
+
+        {/* Сквозная линия ПОВЕРХ пунктиров — представление выбрано владельцем: каждый
+            мок лежит на ОДНОЙ линии, без усреднения R/L в отдельную величину. Прямые
+            сегменты (polyD, без интерполяции curve.ts) — провисания между данными
+            невозможны, потому что кривизны между точками попросту нет. Дельта в
+            тултипе всё равно считается в пределах СВОЕЙ секции (prevSameSection) —
+            страховка от сравнения Reading напрямую с Listening только потому, что они
+            лежат на одной линии по порядку сдачи. */}
+        {line && (
+          <path d={line.path} fill="none" stroke="var(--brand)" strokeWidth={2.2} strokeLinejoin="round" />
         )}
 
         {/* Маркер-кольцо на КАЖДОЙ реальной точке (заливка = surface, обводка = цвет
@@ -329,11 +338,20 @@ export function TrajectoryChart({
           </g>
         )}
 
-        {/* «Ты здесь» — на конце overall-линии (или на последнем моке, если overall'а нет).
-            Brand-заливкой, в отличие от секционных колец: это другая величина. */}
-        <circle data-pop cx={latest.x} cy={latest.y} r={5}
-          fill="var(--brand)" stroke="var(--surface)" strokeWidth={2}
-          style={{ transformBox: "fill-box", transformOrigin: "center" }} />
+        {/* «Ты здесь» — на последнем моке (конец сквозной линии). Brand-заливка
+            выделяет «сейчас», но форма остаётся формой секции: если последний мок —
+            Listening, круг поверх ромба стёр бы канал формы (обязателен при
+            дальтонизме, WCAG 1.4.1), и точка читалась бы как круг вопреки легенде. */}
+        {latest.section === "listening" ? (
+          <rect data-pop x={latest.x - 4.7} y={latest.y - 4.7} width={9.4} height={9.4}
+            transform={`rotate(45 ${latest.x} ${latest.y})`}
+            fill="var(--brand)" stroke="var(--surface)" strokeWidth={2}
+            style={{ transformBox: "fill-box", transformOrigin: "center" }} />
+        ) : (
+          <circle data-pop cx={latest.x} cy={latest.y} r={5}
+            fill="var(--brand)" stroke="var(--surface)" strokeWidth={2}
+            style={{ transformBox: "fill-box", transformOrigin: "center" }} />
+        )}
 
         {/* Прозрачная область-приёмник поверх — ловит курсор и между линиями. */}
         <rect x={padL} y={padT} width={w - padL - padR} height={h - padT - padB} fill="transparent" style={{ cursor: "crosshair" }} />
@@ -351,6 +369,22 @@ export function TrajectoryChart({
         {target && (
           <span className="ov-lbl ov-lbl-target" style={{ left: `${((w - padR) / w) * 100}%`, top: `${(target.y / h) * 100}%` }}>
             Target {target.band}
+          </span>
+        )}
+        {targetEdge && (
+          // Бейдж, а не кламп-линия на кромке: клампнутая линия визуально сидела бы
+          // рядом с данными и читалась как «target почти достигнут», хотя разрыв до
+          // цели — несколько банд. Бейдж у угла плота честно говорит «цель за пределами
+          // этого окна» стрелкой вверх/вниз, не привязываясь к масштабу оси.
+          <span
+            className="ov-lbl ov-lbl-target-edge"
+            style={
+              targetEdge.above
+                ? { left: `${((w - padR) / w) * 100}%`, top: `${((padT + 6) / h) * 100}%`, transform: "translate(-100%, 0)" }
+                : { left: `${((w - padR) / w) * 100}%`, top: `${((h - padB - 6) / h) * 100}%`, transform: "translate(-100%, -100%)" }
+            }
+          >
+            Target {targetEdge.band} {targetEdge.above ? "↑" : "↓"}
           </span>
         )}
         {exam && (
@@ -452,14 +486,14 @@ export function TrajectoryChart({
           чипа, из которых кликаются два, а Combined читался как disabled-кнопка.
           Разделитель отбивает «ключ» от «контролов» — без лишней копирайт-подписи. */}
       <div className="ov-legend">
-        {overall && (
+        {line && (
           <span className="ov-leg-key">
-            <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--brand)" }} /> Overall
+            <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--brand)" }} /> Combined
           </span>
         )}
         {hasSplit ? (
           <>
-            {overall && <span className="ov-leg-div" aria-hidden="true" />}
+            {line && <span className="ov-leg-div" aria-hidden="true" />}
             <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("reading")} aria-label={hidden.has("reading") ? "Show Reading line" : "Hide Reading line"} onClick={() => toggle("reading")}>
               <span className="ov-leg-swatch ov-leg-circle" style={{ background: SECTION_COLOR.reading }} /> Reading
             </button>
@@ -475,11 +509,25 @@ export function TrajectoryChart({
             </span>
           ))
         )}
+        {targetLegendBand != null && (
+          <span className="ov-leg-key">
+            <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--warn-text)" }} /> Target {targetLegendBand}
+          </span>
+        )}
       </div>
-      {overall && (
+      {line && (
+        // Вторая фраза строится из фактически нарисованных линий (reading/listening
+        // пропсы), не из предположения «всегда обе»: при одной секции или когда у
+        // секции <2 точек линии нет, note раньше всё равно называл обе.
         <p className="ov-legend-note">
-          Overall is your band right now — the average of your latest Reading and Listening, the way IELTS averages sections.
-          {hasSplit ? " Reading and Listening show each section on its own; tap or click one to hide its line." : ""}
+          Combined is your band across every full mock, in order.
+          {reading && listening
+            ? " Reading and Listening show each section&apos;s own trend; tap or click one to hide its line."
+            : reading
+              ? " Reading also shows the section&apos;s own trend."
+              : listening
+                ? " Listening also shows the section&apos;s own trend."
+                : ""}
         </p>
       )}
     </>

@@ -8,7 +8,6 @@ import { leaderboardEntry } from "@/db/schema";
 import { LISTENING_CATEGORIES } from "@/lib/labels";
 import {
   buildTrajectory,
-  buildOverallSeries,
   computeForecast,
   buildReadiness,
   type Trajectory,
@@ -18,7 +17,6 @@ import {
   type SkillReadiness,
   type Skill,
 } from "@/lib/progress/overview";
-import { smoothD, type Scaled } from "@/lib/progress/curve";
 import { computeStats, badgeProgress, type Criteria } from "@/lib/progress/badges";
 import { getActiveBadges, type ActiveBadge } from "@/lib/content/badges";
 import { listUserHistory as listWritingHistory } from "@/lib/writing/read";
@@ -180,9 +178,26 @@ function fmtDate(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
+interface Scaled {
+  x: number;
+  y: number;
+}
+
 function scalePoints(pts: TrajectoryPoint[], xScale: (t: number) => number, yScale: (b: number) => number): Scaled[] {
   return pts.map((p) => ({ x: xScale(p.t), y: yScale(p.band) }));
 }
+
+// Прямая полилиния через реальные точки — вариант 3 «научный/точный» (решение
+// владельца, chart-styles-preview.html): без интерполяции curve.ts, прямые сегменты
+// между соседними моками не могут провиснуть или перелететь данные — между точками
+// попросту нет кривизны, только отрезок.
+const polyD = (pts: Scaled[]): string => {
+  if (pts.length === 0) return "";
+  const [first, ...rest] = pts;
+  let d = `M ${first.x.toFixed(1)} ${first.y.toFixed(1)}`;
+  for (const p of rest) d += ` L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+  return d;
+};
 
 function TrajectoryHero({
   trajectory,
@@ -214,21 +229,14 @@ function TrajectoryHero({
     );
   }
 
-  // Y domain — подгоняется под ТО, ЧТО реально на графике: баллы моков, цель и
-  // проекция, + запас, округлённо по сетке 0.5, в пределах band [1,9]. Раньше ось
-  // жёстко держала весь диапазон 4–9 → низкие плоские данные вжимались в самый низ,
-  // а верх пустовал. Это окно обзора, НЕ шкала грейдинга — числа не меняются.
-  // Overall-линия («твой band» = среднее последних R и L) — то единственное, что честно
-  // тянется через время. Сырой combined остаётся облаком свидетельств под маркерами и
-  // кормит прогноз ровно как раньше.
-  const overall = buildOverallSeries(pts);
-
+  // Y domain — окно обнимает ТОЛЬКО баллы моков + запас, округлённо по сетке 0.5,
+  // в пределах band [1,9]. Раньше ось жёстко держала весь диапазон 4–9 → низкие
+  // плоские данные вжимались в самый низ, а верх пустовал. Далёкий target больше
+  // НЕ растягивает окно — он уходит в бейдж у кромки плота (geomFor/targetEdge
+  // ниже); прогноз-стаб, если вылезает за окно, визуально клампится к кромке (там
+  // же). Это окно обзора, НЕ шкала грейдинга — сами числа не меняются, только их
+  // положение на холсте.
   const yVals = pts.map((p) => p.band);
-  if (targetBand != null) yVals.push(targetBand);
-  if (forecast.projectedBand != null) yVals.push(forecast.projectedBand);
-  // Округление к 0.5 может вытолкнуть overall на четверть балла за среднее — окно
-  // обзора должно вместить линию, иначе она упрётся в край. Это вид, не грейдинг.
-  for (const p of overall) yVals.push(p.band);
   let yMin = Math.max(1, Math.floor((Math.min(...yVals) - 0.5) * 2) / 2);
   let yMax = Math.min(9, Math.ceil((Math.max(...yVals) + 0.5) * 2) / 2);
   // Гарантируем минимум ~2.5 балла по вертикали, иначе на плоских данных сетка
@@ -277,19 +285,26 @@ function TrajectoryHero({
     const cPts = scalePoints(pts, xScale, yScale);
     const rPts = trajectory.reading.length >= 2 ? scalePoints(trajectory.reading, xScale, yScale) : null;
     const lPts = trajectory.listening.length >= 2 ? scalePoints(trajectory.listening, xScale, yScale) : null;
-    // Overall — ЕДИНСТВЕННАЯ линия, которую честно тянуть через время: одна величина.
-    // Линия из одной точки не рисуется, отсюда >= 2.
-    const oPts = overall.length >= 2 ? overall.map((p) => ({ x: xScale(p.t), y: yScale(p.band) })) : null;
+    // x-координаты всех моков — бледные вертикали сетки на КАЖДОЙ точке (вариант 3),
+    // отдельно от равномерных xTicks. toFixed(1) дедупит два мока в один день (тот же
+    // пиксель — вторая вертикаль поверх первой ничего не добавляет).
+    const pointXs = Array.from(new Set(cPts.map((p) => Number(p.x.toFixed(1)))));
     const lastScaled = cPts[cPts.length - 1];
-    // Пилюля текущего балла показывает OVERALL, когда он есть: это и есть «твой band».
-    // Раньше она несла band последнего мока — то есть половину картины, подписанную как целое.
-    const lastOverall = overall.length > 0 ? overall[overall.length - 1] : null;
-    const latest = lastOverall
-      ? { x: xScale(lastOverall.t), y: yScale(lastOverall.band), band: lastOverall.band, isOverall: true }
-      : { x: lastScaled.x, y: lastScaled.y, band: last.band, isOverall: false };
-    const targetY = targetBand != null ? yScale(Math.min(Math.max(targetBand, yMin), yMax)) : null;
+    // Пилюля текущего балла — band последнего мока. Сквозная линия ниже уже проходит
+    // через каждый мок как есть, без усреднения R/L в отдельную величину. section
+    // нужен клиенту, чтобы маркер «ты здесь» держал форму секции (круг/ромб), а не
+    // только brand-заливку.
+    const latest = { x: lastScaled.x, y: lastScaled.y, band: last.band, section: last.section };
+    // Target внутри окна обзора — обычная пунктирная линия. Вне окна кламп-линия
+    // читалась как «target почти достигнут» при разрыве в несколько банд (это ложь) —
+    // вместо неё бейдж у кромки плота (targetEdge, above = цель выше видимого окна).
+    const targetInWindow = targetBand != null && targetBand >= yMin && targetBand <= yMax;
+    const targetY = targetInWindow ? yScale(targetBand!) : null;
     const examX = examInWindow ? xScale(examMs) : null;
-    const projY = showForecast ? yScale(forecast.projectedBand!) : null;
+    // Прогноз-стаб клампится в плот по уже посчитанному пикселю (не по band), потому
+    // что projectedBand может лежать вне окна обзора — стаб визуально утыкается в
+    // кромку плота, а не улетает за пределы холста.
+    const projY = showForecast ? Math.min(Math.max(yScale(forecast.projectedBand!), PAD.t), CH - PAD.b) : null;
     // Засечки оси X: равномерно по домену. Раньше подписей было ровно две (по краям) —
     // между ними шкалу приходилось достраивать в уме, и поле читалось как «точки в
     // пустоте», а не как график. На узком мобильном холсте 4 подписи склеились бы — 3.
@@ -306,13 +321,14 @@ function TrajectoryHero({
       padT: PAD.t,
       padB: PAD.b,
       combined: pts.map((p, i) => ({ x: cPts[i].x, y: cPts[i].y, band: p.band, dateMs: p.t, section: p.section })),
-      overall: oPts
-        ? { path: smoothD(oPts), firstX: oPts[0].x, lastX: oPts[oPts.length - 1].x }
-        : null,
-      reading: rPts ? { path: smoothD(rPts) } : null,
-      listening: lPts ? { path: smoothD(lPts) } : null,
+      // Сквозная линия — band каждого мока подряд, хронологически (см. polyD выше).
+      line: cPts.length >= 2 ? { path: polyD(cPts) } : null,
+      reading: rPts ? { path: polyD(rPts) } : null,
+      listening: lPts ? { path: polyD(lPts) } : null,
+      pointXs,
       grid: gridBands.map((b) => ({ band: b, y: yScale(b) })),
       target: targetY != null ? { y: targetY, band: targetBand! } : null,
+      targetEdge: targetBand != null && !targetInWindow ? { band: targetBand, above: targetBand > yMax } : null,
       exam: examX != null ? { x: examX, rightEdge: examX > CW - PAD.r - 28 } : null,
       forecast: showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: CW - PAD.r, projY: projY! } : null,
       xTicks,
@@ -604,6 +620,10 @@ const OV_CSS = `
 .ov-lbl{position:absolute;font-size:var(--text-xs);line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums}
 .ov-lbl-grid{font-family:var(--font-mono);font-weight:600;color:var(--text-secondary);transform:translate(-100%,-50%)}
 .ov-lbl-target{color:var(--warn-text);font-weight:700;transform:translate(-100%,-140%)}
+/* Бейдж target ВНЕ окна обзора (вместо кламп-линии на кромке) — пилюля с тёплой
+   тонкой рамкой; нет продового warn-border токена, поэтому рамка смешана из
+   --warn-text и поверхности. */
+.ov-lbl-target-edge{background:var(--surface);border:1px solid color-mix(in oklab, var(--warn-text) 35%, var(--surface));color:var(--warn-text);font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;padding:2px 8px;border-radius:var(--radius-full)}
 .ov-lbl-exam{color:var(--brand-active);font-weight:700}
 /* Текущий балл — не бледная цифра у линии, а brand-пилюля слева от последней точки:
    белым по фиолетовому это самый читаемый и главный числовой акцент графика. */
