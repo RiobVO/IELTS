@@ -18,8 +18,32 @@ export const CHART_MOBILE = { w: 440, h: 320 };
 
 const DAY_MS = 86_400_000;
 
+// timeZone: "UTC" — сервер энв-независим (прод и так UTC, но dev-машина может быть
+// в другом поясе): один и тот же ms всегда даёт один и тот же текст, откуда бы ни
+// шёл рендер. Клиент поверх этого базлайна переформатирует в TZ браузера после
+// маунта (TrajectoryChart.tsx) — здесь только SSR-инвариантный формат.
 export function fmtDate(ms: number): string {
-  return new Date(ms).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+  return new Date(ms).toLocaleDateString("en-US", { day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+/**
+ * Гасит подпись, РАВНУЮ последней сохранённой НЕпогашенной подписи — только вперёд
+ * по массиву (не глобальный дедуп). На окне короче ~2 суток соседние засечки
+ * округляются до одного календарного дня и печатали дубль «Jul 14 / Jul 14»,
+ * который читается как баг: точка/вертикаль сетки остаётся, пропадает только текст.
+ * ВНИМАНИЕ (сохранено намеренно): "прошлая сохранённая" обновляется на КАЖДОЙ
+ * неравной подписи, включая уже погашенную ("") — т.е. случай [A, "", A] НЕ гасит
+ * второй "A" (после первого дедупа prevLabel становится "", а "A" ей не равна).
+ */
+export function dedupeConsecutiveLabels(labels: string[]): string[] {
+  if (labels.length === 0) return [];
+  const out = [...labels];
+  let prevLabel = out[0];
+  for (let i = 1; i < out.length; i++) {
+    if (out[i] === prevLabel) out[i] = "";
+    else prevLabel = out[i];
+  }
+  return out;
 }
 
 interface Scaled {
@@ -68,7 +92,7 @@ export interface ChartGeom {
   targetEdge: { band: number; above: boolean } | null;
   exam: { x: number; rightEdge: boolean } | null;
   forecast: { lastX: number; lastY: number; horizonX: number; projY: number } | null;
-  xTicks: { x: number; label: string }[];
+  xTicks: { x: number; tMs: number; label: string }[];
   latest: { x: number; y: number; band: number; section: "reading" | "listening" };
 }
 
@@ -162,20 +186,16 @@ export function buildChartGeometry(input: ChartGeometryInput, size: { w: number;
   // между ними шкалу приходилось достраивать в уме, и поле читалось как «точки в
   // пустоте», а не как график. На узком мобильном холсте 4 подписи склеились бы — 3.
   const tickCount = CW >= 600 ? 4 : 3;
+  // tMs — сырой t засечки, наружу (клиент переформатирует его в свою TZ после
+  // маунта; см. dedupeConsecutiveLabels/TrajectoryChart.tsx). label здесь — SSR-
+  // базлайн в UTC, дедупится ниже; время сознательно не добавляем: юзеру
+  // «время мимо часов на стене».
   const xTicks = Array.from({ length: tickCount }, (_, i) => {
     const t = xMin + ((xMax - xMin) * i) / (tickCount - 1);
-    return { x: xScale(t), label: fmtDate(t) };
+    return { x: xScale(t), tMs: t, label: fmtDate(t) };
   });
-  // Подписи режутся до дня; на окне короче ~2 суток соседние засечки попадают в
-  // один день и печатали дубль «Jul 14 / Jul 14», который читается как баг. Гасим
-  // ПОДРЯД идущий повтор до пустой строки — сама засечка/вертикаль сетки остаётся,
-  // пропадает только текст. Время в подпись сознательно не добавляем: сервер
-  // рендерит в UTC, юзеру это «время мимо часов на стене».
-  let prevLabel = xTicks[0]?.label;
-  for (let i = 1; i < xTicks.length; i++) {
-    if (xTicks[i].label === prevLabel) xTicks[i] = { ...xTicks[i], label: "" };
-    else prevLabel = xTicks[i].label;
-  }
+  const dedupedLabels = dedupeConsecutiveLabels(xTicks.map((tk) => tk.label));
+  for (let i = 0; i < xTicks.length; i++) xTicks[i] = { ...xTicks[i], label: dedupedLabels[i] };
   return {
     w: CW,
     h: CH,
