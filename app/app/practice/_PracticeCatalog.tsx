@@ -321,6 +321,7 @@ export function PracticeCatalog({
           <h1 className="pc-h1" style={S.h1}>Pick what to drill.</h1>
           <p style={S.sub}>Browse every Reading and Listening test, or filter straight to the question type you want to fix.</p>
           <GoalBar target={targetBand} best={bestBand} />
+          <ProgressPanel reading={readingProgress} listening={listeningProgress} vocab={vocabProgress} />
         </div>
         <div className="pc-herocol">
           <HeroCard hero={hero} />
@@ -350,15 +351,6 @@ export function PracticeCatalog({
             )
           )}
         </div>
-      </section>
-
-      {/* Your progress — Reading/Listening/Vocabulary status in one bold card, brand-
-          gradient draw-in bars + count-up numbers. Replaces the old inline "Done N of
-          M" line that lived on the skill-cards below (killed after a live walkthrough
-          2026-07-16 — it read as an afterthought next to the hero). */}
-      <section>
-        <div style={S.pcpHead}>Your progress</div>
-        <ProgressPanel reading={readingProgress} listening={listeningProgress} vocab={vocabProgress} />
       </section>
 
       {/* Live skills — фильтр-карты Reading/Listening (+ Writing когда ops-гейт открыт) */}
@@ -677,15 +669,17 @@ function HeroCard({ hero }: { hero: HeroData }) {
   );
 }
 
-/* ── Your progress (Reading / Listening / Vocabulary bars) ────────────────
-   Bars draw in 0→pct on mount and numbers count up — the deliberately bold
-   replacement for the old inline "Done N of M" line on the skill-cards below.
-   Reading/Listening total===0 (post-wipe) keeps the row but shows an empty bar
-   + a muted note instead of a nonsensical "0 of 0". */
-const PROGRESS_TILE: Record<"reading" | "listening" | "vocab", { bg: string; fg: string; icon: IconName }> = {
-  reading: { bg: "var(--brand-subtle)", fg: "var(--text-link)", icon: "book-open" },
-  listening: { bg: "var(--info-subtle)", fg: "var(--info-text)", icon: "headphones" },
-  vocab: { bg: "var(--success-subtle)", fg: "var(--success-text)", icon: "graduation-cap" },
+/* ── Your progress (compact Reading / Listening / Vocabulary bars) ────────
+   Sits directly under the Target card in the hero's left column — same
+   visual language (border/radius/bg/shadow tokens, "Target"-style mini-label)
+   as that card, one line per row. Was a full-bleed section between the hero
+   and the skill grid; the owner flagged it as too big on a live prod
+   walkthrough 2026-07-16 — folded into this compact card instead. Draw-in
+   bars + count-up numbers stay (DrawBar/CountUp reused as-is below). */
+const PROGRESS_TILE: Record<"reading" | "listening" | "vocab", { bg: string; fg: string; letter: string }> = {
+  reading: { bg: "var(--brand-subtle)", fg: "var(--text-link)", letter: "R" },
+  listening: { bg: "var(--info-subtle)", fg: "var(--info-text)", letter: "L" },
+  vocab: { bg: "var(--success-subtle)", fg: "var(--success-text)", letter: "V" },
 };
 
 function ProgressPanel({
@@ -700,12 +694,12 @@ function ProgressPanel({
   const sectionPct = (p: SectionProgress) => (p.total > 0 ? Math.round((p.done / p.total) * 100) : 0);
   const sectionRight = (p: SectionProgress) =>
     p.total === 0 ? (
-      <span style={S.pcpStatMuted}>New tests coming soon</span>
+      <span style={S.pcpStatMuted}>New tests soon</span>
     ) : p.done === p.total ? (
       <span style={S.pcpStatDone}>All <CountUp value={p.total} duration={600} /> done ✓</span>
     ) : (
       <span style={S.pcpStat}>
-        <CountUp value={p.done} duration={600} /> of <CountUp value={p.total} duration={600} /> · <CountUp value={p.left} duration={600} /> left
+        <CountUp value={p.done} duration={600} />/<CountUp value={p.total} duration={600} />
       </span>
     );
   // Bar width clamps at 100% (can't overshoot the track); the numbers next to it
@@ -714,6 +708,7 @@ function ProgressPanel({
 
   return (
     <div style={S.pcpCard}>
+      <span style={S.pcpHead}>Your progress</span>
       <ProgressRow tone="reading" label="Reading" pct={sectionPct(reading)} delayMs={0} right={sectionRight(reading)} />
       <ProgressRow tone="listening" label="Listening" pct={sectionPct(listening)} delayMs={90} right={sectionRight(listening)} />
       <ProgressRow
@@ -732,7 +727,7 @@ function ProgressPanel({
             )
           ) : (
             <span style={S.pcpStat}>
-              <CountUp value={vocab.reviewedToday} duration={600} />/<CountUp value={vocab.goal} duration={600} /> today · <CountUp value={vocab.dueToday} duration={600} /> due
+              <CountUp value={vocab.reviewedToday} duration={600} />/<CountUp value={vocab.goal} duration={600} /> · <CountUp value={vocab.dueToday} duration={600} /> due
             </span>
           )
         }
@@ -757,16 +752,10 @@ function ProgressRow({
   const t = PROGRESS_TILE[tone];
   return (
     <div className="pcp-row">
-      <span style={S.pcpLabelWrap}>
-        <span style={{ ...S.pcpTile, background: t.bg, color: t.fg }}>
-          <Icon name={t.icon} size={15} strokeWidth={2.4} />
-        </span>
-        <span style={S.pcpLabel}>{label}</span>
-      </span>
-      <div className="pcp-meta">
-        <DrawBar pct={pct} delayMs={delayMs} />
-        {right}
-      </div>
+      <span aria-hidden="true" style={{ ...S.pcpChip, background: t.bg, color: t.fg }}>{t.letter}</span>
+      <span style={S.pcpLabel}>{label}</span>
+      <DrawBar pct={pct} delayMs={delayMs} />
+      {right}
     </div>
   );
 }
@@ -1195,11 +1184,11 @@ const CSS = `
 .pc-drill:hover{border-color:var(--brand)!important}
 .pc-drill:active{transform:translateY(3px);box-shadow:none!important}
 .pc-drilllink:hover{text-decoration:underline}
-/* Your progress panel — row stacks label-over-bar on narrow viewports via
-   grid-template-columns (DOM order unchanged); the fill's width is toggled
-   0→pct by JS on mount (see DrawBar), .is-drawing carries the transition. */
-.pcp-row{display:grid;grid-template-columns:1fr;row-gap:8px}
-.pcp-meta{display:grid;grid-template-columns:1fr auto;align-items:center;gap:14px}
+/* Your progress panel — one flex row per skill (chip/label/bar/stat); flex-wrap
+   is a defensive fallback on very narrow phones, not a breakpoint restructure.
+   The fill's width is toggled 0→pct by JS on mount (see DrawBar), .is-drawing
+   carries the transition. */
+.pcp-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pcp-fill{display:block;height:100%;border-radius:var(--radius-full);background:linear-gradient(90deg,var(--brand-edge),var(--brand));box-shadow:0 0 10px color-mix(in oklab, var(--brand) 45%, transparent)}
 .pcp-fill.is-drawing{transition:width 700ms cubic-bezier(.16,1,.3,1)}
 .pc-gloss{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-xs)}
@@ -1224,7 +1213,6 @@ const CSS = `
   .pc-skills{grid-template-columns:repeat(2,1fr);gap:16px}
   .pc-showall{height:28px}
   .pc-empty-cards{grid-template-columns:repeat(2,1fr)}
-  .pcp-row{grid-template-columns:132px 1fr;column-gap:18px;row-gap:0;align-items:center}
 }
 @media (min-width:768px){
   .pc-wrap{padding:32px 28px 72px}
@@ -1290,17 +1278,16 @@ const S: Record<string, CSSProperties> = {
   rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
 
-  // Your progress — Reading/Listening/Vocabulary card. Eyebrow mirrors skillHead/
-  // comingHead (same sentence-case section-label pattern).
-  pcpHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-secondary)", margin: "0 0 12px" },
-  pcpCard: { display: "flex", flexDirection: "column", gap: 20, padding: "20px 22px", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", background: "var(--surface-raised)", boxShadow: "var(--shadow-solid)" },
-  pcpLabelWrap: { display: "flex", alignItems: "center", gap: 10 },
-  pcpTile: { width: 28, height: 28, flex: "none", borderRadius: "var(--radius-sm)", display: "grid", placeItems: "center" },
-  pcpLabel: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-primary)" },
-  pcpTrack: { position: "relative", display: "block", width: "100%", minWidth: 0, height: 8, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
-  pcpStat: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap" },
-  pcpStatDone: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--success-text)", whiteSpace: "nowrap" },
-  pcpStatMuted: { fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" },
+  // Your progress — compact card under the Target pill (same border/radius/bg/
+  // shadow tokens as S.goal; pcpHead mirrors goalLab's "Target" mini-label exactly).
+  pcpHead: { fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
+  pcpCard: { marginTop: 14, display: "flex", flexDirection: "column", gap: 6, padding: "10px 12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
+  pcpChip: { width: 18, height: 18, flex: "none", borderRadius: "var(--radius-sm)", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 700 },
+  pcpLabel: { flex: "none", whiteSpace: "nowrap", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-primary)" },
+  pcpTrack: { position: "relative", display: "block", flex: 1, minWidth: 0, height: 5, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
+  pcpStat: { flex: "none", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap" },
+  pcpStatDone: { flex: "none", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--success-text)", whiteSpace: "nowrap" },
+  pcpStatMuted: { flex: "none", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" },
 
   // Skills — sentence-case label (не uppercase-эйбрау) + опц. контекст-хелп про BAND
   skillHeadWrap: { display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 },
