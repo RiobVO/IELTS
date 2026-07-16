@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>bando — стратегическая карта 2026-07-11</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#faf9f7; --bg2:#ffffff; --ink:#17161a; --ink-dim:#5c5a63; --line:#e6e3de;
+    --card:#ffffff; --card-line:#eae7e1;
+    --accent:#6a52de; --accent-soft:#efeaff;
+    --strateg:#1f7a5c; --strateg-soft:#e3f3ec;
+    --gtm:#b5680a; --gtm-soft:#fbebd2;
+    --eng:#2f5fb0; --eng-soft:#e5edfb;
+    --add:#1f7a5c; --add-soft:#e3f3ec;
+    --improve:#2f5fb0; --improve-soft:#e5edfb;
+    --freeze:#b3311f; --freeze-soft:#fbe6e3;
+    --shadow: 0 1px 2px rgba(20,18,25,.04), 0 8px 24px -12px rgba(20,18,25,.10);
+    --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#121116; --bg2:#18171d; --ink:#f2f0ee; --ink-dim:#a7a3ae; --line:#2a2830;
+      --card:#1c1b21; --card-line:#2c2a33;
+      --accent:#a693ff; --accent-soft:#2a2340;
+      --strateg:#5fd9ab; --strateg-soft:#123128;
+      --gtm:#f0b45c; --gtm-soft:#3a2c11;
+      --eng:#8db4ff; --eng-soft:#1c2c4a;
+      --add:#5fd9ab; --add-soft:#123128;
+      --improve:#8db4ff; --improve-soft:#1c2c4a;
+      --freeze:#f19187; --freeze-soft:#3a1a17;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#121116; --bg2:#18171d; --ink:#f2f0ee; --ink-dim:#a7a3ae; --line:#2a2830;
+    --card:#1c1b21; --card-line:#2c2a33;
+    --accent:#a693ff; --accent-soft:#2a2340;
+    --strateg:#5fd9ab; --strateg-soft:#123128;
+    --gtm:#f0b45c; --gtm-soft:#3a2c11;
+    --eng:#8db4ff; --eng-soft:#1c2c4a;
+    --add:#5fd9ab; --add-soft:#123128;
+    --improve:#8db4ff; --improve-soft:#1c2c4a;
+    --freeze:#f19187; --freeze-soft:#3a1a17;
+  }
+  :root[data-theme="light"]{
+    --bg:#faf9f7; --bg2:#ffffff; --ink:#17161a; --ink-dim:#5c5a63; --line:#e6e3de;
+    --card:#ffffff; --card-line:#eae7e1;
+    --accent:#6a52de; --accent-soft:#efeaff;
+    --strateg:#1f7a5c; --strateg-soft:#e3f3ec;
+    --gtm:#b5680a; --gtm-soft:#fbebd2;
+    --eng:#2f5fb0; --eng-soft:#e5edfb;
+    --add:#1f7a5c; --add-soft:#e3f3ec;
+    --improve:#2f5fb0; --improve-soft:#e5edfb;
+    --freeze:#b3311f; --freeze-soft:#fbe6e3;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5; padding-bottom:80px;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:0 24px}
+
+  header.top{padding:56px 24px 28px; border-bottom:1px solid var(--line); background:var(--bg2)}
+  header.top .wrap{padding:0}
+  .eyebrow{font-size:13px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--accent)}
+  h1{font-size:clamp(28px,4vw,40px); margin:10px 0 8px; letter-spacing:-0.01em; font-weight:800}
+  .sub{color:var(--ink-dim); font-size:16px; max-width:760px; margin:0 0 20px}
+  .meta-row{display:flex; gap:10px; flex-wrap:wrap; font-size:13px; color:var(--ink-dim)}
+  .meta-chip{border:1px solid var(--line); border-radius:999px; padding:5px 12px; background:var(--card)}
+
+  section{padding:44px 0}
+  section h2{font-size:22px; margin:0 0 6px; letter-spacing:-0.01em}
+  section .lede{color:var(--ink-dim); font-size:14.5px; margin:0 0 24px; max-width:820px}
+
+  /* legend */
+  .legend{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:8px}
+  .tag{display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; padding:4px 10px; border-radius:999px}
+  .tag-strateg{background:var(--strateg-soft); color:var(--strateg)}
+  .tag-gtm{background:var(--gtm-soft); color:var(--gtm)}
+  .tag-eng{background:var(--eng-soft); color:var(--eng)}
+  .tag-add{background:var(--add-soft); color:var(--add)}
+  .tag-improve{background:var(--improve-soft); color:var(--improve)}
+  .tag-freeze{background:var(--freeze-soft); color:var(--freeze)}
+
+  /* kanban */
+  .kanban{display:grid; grid-template-columns:repeat(3,1fr); gap:20px}
+  @media (max-width:900px){.kanban{grid-template-columns:1fr}}
+  .col-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px}
+  .col-head h3{font-size:15px; text-transform:uppercase; letter-spacing:.05em; margin:0}
+  .col-count{font-size:12px; color:var(--ink-dim); background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:2px 9px}
+  .col-now h3{color:var(--freeze)}
+  .col-next h3{color:var(--gtm)}
+  .col-later h3{color:var(--ink-dim)}
+
+  .card{
+    background:var(--card); border:1px solid var(--card-line); border-radius:var(--radius);
+    padding:16px 16px 14px; margin-bottom:14px; box-shadow:var(--shadow);
+  }
+  .card-top{display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px}
+  .card h4{font-size:15px; margin:0; font-weight:700; letter-spacing:-0.01em}
+  .num{color:var(--ink-dim); font-weight:600; margin-right:6px}
+  .badges{display:flex; gap:6px; flex-wrap:wrap; margin:8px 0}
+  .badge{font-size:11px; font-weight:600; padding:2px 8px; border-radius:6px; border:1px solid var(--card-line); color:var(--ink-dim)}
+  .badge.impact-high{color:var(--freeze); border-color:transparent; background:var(--freeze-soft)}
+  .badge.impact-med{color:var(--gtm); border-color:transparent; background:var(--gtm-soft)}
+  .card p{font-size:13.5px; color:var(--ink-dim); margin:6px 0}
+  .card .dep{font-size:12.5px; margin-top:8px; padding-top:8px; border-top:1px dashed var(--card-line); color:var(--ink-dim)}
+  .card .dep b{color:var(--ink); font-weight:600}
+  .sources{display:flex; gap:5px; flex-wrap:wrap}
+
+  /* freeze block */
+  .freeze-block{border:1px solid var(--freeze-soft); background:var(--freeze-soft); border-radius:var(--radius); padding:20px 22px}
+  .freeze-block h2{color:var(--freeze)}
+  .freeze-item{display:flex; gap:12px; padding:12px 0; border-bottom:1px solid rgba(0,0,0,.06)}
+  :root[data-theme="dark"] .freeze-item, .freeze-item{border-bottom-color:rgba(255,255,255,.06)}
+  @media (prefers-color-scheme:light){ .freeze-item{border-bottom-color:rgba(0,0,0,.06)} }
+  .freeze-item:last-child{border-bottom:none}
+  .freeze-icon{flex:0 0 auto; font-size:18px; line-height:1.4}
+  .freeze-item h4{margin:0 0 3px; font-size:14.5px}
+  .freeze-item p{margin:0; font-size:13.5px; color:var(--ink-dim)}
+
+  /* perspectives appendix */
+  details.persp{background:var(--card); border:1px solid var(--card-line); border-radius:var(--radius); margin-bottom:14px; box-shadow:var(--shadow)}
+  details.persp summary{cursor:pointer; padding:16px 20px; font-weight:700; font-size:15px; list-style:none; display:flex; align-items:center; justify-content:space-between}
+  details.persp summary::-webkit-details-marker{display:none}
+  details.persp summary::after{content:"+"; font-size:20px; color:var(--ink-dim); font-weight:400}
+  details.persp[open] summary::after{content:"–"}
+  .persp-body{padding:0 20px 20px; font-size:13.5px; color:var(--ink-dim)}
+  .thesis{margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--card-line)}
+  .thesis:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0}
+  .thesis h5{margin:0 0 6px; font-size:13.5px; color:var(--ink); font-weight:700}
+  .thesis dl{margin:0; display:grid; grid-template-columns:100px 1fr; gap:4px 10px; font-size:13px}
+  .thesis dt{color:var(--ink-dim); font-weight:600}
+  .thesis dd{margin:0}
+
+  /* questions */
+  .qlist{display:grid; gap:12px}
+  .qitem{display:flex; gap:14px; background:var(--card); border:1px solid var(--card-line); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow)}
+  .qnum{flex:0 0 auto; width:26px; height:26px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center}
+  .qitem h4{margin:0 0 4px; font-size:14.5px}
+  .qitem p{margin:0; font-size:13.5px; color:var(--ink-dim)}
+
+  footer{padding:32px 24px; text-align:center; color:var(--ink-dim); font-size:12.5px; border-top:1px solid var(--line); margin-top:20px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="eyebrow">bando · стратегический разбор</div>
+    <h1>Куда двигаться дальше</h1>
+    <p class="sub">Три независимые перспективы (стратег роста, GTM, senior-инженер) + синтез в приоритизированную карту.
+      Ничего не реализовано — это только план для просмотра и решения.</p>
+    <div class="meta-row">
+      <span class="meta-chip">Дата разбора: 2026-07-11</span>
+      <span class="meta-chip">Статус: ждёт решений владельца</span>
+      <span class="meta-chip">Реализация: не начата</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section id="map">
+    <h2>Карта Now / Next / Later</h2>
+    <p class="lede">Каждая карточка — источник-перспектива, impact/effort и зависимость. Цвет источника: <span class="tag tag-strateg">Стратег</span> <span class="tag tag-gtm">GTM</span> <span class="tag tag-eng">Инженер</span>. Категория действия: <span class="tag tag-add">ADD</span> добавить · <span class="tag tag-improve">IMPROVE</span> починить/улучшить.</p>
+
+    <div class="kanban">
+
+      <!-- NOW -->
+      <div class="col-now">
+        <div class="col-head"><h3>Now</h3><span class="col-count">5 пунктов</span></div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">1.</span>Funnel-инструментирование</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-strateg">Стратег</span></span>
+            <span class="tag tag-improve">IMPROVE</span>
+            <span class="badge impact-high">impact высокий</span>
+            <span class="badge">S–M</span>
+          </div>
+          <p>Один funnel-view: signup → onboard → первый тест → D1/D7 → pre-order intent + engagement по механикам. Без этого весь список ниже — гипотезы, а не решения.</p>
+          <div class="dep"><b>Зависимость:</b> нет — события в PostHog частично есть</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">2.</span>Pre-order → price-discovery</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-strateg">Стратег</span><span class="tag tag-gtm">GTM</span></span>
+            <span class="tag tag-improve">IMPROVE</span>
+            <span class="badge impact-high">impact высокий</span>
+            <span class="badge">S</span>
+          </div>
+          <p>Конкретная цена + early-bird на pre-order, разбивка intent по тиру и фиче (band / Writing / Speaking). Единственный revenue-сигнал до merchant-ключей.</p>
+          <div class="dep"><b>Зависимость:</b> ценовой якорь — решение владельца (вопрос №1)</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">3.</span>Честный empty-state + контент-гейт на пуши</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-strateg">Стратег</span><span class="tag tag-gtm">GTM</span></span>
+            <span class="tag tag-improve">IMPROVE</span>
+            <span class="badge impact-high">impact высокий</span>
+            <span class="badge">S</span>
+          </div>
+          <p>Копия «каталог выкатывается [дата]» вместо вида «сломанного» каталога; не постить sprint join-URL в канал до контент-порога — 500 подписчиков не восстановимы.</p>
+          <div class="dep"><b>Зависимость:</b> график перезаливки контента (владелец, вопрос №2)</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">4.</span>Storage-гигиена: OPS-1 + аудио-кап</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-eng">Инженер</span></span>
+            <span class="tag tag-improve">IMPROVE</span>
+            <span class="badge impact-high">impact высокий</span>
+            <span class="badge">S–M</span>
+          </div>
+          <p>Чистка Storage-сирот (BACKLOG OPS-1) + битрейт-кап на импорте mp3. Supabase Free = 1GB; ~60–120 listening-тестов уже упрутся в лимит.</p>
+          <div class="dep"><b>Зависимость:</b> синхронно с перезаливкой контента клиентом</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">5.</span>Тихие поломки retention-каналов</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-eng">Инженер</span></span>
+            <span class="tag tag-improve">IMPROVE</span>
+            <span class="badge impact-med">impact средний</span>
+            <span class="badge">S</span>
+          </div>
+          <p>Проверить: weekly-digest роут <em>отсутствует</em> в <code>vercel.json</code> crons — возможно, вообще не срабатывает. Plus: prune <code>signup_throttle</code>, advisory-lock → ON CONFLICT-счётчик до наплыва.</p>
+          <div class="dep"><b>Зависимость:</b> нет</div>
+        </div>
+      </div>
+
+      <!-- NEXT -->
+      <div class="col-next">
+        <div class="col-head"><h3>Next</h3><span class="col-count">5 пунктов</span></div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">6.</span>Оффер-репозиционирование: journey + W/S</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-strateg">Стратег</span><span class="tag tag-gtm">GTM</span></span>
+            <span class="tag tag-improve">IMPROVE</span>
+            <span class="badge impact-high">impact высокий</span>
+            <span class="badge">S–M</span>
+          </div>
+          <p>Лендинг/pricing вокруг «дистанции до target band к дате экзамена» + W/S громко («AI проверит за минуты, дешевле репетитора»). Обещаем range+confidence, не точный балл — снимает риск невалидированного якоря.</p>
+          <div class="dep"><b>Зависимость:</b> копирайт — решение владельца</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">7.</span>Student Telegram-бот (text-first)</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-strateg">Стратег</span><span class="tag tag-gtm">GTM</span><span class="tag tag-eng">Инженер</span></span>
+            <span class="tag tag-add">ADD</span>
+            <span class="badge impact-high">impact высокий</span>
+            <span class="badge">M–L</span>
+          </div>
+          <p>Этап 1: bind-флоу <code>telegram_id</code>↔profile (greenfield, миграция + одноразовый токен). Этап 2: «вопрос дня» + streak/mistakes-due нуджи с deep-link. Без image-карточек и mini-app.</p>
+          <div class="dep"><b>Зависимость:</b> контент + бот-токен (владелец, вопрос №3)</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">8.</span>Лидерборд-дебаунс</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-eng">Инженер</span></span>
+            <span class="tag tag-improve">IMPROVE</span>
+            <span class="badge impact-high">impact высокий (scale)</span>
+            <span class="badge">M</span>
+          </div>
+          <p>Rebuild лидерборда не чаще раза в ~60с. Сейчас — полный table-lock rebuild на каждый rated submit; спринт-когорта = burst = деградация всех сабмитов разом.</p>
+          <div class="dep"><b>Зависимость:</b> обязателен до п.9</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">9.</span>Публичный 30-day sprint в канал</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-gtm">GTM</span></span>
+            <span class="tag tag-add">ADD</span>
+            <span class="badge impact-high">impact высокий</span>
+            <span class="badge">M</span>
+          </div>
+          <p>Датированная когорта поверх уже готовых daily-plan + countdown, вехи под шеринг результата.</p>
+          <div class="dep"><b>Зависимость:</b> контент-порог (п.3) + лидерборд-дебаунс (п.8)</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">10.</span>Fan-out батчи digest/reminders</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-eng">Инженер</span></span>
+            <span class="tag tag-improve">IMPROVE</span>
+            <span class="badge impact-med">impact средний</span>
+            <span class="badge">S</span>
+          </div>
+          <p>Пагинация с курсором вместо одного вызова на всех юзеров — иначе на росте базы таймауты режут список получателей недетерминированно.</p>
+          <div class="dep"><b>Зависимость:</b> до роста базы</div>
+        </div>
+      </div>
+
+      <!-- LATER -->
+      <div class="col-later">
+        <div class="col-head"><h3>Later</h3><span class="col-count">4 пункта</span></div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">11.</span>Платёжные адаптеры Payme/Click/Uzum</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-eng">Инженер</span></span>
+            <span class="tag tag-add">ADD</span>
+            <span class="badge impact-high">impact высокий</span>
+            <span class="badge">M / провайдер</span>
+          </div>
+          <p>Ядро (<code>applyCompletedPayment</code>) готово и adversarial-проверено. Работа = state-machine протокола каждого провайдера + их sandbox.</p>
+          <div class="dep"><b>Зависимость:</b> merchant-ключи (владелец, вопрос №4) — жёсткий блокер</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">12.</span>Supabase Pro → Vercel Pro</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-eng">Инженер</span></span>
+            <span class="tag tag-improve">IMPROVE</span>
+            <span class="badge impact-med">impact средний</span>
+            <span class="badge">S–M</span>
+          </div>
+          <p>Триггеры по порядку: Storage 1GB → PITR-потребность → cron/compute-потолок. Supabase сработает первым.</p>
+          <div class="dep"><b>Зависимость:</b> бюджет владельца (вопрос №6)</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">13.</span>B2B2C-партнёрства с IELTS-центрами</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-gtm">GTM</span></span>
+            <span class="tag tag-add">ADD</span>
+            <span class="badge impact-high">impact высокий</span>
+            <span class="badge">M (процесс)</span>
+          </div>
+          <p>Второй источник трафика с низким CAC — класс-коды для преподавателей, «тренажёр между занятиями».</p>
+          <div class="dep"><b>Зависимость:</b> контент + аутрич владельца (вопрос №7)</div>
+        </div>
+
+        <div class="card">
+          <div class="card-top"><h4><span class="num">14.</span>Лидерборд-витрина + реальная реферал-награда</h4></div>
+          <div class="badges">
+            <span class="sources"><span class="tag tag-gtm">GTM</span></span>
+            <span class="tag tag-add">ADD</span>
+            <span class="badge impact-med">impact средний</span>
+            <span class="badge">S–M</span>
+          </div>
+          <p>Разморозка соревновательных механик после живого DAU; реферал-награда меняется с XP на free-дни после платежей.</p>
+          <div class="dep"><b>Зависимость:</b> триггер — DAU-сигнал + живые платежи</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="freeze">
+    <div class="freeze-block">
+      <h2>Останавливаем / не трогаем</h2>
+      <p class="lede" style="color:var(--ink-dim)">Тоже часть ответа «что делать». Здесь — где перспективы разошлись и решение принято явно, плюс фантомный техдолг, который не нужно чинить.</p>
+
+      <div class="freeze-item">
+        <div class="freeze-icon">⏸</div>
+        <div>
+          <h4>Лига / лидерборд — заморозка инвестиций <span class="tag tag-freeze" style="margin-left:6px">DIFFERENTLY</span></h4>
+          <p><b>Расхождение:</b> GTM видел здесь виральный актив («топ Ташкента»); стратег — риск: пустой после вайпа лидерборд читается как анти-social-proof, а 4 перекрывающиеся системы удержания на пре-revenue продукте нарушают anti-goal BRIEF §0.
+          <b>Решение:</b> победил стратег — код не удаляется, инвестиции стоп до живого DAU. Дешёвый шеринг результата (уже на проде) остаётся; «витрина хвастовства» — в Later (п.14) с триггером.</p>
+        </div>
+      </div>
+
+      <div class="freeze-item">
+        <div class="freeze-icon">⏸</div>
+        <div>
+          <h4>XP-реферал как growth-рычаг</h4>
+          <p>GTM: K-factor ≈ 0, награда без внешней ценности — growth-театр. Оставить только как attribution («кто кого привёл»); вложения в развитие — только после реальной награды (free-дни/скидка) на платежах.</p>
+        </div>
+      </div>
+
+      <div class="freeze-item">
+        <div class="freeze-icon">🚫</div>
+        <div>
+          <h4>Фантомный техдолг из списков аудитов</h4>
+          <p>Инженер проверил в коде: rate-limit на login <b>уже реализован</b> (<code>auth.ts:90</code>) — заметка аудита устарела; два exam-раннера (iframe-mock + атомизированный) — осознанная архитектура, не сливать в один; RLS/кэш-постура answer_key — многослойно проверена, «упрощать» = ломать защиту.</p>
+        </div>
+      </div>
+
+      <div class="freeze-item">
+        <div class="freeze-icon">🚫</div>
+        <div>
+          <h4>Image band-карточка, Telegram mini-app</h4>
+          <p>Требуют новый runtime-стек (image-рендер / initData-HMAC-авторизация вместо Supabase-сессии) — anti-scope без сильного «почему сейчас». Ценность нуджей достигается текстом + deep-link без них.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="questions">
+    <h2>Вопросы владельцу</h2>
+    <p class="lede">Продуктовые развилки, которые не решаются кодом. Карта выше на них местами прямо завязана.</p>
+    <div class="qlist">
+      <div class="qitem"><div class="qnum">1</div><div><h4>Ценовой якорь pre-order</h4><p>Какую цену вешаем (допущение GTM: mass-market коридор ~30–100k UZS/мес) и какая early-bird скидка? Дифференцируем по тирам с первого дня?</p></div></div>
+      <div class="qitem"><div class="qnum">2</div><div><h4>Контент-порог для громкого пуша</h4><p>Сколько R/L-тестов — минимум, чтобы звать базу в канал на sprint? Ориентировочный график перезаливки.</p></div></div>
+      <div class="qitem"><div class="qnum">3</div><div><h4>Student-бот: делаем?</h4><p>Если да — нужен отдельный бот-токен. Это самая крупная кодовая инвестиция карты (M–L).</p></div></div>
+      <div class="qitem"><div class="qnum">4</div><div><h4>Merchant-онбординг: какой провайдер первым</h4><p>Payme / Click / Uzum — адаптеры пишутся по одному, порядок определяет ваш реальный онбординг.</p></div></div>
+      <div class="qitem"><div class="qnum">5</div><div><h4>Подтверждение freeze лиги/лидерборда</h4><p>Единственное место, где перспективы разошлись явно. Решение выше — но право на него ваше.</p></div></div>
+      <div class="qitem"><div class="qnum">6</div><div><h4>Бюджет Supabase Pro</h4><p>Перезаливка каталога может упереться в Storage 1GB в горизонте недель. Платим по триггеру или выносим аудио во внешний бакет заранее?</p></div></div>
+      <div class="qitem"><div class="qnum">7</div><div><h4>B2B2C-партнёрства — ваш процесс?</h4><p>Интересен ли трек «тренажёр для учеников IELTS-центров»? Код поддержит класс-кодами, продажи — не кодовая работа.</p></div></div>
+    </div>
+  </section>
+
+  <section id="perspectives">
+    <h2>Три перспективы целиком</h2>
+    <p class="lede">Развёрнутые тезисы каждой перспективы — как они прозвучали независимо, до синтеза.</p>
+
+    <details class="persp">
+      <summary><span><span class="tag tag-strateg">Стратег роста</span> — 5 тезисов + sequencing</span></summary>
+      <div class="persp-body">
+        <div class="thesis">
+          <h5>1. Пустой каталог — острейший риск активации</h5>
+          <dl>
+            <dt>Рычаг</dt><dd>Честный empty-state, не гнать 500 юзеров на пустоту</dd>
+            <dt>Воронка</dt><dd>activation — первый шаг сейчас нулевой</dd>
+            <dt>Impact/effort</dt><dd>высокий / S</dd>
+          </dl>
+        </div>
+        <div class="thesis">
+          <h5>2. Retention/viral-петлю — в Telegram, не в email</h5>
+          <dl>
+            <dt>Рычаг</dt><dd>Text-first student-бот: daily plan nudge, streak-reminder, deep-link; без image-стека</dd>
+            <dt>Воронка</dt><dd>retention + viral, CAC≈0</dd>
+            <dt>Impact/effort</dt><dd>высокий / M</dd>
+          </dl>
+        </div>
+        <div class="thesis">
+          <h5>3. Продавать «дистанцию до target band», не band-число</h5>
+          <dl>
+            <dt>Рычаг</dt><dd>Premium = датированный путь (mock + план + sprint + W/S-коучинг) одним нарративом</dd>
+            <dt>Воронка</dt><dd>revenue</dd>
+            <dt>Impact/effort</dt><dd>высокий / M</dd>
+          </dl>
+        </div>
+        <div class="thesis">
+          <h5>4. Pre-order — инструмент price discovery</h5>
+          <dl>
+            <dt>Рычаг</dt><dd>Захват intent по тиру и цене до merchant-ключей</dd>
+            <dt>Воронка</dt><dd>revenue</dd>
+            <dt>Impact/effort</dt><dd>высокий / S</dd>
+          </dl>
+        </div>
+        <div class="thesis">
+          <h5>5. Инструментировать воронку до новых механик</h5>
+          <dl>
+            <dt>Рычаг</dt><dd>Единый funnel-view signup→onboard→тест→D1/D7→pre-order</dd>
+            <dt>Воронка</dt><dd>meta — enabler всего остального</dd>
+            <dt>Impact/effort</dt><dd>высокий / S–M</dd>
+          </dl>
+        </div>
+        <p style="margin-top:14px"><b>Убрал бы:</b> инвестиции в лигу/лидерборд — пустая база = анти-social-proof, 4 перекрывающиеся системы удержания на пре-revenue продукте.</p>
+        <p><b>Sequencing:</b> (1) контент-гейт + funnel-дашборд параллельно → (2) Telegram-бот, как только есть что линковать → (3) параллельно, не на критическом пути — repositioning + pre-order intent → (4) отложить новую геймификацию, лигу, image-карточки до сигнала.</p>
+      </div>
+    </details>
+
+    <details class="persp">
+      <summary><span><span class="tag tag-gtm">Маркетинг / GTM</span> — 6 тезисов + позиционирование</span></summary>
+      <div class="persp-body">
+        <div class="thesis">
+          <h5>1. Telegram работает как рассылка, а не движок</h5>
+          <dl><dt>Рычаг</dt><dd>Минимальный текстовый бот-клин: «вопрос дня» + стрик-нудж, deep-link</dd>
+              <dt>Воронка</dt><dd>retention + acquisition + viral</dd>
+              <dt>Impact/effort</dt><dd>высокий / M</dd></dl>
+        </div>
+        <div class="thesis">
+          <h5>2. Позиционирование мимо триггера платежа</h5>
+          <dl><dt>Рычаг</dt><dd>Громко про W/S AI-проверку — «дешевле репетитора»; R/L бесплатно как крючок</dd>
+              <dt>Воронка</dt><dd>acquisition + revenue</dd>
+              <dt>Impact/effort</dt><dd>высокий / S</dd></dl>
+        </div>
+        <div class="thesis">
+          <h5>3. Pre-order с конкретной ценой = WTP-замер</h5>
+          <dl><dt>Рычаг</dt><dd>Локализованная цена + early-bird, конверсия по тиру/фиче</dd>
+              <dt>Воронка</dt><dd>revenue</dd>
+              <dt>Impact/effort</dt><dd>высокий / S</dd></dl>
+        </div>
+        <div class="thesis">
+          <h5>4. XP-реферал — K-factor околонулевой</h5>
+          <dl><dt>Рычаг</dt><dd>Шеринг результата default'ом + регион-лидерборд как витрина хвастовства</dd>
+              <dt>Воронка</dt><dd>viral, CAC≈0</dd>
+              <dt>Impact/effort</dt><dd>средний-высокий / S</dd></dl>
+        </div>
+        <div class="thesis">
+          <h5>5. Sprint-когорта — сильный рычаг, но не в пустой каталог</h5>
+          <dl><dt>Рычаг</dt><dd>Публичный «30-day sprint» только за порогом контента</dd>
+              <dt>Воронка</dt><dd>activation + retention + viral</dd>
+              <dt>Impact/effort</dt><dd>высокий / M</dd></dl>
+        </div>
+        <div class="thesis">
+          <h5>6. Нужен второй источник трафика</h5>
+          <dl><dt>Рычаг</dt><dd>B2B2C-партнёрства с IELTS-центрами/репетиторами, кросс-промо в чужих каналах</dd>
+              <dt>Воронка</dt><dd>acquisition, диверсификация</dd>
+              <dt>Impact/effort</dt><dd>высокий / M</dd></dl>
+        </div>
+        <p style="margin-top:14px"><b>Убрал бы:</b> XP-реферал как рычаг роста — оставить как attribution, реальную награду включить после платежей.</p>
+        <p><b>Позиционирование одной строкой:</b> «Bando — IELTS-экзамен в кармане: Reading/Listening бесплатно, точь-в-точь как на реальном тесте, с разбором «какой тип вопросов роняет твой балл»; Writing и Speaking проверяет AI за минуты — вместо репетитора за $10/час.»</p>
+      </div>
+    </details>
+
+    <details class="persp">
+      <summary><span><span class="tag tag-eng">Senior-инженер</span> — 5 тезисов + feasibility</span></summary>
+      <div class="persp-body">
+        <div class="thesis">
+          <h5>1. Полный ребилд лидерборда на каждый rated submit — стена №1</h5>
+          <dl><dt>Наблюдение</dt><dd><code>leaderboard.ts:147</code> — 3 почти-полных скана + table-lock DELETE в транзакции</dd>
+              <dt>Рычаг</dt><dd>Дебаунс «не чаще раза в ~60с» через timestamp + advisory-lock</dd>
+              <dt>Impact/effort</dt><dd>высокий / M</dd></dl>
+        </div>
+        <div class="thesis">
+          <h5>2. Первая стена масштаба — Storage 1GB, не БД</h5>
+          <dl><dt>Наблюдение</dt><dd>~5-15MB/mp3 + сироты OPS-1; ~60-120 listening-тестов ≈ 1GB</dd>
+              <dt>Рычаг</dt><dd>Закрыть OPS-1 синхронно с перезаливкой + битрейт-кап или внешний бакет</dd>
+              <dt>Impact/effort</dt><dd>высокий / S–M</dd></dl>
+        </div>
+        <div class="thesis">
+          <h5>3. Связка тихой хрупкости retention-инфры</h5>
+          <dl><dt>Наблюдение</dt><dd>weekly-digest роут отсутствует в <code>vercel.json</code> crons; <code>signup_throttle</code> никогда не чистится; fan-out одним вызовом; бэкап без PITR</dd>
+              <dt>Рычаг</dt><dd>Prune-джоб, курсорная пагинация, подтвердить срабатывание digest</dd>
+              <dt>Impact/effort</dt><dd>средний / S каждый</dd></dl>
+        </div>
+        <div class="thesis">
+          <h5>4. Платёжные адаптеры — M на провайдера, не «свап HMAC»</h5>
+          <dl><dt>Наблюдение</dt><dd>Ядро (<code>applyCompletedPayment</code>) готово; реальная работа — protocol state-machine Payme/Click/Uzum</dd>
+              <dt>Impact/effort</dt><dd>высокий / M на провайдера</dd></dl>
+        </div>
+        <div class="thesis">
+          <h5>5. Student TG-бот: identity-linking — greenfield</h5>
+          <dl><dt>Наблюдение</dt><dd>Примитивы сообщений есть; <code>telegram_id</code>↔profile связи не существует</dd>
+              <dt>Рычаг</dt><dd>Сначала bind-флоу (миграция + токен), потом send-fanout</dd>
+              <dt>Impact/effort</dt><dd>средний / M (бот) — L (mini-app)</dd></dl>
+        </div>
+        <p style="margin-top:14px"><b>Убрал бы:</b> ничего из горячего ядра — вычеркнул бы 3 фантома техдолга (rate-limit login уже есть; два раннера — не сливать; RLS/кэш не упрощать). Единственное реальное упрощение — advisory-lock в throttle заменить на ON CONFLICT-счётчик.</p>
+        <p><b>Feasibility:</b> student-бот M(бот)/L(mini-app), риск — identity-linking; платёжные адаптеры M/провайдер, риск — sandbox каждого провайдера; апгрейд тиров S–M, триггеры по порядку Storage→PITR→cron.</p>
+      </div>
+    </details>
+
+  </section>
+
+</div>
+
+<footer>bando · внутренний рабочий документ · не публиковался, не задеплоен · docs/strategic-roadmap-2026-07-11.html</footer>
+
+</body>
+</html>
