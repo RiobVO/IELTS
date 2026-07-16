@@ -10,6 +10,7 @@ import { getVocabDueSummary, type VocabDueSummary } from "@/lib/vocab/summary";
 import { db } from "@/db";
 import { attempt, contentItem, leaderboardEntry } from "@/db/schema";
 import { categoryLabel, qtypeLabel, LISTENING_CATEGORIES } from "@/lib/labels";
+import { FULL_CATEGORIES } from "@/lib/exam/trial";
 import { computeBandPlan, type BandPlan, type BandPlanWeakType } from "@/lib/progress/band-plan";
 import { getExamCountdown, isInCurrentTzWeek, isSameTzDay, type ExamCountdown } from "@/lib/progress/exam-countdown";
 import { computeDailyPlan, getCatalogAvailability, getMistakesDueSummary, type DailyPlan, type DailyPlanItem } from "@/lib/progress/daily-plan";
@@ -34,6 +35,12 @@ interface AttemptRow {
   per_type_breakdown: Breakdown;
   submitted_at: string | null;
   content_item: { title: string; category: string; band_scale: Record<string, number> | null } | null;
+}
+
+/** Строка отдельной full-mock выборки (Today's plan, §mocksThisWeek) — минимум полей. */
+interface WeeklyMockRow {
+  submitted_at: string | null;
+  content_item: { category: string } | null;
 }
 
 function total(b: Breakdown): number {
@@ -103,7 +110,7 @@ export default async function Dashboard() {
 
   // Профиль / список попыток / глобальный ранг независимы → один Promise.all
   // (без водопада). Ранг читается owner-путём, но строго по своему user_id.
-  const [profile, attemptsRes, rankRows, leagueTotal, inProgressRows, vocabSummary, mistakesSummary, catalogAvailability] = await Promise.all([
+  const [profile, attemptsRes, weeklyMockAttemptsRes, rankRows, leagueTotal, inProgressRows, vocabSummary, mistakesSummary, catalogAvailability] = await Promise.all([
     getProfile(),
     supabase
       .from("attempt")
@@ -114,6 +121,18 @@ export default async function Dashboard() {
       .eq("status", "submitted")
       .order("submitted_at", { ascending: false })
       .limit(20),
+    // Today's plan (BRIEF §12): mocksThisWeek — отдельная выборка, не из attempts
+    // limit 20 выше (то окно недосчитывает мок при 20+ практиках после него в ту
+    // же неделю). 8 дней (не 7) — надмножество текущей tz-недели С ЗАПАСОМ: при
+    // переводе часов начало tz-недели может лежать дальше 168 часов назад, точную
+    // границу по-прежнему считаем ниже тем же isInCurrentTzWeek, что drillsToday —
+    // без новой tz-математики на стороне запроса.
+    supabase
+      .from("attempt")
+      .select("submitted_at,content_item:content_item_id!inner(category)")
+      .eq("status", "submitted")
+      .gte("submitted_at", new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString())
+      .in("content_item.category", [...FULL_CATEGORIES]),
     db
       .select({ rank: leaderboardEntry.rank })
       .from(leaderboardEntry)
@@ -236,21 +255,18 @@ export default async function Dashboard() {
   const weakest = weak[0] ?? null;
   const hasAttempts = attempts.length > 0;
 
-  // Today's plan (BRIEF §12) — чистое ядро computeDailyPlan; drillsToday/
-  // mocksThisWeek считаем из уже загруженных attempts (без нового запроса),
-  // «сегодня»/«эта неделя» — той же таймзоной юзера, что exam-countdown.
-  // Известное ограничение: окно = последние 20 попыток — недельные моки «забудутся»,
-  // если после них сдано 20+ работ за ту же неделю. Осознанно: экстремальный кейс
-  // не стоит отдельного запроса на каждый рендер дашборда.
-  const isFullMockCategory = (cat: string) => cat === "full_reading" || cat === "full_listening";
+  // Today's plan (BRIEF §12) — чистое ядро computeDailyPlan; «сегодня»/«эта неделя» —
+  // той же таймзоной юзера, что exam-countdown. drillsToday — из уже загруженных
+  // attempts (без нового запроса); известное ограничение: окно = последние 20
+  // попыток, но 20+ сабмитов ЗА ОДИН день — за пределами разумного. mocksThisWeek
+  // окну не подвержен — считается из weeklyMockAttemptsRes, отдельной 7-дневной
+  // выборки (см. Promise.all выше).
   const drillsToday = attempts.filter(
     (a) => a.submitted_at && isSameTzDay(new Date(a.submitted_at), now, tz),
   ).length;
-  const mocksThisWeek = attempts.filter(
-    (a) =>
-      a.submitted_at &&
-      isFullMockCategory(a.content_item?.category ?? "") &&
-      isInCurrentTzWeek(new Date(a.submitted_at), now, tz),
+  const weeklyMockAttempts = (weeklyMockAttemptsRes.data ?? []) as unknown as WeeklyMockRow[];
+  const mocksThisWeek = weeklyMockAttempts.filter(
+    (r) => r.submitted_at && isInCurrentTzWeek(new Date(r.submitted_at), now, tz),
   ).length;
   const dailyPlan = computeDailyPlan({
     daysUntilExam: examCountdown?.days ?? null,
