@@ -561,8 +561,12 @@ export function PracticeCatalog({
    work remains. Target selector keeps the exact state machine every earlier
    round built up (optimistic set → serialized async transition →
    setTargetBand → Saved/Error aria-live) — only the chrome changes, pill-
-   sized now instead of a giant number (that role moved to the ring's center
-   digit). */
+   sized now instead of a giant number.
+
+   Hero zone (gap ring + headline/subcopy) was cut on prod feedback 2026-07-16
+   ("too big" — it was also stretching the neighboring resume card via grid-
+   stretch on the empty violet column). Header is now just the pill + a
+   "Reached ✓"/"N% to go" readout; rows are unchanged. */
 function GoalModule({
   target,
   best,
@@ -629,7 +633,7 @@ function GoalModule({
     });
   };
 
-  // Saved/Error замещают "N% to go" транзиентно — не плодим лишний элемент.
+  // Saved/Error замещают "Reached ✓"/"N% to go" транзиентно — не плодим лишний элемент.
   const tail = error ? (
     <span style={S.pgError}>Couldn&apos;t save — try again</span>
   ) : saved ? (
@@ -639,31 +643,14 @@ function GoalModule({
   ) : null;
 
   // Target unset (onboarding normally guarantees it) — the pill/select needs a
-  // real value so it's skipped, but the ring/headline fall back to the same
-  // 7.0 default SkillBand already uses elsewhere on this page for the same
-  // edge (targetBand ?? 7), so the hero zone never looks broken/empty.
+  // real value, so both the pill and the reached/gap readout are skipped; the
+  // rows below render regardless (they don't depend on a target).
   const targetValue = value;
-  const ringTarget = targetValue ?? 7;
-  const reached = best != null && best >= ringTarget;
+  const reached = targetValue != null && best != null && best >= targetValue;
   const pctToGo =
     targetValue != null && best != null && best < targetValue
       ? Math.round((1 - best / targetValue) * 100)
       : null;
-
-  let headline: string;
-  let subcopy: string | null;
-  if (best == null) {
-    headline = "Sit a full mock to get your band";
-    subcopy = null;
-  } else if (reached) {
-    headline = "Target reached ✓";
-    subcopy = "Keep it warm.";
-  } else {
-    headline = `You're at ${best.toFixed(1)}!`;
-    // Neutral encouragement only — the actual forecast lives on /app/progress,
-    // this card doesn't promise a timeline.
-    subcopy = "Every mock and drill closes the gap.";
-  }
 
   return (
     <div className="pg-card" style={S.pgCard}>
@@ -688,97 +675,21 @@ function GoalModule({
             </span>
           </span>
         )}
-        {tail ?? (pctToGo != null && <span style={S.pgPctToGo}>{pctToGo}% to go</span>)}
+        {/* No ring anymore (cut 2026-07-16 — too big, stretched the neighboring
+            resume card) — "reached" now gets a minimal text readout instead of
+            losing the signal entirely. */}
+        {tail ?? (reached ? (
+          <span style={S.pgReachedTag}>Reached ✓</span>
+        ) : (
+          pctToGo != null && <span style={S.pgPctToGo}>{pctToGo}% to go</span>
+        ))}
         <span role="status" aria-live="polite" style={S.srOnly}>{status}</span>
-      </div>
-
-      <div className="pg-hero">
-        <GapRing best={best} target={ringTarget} reached={reached} />
-        <div>
-          <div style={S.pgHeadline}>{headline}</div>
-          {subcopy && <p style={S.pgSubcopy}>{subcopy}</p>}
-        </div>
       </div>
 
       <div className="pg-rows">
         <SectionRow tone="reading" label="Reading" progress={reading} onDrill={onDrill} />
         <SectionRow tone="listening" label="Listening" progress={listening} onDrill={onDrill} />
         <VocabRow vocab={vocab} />
-      </div>
-    </div>
-  );
-}
-
-/* Gap ring — SVG circle draw-in using the same trick as the dashboard's
-   BandGauge (app/app/_DashMotion.tsx): the base/resting stroke-dashoffset IS
-   the final value, the CSS keyframe only supplies the "from" (both fill-mode),
-   so there's no JS/flash gymnastics to get right — unlike DrawBar's width in
-   earlier rounds, an SVG stroke doesn't need a "reset then re-enable" dance.
-   Center shows the gap-to-target, a reached checkmark, or "—" with no band. */
-const RING_SIZE = 104;
-const RING_STROKE = 10;
-const RING_R = RING_SIZE / 2 - RING_STROKE / 2 - 2;
-const RING_CX = RING_SIZE / 2;
-
-function GapRing({ best, target, reached }: { best: number | null; target: number; reached: boolean }) {
-  const frac = best != null ? Math.max(0, Math.min(1, best / target)) : 0;
-  const valLen = +(frac * 100).toFixed(2);
-  const gap = best != null ? Math.max(0, target - best) : 0;
-
-  return (
-    <div
-      className="pg-ring-stage"
-      style={{ width: RING_SIZE, height: RING_SIZE }}
-      role="img"
-      aria-label={
-        best == null
-          ? "No band yet"
-          : reached
-            ? `Target reached, best band ${best.toFixed(1)}`
-            : `${gap.toFixed(1)} band to go to reach your target`
-      }
-    >
-      <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} aria-hidden="true">
-        <defs>
-          <linearGradient id="pgRingGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor={reached ? "var(--success-edge)" : "var(--brand-edge)"} />
-            <stop offset="1" stopColor={reached ? "var(--success)" : "var(--brand)"} />
-          </linearGradient>
-        </defs>
-        <circle cx={RING_CX} cy={RING_CX} r={RING_R} pathLength={100} fill="none" stroke="var(--surface-inset)" strokeWidth={RING_STROKE} />
-        {best != null && (
-          <circle
-            className="pg-ring-val"
-            cx={RING_CX}
-            cy={RING_CX}
-            r={RING_R}
-            pathLength={100}
-            fill="none"
-            stroke="url(#pgRingGrad)"
-            strokeWidth={RING_STROKE}
-            strokeLinecap="round"
-            strokeDasharray={`${valLen} 100`}
-            transform={`rotate(-90 ${RING_CX} ${RING_CX})`}
-            style={{ "--val-len": String(valLen) } as CSSProperties}
-          />
-        )}
-      </svg>
-      <div className="pg-ring-center">
-        {best == null ? (
-          <span style={S.pgRingEm}>—</span>
-        ) : reached ? (
-          <Icon name="circle-check" size={30} strokeWidth={2.2} style={{ color: "var(--success-edge)" }} />
-        ) : (
-          <>
-            {/* Static, not CountUp: SSR already renders the final value (same
-                pattern as everywhere else count-up is used), but re-playing
-                0→gap here doubles as a visible flash on the hero digit — this
-                number isn't worth that trade next to the ring's own draw-in,
-                which already carries the "arriving" motion for this figure. */}
-            <span style={S.pgRingNum}>+{gap.toFixed(1)}</span>
-            <span style={S.pgRingSub}>to go</span>
-          </>
-        )}
       </div>
     </div>
   );
@@ -1298,24 +1209,16 @@ const CSS = `
 .pc-drill:hover{border-color:var(--brand)!important}
 .pc-drill:active{transform:translateY(3px);box-shadow:none!important}
 .pc-drilllink:hover{text-decoration:underline}
-/* Goal module — light card. .pg-head: target pill + "N% to go". .pg-hero: ring
-   + headline, stacks on narrow viewports (flex-wrap, no order/reorder — DOM
-   order already matches: ring first, text second). .pg-ring-val draws in via
-   the same from-only-keyframe trick as the dashboard's BandGauge (.gauge-val),
-   just under a local name so this file doesn't reach into app/app/page.tsx. */
+/* Goal module — light card, compact: .pg-head is just the target pill + a
+   "Reached ✓"/"N% to go" readout (hero ring was cut 2026-07-16 — too big). */
 .pg-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .pg-selectwrap:hover select{opacity:.85}
 /* Native OPEN popup is a system menu that ignores most inline styling — only
    color/background-color on <option> carry through (inconsistently, but this
    is the standard mitigation). Without it some platforms render white-on-white. */
 .pg-select option{color:var(--text-primary);background:var(--surface)}
-.pg-hero{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-.pg-ring-stage{position:relative;flex:none}
-.pg-ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-.pg-ring-val{stroke-dashoffset:0;animation:pgRingDraw var(--duration-deliberate) var(--ease-out) 150ms both}
 .pg-rows{display:flex;flex-direction:column;gap:10px}
 .pg-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:8px;padding:12px 14px;border-radius:var(--radius-md);border:1.5px solid transparent;transition:var(--transition-colors)}
-@keyframes pgRingDraw{from{stroke-dashoffset:var(--val-len)}}
 .pc-gloss{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-xs)}
 .pc-gloss>summary{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;cursor:pointer;list-style:none;font-family:var(--font-ui);font-size:13px;font-weight:700;color:var(--text-primary)}
 .pc-gloss>summary::-webkit-details-marker{display:none}
@@ -1361,7 +1264,6 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){
   .pc-bars span{animation:none!important;transform:none!important}
   .pc-goalsaved{animation:none!important}
-  .pg-ring-val{animation:none!important}
 }
 `;
 
@@ -1394,27 +1296,23 @@ const S: Record<string, CSSProperties> = {
   rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
 
-  // Goal module — light card (target pill + gap ring + status rows). Same
-  // surface/radius/shadow language as the neighboring skill-cards below —
-  // violet is an accent only (pill fill, ring gradient, chip), not a theme.
-  pgCard: { display: "flex", flexDirection: "column", gap: 20, marginTop: 20, padding: 24, borderRadius: "var(--radius-xl)", border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
+  // Goal module — light card (target pill + status rows only — the gap ring
+  // was cut 2026-07-16, too big, was stretching the neighboring resume card
+  // via grid-stretch on the empty column). Moderate padding/gap, close to the
+  // neighboring skill-cards' own footprint — final height ≈ pill + 3 rows.
+  // Violet is an accent only (pill fill, chip, CTA), not a theme.
+  pgCard: { display: "flex", flexDirection: "column", gap: 14, marginTop: 20, padding: 18, borderRadius: "var(--radius-xl)", border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
   pgGoalPill: { display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 6px 6px 14px", borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", border: "1px solid var(--brand-border)" },
   pgGoalPillLab: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-link)" },
   pgSelectWrap: { position: "relative", display: "inline-flex", alignItems: "center" },
   pgSelect: { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 14, color: "var(--text-link)", background: "transparent", border: "none", padding: "0 20px 0 4px", cursor: "pointer" },
   pgChevron: { position: "absolute", right: 2, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--text-link)" },
   pgPctToGo: { fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
+  // Reached readout replaces the old ring's success-tone fill/checkmark —
+  // same success token as the row tint (ROW_TONE.success.fg), no new colour.
+  pgReachedTag: { fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--success-text)" },
   pgSaved: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--success-text)" },
   pgError: { display: "inline-flex", alignItems: "center", fontSize: 12, fontWeight: 700, color: "var(--error-text)" },
-
-  // Hero zone — ring + headline. Headline stays <28px (matches S.hero's own
-  // heroTitle:20 next door) so weight caps at 700 per the typography rule; the
-  // ring's center digit is the one >28px figure, weight 800 + tight tracking.
-  pgHeadline: { fontFamily: "var(--font-ui)", fontSize: 21, fontWeight: 700, lineHeight: 1.25, color: "var(--text-primary)" },
-  pgSubcopy: { margin: "4px 0 0", fontSize: 13, lineHeight: 1.45, color: "var(--text-secondary)" },
-  pgRingNum: { fontFamily: "var(--font-mono)", fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: "var(--text-primary)" },
-  pgRingSub: { fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-muted)" },
-  pgRingEm: { fontFamily: "var(--font-mono)", fontSize: 26, fontWeight: 700, color: "var(--text-muted)" },
 
   // Status rows — chip colour is per-skill (PROGRESS_TILE), row bg/text colour
   // is per-status (ROW_TONE, computed at the call site).
