@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef, type CSSProperties } from "react";
+import { useState, useTransition, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/core/icons";
 import { Badge } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
+import { CountUp } from "@/components/core/CountUp";
 import { QuestionFilter } from "@/components/exam/QuestionFilter";
 import { CatalogNotice } from "@/components/app/CatalogNotice";
 import { Input } from "@/components/core/Input";
@@ -75,6 +76,14 @@ export interface HeroData {
 }
 export type DrillWeakest = { type: string; label: string; section: Section } | null;
 
+/** Vocabulary row of the "Your progress" panel — slim view of VocabDueSummary
+ *  (src/lib/vocab/summary.ts), just the three numbers the bar/stat need. */
+interface VocabProgressStat {
+  reviewedToday: number;
+  goal: number;
+  dueToday: number;
+}
+
 /** Предвыбор фильтра из query: секция + типы/категории + сорт. Значения уже
  *  провалидированы на сервере (page.tsx) против @/lib/labels и enum'а сорта. */
 export interface InitialFilter {
@@ -124,10 +133,6 @@ const COMING: Record<"writing" | "speaking", ComingInfo> = {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Skill-card meta line — caller already filters out total===0. */
-const progressLabel = ({ done, total, left }: SectionProgress): string =>
-  done === total ? `All ${total} done` : `Done ${done} of ${total} · ${left} left`;
-
 export function PracticeCatalog({
   tests,
   filterCategories,
@@ -138,6 +143,7 @@ export function PracticeCatalog({
   listeningCount,
   readingProgress,
   listeningProgress,
+  vocabProgress,
   readingBand,
   listeningBand,
   targetBand,
@@ -160,6 +166,9 @@ export function PracticeCatalog({
    *  фильтров каталога ниже). */
   readingProgress: SectionProgress;
   listeningProgress: SectionProgress;
+  /** Slim vocab summary (getVocabDueSummary) — feeds the "Your progress" panel's
+   *  Vocabulary row, same numbers as the dashboard's VocabCard. */
+  vocabProgress: VocabProgressStat;
   /** User's best band on the skill (per-section best), or null with no attempts. */
   readingBand: number | null;
   listeningBand: number | null;
@@ -343,6 +352,15 @@ export function PracticeCatalog({
         </div>
       </section>
 
+      {/* Your progress — Reading/Listening/Vocabulary status in one bold card, brand-
+          gradient draw-in bars + count-up numbers. Replaces the old inline "Done N of
+          M" line that lived on the skill-cards below (killed after a live walkthrough
+          2026-07-16 — it read as an afterthought next to the hero). */}
+      <section>
+        <div style={S.pcpHead}>Your progress</div>
+        <ProgressPanel reading={readingProgress} listening={listeningProgress} vocab={vocabProgress} />
+      </section>
+
       {/* Live skills — фильтр-карты Reading/Listening (+ Writing когда ops-гейт открыт) */}
       <section>
         <div style={S.skillHeadWrap}>
@@ -361,7 +379,6 @@ export function PracticeCatalog({
             skill="reading"
             name="Reading"
             count={readingCount}
-            progress={readingProgress}
             band={readingBand}
             targetBand={targetBand}
             onClick={() => selectSkill("reading")}
@@ -371,7 +388,6 @@ export function PracticeCatalog({
             skill="listening"
             name="Listening"
             count={listeningCount}
-            progress={listeningProgress}
             band={listeningBand}
             targetBand={targetBand}
             onClick={() => selectSkill("listening")}
@@ -661,6 +677,143 @@ function HeroCard({ hero }: { hero: HeroData }) {
   );
 }
 
+/* ── Your progress (Reading / Listening / Vocabulary bars) ────────────────
+   Bars draw in 0→pct on mount and numbers count up — the deliberately bold
+   replacement for the old inline "Done N of M" line on the skill-cards below.
+   Reading/Listening total===0 (post-wipe) keeps the row but shows an empty bar
+   + a muted note instead of a nonsensical "0 of 0". */
+const PROGRESS_TILE: Record<"reading" | "listening" | "vocab", { bg: string; fg: string; icon: IconName }> = {
+  reading: { bg: "var(--brand-subtle)", fg: "var(--text-link)", icon: "book-open" },
+  listening: { bg: "var(--info-subtle)", fg: "var(--info-text)", icon: "headphones" },
+  vocab: { bg: "var(--success-subtle)", fg: "var(--success-text)", icon: "graduation-cap" },
+};
+
+function ProgressPanel({
+  reading,
+  listening,
+  vocab,
+}: {
+  reading: SectionProgress;
+  listening: SectionProgress;
+  vocab: VocabProgressStat;
+}) {
+  const sectionPct = (p: SectionProgress) => (p.total > 0 ? Math.round((p.done / p.total) * 100) : 0);
+  const sectionRight = (p: SectionProgress) =>
+    p.total === 0 ? (
+      <span style={S.pcpStatMuted}>New tests coming soon</span>
+    ) : p.done === p.total ? (
+      <span style={S.pcpStatDone}>All <CountUp value={p.total} duration={600} /> done ✓</span>
+    ) : (
+      <span style={S.pcpStat}>
+        <CountUp value={p.done} duration={600} /> of <CountUp value={p.total} duration={600} /> · <CountUp value={p.left} duration={600} /> left
+      </span>
+    );
+  // Bar width clamps at 100% (can't overshoot the track); the numbers next to it
+  // stay raw (reviewedToday can exceed goal — that's a good thing, not a bug to hide).
+  const vocabPct = vocab.goal > 0 ? Math.round((vocab.reviewedToday / vocab.goal) * 100) : 0;
+
+  return (
+    <div style={S.pcpCard}>
+      <ProgressRow tone="reading" label="Reading" pct={sectionPct(reading)} delayMs={0} right={sectionRight(reading)} />
+      <ProgressRow tone="listening" label="Listening" pct={sectionPct(listening)} delayMs={90} right={sectionRight(listening)} />
+      <ProgressRow
+        tone="vocab"
+        label="Vocabulary"
+        pct={vocabPct}
+        delayMs={180}
+        right={
+          vocab.dueToday === 0 ? (
+            vocab.reviewedToday >= vocab.goal ? (
+              <span style={S.pcpStatDone}>All done today ✓</span>
+            ) : (
+              // Nothing due right now, but the goal isn't met either — "All done"
+              // would overclaim (goal ≠ due). Bar/numbers stay as-is either way.
+              <span style={S.pcpStat}>No reviews due</span>
+            )
+          ) : (
+            <span style={S.pcpStat}>
+              <CountUp value={vocab.reviewedToday} duration={600} />/<CountUp value={vocab.goal} duration={600} /> today · <CountUp value={vocab.dueToday} duration={600} /> due
+            </span>
+          )
+        }
+      />
+    </div>
+  );
+}
+
+function ProgressRow({
+  tone,
+  label,
+  pct,
+  delayMs,
+  right,
+}: {
+  tone: "reading" | "listening" | "vocab";
+  label: string;
+  pct: number;
+  delayMs: number;
+  right: ReactNode;
+}) {
+  const t = PROGRESS_TILE[tone];
+  return (
+    <div className="pcp-row">
+      <span style={S.pcpLabelWrap}>
+        <span style={{ ...S.pcpTile, background: t.bg, color: t.fg }}>
+          <Icon name={t.icon} size={15} strokeWidth={2.4} />
+        </span>
+        <span style={S.pcpLabel}>{label}</span>
+      </span>
+      <div className="pcp-meta">
+        <DrawBar pct={pct} delayMs={delayMs} />
+        {right}
+      </div>
+    </div>
+  );
+}
+
+/** Bar fill draws in 0→pct on mount — same SSR-safe trick as CountUp: server/no-JS
+ *  renders the final width directly (no FOUC, no layout shift — the track's height
+ *  is fixed, only this inner width moves), client replays 0→pct once mounted.
+ *
+ *  The `.pcp-fill` base class carries NO transition — only `.is-drawing` does.
+ *  A naive "setWidth(0) then rAF→setWidth(pct)" flashes: the very first commit
+ *  (width 0) already has the transition class attached, so the browser animates
+ *  the *reset* (final → 0) before it animates the draw-in. Fix: reset width with
+ *  the transition class still absent (snap, no motion) → let that frame paint →
+ *  THEN attach `.is-drawing` at width 0 → let THAT frame paint → only then set
+ *  the final width, so the browser has a transitioned width:0 to animate from.
+ *  prefers-reduced-motion skips all of this — width stays at its final value and
+ *  `.is-drawing` is never attached, so the first frame is already static/final. */
+function DrawBar({ pct, delayMs }: { pct: number; delayMs: number }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  const [width, setWidth] = useState(clamped);
+  const [drawing, setDrawing] = useState(false);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    setDrawing(false);
+    setWidth(0);
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setDrawing(true);
+        setWidth(clamped);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [clamped]);
+  return (
+    <span style={S.pcpTrack} aria-hidden="true">
+      <span
+        className={drawing ? "pcp-fill is-drawing" : "pcp-fill"}
+        style={{ width: `${width}%`, transitionDelay: `${delayMs}ms` }}
+      />
+    </span>
+  );
+}
+
 /* ── Skill card (live Reading / Listening / Writing / Speaking) ──────────────
    Tactile bando tile: letter chip (soft fill / ink text) + Live pill, name +
    count, a BAND block (the user's best band on a 0–9 rail with a target marker),
@@ -680,7 +833,6 @@ function SkillCard({
   skill,
   name,
   count,
-  progress,
   band,
   targetBand,
   onClick,
@@ -690,8 +842,6 @@ function SkillCard({
   skill: SkillKey;
   name: string;
   count: string;
-  /** "Done N of M · K left" — только Reading/Listening (фильтр-карты); W/S не считают. */
-  progress?: SectionProgress;
   /** User's best band on this skill, or null with no attempts yet. */
   band: number | null;
   /** Goal band; defaults to 7.0 when the user hasn't set one. */
@@ -713,8 +863,6 @@ function SkillCard({
       <div>
         <div style={S.skillName}>{name}</div>
         <div style={S.skillCount}>{count}</div>
-        {/* total===0 (пост-вайп секция без тестов) — строка не рендерится вовсе. */}
-        {progress && progress.total > 0 && <div style={S.skillProgress}>{progressLabel(progress)}</div>}
       </div>
       {/* Band-рейл — только у фильтр-карт (твоё стояние по скиллу). Nav-карты (live
           W/S) — другой вид: ведут в отдельный инструмент, band там не к месту. Вместе
@@ -1047,6 +1195,13 @@ const CSS = `
 .pc-drill:hover{border-color:var(--brand)!important}
 .pc-drill:active{transform:translateY(3px);box-shadow:none!important}
 .pc-drilllink:hover{text-decoration:underline}
+/* Your progress panel — row stacks label-over-bar on narrow viewports via
+   grid-template-columns (DOM order unchanged); the fill's width is toggled
+   0→pct by JS on mount (see DrawBar), .is-drawing carries the transition. */
+.pcp-row{display:grid;grid-template-columns:1fr;row-gap:8px}
+.pcp-meta{display:grid;grid-template-columns:1fr auto;align-items:center;gap:14px}
+.pcp-fill{display:block;height:100%;border-radius:var(--radius-full);background:linear-gradient(90deg,var(--brand-edge),var(--brand));box-shadow:0 0 10px color-mix(in oklab, var(--brand) 45%, transparent)}
+.pcp-fill.is-drawing{transition:width 700ms cubic-bezier(.16,1,.3,1)}
 .pc-gloss{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-xs)}
 .pc-gloss>summary{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;cursor:pointer;list-style:none;font-family:var(--font-ui);font-size:13px;font-weight:700;color:var(--text-primary)}
 .pc-gloss>summary::-webkit-details-marker{display:none}
@@ -1069,6 +1224,7 @@ const CSS = `
   .pc-skills{grid-template-columns:repeat(2,1fr);gap:16px}
   .pc-showall{height:28px}
   .pc-empty-cards{grid-template-columns:repeat(2,1fr)}
+  .pcp-row{grid-template-columns:132px 1fr;column-gap:18px;row-gap:0;align-items:center}
 }
 @media (min-width:768px){
   .pc-wrap{padding:32px 28px 72px}
@@ -1134,6 +1290,18 @@ const S: Record<string, CSSProperties> = {
   rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
 
+  // Your progress — Reading/Listening/Vocabulary card. Eyebrow mirrors skillHead/
+  // comingHead (same sentence-case section-label pattern).
+  pcpHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-secondary)", margin: "0 0 12px" },
+  pcpCard: { display: "flex", flexDirection: "column", gap: 20, padding: "20px 22px", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", background: "var(--surface-raised)", boxShadow: "var(--shadow-solid)" },
+  pcpLabelWrap: { display: "flex", alignItems: "center", gap: 10 },
+  pcpTile: { width: 28, height: 28, flex: "none", borderRadius: "var(--radius-sm)", display: "grid", placeItems: "center" },
+  pcpLabel: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-primary)" },
+  pcpTrack: { position: "relative", display: "block", width: "100%", minWidth: 0, height: 8, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
+  pcpStat: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap" },
+  pcpStatDone: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--success-text)", whiteSpace: "nowrap" },
+  pcpStatMuted: { fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" },
+
   // Skills — sentence-case label (не uppercase-эйбрау) + опц. контекст-хелп про BAND
   skillHeadWrap: { display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 },
   skillHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)" },
@@ -1144,9 +1312,6 @@ const S: Record<string, CSSProperties> = {
   skillTile: { width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 16, fontWeight: 700 },
   skillName: { fontSize: 18, fontWeight: 700, color: "var(--text-primary)" },
   skillCount: { fontSize: 13, color: "var(--text-muted)", marginTop: 3 },
-  // Может обрезаться на узкой карте (4 skill-колонки на десктопе) — nowrap читается
-  // лучше рваного переноса "K / left" на середине слова.
-  skillProgress: { fontSize: 13, color: "var(--text-muted)", marginTop: 3, whiteSpace: "nowrap" },
   // marginTop:auto прижимает футер к низу карты — заполняет пустую нижнюю зону.
   skillFoot: { marginTop: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, color: "var(--text-link)" },
 
