@@ -91,7 +91,7 @@ export interface ChartGeom {
   target: { y: number; band: number } | null;
   targetEdge: { band: number; above: boolean } | null;
   exam: { x: number; rightEdge: boolean } | null;
-  forecast: { lastX: number; lastY: number; horizonX: number; projY: number } | null;
+  forecast: { lastX: number; lastY: number; horizonX: number; projY: number; clamped: boolean; band: number } | null;
   xTicks: { x: number; tMs: number; label: string }[];
   latest: { x: number; y: number; band: number; section: "reading" | "listening" };
 }
@@ -180,8 +180,13 @@ export function buildChartGeometry(input: ChartGeometryInput, size: { w: number;
   const examX = examInWindow ? xScale(examMs) : null;
   // Прогноз-стаб клампится в плот по уже посчитанному пикселю (не по band), потому
   // что projectedBand может лежать вне окна обзора — стаб визуально утыкается в
-  // кромку плота, а не улетает за пределы холста.
-  const projY = showForecast ? Math.min(Math.max(yScale(forecast.projectedBand!), PAD.t), CH - PAD.b) : null;
+  // кромку плота, а не улетает за пределы холста. rawProjY (до клампа) нужен только
+  // чтобы отличить «кламп сработал» — клиент рисует честный бейдж-стрелку со
+  // значением band рядом со стабом, а не молча прижимает линию к кромке (на
+  // растущих аккаунтах кламп-к-потолку читался как «уже у цели»).
+  const rawProjY = showForecast ? yScale(forecast.projectedBand!) : null;
+  const projY = showForecast ? Math.min(Math.max(rawProjY!, PAD.t), CH - PAD.b) : null;
+  const projClamped = showForecast ? rawProjY! !== projY : false;
   // Засечки оси X: равномерно по домену. Раньше подписей было ровно две (по краям) —
   // между ними шкалу приходилось достраивать в уме, и поле читалось как «точки в
   // пустоте», а не как график. На узком мобильном холсте 4 подписи склеились бы — 3.
@@ -213,7 +218,9 @@ export function buildChartGeometry(input: ChartGeometryInput, size: { w: number;
     target: targetY != null ? { y: targetY, band: targetBand! } : null,
     targetEdge: targetBand != null && !targetInWindow ? { band: targetBand, above: targetBand > yMax } : null,
     exam: examX != null ? { x: examX, rightEdge: examX > CW - PAD.r - 28 } : null,
-    forecast: showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: CW - PAD.r, projY: projY! } : null,
+    forecast: showForecast
+      ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: CW - PAD.r, projY: projY!, clamped: projClamped, band: forecast.projectedBand! }
+      : null,
     xTicks,
     latest,
   };
