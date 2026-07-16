@@ -19,6 +19,11 @@ import type { BandPlanDrill, BandPlanWeakType } from "@/lib/progress/band-plan";
 export type DailyPlanIntensity = "generic" | "base" | "ramp" | "final";
 export type DailyPlanItemKind = "mistakes" | "vocab" | "drill" | "drill2" | "mock";
 
+// Нормы плана (решение владельца 2026-07-16): 2 практики в день, 2 полных мока
+// в неделю. Пункт закрывается по достижении нормы, прогресс виден парой N/M.
+export const DAILY_DRILL_TARGET = 2;
+export const WEEKLY_MOCK_TARGET = 2;
+
 export interface DailyPlanInput {
   /** Дни до экзамена (уже посчитано getExamCountdown); null — дата не задана. */
   daysUntilExam: number | null;
@@ -27,8 +32,10 @@ export interface DailyPlanInput {
   secondDrill: BandPlanWeakType | null;
   mistakes: { due: number; reviewedToday: number };
   vocab: { dueToday: number; reviewedToday: number; goal: number };
-  drillDoneToday: boolean;
-  mockDoneThisWeek: boolean;
+  /** Сданных попыток сегодня (любых) — прогресс дневной нормы практики. */
+  drillsToday: number;
+  /** Сданных full-моков в текущей неделе — прогресс недельной нормы мока. */
+  mocksThisWeek: number;
   hasAttempts: boolean;
   catalog: {
     hasPublishedTests: boolean;
@@ -74,7 +81,8 @@ function intensityFor(daysUntilExam: number | null): DailyPlanIntensity {
  * рендера (WCAG 2.4.3: клавиатурный/визуальный порядок не пляшет от состояния).
  */
 export function computeDailyPlan(input: DailyPlanInput): DailyPlan {
-  const { daysUntilExam, drill, secondDrill, mistakes, vocab, drillDoneToday, mockDoneThisWeek, hasAttempts, catalog } = input;
+  const { daysUntilExam, drill, secondDrill, mistakes, vocab, drillsToday, mocksThisWeek, hasAttempts, catalog } = input;
+  const drillDone = drillsToday >= DAILY_DRILL_TARGET;
 
   const examDateSet = daysUntilExam != null;
   const examPassed = daysUntilExam != null && daysUntilExam < 0;
@@ -121,15 +129,18 @@ export function computeDailyPlan(input: DailyPlanInput): DailyPlan {
       label: drillLabel,
       sublabel: null,
       href: drillHref,
-      target: null,
-      progress: null,
-      done: drillDoneToday,
+      target: DAILY_DRILL_TARGET,
+      progress: drillsToday,
+      done: drillDone,
     });
 
     // drill2 гейтится тем же catalog.hasPublishedTests, что и drill: он ведёт по
     // тому же /app/practice?q_type= контракту — без каталога это была бы мёртвая
     // ссылка, как и у drill (спека явно оговаривает только drill/mock, но drill2
     // структурно идентичен drill, а не отдельный от каталога кейс).
+    // Прогресс-пара живёт на первом drill-пункте; drill2 закрывается тем же
+    // дневным счётчиком без своей пары — два одинаковых N/M рядом читались бы
+    // как две отдельные нормы.
     if (includeDrill2 && secondDrill) {
       items.push({
         id: "drill2",
@@ -139,7 +150,7 @@ export function computeDailyPlan(input: DailyPlanInput): DailyPlan {
         href: `/app/practice?q_type=${encodeURIComponent(secondDrill.qtype)}`,
         target: null,
         progress: null,
-        done: drillDoneToday,
+        done: drillDone,
       });
     }
 
@@ -147,14 +158,14 @@ export function computeDailyPlan(input: DailyPlanInput): DailyPlan {
       items.push({
         id: "mock",
         kind: "mock",
-        label: "Take a weekly full mock",
+        label: `Take ${WEEKLY_MOCK_TARGET} full mocks this week`,
         sublabel: null,
         // Категория из каталога, не хардкод full_reading: при каталоге только с
         // full-listening хардкод вёл бы в пустую выдачу фильтра.
         href: `/app/practice?category=${catalog.fullMockCategory}`,
-        target: null,
-        progress: null,
-        done: mockDoneThisWeek,
+        target: WEEKLY_MOCK_TARGET,
+        progress: mocksThisWeek,
+        done: mocksThisWeek >= WEEKLY_MOCK_TARGET,
       });
     }
   }

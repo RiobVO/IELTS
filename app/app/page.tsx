@@ -236,30 +236,30 @@ export default async function Dashboard() {
   const weakest = weak[0] ?? null;
   const hasAttempts = attempts.length > 0;
 
-  // Today's plan (BRIEF §12) — чистое ядро computeDailyPlan; drillDoneToday/
-  // mockDoneThisWeek читаем из уже загруженных attempts (без нового запроса),
+  // Today's plan (BRIEF §12) — чистое ядро computeDailyPlan; drillsToday/
+  // mocksThisWeek считаем из уже загруженных attempts (без нового запроса),
   // «сегодня»/«эта неделя» — той же таймзоной юзера, что exam-countdown.
-  // Известное ограничение: окно = последние 20 попыток — недельный mock «забудется»,
-  // если после него сдано 20+ работ за ту же неделю. Осознанно: экстремальный кейс
+  // Известное ограничение: окно = последние 20 попыток — недельные моки «забудутся»,
+  // если после них сдано 20+ работ за ту же неделю. Осознанно: экстремальный кейс
   // не стоит отдельного запроса на каждый рендер дашборда.
   const isFullMockCategory = (cat: string) => cat === "full_reading" || cat === "full_listening";
-  const drillDoneToday = attempts.some(
+  const drillsToday = attempts.filter(
     (a) => a.submitted_at && isSameTzDay(new Date(a.submitted_at), now, tz),
-  );
-  const mockDoneThisWeek = attempts.some(
+  ).length;
+  const mocksThisWeek = attempts.filter(
     (a) =>
       a.submitted_at &&
       isFullMockCategory(a.content_item?.category ?? "") &&
       isInCurrentTzWeek(new Date(a.submitted_at), now, tz),
-  );
+  ).length;
   const dailyPlan = computeDailyPlan({
     daysUntilExam: examCountdown?.days ?? null,
     drill: bandPlan.drill,
     secondDrill: weak[1] ?? null,
     mistakes: mistakesSummary,
     vocab: { dueToday: vocabSummary.dueToday, reviewedToday: vocabSummary.reviewedToday, goal: vocabSummary.goal },
-    drillDoneToday,
-    mockDoneThisWeek,
+    drillsToday,
+    mocksThisWeek,
     hasAttempts,
     catalog: catalogAvailability,
   });
@@ -807,8 +807,8 @@ function TodayPlanCard({ plan, catalogEmpty }: { plan: DailyPlan; catalogEmpty: 
 }
 
 function TodayPlanRow({ item }: { item: DailyPlanItem }) {
-  // sublabel сейчас всегда null (ядро его не заполняет) — прогресс-пара
-  // (target/progress) несёт vocab; остальные пункты показывают только label.
+  // sublabel сейчас всегда null (ядро его не заполняет) — прогресс-пару
+  // (target/progress) несут vocab/drill/mock; остальные пункты — только label.
   const sub = item.target != null ? `${item.progress ?? 0}/${item.target}` : item.sublabel;
   return (
     <Link
