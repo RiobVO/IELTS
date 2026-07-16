@@ -12,6 +12,7 @@ import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { writingFeatureEnabled, speakingFeatureEnabled } from "@/env";
 import { qtypeLabel, categoryLabel, QTYPE_LABELS, CATEGORY_LABELS, READING_CATEGORIES, LISTENING_CATEGORIES } from "@/lib/labels";
 import { aggregateWeakness, type PerTypeBreakdown, type WeaknessRow } from "@/lib/practice/weakness";
+import { computeSectionProgress } from "@/lib/practice/section-progress";
 import { Icon } from "@/components/core/icons";
 import { Badge } from "@/components/core/Badge";
 import { AppShell } from "../_AppShell";
@@ -110,54 +111,66 @@ export default async function PracticePage({
 
   // Профиль (тир) / submitted-попытки (weak-spots + слабый тип + best band + best
   // raw score) / in_progress (resume + прогресс строк) / оба published-списка /
-  // trial-лейн — параллельно, одной волной. Прогрев шапки конкурентно (cache()'d,
-  // AppShell переиспользует).
-  const [profile, submittedRows, inProgressRes, readingTests, listeningTests, trialRows] = await Promise.all([
-    getProfile(),
-    // Единое owner-чтение submitted-попыток (Drizzle обходит RLS — скоуп по user.id
-    // ставим сами, как в mistakes.ts/дашборде). Раньше было ДВА пересекающихся
-    // запроса: Supabase (50, hero/drill/bestBand) + Drizzle (300, weak-spots).
-    // Теперь одно чтение: первые 50 строк (slice ниже) сохраняют старое окно
-    // hero/drill, все 300 кормят weak-spots статистику за историю.
-    db
-      .select({
-        contentItemId: attemptTable.contentItemId,
-        perTypeBreakdown: attemptTable.perTypeBreakdown,
-        bandScore: attemptTable.bandScore,
-        rawScore: attemptTable.rawScore,
-        section: contentItem.section,
-      })
-      .from(attemptTable)
-      .innerJoin(contentItem, eq(contentItem.id, attemptTable.contentItemId))
-      .where(and(eq(attemptTable.userId, user.id), eq(attemptTable.status, "submitted")))
-      .orderBy(desc(attemptTable.submittedAt))
-      .limit(300),
-    supabase
-      .from("attempt")
-      .select("content_item_id,answers,started_at,content_item:content_item_id(title,category,section)")
-      .eq("status", "in_progress")
-      .order("started_at", { ascending: false })
-      // Страховка от неограниченного чтения answers-jsonb: живых in_progress больше
-      // сотни не бывает (по одной на тест), но unbounded-скан здесь ни к чему.
-      .limit(100),
-    getPublishedTests("reading"),
-    getPublishedTests("listening"),
-    // Trial-лейн (§4.8): (content_item_id, status) попыток на полных gated-тестах.
-    // Раньше шёл серийным хопом ПОСЛЕ батча (ждал userTier), теперь в общей волне —
-    // запрос дешёвый, для non-basic результат просто отбрасывается ниже.
-    db
-      .selectDistinct({ id: attemptTable.contentItemId, status: attemptTable.status })
-      .from(attemptTable)
-      .innerJoin(contentItem, eq(contentItem.id, attemptTable.contentItemId))
-      .where(
-        and(
-          eq(attemptTable.userId, user.id),
-          ne(contentItem.tierRequired, "basic"),
-          inArray(contentItem.category, [...FULL_CATEGORIES]),
+  // trial-лейн / lifetime attempted-ids — параллельно, одной волной. Прогрев шапки
+  // конкурентно (cache()'d, AppShell переиспользует).
+  const [profile, submittedRows, inProgressRes, readingTests, listeningTests, trialRows, attemptedRows] =
+    await Promise.all([
+      getProfile(),
+      // Единое owner-чтение submitted-попыток (Drizzle обходит RLS — скоуп по user.id
+      // ставим сами, как в mistakes.ts/дашборде). Раньше было ДВА пересекающихся
+      // запроса: Supabase (50, hero/drill/bestBand) + Drizzle (300, weak-spots).
+      // Теперь одно чтение: первые 50 строк (slice ниже) сохраняют старое окно
+      // hero/drill, все 300 кормят weak-spots статистику за историю.
+      db
+        .select({
+          contentItemId: attemptTable.contentItemId,
+          perTypeBreakdown: attemptTable.perTypeBreakdown,
+          bandScore: attemptTable.bandScore,
+          rawScore: attemptTable.rawScore,
+          section: contentItem.section,
+        })
+        .from(attemptTable)
+        .innerJoin(contentItem, eq(contentItem.id, attemptTable.contentItemId))
+        .where(and(eq(attemptTable.userId, user.id), eq(attemptTable.status, "submitted")))
+        .orderBy(desc(attemptTable.submittedAt))
+        .limit(300),
+      supabase
+        .from("attempt")
+        .select("content_item_id,answers,started_at,content_item:content_item_id(title,category,section)")
+        .eq("status", "in_progress")
+        .order("started_at", { ascending: false })
+        // Страховка от неограниченного чтения answers-jsonb: живых in_progress больше
+        // сотни не бывает (по одной на тест), но unbounded-скан здесь ни к чему.
+        .limit(100),
+      getPublishedTests("reading"),
+      getPublishedTests("listening"),
+      // Trial-лейн (§4.8): (content_item_id, status) попыток на полных gated-тестах.
+      // Раньше шёл серийным хопом ПОСЛЕ батча (ждал userTier), теперь в общей волне —
+      // запрос дешёвый, для non-basic результат просто отбрасывается ниже.
+      db
+        .selectDistinct({ id: attemptTable.contentItemId, status: attemptTable.status })
+        .from(attemptTable)
+        .innerJoin(contentItem, eq(contentItem.id, attemptTable.contentItemId))
+        .where(
+          and(
+            eq(attemptTable.userId, user.id),
+            ne(contentItem.tierRequired, "basic"),
+            inArray(contentItem.category, [...FULL_CATEGORIES]),
+          ),
         ),
-      ),
-    getHeaderData(),
-  ]);
+      // Lifetime attempted content_item_id (для секционного счётчика "Done N of M" —
+      // НЕ bestRawById: тот зависит от submitted-окна (300 строк выше → slice(0,50)
+      // под hero/bestBand) и несёт best raw_score для дисплея на карточке ("Done ·
+      // X/Y", осознанно оконный best-score показ). Счётчик — lifetime-факт «тест
+      // пройден хоть раз», окно исказило бы его: старый тест, вытесненный полусотней
+      // более свежих попыток по другим тестам, ложно вернулся бы в "left". distinct
+      // растёт с размером каталога (десятки id), не с числом попыток — дёшево.
+      db
+        .selectDistinct({ contentItemId: attemptTable.contentItemId })
+        .from(attemptTable)
+        .where(and(eq(attemptTable.userId, user.id), eq(attemptTable.status, "submitted"))),
+      getHeaderData(),
+    ]);
 
   const userTier: Tier = profile
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
@@ -269,6 +282,20 @@ export default async function PracticePage({
     };
   });
 
+  // Section progress ("Done N of M · K left" на skill-картах) — startable ЗДЕСЬ то
+  // же самое, что рисует Start/Unlock ниже (t.locked уже посчитан выше с trial-лейн).
+  // attempted — из lifetime attemptedRows (см. Promise.all выше), НЕ из bestRawById
+  // (то оконное, best-score display).
+  const attemptedIds = new Set(attemptedRows.map((r) => r.contentItemId));
+  const readingProgress = computeSectionProgress(
+    tests.filter((t) => t.section === "reading").map((t) => ({ id: t.id, startable: !t.locked })),
+    attemptedIds,
+  );
+  const listeningProgress = computeSectionProgress(
+    tests.filter((t) => t.section === "listening").map((t) => ({ id: t.id, startable: !t.locked })),
+    attemptedIds,
+  );
+
   // Фильтр-опции — только реально присутствующие категории/типы, с counts по всему
   // каталогу (как в прототипе макета). Категории в каноничном порядке секций.
   const catCounts: Record<string, number> = {};
@@ -320,6 +347,8 @@ export default async function PracticePage({
         hero={hero}
         readingCount={skillCount(readingTests)}
         listeningCount={skillCount(listeningTests)}
+        readingProgress={readingProgress}
+        listeningProgress={listeningProgress}
         readingBand={bestBand.reading > 0 ? bestBand.reading : null}
         listeningBand={bestBand.listening > 0 ? bestBand.listening : null}
         targetBand={targetBand}

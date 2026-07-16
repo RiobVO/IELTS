@@ -9,6 +9,7 @@ import { QuestionFilter } from "@/components/exam/QuestionFilter";
 import { CatalogNotice } from "@/components/app/CatalogNotice";
 import { Input } from "@/components/core/Input";
 import { qtypeLabel, categoryLabel, qtypeDescription } from "@/lib/labels";
+import type { SectionProgress } from "@/lib/practice/section-progress";
 import { setTargetBand, joinContentWaitlist } from "./actions";
 
 /** Valid IELTS targets — same scale the onboarding select offers. */
@@ -123,6 +124,10 @@ const COMING: Record<"writing" | "speaking", ComingInfo> = {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** Skill-card meta line — caller already filters out total===0. */
+const progressLabel = ({ done, total, left }: SectionProgress): string =>
+  done === total ? `All ${total} done` : `Done ${done} of ${total} · ${left} left`;
+
 export function PracticeCatalog({
   tests,
   filterCategories,
@@ -131,6 +136,8 @@ export function PracticeCatalog({
   hero,
   readingCount,
   listeningCount,
+  readingProgress,
+  listeningProgress,
   readingBand,
   listeningBand,
   targetBand,
@@ -149,6 +156,10 @@ export function PracticeCatalog({
   /** Count line per live skill, e.g. "12 tests". */
   readingCount: string;
   listeningCount: string;
+  /** "Done N of M · K left" — startable/attempted, секционный итог (не зависит от
+   *  фильтров каталога ниже). */
+  readingProgress: SectionProgress;
+  listeningProgress: SectionProgress;
   /** User's best band on the skill (per-section best), or null with no attempts. */
   readingBand: number | null;
   listeningBand: number | null;
@@ -350,6 +361,7 @@ export function PracticeCatalog({
             skill="reading"
             name="Reading"
             count={readingCount}
+            progress={readingProgress}
             band={readingBand}
             targetBand={targetBand}
             onClick={() => selectSkill("reading")}
@@ -359,6 +371,7 @@ export function PracticeCatalog({
             skill="listening"
             name="Listening"
             count={listeningCount}
+            progress={listeningProgress}
             band={listeningBand}
             targetBand={targetBand}
             onClick={() => selectSkill("listening")}
@@ -667,6 +680,7 @@ function SkillCard({
   skill,
   name,
   count,
+  progress,
   band,
   targetBand,
   onClick,
@@ -676,6 +690,8 @@ function SkillCard({
   skill: SkillKey;
   name: string;
   count: string;
+  /** "Done N of M · K left" — только Reading/Listening (фильтр-карты); W/S не считают. */
+  progress?: SectionProgress;
   /** User's best band on this skill, or null with no attempts yet. */
   band: number | null;
   /** Goal band; defaults to 7.0 when the user hasn't set one. */
@@ -697,6 +713,8 @@ function SkillCard({
       <div>
         <div style={S.skillName}>{name}</div>
         <div style={S.skillCount}>{count}</div>
+        {/* total===0 (пост-вайп секция без тестов) — строка не рендерится вовсе. */}
+        {progress && progress.total > 0 && <div style={S.skillProgress}>{progressLabel(progress)}</div>}
       </div>
       {/* Band-рейл — только у фильтр-карт (твоё стояние по скиллу). Nav-карты (live
           W/S) — другой вид: ведут в отдельный инструмент, band там не к месту. Вместе
@@ -1126,6 +1144,9 @@ const S: Record<string, CSSProperties> = {
   skillTile: { width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 16, fontWeight: 700 },
   skillName: { fontSize: 18, fontWeight: 700, color: "var(--text-primary)" },
   skillCount: { fontSize: 13, color: "var(--text-muted)", marginTop: 3 },
+  // Может обрезаться на узкой карте (4 skill-колонки на десктопе) — nowrap читается
+  // лучше рваного переноса "K / left" на середине слова.
+  skillProgress: { fontSize: 13, color: "var(--text-muted)", marginTop: 3, whiteSpace: "nowrap" },
   // marginTop:auto прижимает футер к низу карты — заполняет пустую нижнюю зону.
   skillFoot: { marginTop: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, color: "var(--text-link)" },
 
