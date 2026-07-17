@@ -29,30 +29,30 @@ interface KeyData {
  * MCQ / matching / map-labelling are routed by data when present and flagged
  * for review otherwise — finalized against their first real file (BRIEF §10).
  */
-export function parseTest(html: string): ParsedTest {
+export async function parseTest(html: string): Promise<ParsedTest> {
   // Listening uses a different template (KEY/band, .part[data-part], audio) —
   // route to its dedicated parser. Detected by an <audio> tag + part sections.
-  if (isListening(html)) return parseListening(html);
+  if (isListening(html)) return await parseListening(html);
   // Full Reading: 3 passage sections (vs one #passageContent in single).
-  if (isFullReading(html)) return parseFullReading(html);
+  if (isFullReading(html)) return await parseFullReading(html);
 
   const $ = cheerio.load(html);
   const warnings: string[] = [];
 
-  // --- embedded JS data objects ---
+  // --- embedded JS data objects (evaluated in memory-capped worker isolates) ---
   const script = $("script")
     .toArray()
     .map((s) => $(s).html() ?? "")
     .join("\n");
   const data: KeyData = {
-    correctAnswers: extractData(script, "correctAnswers") ?? {},
-    acceptableAnswers: extractData(script, "acceptableAnswers") ?? {},
-    mcqGroups: extractData(script, "mcqGroups") ?? {},
-    explanations: extractData(script, "explanations") ?? {},
-    evidence: extractData(script, "evidence") ?? {},
+    correctAnswers: (await extractData(script, "correctAnswers")) ?? {},
+    acceptableAnswers: (await extractData(script, "acceptableAnswers")) ?? {},
+    mcqGroups: (await extractData(script, "mcqGroups")) ?? {},
+    explanations: (await extractData(script, "explanations")) ?? {},
+    evidence: (await extractData(script, "evidence")) ?? {},
   };
   const questionTypesRaw: Record<string, string> =
-    extractData(script, "questionTypes") ?? {};
+    (await extractData(script, "questionTypes")) ?? {};
 
   // Map each mcq-multi member question number -> its group key + shared correct
   // letter-set, so a "8-12" group keys all five questions as one mcq_set.

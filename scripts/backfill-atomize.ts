@@ -257,9 +257,9 @@ if (invokedDirectly) {
       continue;
     }
 
-    let parsed: ReturnType<typeof parseTest>;
+    let parsed: Awaited<ReturnType<typeof parseTest>>;
     try {
-      parsed = parseTest(html);
+      parsed = await parseTest(html);
     } catch (e) {
       skippedParseError++;
       console.log(`SKIP ${row.id} "${row.title}" — parse error: ${String((e as Error)?.message ?? e)}`);

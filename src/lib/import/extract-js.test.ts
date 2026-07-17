@@ -72,45 +72,45 @@ describe("extractObjectLiteral — comment-aware (P2)", () => {
 });
 
 describe("evalDataObject", () => {
-  it("разбирает литерал в JS-значение", () => {
-    expect(evalDataObject("{ a: 1, b: [2, 3] }")).toEqual({ a: 1, b: [2, 3] });
+  it("разбирает литерал в JS-значение", async () => {
+    expect(await evalDataObject("{ a: 1, b: [2, 3] }")).toEqual({ a: 1, b: [2, 3] });
   });
 
-  it("изолирован: глобалы Node не видны в песочнице", () => {
+  it("изолирован: глобалы Node не видны в песочнице", async () => {
     // в реальном модуле typeof process === "object"; в песочнице — "undefined"
-    expect(evalDataObject("{ leaked: typeof process }")).toEqual({ leaked: "undefined" });
+    expect(await evalDataObject("{ leaked: typeof process }")).toEqual({ leaked: "undefined" });
   });
 
-  it("отклоняет литерал сверх size-gate до vm (#20 — heap-cap)", () => {
-    // vm.timeout не ограничивает heap; аномально большой литерал бракуем ДО eval,
-    // чтобы poison-файл не уронил процесс импорта по памяти.
+  it("отклоняет литерал сверх size-gate до воркера (#20 — heap-cap)", async () => {
+    // size-gate бракует аномально большой литерал СИНХРОННО, до спавна воркера — poison-файл
+    // не платит за поток. evalDataObject не async (throw синхронный), поэтому toThrow ловит.
     const huge = `{ "a": "${"x".repeat(4 * 1024 * 1024 + 1)}" }`;
     expect(() => evalDataObject(huge)).toThrow(RangeError);
     // extractData ловит throw и возвращает null (не роняет импорт)
-    expect(extractData(`const big = ${huge};`, "big")).toBeNull();
+    expect(await extractData(`const big = ${huge};`, "big")).toBeNull();
   });
 });
 
 describe("extractData", () => {
-  it("извлекает и вычисляет именованный объект", () => {
+  it("извлекает и вычисляет именованный объект", async () => {
     const src = `const correctAnswers = { "1": "A", "2": "B" };`;
-    expect(extractData(src, "correctAnswers")).toEqual({ "1": "A", "2": "B" });
+    expect(await extractData(src, "correctAnswers")).toEqual({ "1": "A", "2": "B" });
   });
 
-  it("null, если объект не найден", () => {
-    expect(extractData("const x = {};", "nope")).toBeNull();
+  it("null, если объект не найден", async () => {
+    expect(await extractData("const x = {};", "nope")).toBeNull();
   });
 
-  it("null (а не выброс наружу), если литерал падает при вычислении", () => {
+  it("null (а не выброс наружу), если литерал падает при вычислении", async () => {
     // ссылка на отсутствующий в песочнице глобал → throw внутри → catch → null
-    expect(extractData("const bad = { v: process.pid };", "bad")).toBeNull();
+    expect(await extractData("const bad = { v: process.pid };", "bad")).toBeNull();
   });
 });
 
 describe("extractFunctionTable", () => {
-  it("материализует пороговую функцию band(r) в таблицу {raw: band}", () => {
+  it("материализует пороговую функцию band(r) в таблицу {raw: band}", async () => {
     const src = "function band(r){ return r >= 39 ? 9 : r >= 20 ? 7 : 5; }";
-    const t = extractFunctionTable(src, "band", 0, 40);
+    const t = await extractFunctionTable(src, "band", 0, 40);
     expect(t).not.toBeNull();
     expect(Object.keys(t!)).toHaveLength(41); // 0..40 включительно
     expect(t![40]).toBe(9);
@@ -119,25 +119,25 @@ describe("extractFunctionTable", () => {
     expect(t![0]).toBe(5);
   });
 
-  it("включает только числовые результаты", () => {
+  it("включает только числовые результаты", async () => {
     const src = `function f(r){ return r < 2 ? "x" : r; }`;
-    expect(extractFunctionTable(src, "f", 0, 3)).toEqual({ 2: 2, 3: 3 }); // 0,1 -> строка, отброшены
+    expect(await extractFunctionTable(src, "f", 0, 3)).toEqual({ 2: 2, 3: 3 }); // 0,1 -> строка, отброшены
   });
 
-  it("null, если функция не найдена или таблица пуста", () => {
-    expect(extractFunctionTable("function f(){ return 1; }", "nope", 0, 5)).toBeNull();
-    expect(extractFunctionTable(`function f(){ return "x"; }`, "f", 0, 3)).toBeNull(); // нет чисел
+  it("null, если функция не найдена или таблица пуста", async () => {
+    expect(await extractFunctionTable("function f(){ return 1; }", "nope", 0, 5)).toBeNull();
+    expect(await extractFunctionTable(`function f(){ return "x"; }`, "f", 0, 3)).toBeNull(); // нет чисел
   });
 
-  it("null, если тело функции сверх size-gate (#20 — heap-cap)", () => {
-    // Функция с гигантским телом бракуется ДО исполнения в vm (defense against OOM).
+  it("null, если тело функции сверх size-gate (#20 — heap-cap)", async () => {
+    // Функция с гигантским телом бракуется ДО исполнения (defense against OOM), спавна воркера нет.
     const bigBody = `function band(r){ const s = "${"y".repeat(4 * 1024 * 1024 + 1)}"; return r; }`;
-    expect(extractFunctionTable(bigBody, "band", 0, 3)).toBeNull();
+    expect(await extractFunctionTable(bigBody, "band", 0, 3)).toBeNull();
   });
 
-  it("изолирован: вычисление функции не может писать в реальный global", () => {
+  it("изолирован: вычисление функции не может писать в реальный global", async () => {
     const sentinel = "__vm_escape_sentinel__";
-    const t = extractFunctionTable(
+    const t = await extractFunctionTable(
       `function band(r){ globalThis.${sentinel} = true; return r; }`,
       "band",
       0,
@@ -176,5 +176,52 @@ describe("extractRangeBuilderTable", () => {
     const src = `const QTYPE = {};
 (function(){ const set = (a, b, t) => { for (let q = a; q <= b; q++) QTYPE[q] = t; }; })();`;
     expect(extractRangeBuilderTable(src, "QTYPE")).toBeNull();
+  });
+});
+
+// #20 — worker-изоляция исполнения. Репро аудита: 59-байтная аллокационная бомба
+// (`while(true) a.push(new Array(1e6))`) раньше валила ВЕСЬ серверный процесс
+// (`FATAL ERROR: heap out of memory`, exit 134) за ~155мс — быстрее vm.timeout, и это
+// фатальный abort V8, а НЕ throw, который try/catch мог бы поймать. Теперь исполнение
+// живёт в worker_threads-изоляте с maxOldGenerationSizeMb: бомба убивает ТОЛЬКО воркер
+// (ERR_WORKER_OUT_OF_MEMORY на 'error'-событии родителя), родитель ловит это как обычную
+// ошибку и отклоняет импорт. Доказательство выживания процесса: если бы OOM пробил в
+// процесс vitest-раннера, эти ассерты никогда бы не выполнились — файл упал бы с крахом,
+// а не с пройденной проверкой. Каждый кейс завершается ВАЛИДНОЙ экстракцией — она
+// проходит ⇒ процесс пережил бомбу.
+describe("worker-изоляция: аллокационная/CPU-бомба НЕ роняет процесс (#20)", () => {
+  // Литерал с IIFE, который аллоцирует до OOM при вычислении `({...})` в воркере.
+  const MEM_BOMB_LITERAL =
+    `const poison = { "x": (function(){ const a = []; while (true) { a.push(new Array(1e6)); } return 1; })() };`;
+  // Тело band-функции бомбит при первом же вызове band(0) в harness-цикле extractFunctionTable.
+  const MEM_BOMB_FN = `function band(r){ const a = []; while (true) { a.push(new Array(1e6)); } return r; }`;
+  // Бесконечный CPU-цикл — ловится vm.timeout ВНУТРИ воркера (не heap, а время).
+  const CPU_BOMB_FN = `function band(r){ while (true) {} return r; }`;
+
+  it("память-бомба в литерале: extractData → null, процесс жив", async () => {
+    // Воркер умирает по OOM, extractData ловит и штатно отдаёт null — импорт отклонён, не крашнут.
+    expect(await extractData(MEM_BOMB_LITERAL, "poison")).toBeNull();
+    // Процесс пережил: валидная экстракция сразу после бомбы работает.
+    expect(await extractData(`const ok = { "1": "A" };`, "ok")).toEqual({ "1": "A" });
+  });
+
+  it("память-бомба в band-функции: extractFunctionTable → null, процесс жив", async () => {
+    expect(await extractFunctionTable(MEM_BOMB_FN, "band", 0, 40)).toBeNull();
+    // Валидная band-функция после бомбы всё ещё материализуется корректно.
+    const ok = await extractFunctionTable("function band(r){ return r >= 39 ? 9 : 5; }", "band", 0, 40);
+    expect(ok?.[40]).toBe(9);
+  });
+
+  it("evalDataObject на бомбе ОТКЛОНЯЕТСЯ ловимой ошибкой (а не фатальным крахом)", async () => {
+    // Прямое доказательство «родитель получает catchable-ошибку»: promise reject, не abort процесса.
+    const literal = `{ "x": (function(){ const a = []; while (true) { a.push(new Array(1e6)); } return 1; })() }`;
+    await expect(evalDataObject(literal)).rejects.toThrow();
+    // И процесс продолжает жить.
+    expect(await evalDataObject(`{ "ok": true }`)).toEqual({ ok: true });
+  });
+
+  it("CPU-бомба: vm.timeout внутри воркера → extractFunctionTable отдаёт null, процесс жив", async () => {
+    expect(await extractFunctionTable(CPU_BOMB_FN, "band", 0, 3)).toBeNull();
+    expect(await extractData(`const ok = { "1": "A" };`, "ok")).toEqual({ "1": "A" });
   });
 });

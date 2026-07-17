@@ -39,7 +39,7 @@ if (!path) {
 }
 
 const { parseTest } = await import("../src/lib/import/parse-test.ts");
-const parsed = parseTest(readFileSync(resolve(path), "utf8"));
+const parsed = await parseTest(readFileSync(resolve(path), "utf8"));
 const captured = parsed.passages.filter((p) => p.questionsHtml);
 console.log(`Parsed "${parsed.title}" (${parsed.section}) — passages ${parsed.passages.length}, captured ${captured.length}`);
 if (captured.length === 0) {

@@ -19,7 +19,7 @@ import type {
  * and matching/classification render as `table.matching-table` radio rows.
  * Question number -> passage via the surrounding `[data-part]` section.
  */
-export function parseFullReading(html: string): ParsedTest {
+export async function parseFullReading(html: string): Promise<ParsedTest> {
   const $ = cheerio.load(html);
   const warnings: string[] = [];
 
@@ -28,20 +28,20 @@ export function parseFullReading(html: string): ParsedTest {
     .map((s) => $(s).html() ?? "")
     .join("\n");
   const correctAnswers: Record<string, string> =
-    extractData(script, "correctAnswers") ?? {};
+    (await extractData(script, "correctAnswers")) ?? {};
   const acceptableVariants: Record<string, string[]> =
-    extractData(script, "acceptableVariants") ?? {};
+    (await extractData(script, "acceptableVariants")) ?? {};
   const acceptableAnswers: Record<string, string[]> =
-    extractData(script, "acceptableAnswers") ?? {};
+    (await extractData(script, "acceptableAnswers")) ?? {};
   const acceptable: Record<string, string[]> =
     Object.keys(acceptableVariants).length > 0
       ? acceptableVariants
       : acceptableAnswers;
   const questionTypesRaw: Record<string, string> =
-    extractData(script, "questionTypes") ?? {};
+    (await extractData(script, "questionTypes")) ?? {};
   const bandScale =
-    extractFunctionTable(script, "getBand", 0, 40) ??
-    extractFunctionTable(script, "getBandFor40", 0, 40);
+    (await extractFunctionTable(script, "getBand", 0, 40)) ??
+    (await extractFunctionTable(script, "getBandFor40", 0, 40));
   if (!bandScale) warnings.push("getBand function not found — no band scale.");
 
   const title =

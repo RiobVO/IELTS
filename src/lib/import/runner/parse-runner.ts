@@ -28,9 +28,9 @@ function detectSection(html: string): "listening" | "reading" {
   return $("audio").length > 0 ? "listening" : "reading";
 }
 
-export function parseRunner(html: string): RunnerParseResult {
+export async function parseRunner(html: string): Promise<RunnerParseResult> {
   const section = detectSection(html);
-  return section === "listening" ? parseListeningRunner(html) : parseReadingRunner(html);
+  return section === "listening" ? await parseListeningRunner(html) : await parseReadingRunner(html);
 }
 
 // Распознаваемые контейнеры ключа ответов (по любому из имён строятся вопросы).
@@ -80,27 +80,27 @@ function mkQuestion(
   };
 }
 
-function parseReadingRunner(html: string): RunnerParseResult {
+async function parseReadingRunner(html: string): Promise<RunnerParseResult> {
   const src = scriptText(html);
-  const correct = extractData<Record<string, string>>(src, "correctAnswers") ?? {};
+  const correct = (await extractData<Record<string, string>>(src, "correctAnswers")) ?? {};
   // Варианты живут под двумя именами: acceptableAnswers (основной источник) и
   // acceptableVariants (Vol7/Mock, QA 2026-07-02). Оба — {номер: [варианты]}.
   const accept: Record<string, string[]> = {
-    ...(extractData<Record<string, string[]>>(src, "acceptableAnswers") ?? {}),
-    ...(extractData<Record<string, string[]>>(src, "acceptableVariants") ?? {}),
+    ...((await extractData<Record<string, string[]>>(src, "acceptableAnswers")) ?? {}),
+    ...((await extractData<Record<string, string[]>>(src, "acceptableVariants")) ?? {}),
   };
-  const types = extractData<Record<string, string>>(src, "questionTypes") ?? {};
-  const expl = extractData<Record<string, string>>(src, "explanations") ?? {};
-  const evid = extractData<Record<string, { para: string; snippet: string }>>(src, "evidence") ?? {};
+  const types = (await extractData<Record<string, string>>(src, "questionTypes")) ?? {};
+  const expl = (await extractData<Record<string, string>>(src, "explanations")) ?? {};
+  const evid = (await extractData<Record<string, { para: string; snippet: string }>>(src, "evidence")) ?? {};
   // Reading "choose TWO/THREE": members share one correct letter-set, keyed by range
   // in mcqGroups ({"8-12": {qs, correct}}) — same source convention parse-test.ts reads.
   // Without this the members fell to exact/text_accept and set-grading was wrong (#7).
-  const mcqGroups = extractData<Record<string, { qs: number[]; correct: string[] }>>(src, "mcqGroups") ?? {};
+  const mcqGroups = (await extractData<Record<string, { qs: number[]; correct: string[] }>>(src, "mcqGroups")) ?? {};
   const mcqByNum = new Map<number, { groupKey: string; correct: string[] }>();
   for (const [groupKey, g] of Object.entries(mcqGroups)) {
     for (const n of g?.qs ?? []) mcqByNum.set(n, { groupKey, correct: g.correct ?? [] });
   }
-  const bandScale = extractFunctionTable(src, "getBandFor40", 0, 40);
+  const bandScale = await extractFunctionTable(src, "getBandFor40", 0, 40);
 
   // Union: an mcq-multi member may live only in mcqGroups, not in correctAnswers.
   // Фильтр положительных целых (P4): нечисловые ключи "q1" (bespoke-диалект) иначе дают
@@ -196,17 +196,17 @@ function parseReadingRunner(html: string): RunnerParseResult {
   return { parsed, externalAudioSrc: null };
 }
 
-function parseListeningRunner(html: string): RunnerParseResult {
+async function parseListeningRunner(html: string): Promise<RunnerParseResult> {
   const src = scriptText(html);
-  const key = extractData<Record<string, string[]>>(src, "KEY") ?? {};
+  const key = (await extractData<Record<string, string[]>>(src, "KEY")) ?? {};
   // Fallback (Listening Mock, QA 2026-07-02): часть listening-файлов хранит ключ в
   // READING-контейнерах (correctAnswers + acceptableVariants/acceptableAnswers).
   // Приводим их к форме KEY {номер: [варианты]}; при наличии KEY fallback не трогаем.
   if (Object.keys(key).length === 0) {
-    const correct = extractData<Record<string, string>>(src, "correctAnswers") ?? {};
+    const correct = (await extractData<Record<string, string>>(src, "correctAnswers")) ?? {};
     const accept: Record<string, string[]> = {
-      ...(extractData<Record<string, string[]>>(src, "acceptableAnswers") ?? {}),
-      ...(extractData<Record<string, string[]>>(src, "acceptableVariants") ?? {}),
+      ...((await extractData<Record<string, string[]>>(src, "acceptableAnswers")) ?? {}),
+      ...((await extractData<Record<string, string[]>>(src, "acceptableVariants")) ?? {}),
     };
     for (const [k, v] of Object.entries(correct)) {
       key[k] = accept[k]?.length ? accept[k]! : [String(v)];
@@ -219,14 +219,15 @@ function parseListeningRunner(html: string): RunnerParseResult {
   // (тогда литерал на момент объявления пуст). Литерал имеет приоритет; если он
   // пуст/отсутствует — восстанавливаем типы из вызовов-наполнителей, затем из
   // reading-имени questionTypes (тот же fallback-источник, что и ключ).
-  const literalTypes = extractData<Record<string, string>>(src, "QTYPE");
+  const literalTypes = await extractData<Record<string, string>>(src, "QTYPE");
   const types =
     literalTypes && Object.keys(literalTypes).length > 0
       ? literalTypes
-      : extractRangeBuilderTable(src, "QTYPE")
-        ?? extractData<Record<string, string>>(src, "questionTypes")
+      : // `await` binds tighter than `??`: range-builder found → extractData не зовётся (SC сохранён).
+        extractRangeBuilderTable(src, "QTYPE")
+        ?? (await extractData<Record<string, string>>(src, "questionTypes"))
         ?? {};
-  const bandScale = extractFunctionTable(src, "band", 0, 40);
+  const bandScale = await extractFunctionTable(src, "band", 0, 40);
 
   // Фильтр положительных целых (P4): нечисловые ключи "q1" не создают NaN-вопросов.
   const numbers = Object.keys(key)

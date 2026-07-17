@@ -1,6 +1,6 @@
 // Тесты Listening-парсера (BRIEF §4.2). Inline-фикстура повторяет селекторы
 // parse-listening.ts; маршрут через диспетчер parseTest (<audio> + .part).
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseTest } from "./parse-test";
@@ -37,7 +37,10 @@ const LISTENING_HTML = `<!doctype html><html><head><title>IELTS Listening Test -
 </body></html>`;
 
 describe("parseListening — inline part", () => {
-  const t = parseTest(LISTENING_HTML); // через диспетчер
+  let t: Awaited<ReturnType<typeof parseTest>>;
+  beforeAll(async () => {
+    t = await parseTest(LISTENING_HTML); // через диспетчер
+  });
   const q = (n: number) => t.questions.find((x) => x.number === n)!;
 
   it("диспетчеризуется в listening по <audio> + .part и тянет аудио/мету", () => {
@@ -99,7 +102,10 @@ const LISTENING_MAP_MULTI_HTML = `<!doctype html><html><head><title>IELTS Listen
 </body></html>`;
 
 describe("parseListening gap fixtures", () => {
-  const t = parseTest(LISTENING_MAP_MULTI_HTML);
+  let t: Awaited<ReturnType<typeof parseTest>>;
+  beforeAll(async () => {
+    t = await parseTest(LISTENING_MAP_MULTI_HTML);
+  });
   const q = (n: number) => t.questions.find((x) => x.number === n)!;
 
   it("atomizes bare checkbox choose-TWO groups as mcq_multi", () => {
@@ -144,18 +150,18 @@ const LISTENING_TWO_PART_HTML = `<!doctype html><html><head><title>IELTS Listeni
 </body></html>`;
 
 describe("parseListening — категория по числу частей (BRIEF §4.8)", () => {
-  it("ровно одна распознанная часть → part_N (число из data-part), без band_scale", () => {
-    const t1 = parseTest(LISTENING_HTML); // data-part="1"
+  it("ровно одна распознанная часть → part_N (число из data-part), без band_scale", async () => {
+    const t1 = await parseTest(LISTENING_HTML); // data-part="1"
     expect(t1.category).toBe("part_1");
     expect(t1.bandScale).toBeNull();
 
-    const t2 = parseTest(LISTENING_MAP_MULTI_HTML); // data-part="2"
+    const t2 = await parseTest(LISTENING_MAP_MULTI_HTML); // data-part="2"
     expect(t2.category).toBe("part_2");
     expect(t2.bandScale).toBeNull();
   });
 
-  it("2+ части → full_listening, band(r) материализуется в шкалу 0..40 (регресс, не изменилось)", () => {
-    const t = parseTest(LISTENING_TWO_PART_HTML);
+  it("2+ части → full_listening, band(r) материализуется в шкалу 0..40 (регресс, не изменилось)", async () => {
+    const t = await parseTest(LISTENING_TWO_PART_HTML);
     expect(t.category).toBe("full_listening");
     expect(t.passages).toHaveLength(2);
     expect(t.questions).toHaveLength(2);
@@ -165,23 +171,23 @@ describe("parseListening — категория по числу частей (BR
     expect(t.bandScale!["0"]).toBe(5);
   });
 
-  it("одна часть с номером вне 1..4 → фолбэк full_listening + warning (не молчаливый Basic-протек)", () => {
+  it("одна часть с номером вне 1..4 → фолбэк full_listening + warning (не молчаливый Basic-протек)", async () => {
     const html = LISTENING_HTML.replace('data-part="1"', 'data-part="7"');
-    const t = parseTest(html);
+    const t = await parseTest(html);
     expect(t.category).toBe("full_listening");
     expect(t.warnings.some((w) => /has no valid part number/.test(w))).toBe(true);
   });
 
-  it("нечисловой data-part («2foo») не молча читается как 2 — невалиден, warning, full_listening", () => {
+  it("нечисловой data-part («2foo») не молча читается как 2 — невалиден, warning, full_listening", async () => {
     const html = LISTENING_HTML.replace('data-part="1"', 'data-part="2foo"');
-    const t = parseTest(html);
+    const t = await parseTest(html);
     expect(t.category).toBe("full_listening");
     expect(t.warnings.some((w) => /has no valid part number/.test(w))).toBe(true);
     // Вопросы блока не теряются, даже когда его номер части невалиден.
     expect(t.questions.map((q) => q.number).sort()).toEqual([1, 2, 3, 4]);
   });
 
-  it("дубль валидного номера части (два data-part=\"1\") → warning + full_listening, вопросы ОБОИХ блоков сохранены", () => {
+  it("дубль валидного номера части (два data-part=\"1\") → warning + full_listening, вопросы ОБОИХ блоков сохранены", async () => {
     const html = `<!doctype html><html><head><title>IELTS Listening Duplicate Parts</title></head>
 <body>
   <audio src="audio/dup.mp3"></audio>
@@ -197,7 +203,7 @@ describe("parseListening — категория по числу частей (BR
     const KEY = { "1": ["library"], "2": ["hall"] };
   </script>
 </body></html>`;
-    const t = parseTest(html);
+    const t = await parseTest(html);
     expect(t.category).toBe("full_listening");
     expect(t.warnings.some((w) => /Duplicate part number 1/.test(w))).toBe(true);
     // Оба вопроса на месте, каждый привязан к СВОЕМУ (уникальному) passage order —
@@ -207,7 +213,7 @@ describe("parseListening — категория по числу частей (BR
     expect(orders.size).toBe(t.passages.length); // все order уникальны
   });
 
-  it("размеченная часть + блок .part БЕЗ data-part → warning + full_listening, вопросы обоих блоков сохранены (не тихий скип)", () => {
+  it("размеченная часть + блок .part БЕЗ data-part → warning + full_listening, вопросы обоих блоков сохранены (не тихий скип)", async () => {
     const html = `<!doctype html><html><head><title>IELTS Listening Missing Part Attr</title></head>
 <body>
   <audio src="audio/missing.mp3"></audio>
@@ -223,13 +229,13 @@ describe("parseListening — категория по числу частей (BR
     const KEY = { "1": ["library"], "2": ["hall"] };
   </script>
 </body></html>`;
-    const t = parseTest(html);
+    const t = await parseTest(html);
     expect(t.category).toBe("full_listening");
     expect(t.warnings.some((w) => /has no valid part number/.test(w))).toBe(true);
     expect(t.questions.map((q) => q.number).sort()).toEqual([1, 2]);
   });
 
-  it("legacy-разметка без цифр в id (0 валидных частей) → warning + full_listening, вопрос сохранён", () => {
+  it("legacy-разметка без цифр в id (0 валидных частей) → warning + full_listening, вопрос сохранён", async () => {
     const html = `<!doctype html><html><head><title>Listening Legacy Malformed</title></head>
 <body>
   <audio src="audio/legacy.mp3"></audio>
@@ -241,7 +247,7 @@ describe("parseListening — категория по числу частей (BR
     const KEY = { "1": ["library"] };
   </script>
 </body></html>`;
-    const t = parseTest(html);
+    const t = await parseTest(html);
     expect(t.category).toBe("full_listening");
     expect(t.warnings.some((w) => /has no valid part number/.test(w))).toBe(true);
     expect(t.questions.map((q) => q.number)).toEqual([1]);
@@ -250,7 +256,7 @@ describe("parseListening — категория по числу частей (BR
   // Роутинг-регресс (review 2026-07-17): единственная `.part` БЕЗ data-part вообще
   // раньше не проходила isListening()'s `.part[data-part]`-гейт и уходила в reading-
   // ветку parseTest — ни одна из fail-safe'ов parse-listening (полностью её обходя).
-  it("modern-HTML с единственной .part БЕЗ data-part роутится в listening (не в reading) → full_listening + warning, вопрос сохранён", () => {
+  it("modern-HTML с единственной .part БЕЗ data-part роутится в listening (не в reading) → full_listening + warning, вопрос сохранён", async () => {
     const html = `<!doctype html><html><head><title>IELTS Listening Bare Part Only</title></head>
 <body>
   <audio src="audio/bare.mp3"></audio>
@@ -262,7 +268,7 @@ describe("parseListening — категория по числу частей (BR
     const KEY = { "1": ["library"] };
   </script>
 </body></html>`;
-    const t = parseTest(html);
+    const t = await parseTest(html);
     // Главное: попал в listening, а не молча стал passage_1/full_reading через
     // reading-парсер (там нет ни KEY, ни .part-семантики — вопрос бы просто не нашёлся).
     expect(t.section).toBe("listening");
@@ -274,8 +280,8 @@ describe("parseListening — категория по числу частей (BR
 
 const listening = sample("listening-test.html");
 describe.skipIf(!listening)("real sample — listening-test (40Q)", () => {
-  it("4 части / 40 вопросов с аудио и band-шкалой, без предупреждений", () => {
-    const t = parseTest(listening!);
+  it("4 части / 40 вопросов с аудио и band-шкалой, без предупреждений", async () => {
+    const t = await parseTest(listening!);
     expect(t.section).toBe("listening");
     // Регресс (BRIEF §4.8): 4 части — по-прежнему full_listening, не part_N.
     expect(t.category).toBe("full_listening");
