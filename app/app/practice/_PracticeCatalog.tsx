@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useState, useTransition, useEffect, useRef, type CSSProperties } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/core/icons";
 import { Badge } from "@/components/core/Badge";
@@ -75,14 +75,6 @@ export interface HeroData {
 }
 export type DrillWeakest = { type: string; label: string; section: Section } | null;
 
-/** Vocabulary row of the "Your progress" panel — slim view of VocabDueSummary
- *  (src/lib/vocab/summary.ts), just the three numbers the bar/stat need. */
-interface VocabProgressStat {
-  reviewedToday: number;
-  goal: number;
-  dueToday: number;
-}
-
 /** Предвыбор фильтра из query: секция + типы/категории + сорт. Значения уже
  *  провалидированы на сервере (page.tsx) против @/lib/labels и enum'а сорта. */
 export interface InitialFilter {
@@ -142,7 +134,6 @@ export function PracticeCatalog({
   listeningCount,
   readingProgress,
   listeningProgress,
-  vocabProgress,
   readingBand,
   listeningBand,
   targetBand,
@@ -165,9 +156,6 @@ export function PracticeCatalog({
    *  фильтров каталога ниже). */
   readingProgress: SectionProgress;
   listeningProgress: SectionProgress;
-  /** Slim vocab summary (getVocabDueSummary) — feeds the "Your progress" panel's
-   *  Vocabulary row, same numbers as the dashboard's VocabCard. */
-  vocabProgress: VocabProgressStat;
   /** User's best band on the skill (per-section best), or null with no attempts. */
   readingBand: number | null;
   listeningBand: number | null;
@@ -251,13 +239,6 @@ export function PracticeCatalog({
     setSkill((s) => (s === k ? null : k));
     if (k === "reading" || k === "listening") revealCatalog();
   };
-  // Goal module's "Drill" CTA — unlike selectSkill's toggle (used by the skill-
-  // card grid below), this must be idempotent: clicking "Drill" while already
-  // filtered to that skill should confirm/scroll, never remove the filter.
-  const drillTo = (k: "reading" | "listening") => {
-    setSkill(k);
-    revealCatalog();
-  };
   const clearSkill = () => setSkill(null);
   const drill = () => {
     if (!drillWeakest) return;
@@ -326,7 +307,7 @@ export function PracticeCatalog({
           </div>
           <h1 className="pc-h1" style={S.h1}>Pick what to drill.</h1>
           <p style={S.sub}>Browse every Reading and Listening test, or filter straight to the question type you want to fix.</p>
-          <GoalModule target={targetBand} best={bestBand} reading={readingProgress} listening={listeningProgress} vocab={vocabProgress} onDrill={drillTo} />
+          <GoalBar target={targetBand} best={bestBand} />
         </div>
         <div className="pc-herocol">
           <HeroCard hero={hero} />
@@ -376,6 +357,7 @@ export function PracticeCatalog({
             skill="reading"
             name="Reading"
             count={readingCount}
+            progress={readingProgress}
             band={readingBand}
             targetBand={targetBand}
             onClick={() => selectSkill("reading")}
@@ -385,6 +367,7 @@ export function PracticeCatalog({
             skill="listening"
             name="Listening"
             count={listeningCount}
+            progress={listeningProgress}
             band={listeningBand}
             targetBand={targetBand}
             onClick={() => selectSkill("listening")}
@@ -553,38 +536,20 @@ export function PracticeCatalog({
   );
 }
 
-/* ── Goal module (light card: target pill + gap ring + status rows) ───────
-   Owner's final call after a dark aurora-glass round read "too purple, not
-   warm/friendly" — back to the page's normal light surface tokens; violet is
-   an ACCENT only (ring fill, CTA, chip), matching a mock-up: ring + an
-   encouraging headline + three soft status rows, one carrying a CTA where
-   work remains. Target selector keeps the exact state machine every earlier
-   round built up (optimistic set → serialized async transition →
-   setTargetBand → Saved/Error aria-live) — only the chrome changes, pill-
-   sized now instead of a giant number.
-
-   Hero zone (gap ring + headline/subcopy) was cut on prod feedback 2026-07-16
-   ("too big" — it was also stretching the neighboring resume card via grid-
-   stretch on the empty violet column). Header is now just the pill + a
-   "Reached ✓"/"N% to go" readout; rows are unchanged. */
-function GoalModule({
-  target,
-  best,
-  reading,
-  listening,
-  vocab,
-  onDrill,
-}: {
-  target: number | null;
-  best: number | null;
-  reading: SectionProgress;
-  listening: SectionProgress;
-  vocab: VocabProgressStat;
-  /** Reading/Listening row CTA — PracticeCatalog's drillTo: filters to the
-   *  skill (idempotent, unlike the skill-card grid's toggle) + reveals the
-   *  test list below. */
-  onDrill: (section: "reading" | "listening") => void;
-}) {
+/* ── Goal bar (target band + gap, inline-editable) ─────────────────────────
+   Rolled back to the pre-merge visual (owner's final call: "as small/plain as
+   possible, no color, back to what it was" — the card-module experiments this
+   session all read as too much). Save logic keeps this session's fixes though
+   (not a byte-for-byte revert of `change`): serialized async transition
+   (startTransition(async () => ...) so `pending` spans the whole request, not
+   just the sync part of the callback), re-entrancy guard (`if (pending) return`
+   — blocks a second save from racing an in-flight one, which used to let an
+   out-of-order rollback clobber a value the user already confirmed), and
+   aria-busy instead of disabled (keeps the select in the tab order while
+   saving). No <option> contrast fix carried over — this pill was always dark
+   text on a light control, never the dark-card's white-on-transparent, so the
+   native popup was never at risk of white-on-white here. */
+function GoalBar({ target, best }: { target: number | null; best: number | null }) {
   const [value, setValue] = useState(target);
   const [pending, startTransition] = useTransition();
   // Озвучка оптимистичной записи: aria-live для скринридера + видимый «Saved»-тик
@@ -601,25 +566,21 @@ function GoalModule({
     return () => clearTimeout(id);
   }, [saved]);
 
+  if (value == null) return null; // unset edge — onboarding normally guarantees it
+
   const change = (e: React.ChangeEvent<HTMLSelectElement>) => {
     // Serialize saves: while one is in flight, ignore re-entrant changes instead
     // of letting a second request race the first. Without this, an out-of-order
     // resolution (older request settles after a newer one already applied) could
-    // roll back over a value the user already confirmed — the closure below
-    // captures the RIGHT `prev` for its own call, but two overlapping calls each
-    // "correct" per their own view, and the net result depends on arrival order.
-    // Blocking re-entry means there's only ever one request in flight, so that
-    // ambiguity can't occur.
+    // roll back over a value the user already confirmed.
     if (pending) return;
     const next = Number(e.target.value);
     const prev = value;
     setValue(next); // optimistic
     setError(false);
     // Async transition (React 19): startTransition awaits the passed function,
-    // so `pending` now spans the whole request instead of flipping back to false
-    // as soon as the synchronous part of the callback returns (which is what
-    // happened with `startTransition(() => { fn().then(...) })` — the .then/.catch
-    // ran outside the transition, `pending` lied about being done immediately).
+    // so `pending` spans the whole request instead of flipping back to false as
+    // soon as the synchronous part of the callback returns.
     startTransition(async () => {
       try {
         await setTargetBand(next.toFixed(1));
@@ -633,64 +594,54 @@ function GoalModule({
     });
   };
 
-  // Saved/Error замещают "Reached ✓"/"N% to go" транзиентно — не плодим лишний элемент.
+  const reached = best != null && best >= value;
+  const pct = best != null ? Math.min(100, Math.round((best / value) * 100)) : 0;
+  // Saved/Error замещают gap-текст транзиентно — не плодим лишний элемент в пилюле.
   const tail = error ? (
-    <span style={S.pgError}>Couldn&apos;t save — try again</span>
+    <span style={S.goalError}>Couldn&apos;t save — try again</span>
   ) : saved ? (
-    <span style={S.pgSaved} className="pc-goalsaved">
+    <span style={S.goalSaved} className="pc-goalsaved">
       <Icon name="check" size={13} strokeWidth={3} /> Saved
     </span>
   ) : null;
 
-  // Target unset (onboarding normally guarantees it) — the pill/select needs a
-  // real value, so both the pill and the reached/gap readout are skipped; the
-  // rows below render regardless (they don't depend on a target).
-  const targetValue = value;
-  const reached = targetValue != null && best != null && best >= targetValue;
-  const pctToGo =
-    targetValue != null && best != null && best < targetValue
-      ? Math.round((1 - best / targetValue) * 100)
-      : null;
-
   return (
-    <div className="pg-card" style={S.pgCard}>
-      <div className="pg-head">
-        {targetValue != null && (
-          <span className="pg-goalpill" style={S.pgGoalPill}>
-            <span style={S.pgGoalPillLab}>Goal · Band</span>
-            <span style={S.pgSelectWrap} className="pg-selectwrap">
-              <select
-                aria-label="Target band"
-                className="pg-select"
-                value={targetValue.toFixed(1)}
-                onChange={change}
-                aria-busy={pending}
-                style={S.pgSelect}
-              >
-                {BANDS.map((b) => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
-              <Icon name="chevron-down" size={14} strokeWidth={2.5} style={S.pgChevron} />
-            </span>
+    <div style={S.goal}>
+      <span style={S.goalLab}>Target</span>
+      {/* appearance:none + собственный chevron — чтобы mono-пилюля явно читалась
+          как редактируемый контрол (нативная стрелка была единственным сигналом). */}
+      <span style={S.goalSelectWrap} className="pc-goalselect">
+        <select
+          aria-label="Target band"
+          className="pc-goalsel"
+          value={value.toFixed(1)}
+          onChange={change}
+          aria-busy={pending}
+          style={S.goalSelect}
+        >
+          {BANDS.map((b) => (
+            <option key={b} value={b}>{b}</option>
+          ))}
+        </select>
+        <Icon name="chevron-down" size={14} strokeWidth={2.5} style={S.goalChevron} />
+      </span>
+      {best == null ? (
+        tail ?? <span style={S.goalHint}>Take a test to measure your gap</span>
+      ) : (
+        <>
+          <span style={S.goalTrack}>
+            <span style={{ ...S.goalFill, width: `${pct}%` }} />
           </span>
-        )}
-        {/* No ring anymore (cut 2026-07-16 — too big, stretched the neighboring
-            resume card) — "reached" now gets a minimal text readout instead of
-            losing the signal entirely. */}
-        {tail ?? (reached ? (
-          <span style={S.pgReachedTag}>Reached ✓</span>
-        ) : (
-          pctToGo != null && <span style={S.pgPctToGo}>{pctToGo}% to go</span>
-        ))}
-        <span role="status" aria-live="polite" style={S.srOnly}>{status}</span>
-      </div>
-
-      <div className="pg-rows">
-        <SectionRow tone="reading" label="Reading" progress={reading} onDrill={onDrill} />
-        <SectionRow tone="listening" label="Listening" progress={listening} onDrill={onDrill} />
-        <VocabRow vocab={vocab} />
-      </div>
+          {/* Само число band НЕ дублируем здесь (живёт per-skill на картах) — goal-бар
+              несёт только цель и дельту; gap сам по себе не претендует на офиц. band. */}
+          {tail ?? (reached ? (
+            <span style={S.goalReached}>Target reached</span>
+          ) : (
+            <span style={S.goalGap}>+{(value - best).toFixed(1)} to target</span>
+          ))}
+        </>
+      )}
+      <span role="status" aria-live="polite" style={S.srOnly}>{status}</span>
     </div>
   );
 }
@@ -725,109 +676,10 @@ function HeroCard({ hero }: { hero: HeroData }) {
   );
 }
 
-/* ── Status rows (Reading / Listening / Vocabulary) ────────────────────────
-   Soft tinted pills, not bars: success tint when nothing's left, a neutral
-   row + "Drill"/"Review" CTA where work remains, muted when there's simply
-   nothing to show yet. Diamonds and neon tubes from the previous round are
-   gone entirely — this design carries no per-test detail, only the aggregate
-   + a way in. The R/L/V chip is decorative (aria-hidden); the skill name is
-   now plain visible text right next to it, so it doubles as the accessible
-   name with no sr-only span needed (earlier rounds hid the word and relied on
-   sr-only — simpler now that the word itself is on-screen). */
-const PROGRESS_TILE: Record<"reading" | "listening" | "vocab", { bg: string; fg: string; letter: string }> = {
-  reading: { bg: "var(--brand-subtle)", fg: "var(--text-link)", letter: "R" },
-  listening: { bg: "var(--info-subtle)", fg: "var(--info-text)", letter: "L" },
-  vocab: { bg: "var(--success-subtle)", fg: "var(--success-text)", letter: "V" },
-};
+/** Skill-card meta line — caller already filters out total===0. */
+const progressLabel = ({ done, total, left }: SectionProgress): string =>
+  done === total ? `All ${total} done` : `Done ${done} of ${total} · ${left} left`;
 
-const ROW_TONE: Record<"success" | "warn" | "neutral" | "muted", { bg: string; fg: string; bd: string }> = {
-  success: { bg: "var(--success-subtle)", fg: "var(--success-text)", bd: "color-mix(in oklab, var(--success) 35%, transparent)" },
-  warn: { bg: "var(--warn-subtle)", fg: "var(--warn-text)", bd: "color-mix(in oklab, var(--warn) 35%, transparent)" },
-  neutral: { bg: "var(--surface-inset)", fg: "var(--text-secondary)", bd: "var(--border)" },
-  muted: { bg: "var(--surface-inset)", fg: "var(--text-muted)", bd: "var(--border-subtle)" },
-};
-
-function StatusRow({
-  tone,
-  chipTone,
-  label,
-  status,
-  cta,
-}: {
-  tone: keyof typeof ROW_TONE;
-  chipTone: "reading" | "listening" | "vocab";
-  label: string;
-  status: string;
-  cta?: ReactNode;
-}) {
-  const t = ROW_TONE[tone];
-  const chip = PROGRESS_TILE[chipTone];
-  return (
-    <div className="pg-row" style={{ background: t.bg, borderColor: t.bd }}>
-      <span aria-hidden="true" style={{ ...S.pgChip, background: chip.bg, color: chip.fg }}>{chip.letter}</span>
-      <span style={S.pgRowLabel}>{label}</span>
-      <span style={{ ...S.pgRowStatus, color: t.fg }}>{status}</span>
-      {cta}
-    </div>
-  );
-}
-
-function SectionRow({
-  tone,
-  label,
-  progress,
-  onDrill,
-}: {
-  tone: "reading" | "listening";
-  label: string;
-  progress: SectionProgress;
-  onDrill: (section: "reading" | "listening") => void;
-}) {
-  const { total, left } = progress;
-  if (total === 0) {
-    return <StatusRow tone="muted" chipTone={tone} label={label} status="New tests soon" />;
-  }
-  if (left === 0) {
-    return <StatusRow tone="success" chipTone={tone} label={label} status="0 left ✓" />;
-  }
-  return (
-    <StatusRow
-      tone="neutral"
-      chipTone={tone}
-      label={label}
-      status={`${left} left`}
-      cta={
-        <Button variant="secondary" size="sm" trailingIcon="arrow-right" onClick={() => onDrill(tone)}>
-          Drill
-        </Button>
-      }
-    />
-  );
-}
-
-function VocabRow({ vocab }: { vocab: VocabProgressStat }) {
-  if (vocab.dueToday > 0) {
-    return (
-      <StatusRow
-        tone="warn"
-        chipTone="vocab"
-        label="Vocabulary"
-        status={`${vocab.dueToday} due`}
-        cta={
-          <Button variant="secondary" size="sm" trailingIcon="arrow-right" href="/app/vocabulary">
-            Review
-          </Button>
-        }
-      />
-    );
-  }
-  // Nothing due right now, but the goal isn't met either — "All done" would
-  // overclaim (goal ≠ due).
-  if (vocab.reviewedToday >= vocab.goal) {
-    return <StatusRow tone="success" chipTone="vocab" label="Vocabulary" status="All done today ✓" />;
-  }
-  return <StatusRow tone="neutral" chipTone="vocab" label="Vocabulary" status="No reviews due" />;
-}
 /* ── Skill card (live Reading / Listening / Writing / Speaking) ──────────────
    Tactile bando tile: letter chip (soft fill / ink text) + Live pill, name +
    count, a BAND block (the user's best band on a 0–9 rail with a target marker),
@@ -847,6 +699,7 @@ function SkillCard({
   skill,
   name,
   count,
+  progress,
   band,
   targetBand,
   onClick,
@@ -856,6 +709,8 @@ function SkillCard({
   skill: SkillKey;
   name: string;
   count: string;
+  /** "Done N of M · K left" — только Reading/Listening (фильтр-карты); W/S не считают. */
+  progress?: SectionProgress;
   /** User's best band on this skill, or null with no attempts yet. */
   band: number | null;
   /** Goal band; defaults to 7.0 when the user hasn't set one. */
@@ -877,6 +732,8 @@ function SkillCard({
       <div>
         <div style={S.skillName}>{name}</div>
         <div style={S.skillCount}>{count}</div>
+        {/* total===0 (пост-вайп секция без тестов) — строка не рендерится вовсе. */}
+        {progress && progress.total > 0 && <div style={S.skillProgress}>{progressLabel(progress)}</div>}
       </div>
       {/* Band-рейл — только у фильтр-карт (твоё стояние по скиллу). Nav-карты (live
           W/S) — другой вид: ведут в отдельный инструмент, band там не к месту. Вместе
@@ -1209,16 +1066,6 @@ const CSS = `
 .pc-drill:hover{border-color:var(--brand)!important}
 .pc-drill:active{transform:translateY(3px);box-shadow:none!important}
 .pc-drilllink:hover{text-decoration:underline}
-/* Goal module — light card, compact: .pg-head is just the target pill + a
-   "Reached ✓"/"N% to go" readout (hero ring was cut 2026-07-16 — too big). */
-.pg-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.pg-selectwrap:hover select{opacity:.85}
-/* Native OPEN popup is a system menu that ignores most inline styling — only
-   color/background-color on <option> carry through (inconsistently, but this
-   is the standard mitigation). Without it some platforms render white-on-white. */
-.pg-select option{color:var(--text-primary);background:var(--surface)}
-.pg-rows{display:flex;flex-direction:column;gap:10px}
-.pg-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:8px;padding:12px 14px;border-radius:var(--radius-md);border:1.5px solid transparent;transition:var(--transition-colors)}
 .pc-gloss{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-xs)}
 .pc-gloss>summary{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;cursor:pointer;list-style:none;font-family:var(--font-ui);font-size:13px;font-weight:700;color:var(--text-primary)}
 .pc-gloss>summary::-webkit-details-marker{display:none}
@@ -1256,9 +1103,9 @@ const CSS = `
 }
 @keyframes pc-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes pc-fade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
-@media (pointer:coarse){.pc-showall{min-height:44px}.pc-goalsel{min-height:44px}.pg-select{min-height:44px}}
+@media (pointer:coarse){.pc-showall{min-height:44px}.pc-goalsel{min-height:44px}}
 /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
-@media (max-width:430px){.pc-goalsel{font-size:16px!important}.pg-select{font-size:16px!important}}
+@media (max-width:430px){.pc-goalsel{font-size:16px!important}}
 /* Микро-текст: overline-эйбрау и R/L-пилюля в строке теста — смысловые лейблы → 12px. */
 @media (max-width:430px){.pc-overline{font-size:12px!important}.pc-row-pill{font-size:12px!important}}
 @media (prefers-reduced-motion:reduce){
@@ -1283,9 +1130,19 @@ const S: Record<string, CSSProperties> = {
   drillLink: { display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 44, padding: "4px 2px", background: "none", border: "none", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, textAlign: "left", cursor: "pointer" },
   firstNote: { display: "flex", alignItems: "flex-start", gap: 9, padding: "11px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.4, fontWeight: 600 },
 
-  // goalChevron — shared with the catalog's "Sort tests" select below (.pc-goalsel/
-  // .pc-goalselect), kept here even though GoalBar's own pill is gone.
+  // Goal bar — target band + gap, inline-editable target select.
+  goal: { marginTop: 20, display: "inline-flex", alignItems: "center", gap: 12, flexWrap: "wrap", rowGap: 10, padding: "10px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
+  goalLab: { fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
+  goalSelectWrap: { position: "relative", display: "inline-flex", alignItems: "center" },
+  goalSelect: { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 16, color: "var(--text-primary)", border: "1px solid var(--border-strong)", borderRadius: "var(--radius-sm)", background: "var(--surface-inset)", padding: "4px 26px 4px 10px", cursor: "pointer", transition: "var(--transition-colors)" },
   goalChevron: { position: "absolute", right: 7, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--text-muted)" },
+  goalTrack: { position: "relative", display: "inline-block", width: 120, height: 8, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
+  goalFill: { position: "absolute", insetBlock: 0, left: 0, height: "100%", background: "var(--brand)", borderRadius: "var(--radius-full)" },
+  goalGap: { fontSize: 13, fontWeight: 700, color: "var(--text-link)" },
+  goalReached: { fontSize: 13, fontWeight: 700, color: "var(--success-text)" },
+  goalHint: { fontSize: 13, fontWeight: 600, color: "var(--text-muted)" },
+  goalSaved: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--success-text)" },
+  goalError: { display: "inline-flex", alignItems: "center", fontSize: 12, fontWeight: 700, color: "var(--error-text)" },
   srOnly: { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 },
 
   // Hero — violet 3D-карта, белый ink (WCAG AA на brand, проверено: 4.63:1).
@@ -1295,30 +1152,6 @@ const S: Record<string, CSSProperties> = {
   heroSub: { fontSize: 13, marginTop: 8, lineHeight: 1.45 },
   rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
-
-  // Goal module — light card (target pill + status rows only — the gap ring
-  // was cut 2026-07-16, too big, was stretching the neighboring resume card
-  // via grid-stretch on the empty column). Moderate padding/gap, close to the
-  // neighboring skill-cards' own footprint — final height ≈ pill + 3 rows.
-  // Violet is an accent only (pill fill, chip, CTA), not a theme.
-  pgCard: { display: "flex", flexDirection: "column", gap: 14, marginTop: 20, padding: 18, borderRadius: "var(--radius-xl)", border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
-  pgGoalPill: { display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 6px 6px 14px", borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", border: "1px solid var(--brand-border)" },
-  pgGoalPillLab: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-link)" },
-  pgSelectWrap: { position: "relative", display: "inline-flex", alignItems: "center" },
-  pgSelect: { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 14, color: "var(--text-link)", background: "transparent", border: "none", padding: "0 20px 0 4px", cursor: "pointer" },
-  pgChevron: { position: "absolute", right: 2, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--text-link)" },
-  pgPctToGo: { fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
-  // Reached readout replaces the old ring's success-tone fill/checkmark —
-  // same success token as the row tint (ROW_TONE.success.fg), no new colour.
-  pgReachedTag: { fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--success-text)" },
-  pgSaved: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--success-text)" },
-  pgError: { display: "inline-flex", alignItems: "center", fontSize: 12, fontWeight: 700, color: "var(--error-text)" },
-
-  // Status rows — chip colour is per-skill (PROGRESS_TILE), row bg/text colour
-  // is per-status (ROW_TONE, computed at the call site).
-  pgChip: { width: 18, height: 18, flex: "none", borderRadius: "var(--radius-sm)", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 700 },
-  pgRowLabel: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-primary)" },
-  pgRowStatus: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", marginLeft: "auto" },
 
   // Skills — sentence-case label (не uppercase-эйбрау) + опц. контекст-хелп про BAND
   skillHeadWrap: { display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 },
@@ -1330,6 +1163,9 @@ const S: Record<string, CSSProperties> = {
   skillTile: { width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 16, fontWeight: 700 },
   skillName: { fontSize: 18, fontWeight: 700, color: "var(--text-primary)" },
   skillCount: { fontSize: 13, color: "var(--text-muted)", marginTop: 3 },
+  // Может обрезаться на узкой карте (4 skill-колонки на десктопе) — nowrap читается
+  // лучше рваного переноса "K / left" на середине слова.
+  skillProgress: { fontSize: 13, color: "var(--text-muted)", marginTop: 3, whiteSpace: "nowrap" },
   // marginTop:auto прижимает футер к низу карты — заполняет пустую нижнюю зону.
   skillFoot: { marginTop: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, color: "var(--text-link)" },
 

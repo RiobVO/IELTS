@@ -13,7 +13,6 @@ import { writingFeatureEnabled, speakingFeatureEnabled } from "@/env";
 import { qtypeLabel, categoryLabel, QTYPE_LABELS, CATEGORY_LABELS, READING_CATEGORIES, LISTENING_CATEGORIES } from "@/lib/labels";
 import { aggregateWeakness, type PerTypeBreakdown, type WeaknessRow } from "@/lib/practice/weakness";
 import { computeSectionProgress } from "@/lib/practice/section-progress";
-import { getVocabDueSummary } from "@/lib/vocab/summary";
 import { Icon } from "@/components/core/icons";
 import { Badge } from "@/components/core/Badge";
 import { AppShell } from "../_AppShell";
@@ -114,7 +113,7 @@ export default async function PracticePage({
   // raw score) / in_progress (resume + прогресс строк) / оба published-списка /
   // trial-лейн / lifetime attempted-ids — параллельно, одной волной. Прогрев шапки
   // конкурентно (cache()'d, AppShell переиспользует).
-  const [profile, submittedRows, inProgressRes, readingTests, listeningTests, trialRows, attemptedRows, vocabSummary] =
+  const [profile, submittedRows, inProgressRes, readingTests, listeningTests, trialRows, attemptedRows] =
     await Promise.all([
       getProfile(),
       // Единое owner-чтение submitted-попыток (Drizzle обходит RLS — скоуп по user.id
@@ -170,9 +169,6 @@ export default async function PracticePage({
         .selectDistinct({ contentItemId: attemptTable.contentItemId })
         .from(attemptTable)
         .where(and(eq(attemptTable.userId, user.id), eq(attemptTable.status, "submitted"))),
-      // Vocabulary row of the "Your progress" panel (reviewedToday/goal/dueToday) —
-      // same slim query the dashboard's VocabCard uses.
-      getVocabDueSummary(user.id),
       getHeaderData(),
     ]);
 
@@ -292,7 +288,7 @@ export default async function PracticePage({
     };
   });
 
-  // Section progress ("Done N of M · K left" в панели «Your progress») — знаменатель ВЕСЬ
+  // Section progress ("Done N of M · K left" на skill-картах) — знаменатель ВЕСЬ
   // published-каталог секции (тот же набор, что даёт карте «N tests»), без
   // locked-фильтра: startable-вариант отвергнут живым прогоном 2026-07-16 (Basic
   // видел «4 tests» / «All 2 done» на Reading, пустую строку на Listening — см.
@@ -361,11 +357,6 @@ export default async function PracticePage({
         listeningCount={skillCount(listeningTests)}
         readingProgress={readingProgress}
         listeningProgress={listeningProgress}
-        vocabProgress={{
-          reviewedToday: vocabSummary.reviewedToday,
-          goal: vocabSummary.goal,
-          dueToday: vocabSummary.dueToday,
-        }}
         readingBand={bestBand.reading > 0 ? bestBand.reading : null}
         listeningBand={bestBand.listening > 0 ? bestBand.listening : null}
         targetBand={targetBand}
