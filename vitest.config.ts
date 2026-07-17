@@ -6,11 +6,12 @@ import { fileURLToPath } from "node:url";
 // `@/lib/writing/...`) — резолвим его здесь, иначе `vi.mock("@/env")` и бенчмарк
 // не найдут модули. `scripts/*.test.ts` включён ради офлайн-бенчмарка writing-слоя;
 // `app/**` — co-located тесты server-роутов/действий Writing Lab (evaluate route,
-// create/poll actions), которые обязаны жить в app/ (Next.js routing).
+// create/poll actions), которые обязаны жить в app/ (Next.js routing); `e2e/**` —
+// чистый предикат stateful-e2e гейта (e2e/stateful-gate.ts), тестируем без Playwright.
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "scripts/**/*.test.ts", "app/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "scripts/**/*.test.ts", "app/**/*.test.ts", "e2e/**/*.test.ts"],
   },
   resolve: {
     alias: {

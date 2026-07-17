@@ -1,13 +1,25 @@
 import { test, expect } from "@playwright/test";
 import { ensureLoggedIn } from "./auth";
+import { isStatefulE2eAllowed, loadE2eEnv, STATEFUL_E2E_BLOCKED_MESSAGE } from "./stateful-gate";
 
-// Смоук пишет реальные строки в боевую БД (нет staging-окружения, продукт ещё
-// без живых клиентов — осознанное решение владельца). Тестовый аккаунт
-// переиспользуется (см. e2e/auth.ts), submit практики создаёт одну строку
-// attempt на прогон — приемлемо на этой стадии, но не гонять в цикле без пауз
-// (signupThrottle бюджет 10/час, см. auth.ts).
+// Смоук пишет реальные строки в БД, на которую указывает DATABASE_URL/DIRECT_URL
+// (нет staging-окружения, продукт ещё без живых клиентов — осознанное решение
+// владельца). Раньше `npm run test:e2e` мог случайно исполниться против прода
+// без единого предохранителя (prod-readiness аудит); теперь гейт
+// (e2e/stateful-gate.ts) требует явный ALLOW_STATEFUL_E2E=1 И отказывает, если
+// DATABASE_URL/DIRECT_URL указывает на прод-ref Supabase, даже с флагом —
+// двойная защита от случайного запуска и от запуска с флагом поверх прод-
+// конфига. global-setup.ts бросает раньше при непройденном гейте; beforeEach
+// ниже — защита на случай прогона файла в обход global-setup. Тестовый
+// аккаунт переиспользуется (см. e2e/auth.ts), submit практики создаёт одну
+// строку attempt на прогон — приемлемо на этой стадии, но не гонять в цикле
+// без пауз (signupThrottle бюджет 10/час, см. auth.ts).
 
 test.describe("smoke", () => {
+  test.beforeEach(() => {
+    test.skip(!isStatefulE2eAllowed(loadE2eEnv()), STATEFUL_E2E_BLOCKED_MESSAGE);
+  });
+
   test("login lands on the authenticated app", async ({ page }) => {
     await ensureLoggedIn(page);
     await expect(page).toHaveURL(/\/app(\/|$|\?)/);
