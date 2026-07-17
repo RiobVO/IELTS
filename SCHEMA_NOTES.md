@@ -968,3 +968,19 @@ up→down→up clean + idempotent; `trial_claim` anon-denied в full-lock ког
 round-trip `db:up:local`→`db:down:local`→`db:up:local` clean; конкурентный throwaway-
 прогон (два `Promise.all`-старта trial на РАЗНЫХ item, 10×) — ровно один claim + один
 attempt, второй уходит в redirect.
+
+## 0055 — attempt_user_mode_started_idx (Basic practice/mock cap index)
+
+Индекс-only миграция (никаких таблиц, `APP_TABLE_COUNT` не меняется — остаётся 37).
+Owner decision 2026-07-17: R/L контент стал полностью бесплатным (см. `persist.ts`,
+`tierRequired` теперь безусловно `'basic'`), а старый флэт-кап 25 mock/день заменён на
+2 practice-старта/день + 2 mock-старта/неделю (`tiers.ts`
+`BASIC_PRACTICE_DAILY_LIMIT`/`BASIC_MOCK_WEEKLY_LIMIT`, `access.ts`). Оба места, что
+считают расход капа — soft-проверка в `enforceAccess` и авторитетная транзакционная
+проверка внутри `startAttempt` (row-lock на `profile`, см. её комментарий) — бьют в
+`attempt WHERE user_id = ? AND mode = ? AND started_at >= ? AND started_at < ?`.
+`CREATE INDEX attempt_user_mode_started_idx ON attempt (user_id, mode, started_at)`
+покрывает оба запроса одним индексом. **Не partial** — в отличие от
+`attempt_user_submitted_idx` (0008), кап считает КАЖДЫЙ старт (включая ещё не сданные
+`in_progress`), не только `submitted`, поэтому `status` не может сузить предикат.
+`down.sql` — структурный реверс (`DROP INDEX IF EXISTS`), контента не теряет.

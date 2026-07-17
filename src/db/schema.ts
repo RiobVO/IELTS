@@ -371,6 +371,10 @@ export const attempt = pgTable(
     uniqueIndex("attempt_one_in_progress_idx")
       .on(t.userId, t.contentItemId)
       .where(sql`${t.status} = 'in_progress'`),
+    // Backs the Basic practice/mock cap COUNT (user_id, mode, started_at
+    // window) in exam/access.ts — NOT partial on status, the cap counts every
+    // start, in_progress included (migration 0055).
+    index("attempt_user_mode_started_idx").on(t.userId, t.mode, t.startedAt),
   ],
 );
 
