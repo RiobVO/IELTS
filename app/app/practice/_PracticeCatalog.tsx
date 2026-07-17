@@ -169,8 +169,9 @@ export function PracticeCatalog({
   speakingEnabled?: boolean;
   /** Предвыбор фильтра из query (переход со старого каталога). undefined = чистый хаб. */
   initialFilter?: InitialFilter;
-  /** Почему отбросило в практику: дневной лимит / throttle сабмита. null = без баннера. */
-  notice?: "limit" | "throttled" | null;
+  /** Почему отбросило в практику: Basic practice/day или mock/week кап, либо throttle
+   *  сабмита. null = без баннера. */
+  notice?: "limit-practice" | "limit-mock" | "throttled" | null;
   /** Student Telegram channel (TELEGRAM_CHANNEL_URL) — CTA on the empty-catalog
    *  funnel. null when unset => that CTA is simply not rendered. */
   telegramChannelUrl: string | null;

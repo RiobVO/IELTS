@@ -116,7 +116,8 @@ export default async function ReadingTestPage({
   const questionsHtml =
     qHtmlParts.length > 0 && qHtmlParts.every(Boolean) ? qHtmlParts.join("\n") : null;
 
-  // Access gate (§4.8): tier entitlement + Basic daily mock-cap (P0), enforced
+  // Access gate (§4.8): tier entitlement + Basic caps (2 practice starts/day +
+  // 2 mock starts/week, owner decision 2026-07-17), enforced
   // server-side from the profile + content_item already read above (no extra
   // round-trip). effectiveTier downgrades an expired premium to basic, so a stale
   // profile.tier can't slip past. submitAttempt re-runs the same gate (defense in
@@ -153,8 +154,11 @@ export default async function ReadingTestPage({
     resume = converted.length > 0 ? { ...existing, mode: "practice" } : null;
   }
   const mode = adminPreview ? "practice" : (existing?.mode ?? modeParam);
-  // Кап — только на создание НОВОГО mock; резюм существующей попытки не расходует
-  // слот и не должен блокироваться (tier-гейт применяется всегда).
+  // Basic caps (2 practice/день + 2 mock/неделю, owner decision 2026-07-17) —
+  // только на создание НОВОГО attempt; резюм существующей попытки (mode=null
+  // ниже) не расходует слот и не должен блокироваться (tier-гейт применяется
+  // всегда). Эта проверка — soft early-check; авторитетная живёт внутри
+  // транзакции startAttempt.
   await enforceAccess(
     user.id,
     userTier,
@@ -243,8 +247,9 @@ export default async function ReadingTestPage({
   const isTrial = !isDraftPreview && !meetsTier(userTier, test.tier_required as Tier);
   const [{ attemptId, answers: savedAnswers, mode: attemptMode }, annotations, locatableRows] = await Promise.all([
     // `resume` из батча выше (с mock→practice конверсией admin-preview) — резюм без
-    // повторного SELECT той же строки.
-    startAttempt(user.id, id, mode, isTrial, resume),
+    // повторного SELECT той же строки. userTier — авторитетная Basic-кап проверка
+    // теперь внутри транзакции startAttempt (не только soft-check в enforceAccess).
+    startAttempt(user.id, id, mode, isTrial, resume, userTier),
     // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
     // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
     db

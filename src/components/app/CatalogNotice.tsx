@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { BASIC_DAILY_LIMIT } from "@/lib/tiers";
+import { BASIC_PRACTICE_DAILY_LIMIT, BASIC_MOCK_WEEKLY_LIMIT } from "@/lib/tiers";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
 
 /**
- * CatalogNotice — почему юзера отбросило в практику. `limit` = исчерпан дневной
- * лимит Basic (mono-счётчик + апселл в Premium); `throttled` = анти-чит velocity-кап
- * на сабмите. URL-driven (`?limit=1`/`?throttled=1`); крестик ведёт на чистый хаб.
+ * CatalogNotice — почему юзера отбросило в практику. `limit-practice` = исчерпан
+ * дневной кап practice-стартов Basic; `limit-mock` = исчерпан недельный кап mock-
+ * стартов Basic (owner decision 2026-07-17 — R/L контент бесплатен для всех тиров,
+ * это единственные оставшиеся лимиты); `throttled` = анти-чит velocity-кап на
+ * сабмите. URL-driven (`?limit=practice`/`?limit=mock`/`?throttled=1`); крестик
+ * ведёт на чистый хаб.
  *
  * Раньше жил внутри legacy-каталога (_CatalogView). После сворачивания Reading/
  * Listening в /app/practice notice переехал сюда: exam-access (access.ts) и
@@ -18,10 +21,21 @@ export function CatalogNotice({
   kind,
   dismissHref,
 }: {
-  kind: "limit" | "throttled";
+  kind: "limit-practice" | "limit-mock" | "throttled";
   dismissHref: string;
 }) {
-  const limit = kind === "limit";
+  const limit = kind === "limit-practice" || kind === "limit-mock";
+  const limitN = kind === "limit-practice" ? BASIC_PRACTICE_DAILY_LIMIT : BASIC_MOCK_WEEKLY_LIMIT;
+  const limitWord = kind === "limit-practice" ? "practice" : "mock";
+  const limitPeriod = kind === "limit-practice" ? "day" : "week";
+  // Exact UTC instant, not a relative "tomorrow"/"next week" — the cap window is
+  // dayStartUtc/weekStartUtc (access.ts), so the reset moment IS 00:00 UTC (Monday
+  // for the weekly/mock cap), never a vague "next calendar day for the reader".
+  const limitReset = kind === "limit-practice" ? "resets at 00:00 UTC" : "resets Monday 00:00 UTC";
+  // Каждый кап независим — их отдельные периоды упоминаем в подписи, чтобы не
+  // повторить старую (теперь неверную) фразу «practice остаётся безлимитным».
+  const otherWord = kind === "limit-practice" ? "Mock" : "Practice";
+  const otherPeriod = kind === "limit-practice" ? "weekly" : "daily";
   const accent = limit ? "var(--warn)" : "var(--info)";
   return (
     <div
@@ -54,17 +68,17 @@ export function CatalogNotice({
       <div style={{ flex: 1, minWidth: 200 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", letterSpacing: "var(--tracking-tight)" }}>
-            {limit ? `That's your ${BASIC_DAILY_LIMIT} mock tests for today` : "One test at a time"}
+            {limit ? `That's your ${limitN} ${limitWord} starts for ${limitPeriod === "day" ? "today" : "this week"}` : "One test at a time"}
           </span>
           {limit && (
             <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--warn-text)", background: "var(--warn-subtle)", borderRadius: "var(--radius-full)", padding: "2px 9px" }}>
-              {BASIC_DAILY_LIMIT}/{BASIC_DAILY_LIMIT} used
+              {limitN}/{limitN} used
             </span>
           )}
         </div>
         <div style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 3, lineHeight: 1.5 }}>
           {limit
-            ? `Basic includes ${BASIC_DAILY_LIMIT} mock tests a day — your next one unlocks tomorrow. Practice stays unlimited; go Premium for unlimited mocks.`
+            ? `Basic includes ${limitN} ${limitWord} starts a ${limitPeriod} — ${limitReset}. ${otherWord} starts have their own ${otherPeriod} cap; go Premium for unlimited ${limitWord}.`
             : "You're starting tests too quickly. Give it a minute, then try again."}
         </div>
       </div>

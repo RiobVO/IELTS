@@ -104,9 +104,14 @@ export default async function PracticePage({
   const user = await requireUser();
   const sp = await searchParams;
   const initialFilter = buildInitialFilter(sp);
-  // Почему отбросило в практику: дневной лимит Basic (access.ts) или throttle сабмита
-  // (reading/[id]/actions.ts). URL-driven, как раньше в каталоге.
-  const notice = sp.limit === "1" ? "limit" : sp.throttled === "1" ? "throttled" : null;
+  // Почему отбросило в практику: Basic-кап (access.ts — practice/день или mock/неделю,
+  // owner decision 2026-07-17) или throttle сабмита (reading/[id]/actions.ts).
+  // URL-driven, как раньше в каталоге.
+  const notice =
+    sp.limit === "practice" ? "limit-practice"
+      : sp.limit === "mock" ? "limit-mock"
+      : sp.throttled === "1" ? "throttled"
+      : null;
   const supabase = await createClient();
 
   // Профиль (тир) / submitted-попытки (weak-spots + слабый тип + best band + best
