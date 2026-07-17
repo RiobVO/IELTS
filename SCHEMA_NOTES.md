@@ -4,7 +4,7 @@ Ambiguities in BRIEF.md §5/§6.1 resolved while building the schema + migration
 The brief wins; where it was silent or self-conflicting, a sane choice was made
 and logged here. No tables were invented beyond what the brief implies.
 
-## Table count: 34 (Phase 1 shipped 13; +21 added in later phases)
+## Table count: 37 (Phase 1 shipped 13; +24 added in later phases)
 
 §5 enumerates 12 tables (`badge`/`user_badge` are two). The Phase-1 worked example
 expected **13 tables** — the 13th is **`notification`**, defined in **§11**

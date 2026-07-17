@@ -38,7 +38,7 @@ plain-SQL артефакт `db-backup-YYYYMMDD-HHMMSS.sql.gz`, retention 30 дн
    ожидаемы), stderr в лог.
 5. Валидировать: `npx tsx scripts/_restore-drill.ts <createdAt>` — печатает
    `[OK]`/`[FAIL]`, exit 0 при полном успехе. Скрипт standalone (см. Appendix
-   ниже — полный исходник), проверяет: 34 таблицы public
+   ниже — полный исходник), проверяет: 37 таблиц public
    (фильтр `!~ '^_'`), row count > 0 для profile/attempt/answer_key/content_item,
    freshness: новейшая строка не старше 30 дней от даты бэкапа (и не новее её).
    Порога «ожидаемое число строк» нет намеренно: `COPY` пер-таблично атомарен
@@ -50,7 +50,7 @@ plain-SQL артефакт `db-backup-YYYYMMDD-HHMMSS.sql.gz`, retention 30 дн
 
 ## Ожидаемый вывод валидатора
 
-    [OK] public table count — 34 (expected 34)
+    [OK] public table count — 37 (expected 37)
     [OK] row count — profile has N row(s)
     [OK] row count — attempt has N row(s)
     [OK] row count — answer_key has N row(s)
@@ -95,6 +95,7 @@ plain-SQL артефакт `db-backup-YYYYMMDD-HHMMSS.sql.gz`, retention 30 дн
  */
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import { config as loadEnv } from "dotenv";
 import postgres from "postgres";
 
@@ -126,9 +127,17 @@ if (!["localhost", "127.0.0.1", "::1"].includes(target.hostname)) {
   process.exit(1);
 }
 
-// Совпадает с verify.ts APP_TABLE_COUNT: public BASE TABLE без `_`-префикса
-// (исключает _migrations). Включает легаси `topic` (schema.ts типизирует 33; +topic = 34).
-const EXPECTED_TABLE_COUNT = 34;
+// Canonical source: scripts/verify.ts APP_TABLE_COUNT — обновлять там, не здесь.
+// Читаем исходник verify.ts как текст и парсим константу регуляркой (НЕ
+// импортируем модуль: verify.ts вызывает DESTRUCTIVE main() безусловно на
+// верхнем уровне при загрузке — импорт уронил бы public-схему this-DB).
+const verifyTsSrc = readFileSync(join(ROOT, "scripts", "verify.ts"), "utf8");
+const tableCountMatch = verifyTsSrc.match(/APP_TABLE_COUNT\s*=\s*(\d+)/);
+if (!tableCountMatch) {
+  console.error("Could not find APP_TABLE_COUNT in scripts/verify.ts — canonical source moved/renamed?");
+  process.exit(1);
+}
+const EXPECTED_TABLE_COUNT = Number(tableCountMatch[1]);
 
 // Новейшая строка не старше 30 дней ОТ ДАТЫ БЭКАПА: тихий период не даёт ложный
 // FAIL, протухший/замороженный дамп ловится.
