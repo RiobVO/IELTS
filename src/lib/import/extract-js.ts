@@ -33,6 +33,23 @@ const WORKER_YOUNG_GEN_MB = 16;
 const VM_TIMEOUT_MS = 1000;
 const WALL_CLOCK_MS = 5000;
 
+/**
+ * `new Worker(...)` throwing SYNCHRONOUSLY means worker_threads itself is unavailable
+ * in this runtime (e.g. a serverless/sandboxed environment that doesn't support it) —
+ * a SYSTEMIC failure that reproduces on every call, unlike an execution failure (bad
+ * literal, timeout, OOM), which is input-specific and normal to degrade into `null`.
+ * Callers MUST let this propagate rather than swallow it into `null` — silently
+ * degrading every extraction turns into a draft persisted with empty answer keys
+ * (content corruption, not a parse warning). Exported so import-runner.ts can let it
+ * abort the import with an operator-facing message instead of a silent draft.
+ */
+export class WorkerUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super(`worker_threads unavailable in this runtime: ${String((cause as Error)?.message ?? cause)}`);
+    this.name = "WorkerUnavailableError";
+  }
+}
+
 // Inline worker source (eval:true) — NO separate on-disk file, so Next/webpack bundling never
 // has to resolve or trace it. Runs the untrusted code in a global-free vm context on its own
 // thread and posts back a structured-cloneable result (data objects / number tables are plain
@@ -57,14 +74,23 @@ try {
  */
 function runInWorker<T>(code: string, timeout: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const worker = new Worker(WORKER_SRC, {
-      eval: true,
-      workerData: { code, timeout },
-      resourceLimits: {
-        maxOldGenerationSizeMb: WORKER_OLD_GEN_MB,
-        maxYoungGenerationSizeMb: WORKER_YOUNG_GEN_MB,
-      },
-    });
+    let worker: Worker;
+    try {
+      worker = new Worker(WORKER_SRC, {
+        eval: true,
+        workerData: { code, timeout },
+        resourceLimits: {
+          maxOldGenerationSizeMb: WORKER_OLD_GEN_MB,
+          maxYoungGenerationSizeMb: WORKER_YOUNG_GEN_MB,
+        },
+      });
+    } catch (err) {
+      // Constructor threw synchronously — worker_threads is unavailable here, not a
+      // problem with `code`. Named error so extractData/extractFunctionTable rethrow
+      // instead of folding it into their usual "bad input -> null" catch.
+      reject(new WorkerUnavailableError(err));
+      return;
+    }
     let settled = false;
     const finish = (fn: () => void): void => {
       if (settled) return;
@@ -179,7 +205,10 @@ export async function extractData<T = unknown>(src: string, name: string): Promi
   if (lit == null) return null;
   try {
     return await evalDataObject<T>(lit);
-  } catch {
+  } catch (err) {
+    // Systemic runtime failure — not this literal's fault — must abort the import,
+    // not degrade to an empty object (see WorkerUnavailableError doc above).
+    if (err instanceof WorkerUnavailableError) throw err;
     return null;
   }
 }
@@ -273,7 +302,8 @@ export async function extractFunctionTable(
   try {
     const table = await runInWorker<Record<number, number>>(harness, VM_TIMEOUT_MS);
     return table && Object.keys(table).length > 0 ? table : null;
-  } catch {
+  } catch (err) {
+    if (err instanceof WorkerUnavailableError) throw err;
     return null;
   }
 }

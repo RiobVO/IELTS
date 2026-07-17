@@ -3,7 +3,9 @@ import { uploadAudio } from "@/lib/telegram/storage";
 import { withinAudioCap, MAX_IMPORT_AUDIO_MB } from "../audio-cap";
 import { audioObjectKey } from "../audio-key";
 import { parseRunner, diagnoseEmptyRunnerParse } from "./parse-runner";
+import type { RunnerParseResult } from "./parse-runner";
 import { parseTest } from "../parse-test";
+import { WorkerUnavailableError } from "../extract-js";
 import { mergeAtomization } from "./atomize-merge";
 import { fetchExternalAudio } from "./safe-audio-fetch";
 import { sanitizeRunner, assertNoKeyLeak } from "./sanitize-runner";
@@ -31,12 +33,41 @@ export interface ImportRunnerResult {
   audioTooLarge: boolean;
 }
 
+/**
+ * Turns the systemic WorkerUnavailableError (worker_threads itself unusable in this
+ * runtime, see extract-js.ts) into the same "throw a plain Error, caller's instanceof-
+ * chain falls to its generic branch" pattern already used for diagnoseEmptyRunnerParse /
+ * DuplicateTestError below — no new reporting channel. Every OTHER error (bad HTML,
+ * RegradeRequiredError, DuplicateTestError, ...) passes through unchanged, so existing
+ * callers' `instanceof` checks in app/admin/actions.ts and the Telegram webhook keep
+ * working. Without this, a worker-unavailable runtime would silently persist a draft
+ * with every answer key empty (extractData/extractFunctionTable normally degrade a
+ * bad INPUT to null — this is a bad RUNTIME, must abort instead).
+ */
+function rethrowWorkerFailure(e: unknown): never {
+  if (e instanceof WorkerUnavailableError) {
+    throw new Error(
+      `Import aborted: JS extraction runtime (worker_threads) is unavailable — ` +
+        `refusing to persist a test with empty answer keys (${e.message})`,
+    );
+  }
+  throw e;
+}
+
+async function parseRunnerOrAbort(html: string): Promise<RunnerParseResult> {
+  try {
+    return await parseRunner(html);
+  } catch (e) {
+    rethrowWorkerFailure(e);
+  }
+}
+
 /** Полный импорт обёртки: parse → persist → (audio) → sanitize → runner_html. */
 export async function importRunner(
   html: string,
   opts: { sourceFilePath?: string; createdBy?: string },
 ): Promise<ImportRunnerResult> {
-  const { parsed: runnerParsed, externalAudioSrc } = await parseRunner(html);
+  const { parsed: runnerParsed, externalAudioSrc } = await parseRunnerOrAbort(html);
   let parsed = runnerParsed;
   // Пустой парс = источник не распознан. Отказ честнее молчаливого 0-вопросного драфта.
   // P4: сообщение различает «контейнер ключа не найден» от «найден, но номера не распознаны»
@@ -72,6 +103,12 @@ export async function importRunner(
       parsed.warnings.push(merge.reason);
     }
   } catch (e) {
+    // WorkerUnavailableError is systemic (worker_threads unavailable in this runtime),
+    // not this file's fault — degrading it to a warning would let the runner-parser
+    // path above hit the exact same wall and still persist a draft with an empty
+    // answer key. Abort the same way parseRunnerOrAbort does above, instead of
+    // folding it into the ordinary "atomization skipped" degradation below.
+    if (e instanceof WorkerUnavailableError) rethrowWorkerFailure(e);
     parsed.warnings.push(
       `atomization skipped — parseTest failed (${String((e as Error)?.message ?? e).slice(0, 120)})`,
     );

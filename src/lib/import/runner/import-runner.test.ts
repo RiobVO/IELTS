@@ -37,6 +37,10 @@ vi.mock("../source-html-storage", () => ({ uploadSourceHtml }));
 
 import { importRunner } from "./import-runner";
 import { MAX_IMPORT_AUDIO_BYTES } from "../audio-cap";
+// Реальный класс (не мок) — extract-js не мокается в этом файле, так что достаточно
+// сконструировать ошибку напрямую, чтобы смоделировать то, что бросил бы parseRunner/
+// parseTest на рантайме без worker_threads.
+import { WorkerUnavailableError } from "../extract-js";
 
 // Listening-runner видит choose-TWO членов как одиночные mcq_single (text_accept с
 // обеими буквами per-member) и НИКОГДА не даёт groupKey — фикстура зеркалит это.
@@ -162,6 +166,19 @@ describe("importRunner atomicity (#12)", () => {
     expect(parsedArg.passages[0]!.audioPath).toBe("https://pub/audio.mp3");
   });
 
+  // Системный сбой (worker_threads недоступен в рантайме) — отличается от обычного
+  // сбоя парсинга: должен ГРОМКО провалить импорт, а не осесть warning'ом/degrade'ом.
+  // Без этого — черновик с пустыми ключами ответов уходит в БД молча (тихая порча контента).
+  it("parseRunner бросил WorkerUnavailableError → импорт отказывает, persist НЕ вызван", async () => {
+    parseRunner.mockImplementation(() => {
+      throw new WorkerUnavailableError(new Error("Worker is not supported"));
+    });
+    await expect(importRunner("<html/>", {})).rejects.toThrow(
+      /worker_threads.*unavailable.*refusing to persist/is,
+    );
+    expect(persist).not.toHaveBeenCalled();
+  });
+
   // Бэкап исходника — воспроизводимость, но best-effort: сбой не должен ронять
   // уже успешный импорт (persist уже закоммичен).
   it("грузит исходный HTML после persist; сбой бэкапа не ронял импорт", async () => {
@@ -226,6 +243,18 @@ describe("importRunner atomization (reading + listening)", () => {
     expect(parsedArg.passages[0]!.bodyHtml).toBe(""); // не атомизировано
     expect(parsedArg.warnings.some((w) => /atomi/i.test(w))).toBe(true);
     expect(res.id).toBeTruthy();
+  });
+
+  // Контраст с тестом выше: обычный сбой parseTest ("cheerio boom") деградирует в
+  // fallback+warning и импорт УСПЕШЕН; WorkerUnavailableError — системный сбой,
+  // должен отказать импорт целиком, а не осесть тем же warning'ом.
+  it("reading: parseTest бросил WorkerUnavailableError → импорт отказывает, НЕ fallback+warning", async () => {
+    parseRunner.mockReturnValue({ parsed: readingParsed(), externalAudioSrc: null });
+    parseTest.mockImplementation(() => {
+      throw new WorkerUnavailableError(new Error("Worker is not supported"));
+    });
+    await expect(importRunner("<html/>", {})).rejects.toThrow(/worker_threads/i);
+    expect(persist).not.toHaveBeenCalled();
   });
 
   it("reading: несовпадение номеров atom↔runner → fallback + warning", async () => {
