@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import type { CheerioAPI } from "cheerio";
 import { extractData, extractFunctionTable } from "./extract-js";
 import type {
   ParsedAnswerKey,
@@ -33,10 +34,6 @@ export function parseListening(html: string): ParsedTest {
   const key =
     Object.keys(keyRaw).length > 0 ? normalizeKey(keyRaw) : normalizeKey(correctRaw);
   if (Object.keys(key).length === 0) warnings.push("KEY answer object not found.");
-  const bandScale =
-    extractFunctionTable(script, "band", 0, 40) ??
-    extractFunctionTable(script, "calculateIELTSScore", 0, 40);
-  if (!bandScale) warnings.push("band(r) function not found — no band scale.");
 
   const title =
     $("title")
@@ -49,29 +46,22 @@ export function parseListening(html: string): ParsedTest {
   const passages: ParsedPassage[] = [];
   const questions: ParsedQuestion[] = [];
 
-  const partSections =
-    $(".part[data-part]").length > 0
-      ? $(".part[data-part]").toArray()
-      : $(".part-content[id^='part']").toArray();
+  const { parts, malformed } = resolvePartSections($, warnings);
 
-  for (const sec of partSections) {
+  for (const { el: sec, order: part, valid } of parts) {
     const $sec = $(sec);
-    const part = Number.parseInt(
-      $sec.attr("data-part") ?? ($sec.attr("id") ?? "").replace(/\D+/g, ""),
-      10,
-    );
-    if (!Number.isFinite(part)) continue;
     const hasQuestion = (num: number): boolean =>
       questions.some((q) => q.number === num);
 
     const banner = $sec.find(".part-banner").text().replace(/\s+/g, " ").trim();
+    const label = valid ? `Part ${part}` : "Part (unrecognized)";
     passages.push({
       order: part,
-      title: `Part ${part}`,
+      title: label,
       // Listening "passage" carries no reading text — store the part banner as
       // context. The interactive form/table/matching is re-rendered from the
       // questions by our own components (§4.2), not from raw HTML.
-      bodyHtml: banner || `Part ${part}`,
+      bodyHtml: banner || label,
       // One audio file for the whole test — attach to each part; the player uses
       // the first non-null path.
       audioPath: audioSrc,
@@ -333,20 +323,111 @@ export function parseListening(html: string): ParsedTest {
 
   const questionTypes = [...new Set(questions.map((q) => q.qtype).filter(Boolean))];
 
+  // Category by part count (BRIEF §4.8) — mirrors Reading's passage_N/full_reading
+  // split (parse-test.ts detectCategory/isFullReading): a single recognized part
+  // imports as part_N, unlocking the same free Basic tier Reading's single passages
+  // already get (persist.ts's "category !== full_* → basic" rule does the tier work,
+  // untouched here); 2+ parts stays the paid full_listening mock, same as before.
+  // `malformed` (resolvePartSections — missing/invalid/duplicate part numbers)
+  // always wins: a file we can't cleanly count the parts of must never be sold
+  // as a falsely-unlocked Basic part_N.
+  const category = malformed ? "full_listening" : detectListeningCategory(passages.map((p) => p.order));
+
+  // band(r) only matters for the Full 40Q mock (BRIEF §4.4 — band lives on the
+  // full test, not per-part); mirrors passage_N never carrying a band scale either.
+  // Extracted here (not up front) because it depends on `category`, which itself
+  // depends on how many parts were actually recognized above.
+  let bandScale: Record<string, number> | null = null;
+  if (category === "full_listening") {
+    const raw =
+      extractFunctionTable(script, "band", 0, 40) ??
+      extractFunctionTable(script, "calculateIELTSScore", 0, 40);
+    if (!raw) warnings.push("band(r) function not found — no band scale.");
+    bandScale = raw ? Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v])) : null;
+  }
+
   return {
     title,
     section: "listening",
-    category: "full_listening",
+    category,
     bandType: "listening",
     durationSeconds: null,
     questionTypes,
-    bandScale: bandScale
-      ? Object.fromEntries(Object.entries(bandScale).map(([k, v]) => [k, v]))
-      : null,
+    bandScale,
     passages,
     questions,
     warnings,
   };
+}
+
+/**
+ * Category by part count — mirrors Reading's passage_N/full_reading split
+ * (parse-test.ts detectCategory/isFullReading, BRIEF §4.8). Only called when
+ * `resolvePartSections` found the file clean (every part number valid, 1-4,
+ * unique) — anything it couldn't cleanly count is routed to full_listening
+ * before this runs, so the only remaining question is how many clean parts
+ * there were: exactly one → part_N, anything else (0 or 2+) → the paid mock.
+ */
+function detectListeningCategory(partNumbers: number[]): string {
+  return partNumbers.length === 1 ? `part_${partNumbers[0]}` : "full_listening";
+}
+
+/** Strict part-number token — a bare 1-4 digit. Anything else (missing attr,
+ *  "2foo", "7", "NaN", empty) is not trusted as a real part boundary. */
+const PART_NUMBER_RE = /^[1-4]$/;
+
+/**
+ * Resolves each `.part`-like section to a stable, unique `order` BEFORE the main
+ * extraction loop runs, and flags the whole file `malformed` if that can't be
+ * done cleanly. Two failure modes found in review (2026-07-17), both now
+ * fail-safe to full_listening instead of a silent partial import:
+ *
+ *  - a section has no valid data-part (missing, non-numeric, or outside 1-4).
+ *    Previously the section was matched by `.part[data-part]` at all only if
+ *    EVERY `.part` happened to carry the attribute — one tagged `.part[data-
+ *    part="1"]` plus one bare `.part` sibling made the selector see only the
+ *    first, silently dropping the second block's questions AND still reporting
+ *    category part_1 (a real revenue-tier bug, not just a cosmetic one, once
+ *    part count started deciding the category).
+ *  - two sections share the same valid number — passage `order` would collide,
+ *    and persist.ts's passageIdByOrder (a plain Map) keeps only the LAST
+ *    insert, so every question from the earlier section silently rebinds to
+ *    the later passage row.
+ *
+ * A synthetic `order` (>=1000, never collides with a real 1-4) keeps every
+ * section's questions extracted and linked to SOME real passage row — no
+ * question is ever dropped — while `malformed` forces the safe category
+ * regardless of how many valid numbers were also found alongside the bad one.
+ */
+function resolvePartSections($: CheerioAPI, warnings: string[]) {
+  const modern = $(".part").toArray();
+  const nodes = modern.length > 0 ? modern : $(".part-content[id^='part']").toArray();
+
+  const seenValid = new Set<number>();
+  let malformed = false;
+  let nextSynthetic = 1000;
+  const parts = nodes.map((el, i) => {
+    const $sec = $(el);
+    const token = ($sec.attr("data-part") ?? ($sec.attr("id") ?? "").replace(/\D+/g, "")).trim();
+    if (PART_NUMBER_RE.test(token)) {
+      const n = Number(token);
+      if (!seenValid.has(n)) {
+        seenValid.add(n);
+        return { el, order: n, valid: true };
+      }
+      warnings.push(
+        `Duplicate part number ${n} (section #${i + 1}) — defaulted to full_listening, questions kept.`,
+      );
+    } else {
+      warnings.push(
+        `Part section #${i + 1} has no valid part number (data-part must be 1-4) — ` +
+          `defaulted to full_listening, questions kept.`,
+      );
+    }
+    malformed = true;
+    return { el, order: nextSynthetic++, valid: false };
+  });
+  return { parts, malformed };
 }
 
 /** Build a ParsedQuestion with its answer routed from KEY (variants). */

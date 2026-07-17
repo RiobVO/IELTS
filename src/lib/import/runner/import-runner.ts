@@ -53,12 +53,17 @@ export async function importRunner(
   // Атомизация (стратегия A, PRACTICE_PLAN): тот же HTML прогоняется вторым
   // парсером (parseTest — сам диспатчит в parse-listening для listening) ради
   // текста пассажей + prompt/options, которые прищепляются к runner-набору по
-  // номеру вопроса. Runner остаётся SoT для answer_key/категории — mock
-  // (runner_html ниже) не меняется. Listening больше не вне scope: merge несёт
-  // отдельную политику под неё (groupKey из atom, qtype-promotion для choose-TWO
-  // членов mcq_single→mcq_multi) — см. atomize-merge.ts. Best-effort: сбой
-  // atom-парса или несовпадение номеров → warning + fallback на runner-набор
-  // (Practice остаётся practice-lite, импорт успешен).
+  // номеру вопроса. Runner остаётся SoT для answer_key — mock (runner_html ниже)
+  // не меняется. Категория/bandScale — из runner для reading, но из atom для
+  // listening (review 2026-07-17, BRIEF §4.8): runner-парсер listening не видит
+  // реальные .part-границы и хардкодит part_1 для любого не-full импорта; только
+  // atom (parse-listening.ts) реально знает часть/band — см. doc-комментарий
+  // mergeAtomization в atomize-merge.ts. Listening несёт и отдельную политику
+  // презентации (groupKey из atom, qtype-promotion для choose-TWO членов
+  // mcq_single→mcq_multi) — см. там же. Best-effort: сбой atom-парса или
+  // несовпадение номеров → warning + fallback на runner-набор (Practice остаётся
+  // practice-lite, импорт успешен; категория/bandScale в этом случае — runner-
+  // эвристика, единственный доступный источник).
   try {
     const merge = mergeAtomization(parsed, parseTest(html));
     if (merge.atomized) {

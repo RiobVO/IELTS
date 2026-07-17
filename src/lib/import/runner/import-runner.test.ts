@@ -273,4 +273,40 @@ describe("importRunner atomization (reading + listening)", () => {
     expect(parsedArg.warnings.some((w) => /atomi/i.test(w))).toBe(true);
     expect(res.id).toBeTruthy();
   });
+
+  // BLOCKER (review 2026-07-17, BRIEF §4.8): единственный реальный listening-импорт
+  // путь — этот (Telegram/admin, importRunner). Runner (parse-runner.ts) не видит
+  // .part[data-part] вообще и хардкодит part_1 для любого не-full импорта; только
+  // atom (parse-listening.ts, через mergeAtomization) реально знает часть/band —
+  // без проброса в atomize-merge.ts detectListeningCategory никогда не доходил до
+  // persist. Юнит-покрытие самого мержа — atomize-merge.test.ts; здесь — что это
+  // реально доезжает через весь importRunner до вызова persistTest.
+  it("listening: category/bandScale в persist — из atom (part_N реальной части), а не из runner-заглушки part_1", async () => {
+    const runnerParsed = { ...listeningParsed(), category: "part_1", bandType: "listening", bandScale: null, questionTypes: ["mcq_single"] };
+    const atomParsed = { ...listeningAtomParsed(), category: "part_3", bandType: "listening", bandScale: null, questionTypes: ["mcq_multi"] };
+    parseRunner.mockReturnValue({ parsed: runnerParsed, externalAudioSrc: null });
+    parseTest.mockReturnValue(atomParsed);
+    await importRunner("<html/>", {});
+    expect(persist).toHaveBeenCalledTimes(1);
+    const [parsedArg] = persist.mock.calls[0] as [{ category: string; bandScale: unknown }];
+    expect(parsedArg.category).toBe("part_3");
+    expect(parsedArg.bandScale).toBeNull();
+  });
+
+  it("listening: full (2+ части) → category full_listening, atom-bandScale в persist (runner не нашёл band())", async () => {
+    const runnerParsed = { ...listeningParsed(), category: "full_listening", bandType: "listening", bandScale: null, questionTypes: ["mcq_single"] };
+    const atomParsed = {
+      ...listeningAtomParsed(),
+      category: "full_listening",
+      bandType: "listening",
+      bandScale: { "0": 5, "40": 9 },
+      questionTypes: ["mcq_multi"],
+    };
+    parseRunner.mockReturnValue({ parsed: runnerParsed, externalAudioSrc: null });
+    parseTest.mockReturnValue(atomParsed);
+    await importRunner("<html/>", {});
+    const [parsedArg] = persist.mock.calls[0] as [{ category: string; bandScale: unknown }];
+    expect(parsedArg.category).toBe("full_listening");
+    expect(parsedArg.bandScale).toEqual({ "0": 5, "40": 9 });
+  });
 });

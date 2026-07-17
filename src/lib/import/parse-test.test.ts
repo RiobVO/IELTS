@@ -190,3 +190,24 @@ describe.skipIf(!banff)("real sample — Banff National Park (MCQ)", () => {
     expect(t.warnings.some((w) => /unknown question type/i.test(w))).toBe(false);
   });
 });
+
+// Роутинг-регресс (review 2026-07-17): isListening() расширили с `.part[data-part]`
+// на bare `.part` (чтобы файл с единственным malformed-блоком тоже попадал в
+// parse-listening, а не тихо утекал в reading — см. parse-listening.test.ts).
+// Reading-шаблоны никогда не несут <audio> и используют РАЗНЫЕ CSS-классы
+// (`.passage-part`/`.questions-part`, не литеральный `.part`) — эти тесты
+// доказывают, что расширение их не задело, даже в намеренно adversarial случае.
+describe("isListening routing regression — reading остаётся reading", () => {
+  it("single passage без <audio> — как и раньше, диспетчеризуется в reading", () => {
+    const t = parseTest(SINGLE_HTML);
+    expect(t.section).toBe("reading");
+    expect(t.category).toBe("passage_2");
+  });
+
+  it("adversarial: тот же single-passage файл + случайный <audio> без .part — audio-присутствия одного недостаточно, остаётся reading", () => {
+    const html = SINGLE_HTML.replace("<body>", '<body><audio src="unrelated.mp3"></audio>');
+    const t = parseTest(html);
+    expect(t.section).toBe("reading");
+    expect(t.category).toBe("passage_2");
+  });
+});

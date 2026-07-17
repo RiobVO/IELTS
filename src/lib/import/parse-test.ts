@@ -312,12 +312,23 @@ export function parseTest(html: string): ParsedTest {
 
 /* ----------------------------- helpers --------------------------------- */
 
-/** Listening template marker: an <audio> element plus part sections. */
+/**
+ * Listening template marker: an <audio> element plus part sections. Matches
+ * bare `.part` (no `data-part` needed here) — review 2026-07-17: a file with
+ * one malformed `.part` block (missing/invalid data-part) still needs to reach
+ * parseListening so resolvePartSections's fail-safe (full_listening + warning,
+ * questions kept) actually runs; gating routing itself on `[data-part]` sent
+ * such a file to the READING parser instead, past every listening fail-safe.
+ * `<audio>` stays the primary discriminator — no reading template uses a
+ * literal `.part` class (reading's own part-like markup is `.passage-part`/
+ * `.questions-part`, distinct CSS class tokens), so this widening only ever
+ * matters for files that already look like listening.
+ */
 function isListening(html: string): boolean {
   const $ = cheerio.load(html);
   return (
     $("audio").length > 0 &&
-    ($(".part[data-part]").length > 0 || $(".part-content[id^='part']").length > 0)
+    ($(".part").length > 0 || $(".part-content[id^='part']").length > 0)
   );
 }
 
