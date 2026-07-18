@@ -30,8 +30,10 @@ describe("FeedbackSchema", () => {
   it("requires exactly 4 criteria", () => {
     expect(() => FeedbackSchema.parse({ ...valid, criteria: valid.criteria.slice(0, 3) })).toThrow();
   });
-  it("requires an annotation type in good|style|grammar", () => {
+  it("requires an annotation type in good|style|grammar|task", () => {
     expect(FeedbackSchema.safeParse({ ...valid, annotations: [{ quote: "x", comment: "y", type: "good" }] }).success).toBe(true);
+    // task — off-task/copied content (prompt v4).
+    expect(FeedbackSchema.safeParse({ ...valid, annotations: [{ quote: "x", comment: "y", type: "task" }] }).success).toBe(true);
     expect(FeedbackSchema.safeParse({ ...valid, annotations: [{ quote: "x", comment: "y" }] }).success).toBe(false);
     expect(FeedbackSchema.safeParse({ ...valid, annotations: [{ quote: "x", comment: "y", type: "bogus" }] }).success).toBe(false);
   });

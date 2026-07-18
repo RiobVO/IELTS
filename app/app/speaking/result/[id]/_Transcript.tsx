@@ -20,7 +20,7 @@ import { deleteSpeakingRecording } from "../../actions";
  * mis-wrap transcript words. Deleting the recording wipes audio + transcript server-side;
  * the block then shows the "removed" state while the band/feedback stay.
  */
-export type SpeakType = "pause" | "filler" | "repair" | "grammar" | "good";
+export type SpeakType = "pause" | "filler" | "repair" | "grammar" | "good" | "task";
 export interface SpeakAnno {
   quote: string;
   comment: string;
@@ -42,6 +42,9 @@ const TYPE_STYLE: Record<SpeakType, TypeStyle> = {
   repair: { tint: "color-mix(in oklab, var(--streak) 22%, transparent)", accent: "var(--streak)", deco: "double", legend: "Self-repair", decoName: "double", def: "Restarting or correcting mid-sentence." },
   grammar: { tint: "color-mix(in oklab, var(--error) 16%, transparent)", accent: "var(--error-text)", deco: "wavy", legend: "Grammar", decoName: "wavy", def: "A grammar slip worth fixing." },
   good: { tint: "color-mix(in oklab, var(--success) 24%, transparent)", accent: "var(--success-text)", deco: "solid", legend: "Good move", decoName: "solid", def: "A strong word or structure — keep doing this." },
+  // task = off-task/not-assessable речь (prompt v4) — нейтральные токены: не языковая
+  // ошибка, а «не оценивается». В легенду попадает только при наличии таких пометок.
+  task: { tint: "var(--surface-inset)", accent: "var(--text-secondary)", deco: "solid", legend: "Off-task", decoName: "solid", def: "Non-English or off-task speech — not assessed." },
 };
 
 const LEGEND_ORDER: SpeakType[] = ["pause", "filler", "repair", "grammar", "good"];
@@ -186,7 +189,9 @@ export function Transcript({
     return segs.map((seg, i) => {
       if (seg.annIndex === null) return <span key={`${keyPrefix}-${i}`}>{seg.text}</span>;
       const idx = seg.annIndex;
-      const ts = TYPE_STYLE[annotations[idx].type];
+      // Fallback: строки читаются без re-валидации — неизвестный тип из будущей
+      // версии промпта не должен ронять разбор.
+      const ts = TYPE_STYLE[annotations[idx].type] ?? TYPE_STYLE.filler;
       const on = active === idx;
       return (
         <mark
@@ -298,7 +303,7 @@ export function Transcript({
 
         <div style={S.notes}>
           {annotations.map((a, i) => {
-            const ts = TYPE_STYLE[a.type];
+            const ts = TYPE_STYLE[a.type] ?? TYPE_STYLE.filler;
             const on = active === i;
             return (
               <button
@@ -320,9 +325,10 @@ export function Transcript({
         </div>
       </div>
 
-      {/* Legend */}
+      {/* Legend: task — только при наличии таких пометок (дегенеративные записи),
+          на нормальном разборе постоянный ряд «Off-task» лишь путал бы. */}
       <div style={S.legendCard}>
-        {LEGEND_ORDER.map((t) => {
+        {LEGEND_ORDER.concat(annotations.some((a) => a.type === "task") ? (["task"] as SpeakType[]) : []).map((t) => {
           const ts = TYPE_STYLE[t];
           return (
             <div key={t} style={S.legendRow}>

@@ -4,8 +4,10 @@ import { z } from "zod";
 const band = z.number().min(0).max(9);
 
 // Annotation type drives the legend + <mark> tint + comment-card accent in the UI:
-// good = a strong move to reinforce, style = style/clarity, grammar = a grammar slip.
-const AnnotationType = z.enum(["good", "style", "grammar"]);
+// good = a strong move to reinforce, style = style/clarity, grammar = a grammar slip,
+// task = off-task/copied content (prompt-copy и т.п.) — раньше модель шохорнила такие
+// пометки в grammar/style, что путало легенду на дегенеративных инпутах.
+const AnnotationType = z.enum(["good", "style", "grammar", "task"]);
 
 const CriterionSchema = z.object({
   name: z.enum(["task_response", "coherence_cohesion", "lexical_resource", "grammar_accuracy"]),

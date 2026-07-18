@@ -25,12 +25,16 @@ export function Annotations({ essay, annotations }: { essay: string; annotations
       <h2 style={S.h2}>Notes on your text</h2>
       <p style={S.help}>Tap a highlight or a card — they&apos;re linked. Colour shows the kind of note.</p>
       <div style={S.legend}>
-        {(["good", "style", "grammar"] as AnnoType[]).map((t) => (
-          <span key={t} style={S.legendItem}>
-            <span style={{ ...S.legendDot, background: TYPE_STYLE[t].accent }} />
-            {TYPE_STYLE[t].legend}
-          </span>
-        ))}
+        {/* task — только при наличии таких пометок (дегенеративные инпуты): на нормальном
+            эссе постоянный чип «Off-task» в легенде лишь путал бы. */}
+        {(["good", "style", "grammar"] as AnnoType[])
+          .concat(annotations.some((a) => a.type === "task") ? (["task"] as AnnoType[]) : [])
+          .map((t) => (
+            <span key={t} style={S.legendItem}>
+              <span style={{ ...S.legendDot, background: TYPE_STYLE[t].accent }} />
+              {TYPE_STYLE[t].legend}
+            </span>
+          ))}
       </div>
 
       <div className="wf-annogrid" style={S.grid}>
@@ -38,7 +42,9 @@ export function Annotations({ essay, annotations }: { essay: string; annotations
           {segments.map((seg, i) => {
             if (seg.annIndex === null) return <span key={i}>{seg.text}</span>;
             const a = annotations[seg.annIndex];
-            const ts = TYPE_STYLE[a.type];
+            // Fallback: строки читаются raw-cast'ом без re-валидации — неизвестный тип
+            // из будущей версии промпта не должен ронять страницу разбора.
+            const ts = TYPE_STYLE[a.type] ?? TYPE_STYLE.style;
             const on = active === seg.annIndex;
             return (
               <mark
@@ -62,7 +68,7 @@ export function Annotations({ essay, annotations }: { essay: string; annotations
 
         <div style={S.cards}>
           {annotations.map((a, i) => {
-            const ts = TYPE_STYLE[a.type];
+            const ts = TYPE_STYLE[a.type] ?? TYPE_STYLE.style;
             const on = active === i;
             return (
               <button
