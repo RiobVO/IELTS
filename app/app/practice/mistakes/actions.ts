@@ -53,6 +53,8 @@ export async function resolveMistake(
         set: { resolvedAt: new Date() },
       });
     revalidatePath("/app/practice/mistakes");
+    // Дашборд показывает те же данные (getMistakesDueSummary в плане дня).
+    revalidatePath("/app");
   } catch (e) {
     await logError({
       source: "server",

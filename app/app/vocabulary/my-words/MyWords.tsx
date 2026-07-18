@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/core/icons";
 import { Button } from "@/components/core/Button";
 import { deleteSavedWord, reviewSavedWord } from "../saved-words-actions";
@@ -43,6 +44,21 @@ export function MyWords({ words }: { words: SavedWordRow[] }) {
   const completed = total - queue.length;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const finished = view === "review" && total > 0 && queue.length === 0;
+
+  // Граница сессии повторов — паттерн ReviewSession (см. комментарий там): один
+  // refresh на завершении вместо revalidatePath в per-card reviewSavedWord. finished
+  // обратим (exitReview → новая сессия) — ref сбрасывается вместе с ним.
+  const router = useRouter();
+  const refreshedRef = useRef(false);
+  useEffect(() => {
+    if (!finished) {
+      refreshedRef.current = false;
+      return;
+    }
+    if (refreshedRef.current) return;
+    refreshedRef.current = true;
+    router.refresh();
+  }, [finished, router]);
 
   // Транзиентное сообщение угасает само (паттерн семейства vocab-сессии).
   useEffect(() => {

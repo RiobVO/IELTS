@@ -1,6 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
@@ -156,5 +157,8 @@ export async function preorderPlan(input: {
     period_months: plan.months,
     source_page: sourcePage,
   });
+  // /app/upgrade читает preordered-стейт server-side — без ревалидации кешированная
+  // страница показала бы кнопку без «You're in» до минуты (staleTimes).
+  revalidatePath("/app/upgrade");
   return { ok: true };
 }

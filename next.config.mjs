@@ -3,6 +3,14 @@ import { withSentryConfig } from "@sentry/nextjs";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // Клиентский Router Cache для динамических сегментов (Next 15 дефолт — 0с:
+    // каждый возврат на посещённую страницу = полный RSC-рефетч ~350мс). 60с
+    // покрывает типичную петлю дашборд↔каталог↔сессия; свежесть от TTL не зависит —
+    // каждая мутация чистит кеш сама (revalidatePath в server actions / boundary-
+    // refresh в vocab-сессиях). Серверного кеширования не касается.
+    staleTimes: { dynamic: 60 },
+  },
   // Глобальные security-заголовки (BRIEF §6.1 defense-in-depth). Применяются на уровне
   // роутинга ДО хендлеров/страниц (см. resolve-routes.js в next/dist), поэтому там, где
   // конкретный роут сам ставит те же заголовки на свой Response (runner/route.ts —

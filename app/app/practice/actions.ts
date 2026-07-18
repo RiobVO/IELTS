@@ -31,7 +31,12 @@ export async function setTargetBand(band: string): Promise<void> {
     .set({ targetBand: value.toFixed(1) })
     .where(eq(profile.id, user.id));
 
+  // target_band виден не только в GoalBar каталога: band-план дашборда, target-бейдж
+  // Overview (/app/progress) и профиль читают то же поле — перечисляем все поверхности.
   revalidatePath("/app/practice");
+  revalidatePath("/app");
+  revalidatePath("/app/progress");
+  revalidatePath("/app/profile");
 }
 
 /**
