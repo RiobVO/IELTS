@@ -33,6 +33,15 @@ function roundHalf(x: number): number {
   return Math.round(x * 2) / 2;
 }
 
+/**
+ * Представитель band-диапазона W/S-фидбека (bandLow–bandHigh) для Readiness: середина,
+ * округлённая к 0.5-сетке IELTS. Без округления середина 6.0–6.5 = 6.25 → в UI «6.3» —
+ * несуществующий балл шкалы. .25 округляется ВВЕРХ, как официальный overall.
+ */
+export function midBand(low: number, high: number): number {
+  return roundHalf((low + high) / 2);
+}
+
 /** Округление к 0.5-сетке ВНИЗ / ВВЕРХ — для дожатия точки прогноза ВНУТРЬ окна капа. */
 function floorHalf(x: number): number {
   return Math.floor(x * 2) / 2;
@@ -87,9 +96,10 @@ export interface Trajectory {
    * центрируется на реальном overall. Цвет точки берёт UI из `section`.
    *
    * ВНИМАНИЕ: это облако СВИДЕТЕЛЬСТВ, а не временной ряд одной величины — соседние
-   * точки бывают из разных тестов. Ломаная через него врёт про переход, которого не
-   * было (Reading 3.5 сразу за Listening 2.0 рисовался «башней»). Для ЛИНИИ есть
-   * `buildOverallSeries`; для дельт — сравнивать в пределах своей секции.
+   * точки бывают из разных тестов, и полилиния через них даёт вертикальные «башни»
+   * при моках одного дня. Это ОСОЗНАННЫЙ выбор владельца (вариант 3: каждый мок
+   * лежит НА линии, без синтетических усреднений; альтернатива с overall-линией
+   * строилась и была откачена). Для дельт — сравнивать в пределах своей секции.
    */
   combined: TrajectoryPoint[];
   /** reading-подмножество combined — для split-линии/легенды. */
@@ -120,59 +130,6 @@ export function buildTrajectory(attempts: TrajectoryAttempt[]): Trajectory {
     reading: combined.filter((p) => p.section === "reading"),
     listening: combined.filter((p) => p.section === "listening"),
   };
-}
-
-/* -------------------------------------------------------------------------- */
-/* buildOverallSeries — «настоящий» overall во времени (линия графика)         */
-/* -------------------------------------------------------------------------- */
-
-/** Точка overall-линии. Секции нет: величина ДЕРИВАТИВНАЯ, а не отдельный мок. */
-export interface OverallPoint {
-  t: number;
-  band: number;
-}
-
-/**
- * Overall band во времени: на момент каждого мока — среднее ПОСЛЕДНИХ известных секций,
- * округлённое к 0.5 (как официальный overall IELTS).
- *
- * Зачем отдельно от `combined`: линия имеет смысл только для ОДНОЙ измеряемой
- * величины. `combined` — две переплетённые (R и L — разные тесты), поэтому любая
- * ломаная через него кодирует несуществующий переход. Здесь величина одна, и отрезок
- * между точками честно значит «твой overall изменился вот так».
- *
- * Почему это НЕ противоречит «единого overall из одной попытки не бывает» (см. docblock
- * модуля): мы и не берём его из одной попытки. Официальный overall = среднее секций,
- * сданных на РАЗНЫХ тестах одной сессии; здесь тот же приём — последний известный
- * результат по каждой секции.
- *
- * Пока сдана ОДНА секция, overall равен ей: это лучшая оценка из того, что известно, и
- * ровно та же конвенция, по которой уже живёт `buildReadiness` (`mean(present)` — среднее
- * ПРИСУТСТВУЮЩИХ скиллов, не всех четырёх). Альтернатива — не рисовать линию до второй
- * секции — была хуже: у студента, сдававшего сначала только Listening, «его band» появлялся
- * лишь на последней пятой части графика. Ступенька в момент первого мока второй секции
- * честна: это не скачок способностей, а приход новой информации.
- *
- * Прогноз (`computeForecast`) сознательно продолжает есть сырой `combined`: регрессия
- * через смешанное облако центрируется на overall, и трогать её не просили.
- */
-export function buildOverallSeries(combined: TrajectoryPoint[]): OverallPoint[] {
-  const out: OverallPoint[] = [];
-  let lastReading: number | null = null;
-  let lastListening: number | null = null;
-
-  for (const p of combined) {
-    if (p.section === "reading") lastReading = p.band;
-    else lastListening = p.band;
-
-    const known = [lastReading, lastListening].filter((b): b is number => b != null);
-    const band = roundHalf(known.reduce((s, b) => s + b, 0) / known.length);
-    // Два мока с одним timestamp дали бы две точки на одном x — вертикальный отрезок,
-    // которого линия не описывает. Держим последнее известное состояние на момент t.
-    if (out.length > 0 && out[out.length - 1].t === p.t) out[out.length - 1] = { t: p.t, band };
-    else out.push({ t: p.t, band });
-  }
-  return out;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -497,13 +454,7 @@ export interface SkillReadiness {
 export interface Readiness {
   /** всегда 4 записи в порядке R, L, W, S. */
   skills: SkillReadiness[];
-  /**
-   * overall = среднее ДОСТУПНЫХ скилл-band, округлённое к 0.5 (как overall IELTS).
-   * При < 4 заданных — это ЧАСТИЧНАЯ оценка (см. skillsCounted), не настоящий overall.
-   * Не клампим в [4,9] — историческая правда важнее косметики (кламп — только у прогноза).
-   */
-  overallBand: number | null;
-  /** сколько из 4 скиллов имеют band (0–4). */
+  /** сколько из 4 скиллов имеют band (0–4) — счётчик «N/4 skills» в карточке. */
   skillsCounted: number;
   targetBand: number | null;
 }
@@ -530,7 +481,5 @@ export function buildReadiness(input: ReadinessInput): Readiness {
   }));
 
   const present = skills.map((s) => s.band).filter((b): b is number => b != null);
-  const overallBand = present.length > 0 ? roundHalf(mean(present)) : null;
-
-  return { skills, overallBand, skillsCounted: present.length, targetBand };
+  return { skills, skillsCounted: present.length, targetBand };
 }

@@ -10,6 +10,7 @@ import {
   buildTrajectory,
   computeForecast,
   buildReadiness,
+  midBand,
   type Trajectory,
   type TrajectoryPoint,
   type Forecast,
@@ -122,8 +123,10 @@ export async function OverviewPanel() {
   const forecast = computeForecast(trajectory.combined.slice(-20), examDate, targetBand);
 
   const lastBand = (pts: TrajectoryPoint[]) => (pts.length ? pts[pts.length - 1].band : null);
-  const writingBand = writingHistory[0] ? (writingHistory[0].bandLow + writingHistory[0].bandHigh) / 2 : null;
-  const speakingBand = speakingHistory[0] ? (speakingHistory[0].bandLow + speakingHistory[0].bandHigh) / 2 : null;
+  // midBand: сырая середина диапазона (6.0–6.5 → 6.25) рисовала в Readiness «6.3» —
+  // несуществующий балл 0.5-шкалы IELTS.
+  const writingBand = writingHistory[0] ? midBand(writingHistory[0].bandLow, writingHistory[0].bandHigh) : null;
+  const speakingBand = speakingHistory[0] ? midBand(speakingHistory[0].bandLow, speakingHistory[0].bandHigh) : null;
 
   const readiness = buildReadiness({
     reading: lastBand(trajectory.reading),
@@ -326,7 +329,9 @@ function ForecastCard({ forecast }: { forecast: Forecast }) {
           </>
         )
       )}
-      {forecast.slopePerWeek != null && forecast.slopePerWeek > 0 && (
+      {/* trend === "up" — тот же порог (±0.25 band/мес), что отличает рост от шума:
+          раньше строка хвалила и за ~0.01 band/нед, который сама модель считает flat. */}
+      {forecast.trend === "up" && forecast.slopePerWeek != null && (
         <p style={S.forecastPace}>Improving ~{forecast.slopePerWeek.toFixed(2)} band per week lately</p>
       )}
       {verdictText[verdict] && <div style={verdictStyle}>{verdictText[verdict]}</div>}
@@ -351,7 +356,8 @@ const SKILL_META: Record<Skill, { label: string; icon: IconName; href: string }>
 };
 
 function ReadinessCard({ readiness }: { readiness: Readiness }) {
-  const started = readiness.skills.filter((s) => s.band != null).length;
+  // Ядро уже посчитало это как skillsCounted — не дублируем деривацию.
+  const started = readiness.skillsCounted;
   return (
     <div style={S.card}>
       <div style={S.readyHead}>
