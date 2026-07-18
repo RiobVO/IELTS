@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoisted so the vi.mock factories (hoisted above) can reference these eagerly.
-const { getUser, getProfile, counts, recentCount, insert, trigger, readOwn, markFailed, failStale, featureEnabled, loadTask } = vi.hoisted(() => ({
+const { getUser, getProfile, counts, recentCount, insert, trigger, readOwn, markFailed, failStale, featureEnabled, loadTask, revalidatePathMock } = vi.hoisted(() => ({
+  revalidatePathMock: vi.fn(),
   getUser: vi.fn(),
   getProfile: vi.fn(),
   counts: vi.fn(),
@@ -16,13 +17,15 @@ const { getUser, getProfile, counts, recentCount, insert, trigger, readOwn, mark
 vi.mock("@/lib/auth", () => ({ getUser, getProfile }));
 vi.mock("@/lib/writing/store", () => ({ completedCounts: counts, countRecentSubmissions: recentCount, insertPendingSubmission: insert, triggerEvaluate: trigger, readOwnSubmission: readOwn, markFailed, failStaleSubmissions: failStale, loadWritingTaskForSubmissionGate: loadTask }));
 vi.mock("@/env", () => ({ writingFeatureEnabled: featureEnabled }));
+// revalidatePath вне request-скоупа Next бросает — мокаем, как publish.test.ts.
+vi.mock("next/cache", () => ({ revalidatePath: revalidatePathMock }));
 import { createWritingSubmission, getSubmissionStatus } from "./actions";
 import { WRITING_STALE_MS, WRITING_RATE_MAX } from "@/lib/writing/lifecycle";
 
 const TASK = "11111111-1111-1111-1111-111111111111"; // a well-formed task id
 
 beforeEach(() => {
-  [getUser, getProfile, counts, recentCount, insert, trigger, readOwn, markFailed, failStale, featureEnabled, loadTask].forEach((m) => m.mockReset());
+  [getUser, getProfile, counts, recentCount, insert, trigger, readOwn, markFailed, failStale, featureEnabled, loadTask, revalidatePathMock].forEach((m) => m.mockReset());
   featureEnabled.mockReturnValue(true); // default: fully configured; #5 cases override
   failStale.mockResolvedValue(0); // default: nothing stale to reap
   recentCount.mockResolvedValue(0); // default: under the rate cap; #21 case overrides
@@ -146,6 +149,9 @@ describe("getSubmissionStatus", () => {
     readOwn.mockResolvedValue({ status: "completed", updatedAt: new Date(0) });
     expect(await getSubmissionStatus("s1")).toEqual({ status: "completed" });
     expect(markFailed).not.toHaveBeenCalled();
+    // completed — единственный статус, чистящий Router Cache поверхностей (staleTimes).
+    expect(revalidatePathMock).toHaveBeenCalledWith("/app/writing", "layout");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/app/progress");
   });
 
   it("returns null when the row is not the user's", async () => {

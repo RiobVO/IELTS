@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { getProfile, getUser } from "@/lib/auth";
 import { writingFeatureEnabled } from "@/env";
 import { isUuid } from "@/lib/uuid";
@@ -123,6 +124,16 @@ export async function getSubmissionStatus(
   if (row.status === "evaluating" && isStuck(row.updatedAt, now, WRITING_STALE_MS)) {
     await markFailed(submissionId);
     return { status: "failed" };
+  }
+  // completed — момент, когда анализ становится видим на поверхностях (previewUsed
+  // каталога, история, список W/S на /app/progress): чистим клиентский Router Cache
+  // (staleTimes). Оценка завершается в internal-роуте без клиентского контекста,
+  // поэтому ревалидация живёт здесь — в полле, которым клиент узнаёт о завершении.
+  // create/upload не ревалидируют: in-flight строки на поверхностях не показываются;
+  // failed — тоже (нигде не рендерится, юзер просто ретраит).
+  if (row.status === "completed") {
+    revalidatePath("/app/writing", "layout");
+    revalidatePath("/app/progress");
   }
   return { status: row.status };
 }

@@ -67,6 +67,15 @@ export async function saveWord(
       // ловит любой конфликт. returning пуст при конфликте → created=false.
       .onConflictDoNothing()
       .returning({ id: savedWord.id });
+    if (inserted.length > 0) {
+      // Новое слово видно в «My words» и счётчике карты на /app/vocabulary. Капсула
+      // сохранения — practice-only (canSaveWords в PassagePane), mock этот экшен не
+      // зовёт; ре-рендер practice-страницы от ревалидации идемпотентен (startAttempt
+      // → resume-ветка, test_start не перефейрится). Дубль (created=false) данных не
+      // меняет — без ревалидации.
+      revalidatePath("/app/vocabulary/my-words");
+      revalidatePath("/app/vocabulary");
+    }
     return { ok: true, created: inserted.length > 0 };
   } catch (e) {
     await logError({
