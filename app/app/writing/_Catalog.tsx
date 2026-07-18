@@ -170,26 +170,31 @@ export function WritingCatalog({
             Pick a Task 1 or Task 2 prompt and get an estimated band range with a concrete plan to lift it — not a verdict.
           </p>
         </div>
-        {preview === "spent" ? (
-          <div style={S.tierPill}>
-            <Icon name="lock" size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} />
-            <span style={S.tierPillText}>Premium feature</span>
-          </div>
-        ) : preview === "available" ? (
-          <div style={S.tierPill}>
-            <Icon name="sparkles" size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} />
-            <span style={S.tierPillText}>1 free analysis</span>
-          </div>
-        ) : (
-          targetBand != null && (
-            <div style={S.target}>
-              <span style={S.targetDot} />
-              <span style={S.targetLab}>Target</span>
-              <span style={S.targetVal}>{targetBand.toFixed(1)}</span>
-              <span style={S.targetHint}>band</span>
+        <div style={S.headerSide}>
+          {preview === "spent" ? (
+            <div style={S.tierPill}>
+              <Icon name="lock" size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} />
+              <span style={S.tierPillText}>Premium feature</span>
             </div>
-          )
-        )}
+          ) : preview === "available" ? (
+            <div style={S.tierPill}>
+              <Icon name="sparkles" size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} />
+              <span style={S.tierPillText}>1 free analysis</span>
+            </div>
+          ) : (
+            targetBand != null && (
+              <div style={S.target}>
+                <span style={S.targetDot} />
+                <span style={S.targetLab}>Target</span>
+                <span style={S.targetVal}>{targetBand.toFixed(1)}</span>
+                <span style={S.targetHint}>band</span>
+              </div>
+            )
+          )}
+          {/* Точка входа в историю анализов из каталога — раньше история была
+              достижима только с result-экранов (навигационный тупик). */}
+          <Button variant="ghost" size="sm" icon="clock" href="/app/writing/history">History</Button>
+        </div>
       </header>
 
       {preview === "available" && (
@@ -572,6 +577,9 @@ const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
 
   header: { display: "flex", gap: 18, flexWrap: "wrap" },
+  // Правый слот хедера: статус-pill + переход в History одной группой (пилюли flex:none,
+  // контейнер не даёт им разъезжаться при space-between на десктопе).
+  headerSide: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", flex: "none" },
   overline: { display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--text-link)", textTransform: "uppercase", marginBottom: 12 },
   overlineDot: { width: 7, height: 7, borderRadius: "var(--radius-full)", background: "var(--brand)" },
   h1: { margin: 0, lineHeight: 1.0, fontWeight: 800, letterSpacing: "-0.025em", color: "var(--text-primary)", textWrap: "balance" },
