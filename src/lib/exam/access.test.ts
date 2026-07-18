@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // который фейлит без реальных секретов; enforceAccess/loadAccessData её не зовут,
 // но модуль обязан импортироваться без побочных эффектов).
 const { select } = vi.hoisted(() => ({ select: vi.fn() }));
+const captureFn = vi.hoisted(() => vi.fn());
 const redirectFn = vi.hoisted(() => vi.fn((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 }));
@@ -21,7 +22,10 @@ vi.mock("@/db", () => ({
   },
 }));
 vi.mock("next/navigation", () => ({ redirect: redirectFn }));
-vi.mock("@/lib/analytics/server", () => ({ captureServer: vi.fn() }));
+vi.mock("@/lib/analytics/server", () => ({ captureServer: captureFn }));
+// after() вне request-скоупа Next бросает; в юнитах зовём колбэк синхронно —
+// это позволяет ассертить cap_hit-телеметрию (captureServer замокан выше).
+vi.mock("next/server", () => ({ after: (fn: () => unknown) => void fn() }));
 
 import { dayStartUtc, enforceAccess, loadAccessData, startAttempt, weekStartUtc } from "./access";
 
@@ -41,6 +45,7 @@ const orderLimitChain = (rows: unknown[]) => ({
 beforeEach(() => {
   select.mockReset();
   redirectFn.mockClear();
+  captureFn.mockClear();
 });
 
 describe("enforceAccess", () => {
@@ -78,6 +83,8 @@ describe("enforceAccess", () => {
       enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=practice");
     expect(redirectFn).toHaveBeenCalledWith("/app/practice?limit=practice");
+    // Отказ по капу обязан оставлять телеметрический след — иначе он невидим (§11).
+    expect(captureFn).toHaveBeenCalledWith("cap_hit", "u1", { mode: "practice", scope: "daily", check: "soft" });
   });
 
   it("Basic practice: 1-й и 2-й старт проходят (n=0, n=1 < лимита 2), 3-й режется (n=2)", async () => {

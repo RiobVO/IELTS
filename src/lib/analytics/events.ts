@@ -21,6 +21,7 @@ export const AnalyticsEvent = {
   Preorder: "preorder",
   ContentWaitlist: "content_waitlist",
   SprintSignup: "sprint_signup",
+  CapHit: "cap_hit",
 } as const;
 
 /** Свойства каждого события (ключ объекта = имя события в PostHog). */
@@ -86,6 +87,15 @@ export type EventProperties = {
    *  user_id ↔ участие для замера retention. Без свойств: коммуникация целиком
    *  в Telegram вне продукта, личность уже несёт distinctId. */
   sprint_signup: Record<string, never>;
+  /** Отказ Basic-юзеру в старте по капу (§4.8: 2 practice/день, 2 mock/нед) —
+   *  единственный след отказа: заблокированный старт НЕ создаёт строку attempt.
+   *  check: soft = ранний чек enforceAccess (норма), authoritative =
+   *  транзакционный в startAttempt (поймана гонка, проскочившая soft). */
+  cap_hit: {
+    mode: "practice" | "mock";
+    scope: "daily" | "weekly";
+    check: "soft" | "authoritative";
+  };
 };
 
 /** Имена событий — производны от контракта свойств, чтобы не разъехались. */
