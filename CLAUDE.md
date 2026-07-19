@@ -14,7 +14,10 @@ Next.js (App Router) + Drizzle + Supabase. IELTS-платформа. UI/тест
   `mode='practice'`, mock не тронут).
 - **[BACKLOG.md](./BACKLOG.md)** — продуктовый бэклог. История фаз — в git / BRIEF §9.
 - **[TESTING_PLAN.md](./TESTING_PLAN.md)** — трек зрелости тестирования по волнам (аудит
-  2026-07-19): волна 0a (платёжные инварианты) следующая; статус-таблица в §14 файла.
+  2026-07-19): волны 0a (платёжные инварианты + 3 прод-фикса, в т.ч. FOR UPDATE
+  stack-race) и 1 (CI-детектор: 6 джобов, sha-пин post-deploy smoke, restore-smoke
+  бэкапа) закрыты 2026-07-19; следующая — 1.5 (native-PG данные/гонки, §6);
+  статус-таблица в §14 файла. Правило прерывания: merchant-ключи пришли → 0b.
 
 **Следующая работа — BRIEF §12 (Roadmap Next):** notifications-переработка +
 upgrade-разруливание закрыты 2026-07-08 (`ad6b475..72407ab`, §12.2 п.4: actionable-
@@ -112,6 +115,8 @@ npm run dev            # Next.js dev server (localhost:3000)
 npm run build          # prod build (typechecks + lints the build graph)
 npx tsc --noEmit       # full typecheck (covers src/ + scripts/ that build skips)
 npm test               # vitest — pure logic only (grading, anti-cheat, parsers). No e2e/browser.
+npm run test:db        # транзакционные инварианты на throwaway нативном PG (test/db/, DESTRUCTIVE,
+                       # безусловный local-only guard; конкурентные тесты гонять ×5-10)
 
 npm run docker:db      # local Postgres:16 on :5432 (for the verify gate)
 npm run verify         # ACCEPTANCE GATE — DB/RLS/migrations/health/auth-trigger (DESTRUCTIVE, local-only)
@@ -122,7 +127,8 @@ npm run import <file>  # parse a test HTML file and persist it (status=draft)
 ```
 
 **Definition of "closed" / verified:** `npx tsc --noEmit` always; `npm test` for logic;
-`npm run verify` for payment/RLS/grading/migration changes; `npm run build` before a prod push.
+`npm run verify` for payment/RLS/grading/migration changes; `npm run test:db` (×5-10) for
+transactional/concurrency changes (payments, locks); `npm run build` before a prod push.
 `build`/`tsc` alone is not verification — exercise the changed behavior. Ad-hoc probes: throwaway
 `scripts/_*.ts` via `npx tsx`, deleted after (`scripts/` is gitignored).
 
