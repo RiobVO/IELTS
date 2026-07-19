@@ -3,16 +3,8 @@
 import { and, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { after } from "next/server";
 import { db } from "@/db";
-import {
-  annotation,
-  answerKey,
-  attempt,
-  attemptReviewSnapshot,
-  question,
-} from "@/db/schema";
-import { captureServer } from "@/lib/analytics/server";
+import { annotation, answerKey, attempt, question } from "@/db/schema";
 import {
   countSubmitsInWindow,
   exceedsSubmitRate,
@@ -20,12 +12,10 @@ import {
 } from "@/lib/anti-cheat";
 import { getUser } from "@/lib/auth";
 import { enforceAccess, loadAccessData } from "@/lib/exam/access";
+import { finalizeSubmit } from "@/lib/exam/finalize-submit";
 import { bandForScore } from "@/lib/grading/band";
 import { grade, type GradeKey } from "@/lib/grading/grade";
-import { buildReviewSnapshot } from "@/lib/exam/review-snapshot";
 import { logError } from "@/lib/monitoring/log-error";
-import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
-import { recomputeLeaderboard } from "@/lib/progress/leaderboard";
 import { isUuid } from "@/lib/uuid";
 
 // saveProgress тикает автосейвом раз в ~1.5с (§4.3) — офлайн-юзер за минуту простоя
@@ -202,96 +192,32 @@ export async function submitAttempt(
     Math.round((submittedAt.getTime() - att.startedAt.getTime()) / 1000),
   );
 
-  // Transition in_progress -> submitted. The status guard in WHERE makes this the
-  // single-fire claim: a concurrent double-submit updates 0 rows on the loser.
-  // band is only meaningful for Full (40-question) tests (§11); single passage ->
-  // percent only, band_score null.
-  const updated = await db
-    .update(attempt)
-    .set({
-      status: "submitted",
-      answers,
-      submittedAt,
-      timeUsedSeconds,
-      rawScore: result.rawScore,
-      bandScore: bandValue != null ? String(bandValue) : null,
-      perTypeBreakdown: result.perType,
-    })
-    .where(and(eq(attempt.id, attemptId), eq(attempt.status, "in_progress")))
-    .returning({ id: attempt.id });
-  if (updated.length === 0) {
+  // Транзакционное ядро сдачи (single-fire claim in_progress→submitted +
+  // snapshot + test_submit + applyPostSubmit + leaderboard) вынесено в
+  // finalize-submit.ts — server-only, НЕ client-callable — чтобы конкурентный
+  // инвариант «ровно один рейтинг/XP/бейдж на попытку» покрывался db-тестом
+  // напрямую. Грейдинг/auth/throttle/навигация остаются здесь. Поведение
+  // байт-в-байт: тот же порядок стейтментов, что был инлайн.
+  const outcome = await finalizeSubmit({
+    attemptId,
+    userId: user.id,
+    contentItemId,
+    mode: att.mode,
+    answers,
+    submittedAt,
+    timeUsedSeconds,
+    rawScore: result.rawScore,
+    total: result.total,
+    bandValue,
+    perType: result.perType,
+    reviewRows: rows,
+  });
+  if (!outcome.claimed) {
     // Lost the race — another submit already graded it.
     redirect(`/app/reading/${contentItemId}/result?a=${attemptId}`);
   }
 
-  // D3: snapshot разбора на момент сдачи (server-only locked-таблица). /result
-  // читает его вместо ЖИВОГО answer_key, чтобы разбор не «плыл» при позднейшей
-  // правке контента. Best-effort: провал не ломает сабмит (/result деградирует
-  // на live-ключ). onConflictDoNothing — ровно один snapshot на попытку.
-  try {
-    await db
-      .insert(attemptReviewSnapshot)
-      .values({ attemptId, snapshot: buildReviewSnapshot(rows) })
-      .onConflictDoNothing();
-  } catch (e) {
-    await logError({
-      source: "server",
-      message: "submitAttempt: review snapshot insert failed",
-      stack: e instanceof Error ? e.stack : null,
-      context: { op: "reviewSnapshotInsert", attemptId, contentItemId, userId: user.id },
-    });
-  }
-
-  // test_submit — событие воронки (§11). Регистрируется ПОСЛЕ выигранного single-fire
-  // claim (updated.length > 0): идемпотентный ре-сабмит и проигравший гонку
-  // редиректят выше, поэтому ровно одно событие на реальную сдачу — без накрутки.
-  // В after() (как leaderboard): flush PostHog (до 2с) не блокирует сабмит.
-  after(() =>
-    captureServer("test_submit", user.id, {
-      content_item_id: contentItemId,
-      raw_score: result.rawScore,
-      total: result.total,
-      time_used_seconds: timeUsedSeconds,
-      mode: att.mode,
-    }),
-  );
-
-  // Post-submit progression (BRIEF §4.6): streak/XP always, Elo rating on the
-  // first submitted attempt. Best-effort (never throws), so redirect() stays
-  // outside any try block.
-  const post = await applyPostSubmit({
-    userId: user.id,
-    contentItemId,
-    attemptId,
-    mode: att.mode,
-    rawScore: result.rawScore,
-    total: result.total,
-    timeUsedSeconds,
-    submittedAt,
-  });
-
-  // Leaderboard rebuild is deferred to AFTER the response (Next after()): a full
-  // recompute on every rated submit adds hundreds of ms to the user-facing submit
-  // for no UI benefit. Only a rated (first) attempt changes ranks. after() runs
-  // post-response; if it fails the board simply catches up on the next rated
-  // submit. The champion badge is evaluated synchronously (profile ratings), so
-  // it does NOT depend on this deferred rebuild.
-  if (post.rated) {
-    after(async () => {
-      try {
-        await recomputeLeaderboard();
-      } catch (e) {
-        await logError({
-          source: "server",
-          message: "submitAttempt: deferred recomputeLeaderboard failed",
-          stack: e instanceof Error ? e.stack : null,
-          context: { op: "recomputeLeaderboard", attemptId, userId: user.id },
-        });
-      }
-    });
-  }
-
-  const unlocked = post.awardedBadges.map((b) => b.code).join(",");
+  const unlocked = outcome.awardedBadges.map((b) => b.code).join(",");
   const q = unlocked ? `&unlocked=${encodeURIComponent(unlocked)}` : "";
   // Сдача меняет данные почти всех страниц зоны (план дня, Done-счётчики каталога,
   // прогресс, streak/XP/бейджи, mistakes-due) — чистим клиентский Router Cache всей
