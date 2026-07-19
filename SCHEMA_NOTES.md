@@ -984,3 +984,18 @@ Owner decision 2026-07-17: R/L контент стал полностью бес
 `attempt_user_submitted_idx` (0008), кап считает КАЖДЫЙ старт (включая ещё не сданные
 `in_progress`), не только `submitted`, поэтому `status` не может сузить предикат.
 `down.sql` — структурный реверс (`DROP INDEX IF EXISTS`), контента не теряет.
+
+## 0056 — profile/attempt grant lockdown (снятие прод-дрейфа, волна 1.5)
+
+Read-only постура-скрипт волны 1.5 (`scripts/check-rls-posture.ts`, контракт
+`test/db/rls-contract.ts`) на проде поймал ту же готчу «Supabase default-priv grants»,
+что 0047/0048, — теперь на двух старейших таблицах: `anon` держал ВСЕ табличные
+привилегии на `profile`/`attempt` (вплоть до TRUNCATE), `authenticated` —
+DELETE/REFERENCES/TRIGGER/TRUNCATE сверх SELECT. 0010 ревокал только INSERT/UPDATE у
+`authenticated`. Эксплуатации не было: RLS включён, DELETE-политики нет ни у кого,
+политики ownership-scoped (`auth.uid()` у anon = null → 0 строк). 0056 приводит постуру
+к secure-by-default: `REVOKE ALL FROM anon` + у `authenticated` остаётся только SELECT
+(policy-scoped, 0001); все записи в обе таблицы идут owner-path. `down` — no-op
+(паттерн 0047: up снимал только дрейф, контрактных грантов не менял). Контракт в
+`rls-contract.ts` ужесточён до `anon:"empty"` / `auth:"selectOnly"` — рецидив дрейфа
+теперь красный на каждом прогоне скрипта.
