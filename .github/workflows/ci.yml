@@ -116,7 +116,9 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # gitleaks сканирует всю историю, не только HEAD
-      - uses: gitleaks/gitleaks-action@v2
+      # Сторонний action пинится на ПОЛНЫЙ commit SHA (тег v2 переезжает): retag
+      # upstream не должен получить исполнение с токеном приватного репо.
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

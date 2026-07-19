@@ -18,11 +18,19 @@ try {
 }
 
 const passed = report.numPassedTests;
-const skipped = (report.numPendingTests ?? 0) + (report.numTodoTests ?? 0);
-if (typeof passed !== "number") {
-  console.error("[FAIL] test floor: numPassedTests missing in the vitest json report");
+// Счётчики skipped ОБЯЗАНЫ присутствовать (Codex-ревью волны 1): дрейф схемы
+// json-отчёта, потерявший numPendingTests, молча спрятал бы массовый skip.
+if (
+  typeof passed !== "number" ||
+  typeof report.numPendingTests !== "number" ||
+  typeof report.numTodoTests !== "number"
+) {
+  console.error(
+    "[FAIL] test floor: numPassedTests/numPendingTests/numTodoTests missing in the vitest json report (reporter schema drift?)",
+  );
   process.exit(1);
 }
+const skipped = report.numPendingTests + report.numTodoTests;
 if (passed < MIN_PASSED) {
   console.error(`[FAIL] test floor: ${passed} passed < ${MIN_PASSED} — the suite shrank or failed to collect`);
   process.exit(1);
