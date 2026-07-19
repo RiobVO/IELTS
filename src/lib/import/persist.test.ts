@@ -8,11 +8,14 @@ const { select, insert, del } = vi.hoisted(() => ({
   insert: vi.fn(),
   del: vi.fn(),
 }));
+// findDuplicateTest (в отличие от persistTest) не идёт через транзакцию — зовёт
+// db.select() напрямую. Тот же hoisted select переиспользуем и на верхнем уровне
+// db: тесты на persistTest и на findDuplicateTest мок не делят одновременно.
 vi.mock("../../db", () => ({
-  db: { transaction: (cb: (tx: unknown) => unknown) => cb({ select, insert, delete: del }) },
+  db: { transaction: (cb: (tx: unknown) => unknown) => cb({ select, insert, delete: del }), select },
 }));
 
-import { allAttemptsAdminOnly, persistTest, RegradeRequiredError } from "./persist";
+import { allAttemptsAdminOnly, persistTest, RegradeRequiredError, findDuplicateTest } from "./persist";
 import type { ParsedTest } from "./types";
 
 // select #1: existing content_item по sourceFilePath — .from().where() (без .limit()).
@@ -25,6 +28,11 @@ const attemptRoleChain = (rows: unknown[]) => ({
 });
 const insertReturning = (rows: unknown[]) => ({ values: () => ({ returning: () => Promise.resolve(rows) }) });
 const insertPlain = () => ({ values: () => Promise.resolve(undefined) });
+// findDuplicateTest select #2 (per-candidate key rows): answerKey INNER JOIN question —
+// .from().innerJoin().where().
+const keyRowsChain = (rows: unknown[]) => ({
+  from: () => ({ innerJoin: () => ({ where: () => Promise.resolve(rows) }) }),
+});
 
 // Минимальный валидный ParsedTest: 1 пассаж + 1 вопрос — ровно один insert-проход
 // на каждую из четырёх таблиц (content_item/passage/question/answer_key).
@@ -152,5 +160,34 @@ describe("persistTest — admin-only-attempts re-import (F4 «Sit as student»)"
 
     expect(id).toBe("new-id");
     expect(select).toHaveBeenCalledTimes(1); // только existing-запрос, без attempt-джойна
+  });
+});
+
+// Дубль по СОДЕРЖИМОМУ ключа ответов под ДРУГИМ именем файла (QA 2026-07-02: Vol7 T3) —
+// replace по sourceFilePath его не ловит, легла бы вторая строка. findDuplicateTest сам
+// не бросает — возвращает найденный дубль (или null), а вызывающий import-runner.ts
+// оборачивает найденную строку в DuplicateTestError.
+describe("findDuplicateTest — дубль по содержимому ключа (QA 2026-07-02: Vol7 T3)", () => {
+  it("тот же ключ ответов под другим именем файла — дубль найден (false-negative-защита)", async () => {
+    const existing = { id: "existing-id", title: "Existing Test", status: "published", sourceFilePath: "old-file.html" };
+    select
+      .mockReturnValueOnce(existingChain([existing]))
+      .mockReturnValueOnce(keyRowsChain([{ number: 1, accept: ["a"] }])); // тот же accept, что в minimalParsed
+
+    const dup = await findDuplicateTest(minimalParsed, "new-file.html");
+
+    expect(dup).toEqual(existing);
+  });
+
+  it("другой контент под другим именем файла — дубль НЕ детектится (false-positive-защита)", async () => {
+    select
+      .mockReturnValueOnce(
+        existingChain([{ id: "other-id", title: "Other Test", status: "draft", sourceFilePath: "other-file.html" }]),
+      )
+      .mockReturnValueOnce(keyRowsChain([{ number: 1, accept: ["different-answer"] }]));
+
+    const dup = await findDuplicateTest(minimalParsed, "new-file.html");
+
+    expect(dup).toBeNull();
   });
 });
