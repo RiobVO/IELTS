@@ -7,7 +7,7 @@
 // иначе гейт закрыт. e2e/admin.ts создаёt юзеров через SUPABASE_URL, поэтому
 // он больше не может остаться непроверенным (была дыра).
 import { describe, it, expect } from "vitest";
-import { isStatefulE2eAllowed, statefulE2eBlockReason, supabaseRefFromUrl, PROD_DB_REF } from "./stateful-gate";
+import { isStatefulE2eAllowed, statefulE2eBlockReason, supabaseRefFromUrl, resolveE2eEnv, PROD_DB_REF } from "./stateful-gate";
 
 const TEST_REF = "abcdefghijklmnopqrst";
 const OTHER_REF = "zyxwvutsrqponmlkjihg";
@@ -245,5 +245,50 @@ describe("statefulE2eBlockReason", () => {
     const reason = statefulE2eBlockReason({ ...validEnv, SMOKE_BASE_URL: "http://localhost:3000" });
     expect(reason).not.toBeNull();
     expect(reason).toContain("SMOKE_BASE_URL");
+  });
+});
+
+// Внешнее ревью, P1 #1 (env-каскад) + P1 #2 (Windows-регистр): loadE2eEnv читал
+// ТОЛЬКО .env.local, а не dev { ...loadEnvLocalFile(), ...process.env } не
+// матчит приоритет, с которым next dev (NODE_ENV=development) реально грузит
+// файлы (.env < .env.development < .env.local < .env.development.local <
+// process.env) — гейт видел не то окружение, что приложение, и мог
+// fail-open в сторону прода. resolveE2eEnv — чистая функция без ФС, слои уже
+// упорядочены по возрастанию приоритета (последний перекрывает).
+describe("resolveE2eEnv (P1 #1 env-каскад + P1 #2 Windows-регистр)", () => {
+  it("P1 #1: .env.development.local перекрывает .env.local — прод-ref в devLocal протекает поверх валидного local", () => {
+    const envLocalLayer = { ...validEnv };
+    const envDevLocalLayer = { DATABASE_URL: poolerUrl(PROD_DB_REF) };
+    const resolved = resolveE2eEnv([{}, {}, envLocalLayer, envDevLocalLayer], {});
+    expect(resolved.DATABASE_URL).toBe(poolerUrl(PROD_DB_REF));
+    expect(statefulE2eBlockReason(resolved)).not.toBeNull();
+  });
+
+  it("process.env перекрывает все файловые слои", () => {
+    const resolved = resolveE2eEnv([{ DATABASE_URL: poolerUrl(TEST_REF) }], { DATABASE_URL: poolerUrl(OTHER_REF) });
+    expect(resolved.DATABASE_URL).toBe(poolerUrl(OTHER_REF));
+  });
+
+  it("пустые слои ({}) не роняют merge", () => {
+    expect(() => resolveE2eEnv([{}, {}, {}, {}], {})).not.toThrow();
+    expect(resolveE2eEnv([{}, {}, {}, {}], {})).toEqual({});
+  });
+
+  describe("P1 #2: нормализация регистра (Windows env регистронезависим, spread это ломает)", () => {
+    it("mixed-case ключ файлового слоя доступен как UPPERCASE", () => {
+      const resolved = resolveE2eEnv([{ Database_Url: poolerUrl(TEST_REF) }], {});
+      expect(resolved.DATABASE_URL).toBe(poolerUrl(TEST_REF));
+    });
+
+    it("process.env mixed-case ключ перекрывает файловый UPPERCASE (прод поверх test → блок)", () => {
+      const resolved = resolveE2eEnv([{ ...validEnv }], { Database_Url: poolerUrl(PROD_DB_REF) });
+      expect(resolved.DATABASE_URL).toBe(poolerUrl(PROD_DB_REF));
+      expect(statefulE2eBlockReason(resolved)).not.toBeNull();
+    });
+  });
+
+  it("happy-path: только валидный local-слой + пустой process.env → isStatefulE2eAllowed true", () => {
+    const resolved = resolveE2eEnv([{}, {}, { ...validEnv }, {}], {});
+    expect(isStatefulE2eAllowed(resolved)).toBe(true);
   });
 });
