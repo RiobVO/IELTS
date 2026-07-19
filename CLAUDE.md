@@ -13,6 +13,8 @@ Next.js (App Router) + Drizzle + Supabase. IELTS-платформа. UI/тест
 - **[PRACTICE_PLAN.md](./PRACTICE_PLAN.md)** — трек «богатый Practice-режим R/L» (все фичи строго в ветке
   `mode='practice'`, mock не тронут).
 - **[BACKLOG.md](./BACKLOG.md)** — продуктовый бэклог. История фаз — в git / BRIEF §9.
+- **[TESTING_PLAN.md](./TESTING_PLAN.md)** — трек зрелости тестирования по волнам (аудит
+  2026-07-19): волна 0a (платёжные инварианты) следующая; статус-таблица в §14 файла.
 
 **Следующая работа — BRIEF §12 (Roadmap Next):** notifications-переработка +
 upgrade-разруливание закрыты 2026-07-08 (`ad6b475..72407ab`, §12.2 п.4: actionable-
