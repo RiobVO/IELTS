@@ -270,15 +270,25 @@ signed URLs, uploads, поведение реального supabase-js. Для 
       fixture-корни из аккумулятора (чистятся и при частичном падении посева);
       прогон ×2 идентичен
 - [x] Storage: policies бакетов speaking/source-html — **закрыт 2026-07-20**:
-      `scripts/storage-contract-test.ts` + npm `test:hosted:storage`. Идемпотентно
-      создаёт private `speaking-audio` (owner-policy) + `source-html` (service-role-
-      only), на каждом: service-role upload → positive control (signed URL HTTP 200 +
-      тело совпадает) → anon download DENY → cleanup. **Authenticated-контракт**
-      (реальный JWT-юзер): owner-positive (качает свой объект) + cross-user-deny
-      (не качает чужой префикс на speaking-audio — IDOR на Storage) + default-deny
-      source-html (authenticated без policy тоже отказ — ловит лишнюю permissive
-      policy). Границы service-role: anon не создаёт бакет, не заливает в приватный.
-      Cleanup — best-effort (уникальные имена per-прогон против коллизий); прогон ×2
+      **Канон** `scripts/lib/storage-provisioning.ts` — единственный источник истины
+      (speaking-audio private/10MB/owner-policy; source-html private/без policy):
+      `applyStorageProvisioning` (SETUP) + `verifyStorageProvisioning` (READ-ONLY
+      сверка через `storage.buckets`+`pg_policies`). Прод-скрипт `setup-speaking-storage.ts`
+      и тест-setup `setup-test-storage.ts` (npm `test:hosted:storage:setup`) идут из
+      канона — дубль SQL убран. **Контракт `test:hosted:storage` больше НЕ self-heal'ит**
+      (Codex P1): verify-гейт первым — при дрейфе (нет policy / ослаблены roles /
+      public=true / лишняя permissive policy на source-html) FAIL + подсказка setup,
+      exit 1 БЕЗ поведенческих проб. Доказано вживую: `drop policy` → контракт КРАСНЕЕТ
+      (не чинит), setup → снова зелёный. verify строгий (2-й раунд Codex): точная сверка
+      qual/with_check с каноном (ослабление `+OR true` краснеет), roles ровно
+      `[authenticated]` (лишняя роль краснеет), нет лишних АДРЕСНЫХ policy на speaking-audio
+      помимо канонической, source-html дрейф по ТОЧНОМУ литералу `'source-html'`
+      (не задевает `source-html-archive`); setup лечит лишнюю source-html policy (дропает).
+      Поведенческие пробы (service-role upload, signed URL 200, anon-deny, authenticated
+      owner-positive/cross-user download+upload deny/source-html default-deny, service-role
+      границы) — ловят bucket-agnostic `insert with check(true)`, который каталог не адресует.
+      Остаточный edge (документирован): path-scoped agnostic-policy и anon-insert по расширению —
+      узкий класс, не полируется. Cleanup best-effort (уникальные имена per-прогон)
 - [x] hard guard E2E-окружения — **закрыт 2026-07-19 (точка входа волны)**:
       `statefulE2eBlockReason` (`e2e/stateful-gate.ts`) — строгий контракт:
       флаг + все четыре переменные (`SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_URL`/
