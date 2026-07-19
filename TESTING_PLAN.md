@@ -243,15 +243,19 @@ owner-матрица UPDATE/DELETE — тавтология суперюзера
 Нативный PG НЕ доказывает: PostgREST-семантику, Supabase Auth/JWT, Storage policies,
 signed URLs, uploads, поведение реального supabase-js. Для этого:
 
-- [ ] второй Supabase Free проект (test-target, НЕ прод)
+- [ ] второй Supabase Free проект (test-target, НЕ прод) — **OWNER-ГЕЙТ волны:
+      действие в Dashboard за владельцем (не сделано с 0a); все пункты ниже, кроме
+      hard guard, без него не стартуют**
 - [ ] прогон миграций в Supabase-окружении
-- [ ] PostgREST/Auth: RLS через реальные API двумя юзерами (IDOR-матрица §6 — через HTTP-слой)
+- [ ] PostgREST/Auth: RLS через реальные API двумя юзерами (IDOR-матрица §6 — через
+      HTTP-слой; контракт переиспользовать из `test/db/rls-contract.ts`, не дублировать)
 - [ ] Storage: policies бакетов speaking/source-html, upload/download, signed URLs,
       service-role границы
-- [ ] hard guard E2E-окружения: `SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_URL` +
-      `DATABASE_URL` + `DIRECT_URL` обязаны указывать на ОДИН test-ref; известный
-      прод-ref запрещён во ВСЕХ переменных. Сейчас дыра: `stateful-gate.ts:39` смотрит
-      только DATABASE_URL/DIRECT_URL, а `e2e/admin.ts:32` создаёт юзеров через
+- [ ] hard guard E2E-окружения — **код-only, можно ДО test-target (точка входа
+      волны)**: `SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_URL` + `DATABASE_URL` +
+      `DIRECT_URL` обязаны указывать на ОДИН test-ref; известный прод-ref запрещён
+      во ВСЕХ переменных. Сейчас дыра: `stateful-gate.ts:39` смотрит только
+      DATABASE_URL/DIRECT_URL, а `e2e/admin.ts:32` создаёт юзеров через
       SUPABASE_URL — смешанное окружение пройдёт гейт и создаст юзера в проде.
       Юнит-тесты на mismatch и prod-rejection
 - [ ] payment webhook integration — НЕ здесь: hosted Supabase не даёт публичный
