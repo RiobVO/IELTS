@@ -124,21 +124,12 @@ describe("триггер 0002/0005: auto-provision profile на INSERT в auth.u
     expect(ref?.inviter_id).toBe(inviterId);
   });
 
-  it("self-referral (свой же код) блокируется: линковки нет, signup не падает", async () => {
-    // handle_new_user резолвит ref_code ДО инсёрта самого профиля, поэтому
-    // self-referral физически недостижим (свой код ещё не существует) —
-    // тест фиксирует эту гарантию буквально: код, который совпадёт с
-    // будущим referral_code юзера, недоступен заранее, а v_inviter = NEW.id
-    // guard в 0005 защищает и гипотетическое совпадение.
-    const userId = await seedUser({ ref_code: "DOES-NOT-EXIST-YET" });
-    const profile = await profileRow(userId);
-    expect(profile!.referredBy).toBeNull();
-    const [ref] = await sql<{ id: string }[]>`
-      SELECT id FROM referral WHERE invitee_id = ${userId}`;
-    expect(ref).toBeUndefined();
-  });
-
   it("несуществующий ref_code → линковки нет, signup НЕ падает (profile создан)", async () => {
+    // Покрывает и self-referral: handle_new_user резолвит ref_code ДО инсёрта
+    // самого профиля, поэтому собственный код на signup структурно не существует
+    // и резолвится как unknown — отдельного достижимого self-кейса нет (ревью:
+    // прежний «self-referral»-тест был дублем этого). Guard `v_inviter = NEW.id`
+    // в 0005 — защитная глубина на гипотетический replay, триггером недостижим.
     const userId = await seedUser({ ref_code: "NOPE-NO-SUCH-CODE" });
     const profile = await profileRow(userId);
     expect(profile).not.toBeNull();
