@@ -4,7 +4,12 @@ import { captureQuestions } from "./capture-questions";
 import { extractData } from "./extract-js";
 import { parseFullReading } from "./parse-reading-full";
 import { parseListening } from "./parse-listening";
-import { canonQuestionType } from "./question-types";
+import {
+  canonQuestionType,
+  blankTypeWarning,
+  unknownTypeWarning,
+  UNKNOWN_TYPE_FALLBACK,
+} from "./question-types";
 import type {
   ParsedAnswerKey,
   ParsedOption,
@@ -268,7 +273,11 @@ export async function parseTest(html: string): Promise<ParsedTest> {
         if (!confident)
           warnings.push(`Q${num}: fuzzy type match "${rawType}" -> ${type}`);
       } else {
-        warnings.push(`Q${num}: unknown question type label "${rawType}"`);
+        // Канонический envelope (как parse-runner): только его матчит publish-гейт
+        // isUnresolvedQuestionTypeWarning; самодельная строка проскакивала бы мимо.
+        // Fallback вместо пустого qtype — вопрос не теряется, публикацию режет гейт.
+        warnings.push(rawType.trim() === "" ? blankTypeWarning(num) : unknownTypeWarning(num, rawType));
+        q.qtype = UNKNOWN_TYPE_FALLBACK;
       }
     }
     q.answer = routeAnswer(num, data, mcqByNum, warnings);

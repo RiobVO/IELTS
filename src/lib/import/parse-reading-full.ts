@@ -2,7 +2,12 @@ import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import { captureQuestions } from "./capture-questions";
 import { extractData, extractFunctionTable } from "./extract-js";
-import { canonQuestionType } from "./question-types";
+import {
+  canonQuestionType,
+  blankTypeWarning,
+  unknownTypeWarning,
+  UNKNOWN_TYPE_FALLBACK,
+} from "./question-types";
 import type {
   ParsedAnswerKey,
   ParsedOption,
@@ -381,7 +386,11 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
         q.qtype = type;
         if (!confident) warnings.push(`Q${num}: fuzzy type "${raw}" -> ${type}`);
       } else {
-        warnings.push(`Q${num}: unknown question type label "${raw}"`);
+        // Канонический envelope (как parse-runner): только его матчит publish-гейт
+        // isUnresolvedQuestionTypeWarning; самодельная строка проскакивала бы мимо.
+        // Fallback вместо пустого qtype — вопрос не теряется, публикацию режет гейт.
+        warnings.push(raw.trim() === "" ? blankTypeWarning(num) : unknownTypeWarning(num, raw));
+        q.qtype = UNKNOWN_TYPE_FALLBACK;
       }
     }
     if (q.answer.accept.length === 0) q.answer = routeKey(num, correctAnswers, acceptable);

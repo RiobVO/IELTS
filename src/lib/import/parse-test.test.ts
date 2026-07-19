@@ -5,6 +5,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseTest } from "./parse-test";
+import { isUnresolvedQuestionTypeWarning, UNKNOWN_TYPE_FALLBACK } from "./question-types";
 
 const sample = (name: string): string | null => {
   const p = fileURLToPath(new URL(`../../../samples/${name}`, import.meta.url));
@@ -99,6 +100,51 @@ describe("parseTest — single passage", () => {
       expect.arrayContaining(["tfng", "note_completion", "mcq_multi"]),
     );
     expect(t.warnings).toHaveLength(0);
+  });
+});
+
+// Fix 2026-07-19: раньше unknown/blank label давал самодельную строку
+// «unknown question type label», которую publish-гейт (isUnresolvedQuestionTypeWarning)
+// НЕ матчил, а qtype оставался "" (маскировалось enum-крашем на INSERT). Теперь —
+// канонический envelope + fallback, как в parse-runner: вопрос не теряется,
+// публикация блокируется гейтом.
+const UNKNOWN_TYPE_HTML = `<!doctype html><html><head><title>Reading - Unknown</title></head>
+<body>
+  <div class="sectionRubric">Reading Passage 1. You should spend about 20 minutes on the Questions.</div>
+  <div id="passageContent"><h1>Types</h1><p>Passage text.</p></div>
+
+  <div class="tfng-question" id="question-1">
+    <p class="tfng-statement-text">Statement one.</p>
+    <label><input type="radio" name="q1" value="TRUE">True</label>
+    <label><input type="radio" name="q1" value="FALSE">False</label>
+  </div>
+  <div id="question-2" class="question">
+    <p>The gas is <input type="text" name="q2"> in the air.</p>
+  </div>
+
+  <script>
+    const correctAnswers = { "1": "TRUE", "2": "Oxygen" };
+    const questionTypes = { "1": "Quantum Telepathy" };
+  </script>
+</body></html>`;
+
+describe("parseTest — unknown/blank QTYPE попадает под publish-гейт", () => {
+  let t: Awaited<ReturnType<typeof parseTest>>;
+  beforeAll(async () => {
+    t = await parseTest(UNKNOWN_TYPE_HTML);
+  });
+  const q = (n: number) => t.questions.find((x) => x.number === n)!;
+
+  it("нераспознанный и пустой label дают gate-распознаваемые warning'и (Q1 unknown, Q2 blank)", () => {
+    const unresolved = t.warnings.filter(isUnresolvedQuestionTypeWarning);
+    expect(unresolved.some((w) => w.startsWith("Q1:"))).toBe(true);
+    expect(unresolved.some((w) => w.startsWith("Q2:"))).toBe(true);
+  });
+
+  it("вопросы не теряются: qtype падает на fallback, ключи маршрутизированы", () => {
+    expect(q(1).qtype).toBe(UNKNOWN_TYPE_FALLBACK);
+    expect(q(2).qtype).toBe(UNKNOWN_TYPE_FALLBACK);
+    expect(q(1).answer).toMatchObject({ mode: "exact", accept: ["TRUE"] });
   });
 });
 
