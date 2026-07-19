@@ -72,3 +72,29 @@ jobs:
           path: ${{ steps.meta.outputs.name }}
           retention-days: 30
           if-no-files-found: error
+
+      # Restore-smoke (TESTING_PLAN §5): size-guard выше ловит пустой gzip, но не
+      # «дамп не той/пустой БД» и не нерестворимый дамп. Восстанавливаем в scratch-PG
+      # и ассертим КАРКАС приложения. Шаг идёт ПОСЛЕ upload: частичный дамп в
+      # артефактах лучше, чем никакого. ON_ERROR_STOP выключен сознательно — дамп
+      # Supabase несёт auth-объекты/политики, которых нет в ванильном PG; важна не
+      # безошибочность restore, а восстановимость данных приложения.
+      - name: Restore-smoke — dump restores and holds the app schema
+        shell: bash
+        run: |
+          docker run -d --name restore-smoke -e POSTGRES_PASSWORD=postgres postgres:17
+          for i in $(seq 1 30); do
+            docker exec restore-smoke pg_isready -U postgres >/dev/null 2>&1 && break
+            sleep 1
+          done
+          gunzip -c "${{ steps.meta.outputs.name }}" \
+            | docker exec -i restore-smoke psql -q -U postgres postgres >/dev/null 2>&1 || true
+          tables=$(docker exec restore-smoke psql -tA -U postgres postgres \
+            -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name !~ '^_'")
+          profiles=$(docker exec restore-smoke psql -tA -U postgres postgres \
+            -c "SELECT count(*) FROM profile" 2>/dev/null || echo 0)
+          echo "restored: tables=$tables profiles=$profiles"
+          # 37 app-таблиц (verify.ts APP_TABLE_COUNT); profile ≥ 1 — аккаунты
+          # пережили даже контент-вайп, пустой profile = дамп не прод-БД.
+          [ "$tables" -ge 37 ] || { echo "::error::restore-smoke: only $tables app tables (< 37)"; exit 1; }
+          [ "$profiles" -ge 1 ] || { echo "::error::restore-smoke: profile table is empty"; exit 1; }

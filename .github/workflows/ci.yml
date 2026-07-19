@@ -1,8 +1,10 @@
 name: CI
 
-# Gate between push/PR and the Vercel prod deploy: typecheck + unit tests must
-# pass. Before this workflow existed, `git push origin main` went straight to
-# a prod deploy with zero automated verification.
+# CI — ДЕТЕКТОР ПОСЛЕ ФАКТА, не гейт (TESTING_PLAN §3/§5): соло trunk-based,
+# push в main деплоит Vercel независимо от этого workflow. Роли CI: повтор
+# локального pre-push контракта в чистом окружении, детектор «локально зелёное /
+# в чистом окружении красное», журнал состояния коммитов. Красная любая ступень
+# = красный коммит в журнале; required checks на приватном Free недоступны.
 
 on:
   push:
@@ -13,19 +15,135 @@ on:
 permissions:
   contents: read
 
+# Фиктивные значения для env-валидации (src/env.ts проверяет НАЛИЧИЕ при импорте
+# модулей). Джобы, которым нужна БД, переопределяют DATABASE_URL на service-
+# контейнер; статические страницы БД на билде не трогают (все db-импорты — в
+# auth-gated dynamic-роутах).
+env:
+  SUPABASE_URL: http://localhost:54321
+  SUPABASE_ANON_KEY: ci-anon-key
+  SUPABASE_SERVICE_ROLE_KEY: ci-service-role-key
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+  NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+
 jobs:
+  # Типы + юниты + floor тест-каунта + coverage-отчёт (без гейта, §5).
   test:
     runs-on: ubuntu-latest
-    # npm ci + tsc + vitest take ~3 min; anything past 15 is a hung runner.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
-
       - run: npm ci
       - run: npx tsc --noEmit
-      - run: npm test
+      # Один прогон: coverage-отчёт (видимость, БЕЗ thresholds) + json для floor.
+      - run: npx vitest run --coverage --reporter=default --reporter=json --outputFile=vitest-report.json
+      # Floor: детектор «зелёное, потому что тесты массово skipped / не собрались».
+      - run: node scripts/check-test-floor.mjs vitest-report.json
+
+  # Прод-граф сборки: локальный контракт требует build перед пушем — CI повторяет
+  # в чистом окружении (ловит «у меня собирается» / забытый импорт).
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  # Acceptance-гейт БД в чистом окружении: миграции up→down→up, RLS-постура,
+  # auth-триггер, health (§5) + транзакционные платёжные инварианты 0a-db.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      VERIFY_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      # 0a-db: конкурентные транзакции — гоняем трижды (одиночный зелёный прогон
+      # не доказывает отсутствие гонок; полный ×10 остаётся локальным контрактом).
+      - name: test:db ×3
+        run: |
+          for i in 1 2 3; do
+            echo "--- test:db run $i ---"
+            npm run test:db
+          done
+
+  # Дешёвые тумблеры §5 — отдельные джобы, чтобы красный сигнал был точечным.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      # Порог high: moderate-советы видны в логе, но не красят журнал коммитов
+      # (upstream-advisory без нашего изменения не должен маскировать реальные сбои).
+      - run: npm audit --audit-level=high
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # gitleaks сканирует всю историю, не только HEAD
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  # Freshness-чек бэкапа (§5): молча сломавшийся ночной pg_dump однажды оставил
+  # прод без бэкапов на 5 дней. Каждый push проверяет, что последний успешный
+  # прогон db-backup моложе 48 часов — красный здесь = чинить бэкап, не код.
+  backup-freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Последний успешный db-backup моложе 48 часов
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(gh api "repos/${{ github.repository }}/actions/workflows/db-backup.yml/runs?status=success&per_page=1" \
+            --jq '.workflow_runs[0].created_at // empty')
+          if [ -z "$last" ]; then
+            echo "::error::db-backup has no successful runs at all"
+            exit 1
+          fi
+          last_epoch=$(date -d "$last" +%s)
+          age_h=$(( ( $(date +%s) - last_epoch ) / 3600 ))
+          echo "last successful backup: $last (${age_h}h ago)"
+          if [ "$age_h" -gt 48 ]; then
+            echo "::error::last successful db-backup is ${age_h}h old (> 48h) — the nightly dump is broken"
+            exit 1
+          fi

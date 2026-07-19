@@ -12,6 +12,15 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "scripts/**/*.test.ts", "app/**/*.test.ts", "e2e/**/*.test.ts"],
+    // Coverage — ВИДИМОСТЬ, не гейт (TESTING_PLAN §5): thresholds намеренно нет.
+    // include обязателен: без него vitest считает только импортированные файлы и
+    // рисует ложную полноту. Включается флагом --coverage (CI); npm test не тянет.
+    coverage: {
+      provider: "v8",
+      include: ["src/**", "app/**"],
+      exclude: ["**/*.test.ts", "**/*.test.tsx", "**/*.d.ts"],
+      reporter: ["text-summary"],
+    },
   },
   resolve: {
     alias: {

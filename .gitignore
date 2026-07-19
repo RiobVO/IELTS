@@ -74,3 +74,7 @@ npm-debug.log*
 /smoke-deck.json
 /brand-kit/
 /.codex-screenshots/
+
+# vitest-артефакты CI (json-отчёт floor-скрипта + coverage)
+/vitest-report.json
+/coverage/
