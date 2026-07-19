@@ -4,7 +4,9 @@ name: CI
 # push в main деплоит Vercel независимо от этого workflow. Роли CI: повтор
 # локального pre-push контракта в чистом окружении, детектор «локально зелёное /
 # в чистом окружении красное», журнал состояния коммитов. Красная любая ступень
-# = красный коммит в журнале; required checks на приватном Free недоступны.
+# = красный коммит в журнале. Репо публичный: protected branches доступны, но
+# required checks/PR НЕ вводим (соло trunk-based). Security-скан (CodeQL, secret
+# scanning) — отдельные GitHub-функции, не этот workflow.
 
 on:
   push:
