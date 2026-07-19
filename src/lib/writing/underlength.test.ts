@@ -56,6 +56,24 @@ describe("withUnderlengthFlag", () => {
     expect(out.topFixes).toEqual(fb.topFixes);
   });
 
+  // Fix 2026-07-19: bare \b150\b|\b250\b in ALREADY_FLAGGED suppressed the mandatory
+  // warning whenever a scanned field mentioned the number in an UNRELATED context.
+  it("keeps the safety net when a scanned field mentions 250 in an unrelated context", () => {
+    const fb = baseFeedback({
+      annotations: [{ quote: "improve", comment: "You should study 250 hours to improve.", type: "style" }],
+    });
+    const out = withUnderlengthFlag(fb, 200);
+    expect(out.topFixes[0]).toMatch(/200 words/);
+  });
+
+  it("still dedupes on a length-context number without other trigger phrases (\"250-word\")", () => {
+    // «250-word essay is required» не матчит ни одну словесную альтернативу
+    // (word count/minimum/…), держится ТОЛЬКО на \b(150|250)[\s-]?words?\b.
+    const fb = baseFeedback({ topFixes: ["A 250-word essay is required here."] });
+    const out = withUnderlengthFlag(fb, 200);
+    expect(out.topFixes).toEqual(fb.topFixes);
+  });
+
   it("keeps topFixes within the schema max of 3, underlength first", () => {
     const fb = baseFeedback({ topFixes: ["fix one", "fix two", "fix three"] });
     const out = withUnderlengthFlag(fb, 100);
