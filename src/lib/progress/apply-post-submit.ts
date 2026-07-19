@@ -155,8 +155,11 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
         const performance = input.total > 0 ? input.rawScore / input.total : 0;
 
         const d = ratingDeltas(p.rating, testRating, performance);
-        ratingDelta = d.userDelta;
         newRating = Math.max(ELO_FLOOR, p.rating + d.userDelta);
+        // Дельта — ФАКТИЧЕСКОЕ изменение, не сырая userDelta: на полу ELO_FLOOR
+        // клэмп съедает часть минуса, и /result иначе показывал бы «-12» при
+        // реально неизменном рейтинге.
+        ratingDelta = newRating - p.rating;
         newPeak = Math.max(p.peakRating, newRating);
         ratedCount = p.ratedCount + 1;
 
