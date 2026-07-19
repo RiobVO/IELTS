@@ -15,9 +15,12 @@ Next.js (App Router) + Drizzle + Supabase. IELTS-платформа. UI/тест
 - **[BACKLOG.md](./BACKLOG.md)** — продуктовый бэклог. История фаз — в git / BRIEF §9.
 - **[TESTING_PLAN.md](./TESTING_PLAN.md)** — трек зрелости тестирования по волнам (аудит
   2026-07-19): волны 0a (платёжные инварианты + 3 прод-фикса, в т.ч. FOR UPDATE
-  stack-race) и 1 (CI-детектор: 6 джобов, sha-пин post-deploy smoke, restore-smoke
-  бэкапа) закрыты 2026-07-19; следующая — 1.5 (native-PG данные/гонки, §6);
-  статус-таблица в §14 файла. Правило прерывания: merchant-ключи пришли → 0b.
+  stack-race), 1 (CI-детектор: 6 джобов, sha-пин post-deploy smoke, restore-smoke
+  бэкапа) и 1.5 (native-PG данные/гонки: test:db 14→102, экстракция
+  `finalize-submit.ts`, RLS-матрица + `scripts/check-rls-posture.ts`, прод-фиксы
+  0056/0057 grant-lockdown) закрыты 2026-07-19; следующая — 2 (hosted Supabase,
+  ждёт test-target за владельцем); статус-таблица в §14 файла. Правило прерывания:
+  merchant-ключи пришли → 0b.
 
 **Следующая работа — BRIEF §12 (Roadmap Next):** notifications-переработка +
 upgrade-разруливание закрыты 2026-07-08 (`ad6b475..72407ab`, §12.2 п.4: actionable-
