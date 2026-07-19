@@ -105,9 +105,13 @@ jobs:
           tables=$(q "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name !~ '^_'")
           missing=$(q "SELECT string_agg(t, ', ') FROM unnest(ARRAY['profile','payment','attempt','content_item','question','answer_key','attempt_review_snapshot']) AS t WHERE to_regclass('public.' || t) IS NULL")
           profiles=$(q "SELECT count(*) FROM profile")
-          # payment_provider_tx_key живёт в post-data секции дампа — его наличие
+          # Unique-constraint payment живёт в post-data секции дампа — его наличие
           # доказывает, что restore дошёл до constraints, а не оборвался на COPY.
-          postdata=$(q "SELECT count(*) FROM pg_constraint WHERE conname = 'payment_provider_tx_key'")
+          # Проверка СТРУКТУРНАЯ (contype='u' на таблице), не по имени: миграция
+          # 0006 объявляет UNIQUE безымянно, автоимя PG ≠ имени в Drizzle-схеме
+          # (payment_provider_tx_key — только typed-сторона; первый прогон на
+          # реальном дампе поймал ровно это).
+          postdata=$(q "SELECT count(*) FROM pg_constraint WHERE conrelid = 'public.payment'::regclass AND contype = 'u'")
           echo "restored: tables=$tables profiles=$profiles postdata=$postdata missing='${missing}'"
           [ -z "$missing" ] || { echo "::error::restore-smoke: critical tables missing: $missing"; exit 1; }
           # 37 app-таблиц (verify.ts APP_TABLE_COUNT); profile ≥ 1 — аккаунты
