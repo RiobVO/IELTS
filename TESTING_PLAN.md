@@ -251,13 +251,18 @@ signed URLs, uploads, поведение реального supabase-js. Для 
       HTTP-слой; контракт переиспользовать из `test/db/rls-contract.ts`, не дублировать)
 - [ ] Storage: policies бакетов speaking/source-html, upload/download, signed URLs,
       service-role границы
-- [ ] hard guard E2E-окружения — **код-only, можно ДО test-target (точка входа
-      волны)**: `SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_URL` + `DATABASE_URL` +
-      `DIRECT_URL` обязаны указывать на ОДИН test-ref; известный прод-ref запрещён
-      во ВСЕХ переменных. Сейчас дыра: `stateful-gate.ts:39` смотрит только
-      DATABASE_URL/DIRECT_URL, а `e2e/admin.ts:32` создаёт юзеров через
-      SUPABASE_URL — смешанное окружение пройдёт гейт и создаст юзера в проде.
-      Юнит-тесты на mismatch и prod-rejection
+- [x] hard guard E2E-окружения — **закрыт 2026-07-19 (точка входа волны)**:
+      `statefulE2eBlockReason` (`e2e/stateful-gate.ts`) — строгий контракт:
+      флаг + все четыре переменные (`SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_URL`/
+      `DATABASE_URL`/`DIRECT_URL`) обязаны резолвиться в ОДИН не-прод ref через
+      `new URL()`-парсинг (анкерованные hostname/username-форматы, ref ровно 20
+      символов), прод-ref запрещён substring'ом case-insensitive в каждой.
+      Codex-ревью (2 раунда): Critical (обход неанкерованного regex приманкой в
+      query + trailing-dot/UPPERCASE прод-хост) и High (гейт не привязан к
+      app-серверу) закрыты — `SMOKE_BASE_URL` обязан быть НЕ задан для stateful,
+      `playwright.config.ts` не переиспользует чужой сервер при включённом гейте
+      (`reuseExistingServer: !isStatefulE2eAllowed`). 41 юнит-тест, включая
+      полный decoy-bypass по всем четырём переменным
 - [ ] payment webhook integration — НЕ здесь: hosted Supabase не даёт публичный
       HTTPS-эндпойнт Next.js; реальный webhook-колбэк живёт в топологии 0b (Preview)
 - [ ] процедура прогона: health-check → resume если paused (вручную из Dashboard) →
@@ -425,7 +430,7 @@ actions: 3/16. Непокрыто (полный список аудита):
 | 0a платёжные инварианты (0a-unit + 0a-db) + 3 прод-фикса (stack-race FOR UPDATE, reconcileClaims, grant-guard) | ✅ код закрыт; test-target Supabase — за владельцем | 2026-07-19 |
 | 1 CI-фундамент | ✅ закрыта | 2026-07-19 (`81acc4d..cdb8ca6`) |
 | 1.5 native-PG данные/гонки + прод-фиксы 0056/0057 (grant-lockdown) | ✅ закрыта | 2026-07-19 (`3487a13..0b96658`) |
-| 2 hosted Supabase контракты | ⬜ следующая (ждёт test-target Supabase — за владельцем) | — |
+| 2 hosted Supabase контракты | 🔶 hard guard закрыт (точка входа); остальное ждёт test-target Supabase — за владельцем | 2026-07-19 |
 | 0b sandbox-окно | ⬜ ждёт ключей | — |
 | 3 браузер + устройства | ⬜ по триггерам | — |
 | 4 эксплуатация | ⬜ по триггерам | — |
