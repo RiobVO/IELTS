@@ -33,18 +33,63 @@ function blankObject(src: string, name: string): string {
   return src.replace(literal, "{}");
 }
 
+/**
+ * Индекс сразу ЗА `}`, балансирующей открывающую скобку в позиции `open`.
+ * String/comment-aware — как балансировщик в extractObjectLiteral (extract-js):
+ * `}` внутри строкового литерала или комментария закрывающей НЕ считается. Без
+ * этого тело band(), содержащее строку с `}` (напр. `var s="}"`), рвётся на первой
+ * же скобке-в-кавычках, хвост приклеивается после стаба → SyntaxError, весь <script>
+ * раннера мёртв (P3, 2026-07-19). Небаланс → src.length (прежнее поведение
+ * blankFunction: срезать тело до конца источника).
+ */
+function matchBraceEnd(src: string, open: number): number {
+  let depth = 0;
+  let inStr: string | null = null;
+  let esc = false;
+  let inComment: "line" | "block" | null = null;
+  for (let i = open; i < src.length; i++) {
+    const c = src[i]!;
+    if (inComment === "line") {
+      if (c === "\n") inComment = null;
+      continue;
+    }
+    if (inComment === "block") {
+      if (c === "*" && src[i + 1] === "/") {
+        inComment = null;
+        i++;
+      }
+      continue;
+    }
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "/") {
+      inComment = "line";
+      i++;
+    } else if (c === "/" && src[i + 1] === "*") {
+      inComment = "block";
+      i++;
+    } else if (c === "'" || c === '"' || c === "`") inStr = c;
+    else if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+  }
+  return src.length;
+}
+
 /** Заменяет тело `function NAME(...){...}` на заглушку `return 0`. */
 function blankFunction(src: string, name: string): string {
   const re = new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{`);
   const m = re.exec(src);
   if (!m) return src;
-  let i = m.index + m[0].length, depth = 1;
-  while (i < src.length && depth > 0) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}") depth--;
-    i++;
-  }
-  return src.slice(0, m.index) + `function ${name}(){return 0;}` + src.slice(i);
+  // m[0] заканчивается на открывающей `{` — с неё и балансируем (string/comment-aware).
+  const end = matchBraceEnd(src, m.index + m[0].length - 1);
+  return src.slice(0, m.index) + `function ${name}(){return 0;}` + src.slice(end);
 }
 
 export function sanitizeRunner(html: string, opts: SanitizeOpts): string {

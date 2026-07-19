@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
+import * as cheerio from "cheerio";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseRunner } from "./parse-runner";
@@ -159,6 +160,68 @@ var ui = { labels: ["12:30","13:45","14:00","15:15"] };</script></body></html>`;
     const rb = await parseRunner(benign);
     const out = sanitizeRunner(benign, { contentItemId: "cid-5", section: "reading" });
     expect(() => assertNoKeyLeak(out, rb.parsed)).not.toThrow();
+  });
+
+  // Security core: ровно тот сценарий, ради которого существует layer 1. blankObject
+  // вырезает объект через `src.replace(literal, "{}")` — String.replace(string, ...)
+  // бьёт только по ПЕРВОМУ вхождению подстроки-литерала. Вторая декларация того же
+  // имени (другой источник/копипаста в файле) переживает sanitize молча, если бы
+  // assertNoKeyLeak сканировал только первую декларацию по имени — layer 1 гоняет
+  // regex с флагом "g" по ВСЕМ декларациям specifically ради этого случая.
+  it("вторая декларация correctAnswers переживает blankObject — layer 1 её ловит", async () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>
+var correctAnswers = {"1":"TRUE"};
+var questionTypes = {"1":"True/False/Not Given"};
+</script>
+<script>
+var correctAnswers = {"1":"TRUE","2":"leaked-secret-answer"};
+</script>
+</body></html>`;
+    const r = await parseRunner(html);
+    const out = sanitizeRunner(html, { contentItemId: "cid-dup", section: "reading" });
+    // Доказываем механику дыры перед тем, как проверить, что гейт её ловит.
+    expect(out).toMatch(/var correctAnswers\s*=\s*\{\}/); // первая декларация вырезана
+    expect(out).toContain("leaked-secret-answer"); // вторая — нет, пережила sanitize
+    expect(() => assertNoKeyLeak(out, r.parsed)).toThrow(/key leak/i);
+  });
+});
+
+// P3 (2026-07-19): blankFunction балансировал скобки посимвольно БЕЗ учёта строковых
+// литералов — `}` внутри строки в теле band() (напр. `var s="}"`) обнулял depth
+// преждевременно, хвост `";return r;}` приклеивался ПОСЛЕ стаба → SyntaxError, весь
+// <script> раннера мёртв (объявления после band не исполнялись). Сканер теперь
+// string/comment-aware: тело с `}`-в-строке дожёвывается до реальной закрывающей скобки.
+describe("blankFunction — string-aware brace matching (P3)", () => {
+  const html = `<!doctype html><html><head><title>L</title></head><body><audio src="x.mp3"></audio>
+<script>
+function band(r){var s="}";return r;}
+const KEY = {"1":["cat"],"2":["dog"],"3":["sun"],"4":["sky"]};
+</script></body></html>`;
+
+  const out = sanitizeRunner(html, { contentItemId: "cid-p3", section: "listening" });
+
+  const scriptBodies = (source: string): string[] => {
+    const $ = cheerio.load(source);
+    return $("script:not([src])")
+      .map((_, el) => $(el).html() ?? "")
+      .get();
+  };
+
+  it("каждый <script> синтаксически валиден (band не рвёт блок)", () => {
+    for (const body of scriptBodies(out)) {
+      // new Function только парсит тело, не исполняет — ловит именно SyntaxError.
+      expect(() => new Function(body)).not.toThrow();
+    }
+  });
+
+  it("band заглушён, хвоста тела после стаба нет", () => {
+    expect(out).toContain("function band(){return 0;}");
+    expect(out).not.toContain('";return r;}');
+  });
+
+  it("ключ-объект обнулён как обычно", () => {
+    expect(out).toMatch(/const KEY\s*=\s*\{\}/);
   });
 });
 
