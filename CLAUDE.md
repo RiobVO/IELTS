@@ -149,10 +149,16 @@ gaps: daily-limit TOCTOU (soft nudge), HMAC signature is a placeholder until mer
 keys (§10). See SCHEMA_NOTES "Phase 2D". Next: merge `feat/phase-2` → `main`; Phase 3
 (AI Writing/Speaking).
 
-Pending: browser admin-upload UI, autosave/resume (+ the server-trusted-timing and
-submit rate-limit/idempotency §4.6 gaps noted in SCHEMA_NOTES), Listening (blocked
-— no sample file), Full-test band scoring (needs a 40-question file), i18n, HTML
-sanitization. Branch per phase, merge to `main` when a phase is done.
+Phase-1 tail closed on `feat/phase-1-tail`: MCQ single/multi parsing (the first
+real MCQ file, Banff, exposed the gap), passage HTML sanitization (XSS), server-
+stamped `in_progress` attempts + autosave/resume (§4.3) with server-trusted timing
++ idempotent submit (§4.6), and the admin browser upload + publish UI (§4.2.1).
+
+Pending: Listening (blocked — needs a sample Listening HTML + audio), Full-test
+band scoring (blocked — needs a 40-question file), submit rate-limit throttle
+(idempotency + server timing are done; per-frequency throttle still open), i18n
+(deferred — EN at launch per §10). Branch per phase, merge to `main` when a phase
+is done.
 
 ## Git attribution (hard rule)
 
