@@ -113,6 +113,16 @@ export const notificationType = pgEnum("notification_type", [
   "badge_unlocked",
   "system",
 ]);
+export const paymentProvider = pgEnum("payment_provider", [
+  "payme",
+  "click",
+  "uzum",
+]);
+export const paymentStatus = pgEnum("payment_status", [
+  "pending",
+  "completed",
+  "failed",
+]);
 
 /* -------------------------------------------------------------------------- */
 /* region — hierarchical territory (country -> region/viloyat -> district)     */
@@ -192,6 +202,10 @@ export const contentItem = pgTable(
     bandScale: jsonb("band_scale"),
     status: contentStatus("status").notNull().default("draft"),
     version: integer("version").notNull().default(1),
+    // Elo difficulty rating of the test itself (BRIEF §4.6 anti-cheat / Elo).
+    // Updated server-side after each rated attempt; count tracks rated attempts.
+    difficultyRating: integer("difficulty_rating").notNull().default(1000),
+    difficultyCount: integer("difficulty_count").notNull().default(0),
     createdBy: uuid("created_by").references(() => profile.id, {
       onDelete: "set null",
     }),
@@ -406,4 +420,38 @@ export const notification = pgTable(
       .defaultNow(),
   },
   (t) => [index("notification_user_created_idx").on(t.userId, t.createdAt)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* payment — provider charges + subscription lifecycle (BRIEF §4.8 / §11)      */
+/* 14th table (see SCHEMA_NOTES.md "Phase 2D"). Server-write only; owner-read.  */
+/* -------------------------------------------------------------------------- */
+export const payment = pgTable(
+  "payment",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profile.id, { onDelete: "cascade" }),
+    provider: paymentProvider("provider").notNull(),
+    providerTransactionId: text("provider_transaction_id").notNull(),
+    // Purchased tier (premium|ultra). Reuses the userTier enum.
+    tier: userTier("tier").notNull(),
+    periodMonths: integer("period_months").notNull(),
+    amount: integer("amount").notNull(), // minor units (tiyin)
+    currency: text("currency").notNull().default("UZS"),
+    status: paymentStatus("status").notNull().default("pending"),
+    appliedUntil: timestamp("applied_until", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Idempotency key: one row per provider charge (webhook upserts on it).
+    unique("payment_provider_tx_key").on(t.provider, t.providerTransactionId),
+    index("payment_user_created_idx").on(t.userId, t.createdAt),
+  ],
 );

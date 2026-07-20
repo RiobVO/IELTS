@@ -113,9 +113,46 @@ module load.
 
 Phase 1 (MVP core, §9) is complete on `main`: auth, content import, catalog with
 filters, exam mode, server-side grading with per-question-type breakdown, dashboard.
-Pending: browser admin-upload UI, autosave/resume, Listening (blocked — no sample
-file), Full-test band scoring (needs a 40-question file), i18n, HTML sanitization.
-Branch per phase, merge to `main` when a phase is done.
+
+Phase 2 (Engagement) complete on `feat/phase-2`: rating+leaderboard, badges,
+referrals, tiers+payment. **2A (rating + leaderboard) done** (migration `0003`): Elo
+rating on first attempt + adaptive test difficulty, post-submit engine
+(`src/lib/progress/apply-post-submit.ts`: streak/XP + rating + leaderboard
+recompute), `leaderboard_entry` precompute (`src/lib/progress/leaderboard.ts`),
+`/app/leaderboard` UI, UZ region seed. **2B (badges) done** (migration `0004`):
+criteria engine (`src/lib/progress/badges.ts`) wired into the post-submit hook,
+12 seeded badges, `/app/badges` showcase, result-page unlock animation (codes
+passed on the redirect). **2C (referrals) done + applied** (migration `0005`):
+`handle_new_user` trigger extended to link `referred_by` + create a `referral` row
+(fresh per-row UNIQUE code, `status='registered'`) from a signup `ref_code`, with
+the referral INSERT EXCEPTION-guarded so the perk never aborts signup;
+`maybeRewardReferral` (`src/lib/progress/referral.ts`) rewards inviter +100 /
+invitee +50 XP exactly once after the invitee's first submit, claim + grants in one
+`db.transaction`; `?ref=` capture in `/auth`; `/app/invite` UI. Adversarial review
+passed (SQL-injection / anti-abuse §11 / migration-lockstep lenses); `0005` applied
+to Supabase. Known accepted gaps (NOT 2C scope): multi-account referral farming and
+reward-on-any-submit — the real §11 control is the separate anti-bot milestone
+(Turnstile/captcha + velocity cap). See SCHEMA_NOTES "Phase 2C". **2D (tiers +
+payment) done + applied** (migration `0006`, 14th table `payment`): tier gating via
+`src/lib/tiers.ts` (`effectiveTier` demotes expired premium; catalog lock / exam-
+start / submit-action / result-review gates, all defense-in-depth on the server),
+Basic daily limit; payment seam (`src/lib/payments/`) keys-optional with a production
+fail-closed stub; `initiatePayment` creates a `pending` row only, the webhook
+(`/api/webhooks/[provider]`) is the sole grant path — idempotent + single-fire,
+deriving entitlement from the trusted pending row (NOT the request body) and
+validating against `findPlan`; cron downgrade (`/api/cron/expire-premium`, Bearer
+`CRON_SECRET`, fail-closed); `/app/upgrade` + stub checkout + `/app/profile` +
+landing pricing. Adversarial review (payment-integrity / access-control / auth-infra)
+caught a critical body-trust webhook escalation — fixed; lifecycle proven E2E
+(valid/duplicate/forged/mismatch) on local docker; `0006` applied. Known accepted
+gaps: daily-limit TOCTOU (soft nudge), HMAC signature is a placeholder until merchant
+keys (§10). See SCHEMA_NOTES "Phase 2D". Next: merge `feat/phase-2` → `main`; Phase 3
+(AI Writing/Speaking).
+
+Pending: browser admin-upload UI, autosave/resume (+ the server-trusted-timing and
+submit rate-limit/idempotency §4.6 gaps noted in SCHEMA_NOTES), Listening (blocked
+— no sample file), Full-test band scoring (needs a 40-question file), i18n, HTML
+sanitization. Branch per phase, merge to `main` when a phase is done.
 
 ## Git attribution (hard rule)
 
