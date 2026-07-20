@@ -102,3 +102,17 @@ Kit treats it as external (no `CREATE SCHEMA auth`). One residual quirk: a *firs
 "auth"."users"` — ignore/remove it (Supabase provides that table). Incremental
 generates afterwards are clean. The `/drizzle` output is gitignored and
 reference-only; the executable contract is `/migrations`.
+
+## Auth (step 2): profile auto-provisioning
+
+`migrations/0002_auth` adds a `SECURITY DEFINER` trigger `on_auth_user_created`
+on `auth.users` that inserts the matching `public.profile` row on signup (the
+standard Supabase pattern — `public.profile` can't be written by the client
+before a session exists). `auth_provider` is read from `raw_app_meta_data` and
+clamped to the enum (default `email`); `referral_code` is a 10-char slice of a
+fresh `gen_random_uuid()` (no extension; collision is astronomically unlikely at
+launch scale — can add a retry loop later if needed). The local
+`bootstrap-supabase-local.sql` adds the `raw_app_meta_data` / `raw_user_meta_data`
+columns the trigger reads (real Supabase `auth.users` already has them). Browser
+auth needs `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same
+public values as the server `SUPABASE_URL` / `SUPABASE_ANON_KEY`).

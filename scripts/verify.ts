@@ -6,7 +6,8 @@
  *   2. migrate down      -> clean revert (0 app tables)
  *   3. migrate up again  -> idempotent (re-apply works, second run is a no-op)
  *   4. anon role         -> SELECT * FROM answer_key is DENIED by RLS
- *   5. GET /api/health   -> 200
+ *   5. auth trigger      -> new auth.users row auto-creates a profile
+ *   6. GET /api/health   -> 200
  *
  * Requires a reachable DATABASE_URL (Supabase or local docker Postgres) and all
  * required env vars. Fails fast with a clear message if any env var is missing.
@@ -112,6 +113,34 @@ async function answerKeyLock(): Promise<{
   return { rlsEnabled: rls === true, noClientPolicy: n === 0, anonDenied };
 }
 
+/**
+ * Inserts a fake auth user and checks the 0002 trigger auto-creates a matching
+ * profile with the expected defaults (role=student, tier=basic, referral_code),
+ * then cleans up (cascade removes the profile).
+ */
+async function profileAutoCreated(): Promise<boolean> {
+  const email = `verify+${Date.now()}@example.com`;
+  const inserted = await sql<{ id: string }[]>`
+    INSERT INTO auth.users (email, raw_app_meta_data)
+    VALUES (${email}, ${sql.json({ provider: "email" })})
+    RETURNING id`;
+  const id = inserted[0].id;
+  try {
+    const rows = await sql<
+      { role: string; tier: string; referral_code: string | null }[]
+    >`SELECT role::text AS role, tier::text AS tier, referral_code
+        FROM profile WHERE id = ${id}`;
+    return (
+      rows.length === 1 &&
+      rows[0].role === "student" &&
+      rows[0].tier === "basic" &&
+      !!rows[0].referral_code
+    );
+  } finally {
+    await sql`DELETE FROM auth.users WHERE id = ${id}`;
+  }
+}
+
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer();
@@ -207,7 +236,12 @@ async function main() {
         `noClientPolicy=${lock.noClientPolicy}, anonDenied=${lock.anonDenied})`,
     );
 
-  // 5. health endpoint
+  // 5. auth trigger: a new auth.users row auto-creates a profile
+  if (await profileAutoCreated())
+    ok("auth trigger — profile auto-created on signup");
+  else fail("auth trigger — profile NOT auto-created");
+
+  // 6. health endpoint
   if (await checkHealth()) ok("/api/health — 200");
   else fail("/api/health — did not return 200");
 }

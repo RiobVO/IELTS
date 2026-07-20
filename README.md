@@ -25,8 +25,14 @@ Required env (`npm run verify` and the DB client fail fast if any is missing):
 
 ```bash
 npm run dev        # Next.js dev server  -> http://localhost:3000
-                   # health probe        -> http://localhost:3000/api/health
 ```
+
+Routes: `/` (landing) · `/auth` (email sign-in/up) · `/app` (dashboard, auth-gated) ·
+`/admin` (role=admin) · `/api/health`. Auth is Supabase (email now; Apple/Facebook
+when OAuth keys exist — §10). Live sign-in needs a real Supabase project: set
+`SUPABASE_*` and `NEXT_PUBLIC_SUPABASE_*` in `.env.local`. A new auth user
+auto-gets a `profile` row via the `on_auth_user_created` trigger
+(`migrations/0002_auth`).
 
 ## Database
 
