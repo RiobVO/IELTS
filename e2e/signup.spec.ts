@@ -33,6 +33,13 @@ test("signup form creates a new account (tolerant of email-confirm on/off)", asy
   );
 
   const url = page.url();
+  // Хостед тест-стенд шлёт confirm-письма встроенной почтой Supabase (кастомный
+  // SMTP подключён только к прод-проекту) — её квота ~2-4 письма/час. Упереться
+  // в неё при повторных прогонах — свойство инфры, не продукта: skip, не fail.
+  // Любая ДРУГАЯ ошибка формы по-прежнему валит тест.
+  if (url.includes("error=email+rate+limit+exceeded")) {
+    test.skip(true, "Supabase built-in email quota exhausted on the test stand (~2-4/hour)");
+  }
   if (url.includes("error=")) {
     throw new Error(`signup form rejected a fresh, valid email/password: ${url}`);
   }
