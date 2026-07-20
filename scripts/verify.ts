@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 13;
+const APP_TABLE_COUNT = 14; // 13 from §5 + `payment` (2D, see SCHEMA_NOTES.md)
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);
@@ -178,16 +178,25 @@ async function checkHealth(): Promise<boolean> {
   // Ephemeral port avoids colliding with / false-passing against a stale server
   // from a previous run.
   const port = await freePort();
-  const nextBin = join(ROOT, "node_modules", ".bin", "next");
+  // Launch Next via the Node binary directly (node next/dist/bin/next ...) instead
+  // of the node_modules/.bin/next shim: that shim is extensionless on Windows
+  // (only next.cmd is runnable there) and Node >=20 refuses to spawn a .cmd without
+  // shell:true — so spawning the shim path ENOENTs and the gate falsely fails.
+  // Going through process.execPath is cross-platform and needs no shell.
+  const nextBin = join(ROOT, "node_modules", "next", "dist", "bin", "next");
   // detached:true => child is its own process-group leader, so we can signal the
   // whole group (Next forks a router worker that actually binds the port; a bare
   // SIGKILL to the parent would orphan it).
-  const child = spawn(nextBin, ["dev", "-p", String(port), "-H", "127.0.0.1"], {
-    cwd: ROOT,
-    stdio: "ignore",
-    detached: true,
-    env: { ...process.env },
-  });
+  const child = spawn(
+    process.execPath,
+    [nextBin, "dev", "-p", String(port), "-H", "127.0.0.1"],
+    {
+      cwd: ROOT,
+      stdio: "ignore",
+      detached: true,
+      env: { ...process.env },
+    },
+  );
   let childDead = false;
   child.on("exit", () => {
     childDead = true;

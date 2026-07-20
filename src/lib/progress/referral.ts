@@ -13,6 +13,11 @@
  * RETURNING. Self-referral and invalid codes are already excluded upstream by
  * the signup trigger (no `registered` row is ever created for them).
  *
+ * The claim and BOTH XP grants run in ONE transaction. Otherwise a crash between
+ * the (already-committed) claim and the XP writes would leave status='rewarded'
+ * with no XP — and the single-fire guard makes that unrecoverable on retry. The
+ * notifications stay OUTSIDE the transaction (genuinely best-effort).
+ *
  * BEST-EFFORT: the whole body is wrapped so this NEVER throws — the caller
  * (applyPostSubmit) redirects immediately after, and a reward failure must not
  * break the submit, only skip the perk.
@@ -23,32 +28,41 @@ import { notification, profile, referral } from "@/db/schema";
 
 export async function maybeRewardReferral(userId: string): Promise<void> {
   try {
-    // Atomically claim the reward. The WHERE status='registered' + RETURNING is
-    // the single-fire guard: only the first submit that finds the row in
-    // 'registered' flips it to 'rewarded' and gets a row back.
-    const claimed = await db
-      .update(referral)
-      .set({ status: "rewarded", reward: "xp:inviter=100,invitee=50" })
-      .where(
-        and(eq(referral.inviteeId, userId), eq(referral.status, "registered")),
-      )
-      .returning({ inviterId: referral.inviterId });
+    // Claim + grant in one transaction: the status flip and both XP increments
+    // commit or roll back together, so the reward can never be marked 'rewarded'
+    // without the XP actually landing (and vice versa).
+    const inviterId = await db.transaction(async (tx) => {
+      // Atomically claim the reward. The WHERE status='registered' + RETURNING is
+      // the single-fire guard: only the first submit that finds the row in
+      // 'registered' flips it to 'rewarded' and gets a row back. The row lock the
+      // UPDATE takes also serializes concurrent first-submits inside the txn.
+      const claimed = await tx
+        .update(referral)
+        .set({ status: "rewarded", reward: "xp:inviter=100,invitee=50" })
+        .where(
+          and(eq(referral.inviteeId, userId), eq(referral.status, "registered")),
+        )
+        .returning({ inviterId: referral.inviterId });
 
-    // No pending referral for this user, or it was already rewarded.
-    if (claimed.length === 0) return;
+      // No pending referral for this user, or it was already rewarded.
+      if (claimed.length === 0) return null;
 
-    const inviterId = claimed[0].inviterId;
+      // Grant XP via a SQL increment (read-modify-write in JS would race the
+      // post-submit profile write that also touches xp). Inviter +100, invitee +50.
+      await tx
+        .update(profile)
+        .set({ xp: sql`${profile.xp} + 100` })
+        .where(eq(profile.id, claimed[0].inviterId));
+      await tx
+        .update(profile)
+        .set({ xp: sql`${profile.xp} + 50` })
+        .where(eq(profile.id, userId));
 
-    // Grant XP atomically (read-modify-write would race the post-submit profile
-    // write that also touches xp). Inviter +100, invitee +50.
-    await db
-      .update(profile)
-      .set({ xp: sql`${profile.xp} + 100` })
-      .where(eq(profile.id, inviterId));
-    await db
-      .update(profile)
-      .set({ xp: sql`${profile.xp} + 50` })
-      .where(eq(profile.id, userId));
+      return claimed[0].inviterId;
+    });
+
+    // No pending referral was claimed — nothing to announce.
+    if (inviterId === null) return;
 
     // Notifications are nice-to-have: each in its own try/catch so a failure
     // here never undoes the XP grant above. notification.type has no referral

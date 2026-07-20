@@ -3,8 +3,9 @@ import { eq, inArray } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
 import { answerKey, attempt, badge, question } from "@/db/schema";
-import { getUser } from "@/lib/auth";
+import { getProfile, getUser } from "@/lib/auth";
 import { grade, type GradeKey } from "@/lib/grading/grade";
+import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
 import { qtypeLabel } from "@/lib/labels";
 import BadgeUnlock from "./BadgeUnlock";
 
@@ -26,6 +27,16 @@ export default async function ResultPage({
   const [att] = await db.select().from(attempt).where(eq(attempt.id, attemptId));
   // Ownership check — a user can only see their own attempt's review.
   if (!att || att.userId !== user.id || att.contentItemId !== id) notFound();
+
+  // Review depth is tier-gated (§4.8): Basic sees score + percent only; the
+  // per-type breakdown, explanations and evidence are Premium+. effectiveTier
+  // downgrades an expired premium so a stale tier can't unlock the full review.
+  const profile = await getProfile();
+  const fullReview = profile
+    ? hasFullReview(
+        effectiveTier(profile as { tier: Tier; premium_until: string | Date | null }),
+      )
+    : false;
 
   // answer_key read server-side (owner role) — explanations/evidence revealed
   // only AFTER submit (BRIEF §4.2), and only to the attempt's owner.
@@ -101,71 +112,91 @@ export default async function ResultPage({
 
         {unlockedBadges.length > 0 && <BadgeUnlock badges={unlockedBadges} />}
 
-        <h2 style={S.h2}>Разбивка по типам вопросов</h2>
-        <p style={S.sub}>Где ты теряешь баллы — слабые типы вверху.</p>
-        <div style={S.types}>
-          {perType.map(([type, s]) => {
-            const pct = Math.round((s.correct / s.total) * 100);
-            return (
-              <div key={type} style={S.typeRow}>
-                <div style={S.typeName}>{qtypeLabel(type)}</div>
-                <div style={S.barTrack}>
-                  <div
-                    style={{
-                      ...S.barFill,
-                      width: `${pct}%`,
-                      background: pct >= 70 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#ef4444",
-                    }}
-                  />
-                </div>
-                <div style={S.typeScore}>
-                  {s.correct}/{s.total}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {!fullReview && (
+          // Basic tier: score + percent only. The breakdown / explanations /
+          // evidence below are intentionally NOT rendered (§4.8) — an upsell
+          // takes their place.
+          <div style={S.upsell}>
+            <div style={S.upsellTitle}>Полный разбор — на Premium</div>
+            <p style={S.upsellText}>
+              Разбивка по типам вопросов, объяснения к каждому ответу и цитаты из
+              текста доступны на тарифе Premium.
+            </p>
+            <Link href="/app/upgrade" style={S.upsellBtn}>
+              Перейти на Premium →
+            </Link>
+          </div>
+        )}
 
-        <h2 style={S.h2}>Разбор по вопросам</h2>
-        <div style={S.review}>
-          {result.perQuestion.map((q) => {
-            const m = meta.get(q.number)!;
-            const given = Array.isArray(q.given) ? q.given.join(", ") : q.given;
-            const correctAns = (m.accept as string[]).join(" / ");
-            const ev = m.evidence as { para: string; snippet: string } | null;
-            return (
-              <div key={q.number} style={S.rev}>
-                <div style={S.revHead}>
-                  <span style={{ ...S.revNum, background: q.correct ? "#10b981" : "#ef4444" }}>
-                    {q.number}
-                  </span>
-                  <span style={S.revType}>{qtypeLabel(q.qtype)}</span>
-                  <span style={{ ...S.revMark, color: q.correct ? "#10b981" : "#ef4444" }}>
-                    {q.correct ? "✓ верно" : "✗ неверно"}
-                  </span>
-                </div>
-                <div style={S.revLine}>
-                  <span style={S.revLabel}>Твой ответ:</span>{" "}
-                  <span style={{ color: q.correct ? "#10b981" : "#ef4444", fontWeight: 600 }}>
-                    {given && given !== "" ? given : "—"}
-                  </span>
-                </div>
-                {!q.correct && (
-                  <div style={S.revLine}>
-                    <span style={S.revLabel}>Правильно:</span>{" "}
-                    <strong>{correctAns}</strong>
+        {fullReview && (
+          <>
+            <h2 style={S.h2}>Разбивка по типам вопросов</h2>
+            <p style={S.sub}>Где ты теряешь баллы — слабые типы вверху.</p>
+            <div style={S.types}>
+              {perType.map(([type, s]) => {
+                const pct = Math.round((s.correct / s.total) * 100);
+                return (
+                  <div key={type} style={S.typeRow}>
+                    <div style={S.typeName}>{qtypeLabel(type)}</div>
+                    <div style={S.barTrack}>
+                      <div
+                        style={{
+                          ...S.barFill,
+                          width: `${pct}%`,
+                          background: pct >= 70 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#ef4444",
+                        }}
+                      />
+                    </div>
+                    <div style={S.typeScore}>
+                      {s.correct}/{s.total}
+                    </div>
                   </div>
-                )}
-                {m.explanation && <div style={S.expl}>{m.explanation}</div>}
-                {ev?.snippet && (
-                  <div style={S.evidence}>
-                    <span style={S.evLabel}>Из текста:</span> «{ev.snippet}»
+                );
+              })}
+            </div>
+
+            <h2 style={S.h2}>Разбор по вопросам</h2>
+            <div style={S.review}>
+              {result.perQuestion.map((q) => {
+                const m = meta.get(q.number)!;
+                const given = Array.isArray(q.given) ? q.given.join(", ") : q.given;
+                const correctAns = (m.accept as string[]).join(" / ");
+                const ev = m.evidence as { para: string; snippet: string } | null;
+                return (
+                  <div key={q.number} style={S.rev}>
+                    <div style={S.revHead}>
+                      <span style={{ ...S.revNum, background: q.correct ? "#10b981" : "#ef4444" }}>
+                        {q.number}
+                      </span>
+                      <span style={S.revType}>{qtypeLabel(q.qtype)}</span>
+                      <span style={{ ...S.revMark, color: q.correct ? "#10b981" : "#ef4444" }}>
+                        {q.correct ? "✓ верно" : "✗ неверно"}
+                      </span>
+                    </div>
+                    <div style={S.revLine}>
+                      <span style={S.revLabel}>Твой ответ:</span>{" "}
+                      <span style={{ color: q.correct ? "#10b981" : "#ef4444", fontWeight: 600 }}>
+                        {given && given !== "" ? given : "—"}
+                      </span>
+                    </div>
+                    {!q.correct && (
+                      <div style={S.revLine}>
+                        <span style={S.revLabel}>Правильно:</span>{" "}
+                        <strong>{correctAns}</strong>
+                      </div>
+                    )}
+                    {m.explanation && <div style={S.expl}>{m.explanation}</div>}
+                    {ev?.snippet && (
+                      <div style={S.evidence}>
+                        <span style={S.evLabel}>Из текста:</span> «{ev.snippet}»
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         <Link href={`/app/reading/${id}`} style={S.retry}>
           Пройти заново
@@ -193,6 +224,31 @@ const S: Record<string, React.CSSProperties> = {
   scoreTotal: { fontSize: "1.6rem", color: "#94a3b8", fontWeight: 700 },
   percent: { marginTop: ".4rem", color: "#cbd5e1", fontWeight: 600 },
   note: { marginTop: ".75rem", color: "#64748b", fontSize: ".78rem", maxWidth: 420, marginInline: "auto" },
+  upsell: {
+    marginTop: "1.25rem",
+    border: "1px solid #efeafe",
+    background: "#faf8ff",
+    borderRadius: 14,
+    padding: "1.4rem 1.3rem",
+    textAlign: "center",
+  },
+  upsellTitle: { fontSize: "1.1rem", fontWeight: 800, color: "#5a44d6" },
+  upsellText: {
+    color: "#555",
+    fontSize: ".9rem",
+    margin: ".5rem auto 1rem",
+    maxWidth: 440,
+    lineHeight: 1.5,
+  },
+  upsellBtn: {
+    display: "inline-block",
+    padding: ".65rem 1.3rem",
+    borderRadius: 10,
+    background: "#6C5CE7",
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: ".9rem",
+  },
   h2: { fontSize: "1.2rem", margin: "1.75rem 0 .25rem" },
   sub: { color: "#777", margin: "0 0 .9rem", fontSize: ".9rem" },
   types: { display: "grid", gap: ".55rem" },
