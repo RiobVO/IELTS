@@ -20,6 +20,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 // Supabase-managed `auth.users` reference. Drizzle Kit knows NOT to emit a
@@ -307,6 +308,11 @@ export const attempt = pgTable(
   (t) => [
     index("attempt_user_submitted_idx").on(t.userId, t.submittedAt),
     index("attempt_content_item_id_idx").on(t.contentItemId),
+    // At most one in_progress attempt per (user, test) — DB-level guard behind
+    // ensureAttempt's ON CONFLICT DO NOTHING (anti-cheat §4.6, migration 0007).
+    uniqueIndex("attempt_one_in_progress_idx")
+      .on(t.userId, t.contentItemId)
+      .where(sql`${t.status} = 'in_progress'`),
   ],
 );
 
