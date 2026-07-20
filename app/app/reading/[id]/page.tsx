@@ -4,6 +4,7 @@ import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { categoryLabel } from "@/lib/labels";
+import { ensureAttempt } from "./actions";
 import ExamRunner from "./ExamRunner";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +56,10 @@ export default async function ReadingTestPage({
     .eq("content_item_id", id)
     .order("number");
 
+  // Open (or resume) the server-stamped in_progress attempt — also re-runs the
+  // access + daily-limit gate (§4.8) authoritatively before the exam loads.
+  const { attemptId, answers: savedAnswers } = await ensureAttempt(id);
+
   return (
     <main style={{ minHeight: "100dvh", padding: "1.25rem", fontFamily: FONT }}>
       <div style={head}>
@@ -68,7 +73,8 @@ export default async function ReadingTestPage({
       </div>
 
       <ExamRunner
-        contentItemId={id}
+        attemptId={attemptId}
+        initialAnswers={savedAnswers}
         passages={(passages ?? []) as never}
         questions={(questionsData ?? []) as Question[]}
         durationSeconds={test.duration_seconds}
