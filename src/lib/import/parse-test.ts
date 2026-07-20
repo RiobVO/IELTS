@@ -68,6 +68,10 @@ export function parseTest(html: string): ParsedTest {
   const durationSeconds = detectDuration(rubricText);
 
   // --- passage(s) ---
+  // Sanitize BEFORE serializing: the passage is the only field rendered via
+  // dangerouslySetInnerHTML (ExamRunner), so it must not carry scripts/handlers
+  // (BRIEF §11 — content is client-owned but untrusted at render time).
+  sanitizePassage($);
   const bodyHtml = ($("#passageContent").html() ?? "").trim();
   if (!bodyHtml) warnings.push("Passage body (#passageContent) not found.");
   const passages = [
@@ -225,6 +229,32 @@ function blank(
 function grpKey(id: string | undefined): string | null {
   const m = /question-group-(.+)$/.exec(id ?? "");
   return m ? m[1]! : null;
+}
+
+/**
+ * Strip active content from the passage so it's safe to render via
+ * dangerouslySetInnerHTML: drop script/style/embeds, on* event-handler
+ * attributes, and javascript:/data:/vbscript: URLs (BRIEF §11). Deterministic,
+ * cheerio-only — no new dependency.
+ */
+function sanitizePassage($: CheerioAPI): void {
+  const scope = $("#passageContent");
+  scope
+    .find("script, style, link, meta, iframe, object, embed, noscript, form")
+    .remove();
+  scope.find("*").each((_, el) => {
+    if (!("attribs" in el)) return;
+    for (const name of Object.keys(el.attribs)) {
+      if (/^on/i.test(name)) {
+        $(el).removeAttr(name);
+      } else if (
+        /^(href|src|xlink:href|formaction|action)$/i.test(name) &&
+        /^\s*(javascript|data|vbscript):/i.test(el.attribs[name] ?? "")
+      ) {
+        $(el).removeAttr(name);
+      }
+    }
+  });
 }
 
 const NORM = (s: string) => s.trim().toUpperCase().replace(/\s+/g, " ");
