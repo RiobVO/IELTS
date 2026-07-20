@@ -5,6 +5,11 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { answerKey, attempt, contentItem, profile, question } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
+import {
+  countSubmitsInWindow,
+  exceedsSubmitRate,
+  SUBMIT_THROTTLE_MAX,
+} from "@/lib/anti-cheat";
 import { getUser } from "@/lib/auth";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
@@ -184,6 +189,23 @@ export async function submitAttempt(
   if (att.status === "submitted") {
     redirect(`/app/reading/${contentItemId}/result?a=${attemptId}`);
   }
+
+  // Частотный анти-чит throttle (§4.6 — последний открытый зазор). Идемпотентный
+  // ре-сабмит отфильтрован выше (он безвреден и не должен упираться в лимит).
+  // Берём только последние MAX+1 сабмитов по индексу (user_id, submitted_at) и
+  // считаем попавшие в окно: превышение -> мягкий отказ. Попытка остаётся
+  // in_progress, ответы автосохранены — можно повторить через несколько секунд.
+  const recentSubmits = await db
+    .select({ submittedAt: attempt.submittedAt })
+    .from(attempt)
+    .where(and(eq(attempt.userId, user.id), eq(attempt.status, "submitted")))
+    .orderBy(desc(attempt.submittedAt))
+    .limit(SUBMIT_THROTTLE_MAX + 1);
+  const inWindow = countSubmitsInWindow(
+    recentSubmits.map((r) => r.submittedAt),
+    new Date(),
+  );
+  if (exceedsSubmitRate(inWindow)) redirect("/app/reading?throttled=1");
 
   await gateAccess(user.id, contentItemId);
 
