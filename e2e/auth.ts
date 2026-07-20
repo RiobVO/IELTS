@@ -14,6 +14,13 @@ export const SMOKE_PASSWORD = process.env.SMOKE_PASSWORD ?? "smoke-test-password
  * (e2e/cap.spec.ts) нужен логин cap-юзером (basic tier), тем же реальным путём.
  */
 export async function loginAs(page: Page, email: string, password: string): Promise<void> {
+  // Перед каждым логином чистим IP-бюджет auth-троттла (см. purgeAuthThrottle):
+  // сьют делает ~13 логинов при лимите 10/10мин — иначе хвост сьюта детерминированно
+  // красный. Динамический import рвёт статический цикл auth.ts ↔ seed.ts (seed
+  // импортирует SMOKE_* константы отсюда).
+  const { purgeAuthThrottle } = await import("./seed");
+  await purgeAuthThrottle();
+
   await page.goto("/auth?mode=login");
   // AuthScreen рендерит ОБЕ формы одновременно (idle-форма скрыта opacity+pointer-
   // events, не display:none) — getByLabel("Email") матчил бы оба #signup-email и
