@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { qtypeLabel } from "@/lib/labels";
-import { submitAttempt } from "./actions";
+import { saveProgress, submitAttempt } from "./actions";
 
 interface Question {
   id: string;
@@ -24,17 +24,19 @@ function fmt(sec: number): string {
 }
 
 export default function ExamRunner({
-  contentItemId,
+  attemptId,
+  initialAnswers,
   passages,
   questions,
   durationSeconds,
 }: {
-  contentItemId: string;
+  attemptId: string;
+  initialAnswers: Record<string, string>;
   passages: Passage[];
   questions: Question[];
   durationSeconds: number | null;
 }) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
   const [elapsed, setElapsed] = useState(0);
   const [pending, startSubmit] = useTransition();
 
@@ -42,6 +44,21 @@ export default function ExamRunner({
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Autosave (BRIEF §4.3): debounce-persist answers so a dropped connection or a
+  // refresh resumes where the student left off. Fires only when answers actually
+  // change (skips the initial render), and the server stamp of started_at means
+  // the timer keeps running server-side regardless.
+  const saved = useRef(JSON.stringify(initialAnswers));
+  useEffect(() => {
+    const snapshot = JSON.stringify(answers);
+    if (snapshot === saved.current) return;
+    const t = setTimeout(() => {
+      saved.current = snapshot;
+      void saveProgress(attemptId, answers);
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [answers, attemptId]);
 
   const set = (n: number, v: string) =>
     setAnswers((a) => ({ ...a, [String(n)]: v }));
@@ -52,7 +69,7 @@ export default function ExamRunner({
 
   const submit = () => {
     if (pending) return;
-    startSubmit(() => submitAttempt(contentItemId, answers, elapsed));
+    startSubmit(() => submitAttempt(attemptId, answers));
   };
 
   return (
