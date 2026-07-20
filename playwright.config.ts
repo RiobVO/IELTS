@@ -9,10 +9,21 @@ const baseURL = process.env.SMOKE_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
+  // В e2e/ лежит и vitest-файл (stateful-gate.test.ts) — Playwright по умолчанию
+  // собирает *.test.ts тоже и падает на vi.mock. Playwright-сьют = только *.spec.ts.
+  testMatch: "**/*.spec.ts",
   globalSetup: "./e2e/global-setup.ts",
-  timeout: 30_000,
+  // 60с, не 30: сьют бегает против dev-сервера (пер-прогон cold compile) с
+  // hosted тест-БД в eu-central — хвост латентности стриминга RSC-каталога
+  // стабильно пробивал 30с в самом тяжёлом тесте (login+каталог+экзамен+submit).
+  timeout: 60_000,
   expect: { timeout: 10_000 },
-  fullyParallel: false, // тесты используют один и тот же тестовый аккаунт — без гонки
+  // Тесты делят один smoke-аккаунт: fullyParallel:false выключает параллель ВНУТРИ
+  // файла, но раздельные spec-файлы Playwright гонит отдельными воркерами — два
+  // одновременных логина одним аккаунтом ловят login-throttle (fail-closed ветка
+  // конкурентного лока). workers:1 сериализует и файлы тоже.
+  fullyParallel: false,
+  workers: 1,
   retries: 0,
   reporter: [["list"]],
   use: {
