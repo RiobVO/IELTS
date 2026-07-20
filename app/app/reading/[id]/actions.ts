@@ -4,6 +4,7 @@ import { and, count, desc, eq, gte, lt } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { answerKey, attempt, contentItem, profile, question } from "@/db/schema";
+import { captureServer } from "@/lib/analytics/server";
 import { getUser } from "@/lib/auth";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
@@ -102,6 +103,25 @@ export async function ensureAttempt(contentItemId: string): Promise<{
       startedAt: new Date(), // SERVER time — authoritative for §4.6 timing
     })
     .returning({ id: attempt.id });
+
+  // test_start — событие воронки (§11). Только на ВНОВЬ открытой попытке (resume
+  // выше уже вернулся), иначе метрика «стартов» раздулась бы на каждый перезаход.
+  const [meta] = await db
+    .select({
+      section: contentItem.section,
+      category: contentItem.category,
+      tierRequired: contentItem.tierRequired,
+    })
+    .from(contentItem)
+    .where(eq(contentItem.id, contentItemId));
+  await captureServer("test_start", user.id, {
+    content_item_id: contentItemId,
+    section: meta?.section ?? "",
+    category: meta?.category ?? "",
+    tier_required: meta?.tierRequired ?? "",
+    mode: "practice",
+  });
+
   return { attemptId: row!.id, answers: {} };
 }
 
@@ -151,6 +171,7 @@ export async function submitAttempt(
       contentItemId: attempt.contentItemId,
       status: attempt.status,
       startedAt: attempt.startedAt,
+      mode: attempt.mode,
     })
     .from(attempt)
     .where(and(eq(attempt.id, attemptId), eq(attempt.userId, user.id)));
@@ -215,6 +236,17 @@ export async function submitAttempt(
     // Lost the race — another submit already graded it.
     redirect(`/app/reading/${contentItemId}/result?a=${attemptId}`);
   }
+
+  // test_submit — событие воронки (§11). Ставится ПОСЛЕ выигранного single-fire
+  // claim (updated.length > 0): идемпотентный ре-сабмит и проигравший гонку
+  // редиректят выше, поэтому ровно одно событие на реальную сдачу — без накрутки.
+  await captureServer("test_submit", user.id, {
+    content_item_id: contentItemId,
+    raw_score: result.rawScore,
+    total: result.total,
+    time_used_seconds: timeUsedSeconds,
+    mode: att.mode,
+  });
 
   // Post-submit progression (BRIEF §4.6): streak/XP always, Elo rating on the
   // first submitted attempt, leaderboard recompute. Best-effort (never throws),

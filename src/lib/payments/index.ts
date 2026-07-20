@@ -18,6 +18,7 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq, ne, sql } from "drizzle-orm";
+import { captureServer } from "@/lib/analytics/server";
 import { db } from "@/db";
 import { payment, profile } from "@/db/schema";
 import { type PaymentProviderKey, paymentSecret } from "@/env";
@@ -93,8 +94,12 @@ export async function applyCompletedPayment(
   provider: PaymentProviderKey,
   providerTransactionId: string,
 ): Promise<"applied" | "duplicate" | "not_found" | "invalid" | "error"> {
+  // Захваченная выдача для пост-коммит телеметрии (§11). Заполняется ТОЛЬКО на
+  // успешном applied внутри транзакции, читается после её коммита.
+  let granted: { userId: string; tier: string; periodMonths: number } | null =
+    null;
   try {
-    return await db.transaction(async (tx) => {
+    const outcome = await db.transaction(async (tx) => {
       // 1. Доверенная строка: создана initiatePayment (userId из сессии, цена из
       //    findPlan). Тело вебхука не участвует — только ключ поиска.
       const [row] = await tx
@@ -168,8 +173,27 @@ export async function applyCompletedPayment(
         })
         .where(eq(profile.id, row.userId));
 
+      granted = {
+        userId: row.userId,
+        tier: row.tier,
+        periodMonths: row.periodMonths,
+      };
       return "applied";
     });
+
+    // upgrade — событие воронки (§11). Только на реально выданном доступе
+    // ("applied", не "duplicate"/"invalid") и ПОСЛЕ коммита транзакции:
+    // телеметрия best-effort и не должна удерживать/ломать платёжную транзакцию.
+    if (outcome === "applied" && granted) {
+      const g: { userId: string; tier: string; periodMonths: number } = granted;
+      await captureServer("upgrade", g.userId, {
+        provider,
+        tier: g.tier,
+        period_months: g.periodMonths,
+      });
+    }
+
+    return outcome;
   } catch (e) {
     console.error("applyCompletedPayment failed", e);
     return "error";

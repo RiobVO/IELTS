@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { captureServer } from "@/lib/analytics/server";
 import { createClient } from "@/lib/supabase/server";
 
 function fail(message: string): never {
@@ -30,12 +31,27 @@ export async function signUp(formData: FormData) {
   // The inviter's referral_code rides in auth user metadata under "ref_code".
   // The on_auth_user_created trigger reads it (NEW.raw_user_meta_data ->>
   // 'ref_code') to set profile.referred_by and insert the referral row.
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: ref ? { data: { ref_code: ref } } : undefined,
   });
   if (error) fail(error.message);
+
+  // Регистрация — авторитетное серверное событие воронки (§11), РОВНО раз на нового
+  // пользователя. При включённом email-подтверждении Supabase на повторную
+  // регистрацию существующего email отдаёт error=null и ФЕЙКОВЫЙ data.user с новым
+  // случайным id и пустым identities (анти-энумерация) — такие не считаем, иначе
+  // накрутка счётчика + неверный distinctId. Признак реально нового — непустой
+  // identities. ref-код намеренно НЕ кладём (ни в свойства, ни в URL) — это токен
+  // атрибуции; в метрику идёт только has_ref. best-effort.
+  const isNewUser = (data.user?.identities?.length ?? 0) > 0;
+  if (data.user && isNewUser) {
+    await captureServer("signup", data.user.id, {
+      auth_provider: "email",
+      has_ref: ref !== "",
+    });
+  }
 
   // profile row is created server-side by the on_auth_user_created trigger
   // (migrations/0002_auth) — no client write needed.

@@ -1,14 +1,19 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "./supabase/server";
 
-/** The current authenticated user (or null). */
-export async function getUser() {
+/**
+ * The current authenticated user (or null). Request-memoized via React `cache()`:
+ * layout + page (e.g. the /app layout's analytics identify and the page's own
+ * requireUser) share ONE auth round-trip per request instead of refetching.
+ */
+export const getUser = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   return user;
-}
+});
 
 /** The current user's profile row (or null). Read under RLS (own row only). */
 export async function getProfile() {
