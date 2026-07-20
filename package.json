@@ -1,0 +1,40 @@
+{
+  "name": "ielts-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "IELTS preparation platform — Phase 1 scaffold (Next.js + Drizzle + Supabase/Postgres)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts up",
+    "db:down": "tsx scripts/migrate.ts down --all",
+    "db:status": "tsx scripts/migrate.ts status",
+    "db:bootstrap": "tsx scripts/migrate.ts bootstrap",
+    "docker:db": "docker compose up -d db",
+    "docker:db:down": "docker compose down -v",
+    "verify": "tsx scripts/verify.ts",
+    "import": "tsx scripts/import-file.ts"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.1",
+    "cheerio": "^1.2.0",
+    "drizzle-orm": "^0.38.3",
+    "next": "^15.5.0",
+    "postgres": "^3.4.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "dotenv": "^16.4.7",
+    "drizzle-kit": "^0.30.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

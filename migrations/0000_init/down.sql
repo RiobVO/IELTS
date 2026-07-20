@@ -1,0 +1,31 @@
+-- 0000_init :: down  (reverse of up.sql; drops tables then enums)
+DROP TABLE IF EXISTS notification CASCADE;
+DROP TABLE IF EXISTS topic CASCADE;
+DROP TABLE IF EXISTS leaderboard_entry CASCADE;
+DROP TABLE IF EXISTS referral CASCADE;
+DROP TABLE IF EXISTS user_badge CASCADE;
+DROP TABLE IF EXISTS badge CASCADE;
+DROP TABLE IF EXISTS attempt CASCADE;
+DROP TABLE IF EXISTS answer_key CASCADE;
+DROP TABLE IF EXISTS question CASCADE;
+DROP TABLE IF EXISTS passage CASCADE;
+DROP TABLE IF EXISTS content_item CASCADE;
+DROP TABLE IF EXISTS profile CASCADE;
+DROP TABLE IF EXISTS region CASCADE;
+
+DROP TYPE IF EXISTS notification_type;
+DROP TYPE IF EXISTS topic_skill;
+DROP TYPE IF EXISTS leaderboard_period;
+DROP TYPE IF EXISTS referral_status;
+DROP TYPE IF EXISTS attempt_status;
+DROP TYPE IF EXISTS attempt_mode;
+DROP TYPE IF EXISTS answer_mode;
+DROP TYPE IF EXISTS question_type;
+DROP TYPE IF EXISTS content_status;
+DROP TYPE IF EXISTS band_type;
+DROP TYPE IF EXISTS content_category;
+DROP TYPE IF EXISTS content_section;
+DROP TYPE IF EXISTS user_tier;
+DROP TYPE IF EXISTS user_role;
+DROP TYPE IF EXISTS auth_provider;
+DROP TYPE IF EXISTS region_level;
