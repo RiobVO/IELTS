@@ -52,7 +52,28 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-const sql = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
+// Verify is DESTRUCTIVE (drops/recreates the public schema, and the bootstrap
+// overwrites auth.uid()). It must target a THROWAWAY local DB — never the real
+// Supabase project. Prefer VERIFY_DATABASE_URL; refuse a non-local target.
+const VERIFY_DB = process.env.VERIFY_DATABASE_URL ?? process.env.DATABASE_URL!;
+function isLocalDb(u: string): boolean {
+  try {
+    return ["localhost", "127.0.0.1", "::1"].includes(new URL(u).hostname);
+  } catch {
+    return false;
+  }
+}
+if (!isLocalDb(VERIFY_DB) && process.env.VERIFY_ALLOW_REMOTE !== "1") {
+  console.error(
+    "\nRefusing to run the destructive verify gate against a non-local database:\n  " +
+      VERIFY_DB.replace(/:\/\/([^:@/]+):[^@/]+@/, "://$1:****@") +
+      "\nPoint VERIFY_DATABASE_URL at a local Postgres (npm run docker:db), " +
+      "or set VERIFY_ALLOW_REMOTE=1 to override.\n",
+  );
+  process.exit(1);
+}
+
+const sql = postgres(VERIFY_DB, { max: 1, onnotice: () => {} });
 
 async function countAppTables(): Promise<number> {
   const rows = await sql<{ n: number }[]>`
