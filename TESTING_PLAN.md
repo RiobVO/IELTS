@@ -373,30 +373,72 @@ Sandbox-прогон:
 | Touch-ветки, мобильная клавиатура | Реальный телефон (ручной гейт) |
 
 Golden paths — три подволны, ядро НЕ ждёт мерчанта:
-- **3a (можно сейчас):** login/session, reading autosave/reload/submit, full mock iframe;
+- **3a (закрыта 2026-07-20):** login/session, reading autosave/reload/submit, full mock iframe, cap-граница;
 - **3b (по фичам):** writing, speaking, admin import, vocabulary;
 - **3c (после 0b):** payment sandbox E2E.
 
+**Инфра волны 3a (2026-07-20).** Stateful-сьют переведён с прод-БД на hosted тест-стенд:
+`npm run test:e2e:stateful` (`scripts/run-stateful-e2e.ts`) — env из `.env.test.local` через
+`loadTestTargetEnv` (fail-fast на прод-ref) + ALLOW_STATEFUL_E2E=1; `e2e/seed.ts` —
+идемпотентный сид (атомизированный reading-item 5Q, синтетический runner-item с
+bridge-submit, smoke-юзер premium + cap-юзер basic, cleanup-хелперы, чистка
+signup_throttle на старте). Негативный контроль: без тест-env global-setup блокирует
+сьют ДО касания БД (доказано прогоном). Codex-ревью волны: **BLOCKER закрыт** — гейт и
+admin-провижининг читали РАЗНЫЕ env-каскады (прод-`.env.local` + тест-`.env.development.local`
+= юзер создавался бы в проде); теперь один resolved-объект `loadE2eEnv()` питает гейт И
+всех потребителей кредов; +3 находки (обязательный `NEXT_PUBLIC_SUPABASE_ANON_KEY` в
+`.env.test.local`, чистка троттла, cap-ассерты без гонки с client-side `replaceState`).
+**Сетевой урок стенда (диагностика с уликами pg_stat_activity):** локальный dev ↔
+eu-central непригоден на обоих пулерах Supavisor — transaction (:6543) стопорится посреди
+протокола (Client/ClientRead до 300s, ~50% зависонов /app/practice), session (:5432)
+упирается в pool_size=15 (EMAXCONNSESSION); e2e-раннер подключает БД НАПРЯМУЮ
+(`db.<ref>`, IPv6-only, без клиентского лимита) — прод-конфиг (:6543) не тронут, там
+один регион и short-lived инстансы. Плюс undici-preload (`scripts/e2e-undici-resilience.mjs`):
+короткое keep-alive окно против ECONNRESET на протухших сокетах fetch (ретраи убраны
+сознательно — RetryAgent ломал POST-тела и маскировал 429 квоты в «fetch failed»).
+Стабилизация: **×5 полных прогонов подряд зелёные** (9 passed + 1 skipped, ~110с/прогон).
+
+Runbook прогона (ручной, НЕ в CI — по образцу §7):
+1. Dashboard `ielts-test`: если paused — Restore, дождаться healthy;
+2. один прогон за раз (фикстуры/аккаунты общие — параллельные запуски конфликтуют);
+3. `npm run test:e2e:stateful` (сид + троттл-чистка внутри; порт :3000 должен быть
+   свободен — зомби-`next` убить по гоче CLAUDE.md);
+4. signup-тест может дать skip: встроенная почта Supabase на тест-проекте (кастомный
+   SMTP только на проде) даёт ~2-4 письма/час — skip по квоте штатен, любая другая
+   ошибка формы красная;
+5. часы машины держать в NTP-синхроне (дрейф >1с даёт разовые `JWT issued at future`).
+
 Полный целевой список из аудита:
-- [ ] signup → подтверждение email → onboarding → dashboard
-- [ ] login → logout → session protection
+- [ ] signup → подтверждение email → onboarding → dashboard (частично: форма signup
+      покрыта старым спеком; email-цепочка — вне автоматики, см. нюанс ниже)
+- [x] login → logout → session protection (`e2e/auth.spec.ts`, 2026-07-20; password
+      reset — отдельный незакрытый пункт ниже)
 - [ ] password reset → callback → новый пароль
-- [ ] reading practice: ответы → autosave → reload → resume → submit → разбор
-- [ ] full mock через iframe: bridge/postMessage → таймер → submit → result
-- [ ] listening: старт аудио, пауза, resume, переходы частей
-- [ ] Basic cap на границе лимита
-- [ ] vocabulary review + saved words
-- [ ] writing: store → evaluation → polling → result
-- [ ] speaking: permission → upload → evaluation → delete
-- [ ] admin import → review → publish → каталог
-- [ ] payment sandbox (после 0b)
+- [x] reading practice: ответы → autosave → reload → resume → submit → разбор
+      (`e2e/reading.spec.ts`: реальный debounce-автосейв 1.5с ловится по POST server
+      action, reload восстанавливает значения контролов, счёт 3/5 согласован с ответами)
+- [x] full mock через iframe: bridge/postMessage → submit → result
+      (`e2e/mock-iframe.spec.ts`: sandbox РОВНО `allow-scripts allow-modals`, CSP
+      runner-роута `default-src 'none'`+`connect-src 'none'`, синтетический runner_html
+      шлёт канонический `{type:"ielts-submit"}` → грейд 2/2; таймер — вне синтетики)
+- [ ] listening: старт аудио, пауза, resume, переходы частей (ждёт заливки аудио)
+- [x] Basic cap на границе лимита (`e2e/cap.spec.ts`: limit−1 проходит в раннер,
+      граница блокирует с видимым баннером; счётчик подводится сид-хелпером
+      `preloadPracticeStarts`, cleanup в afterAll)
+- [ ] vocabulary review + saved words (3b)
+- [ ] writing: store → evaluation → polling → result (3b)
+- [ ] speaking: permission → upload → evaluation → delete (3b)
+- [ ] admin import → review → publish → каталог (3b)
+- [ ] payment sandbox (после 0b, 3c)
 
 Устройства — ручной release-гейт (короткий чек-лист + фиксация прохождения):
 - [ ] реальный iPhone Safari; реальный Android Chrome
 - [ ] аудио, touch, клавиатура, scroll, orientation
 
-Существующее: `e2e/smoke.spec.ts` (4 сценария, Desktop Chrome only),
-`_mobile_gate.ts` gitignored (одноразовый) — формализовать в версионируемый чек-лист.
+Существующее: `e2e/smoke.spec.ts` (4 сценария; с волны 3a бегает против тест-стенда
+через тот же stateful-раннер). `_mobile_gate.ts` (gitignored, одноразовый) удалён
+2026-07-20 — устройственный чек-лист остаётся ручным гейтом, версионируемый формат
+за подволной устройств.
 
 Нюанс email-флоу: `e2e/admin.ts` создаёт сразу confirmed-юзера через Admin API, обходя
 почту — реальные confirmation/password-reset письма автоматикой НЕ проверяются;
@@ -489,5 +531,6 @@ actions: 3/16. Непокрыто (полный список аудита):
 | 1.5 native-PG данные/гонки + прод-фиксы 0056/0057 (grant-lockdown) | ✅ закрыта | 2026-07-19 (`3487a13..0b96658`) |
 | 2 hosted Supabase контракты | ✅ закрыта (test-target заведён, миграции+постура+IDOR через реальный PostgREST+Auth+Storage; payment webhook по дизайну в 0b) | 2026-07-20 |
 | 0b sandbox-окно | ⬜ ждёт ключей | — |
-| 3 браузер + устройства | ⬜ по триггерам | — |
+| 3a браузер: stateful-сьют на тест-стенде (раннер+сид+auth/reading/mock-iframe/cap, Codex-BLOCKER env-каскада закрыт, ×5 зелёные) | ✅ закрыта | 2026-07-20 |
+| 3b/3c браузер: по фичам / после 0b; устройства — ручной гейт | ⬜ по триггерам | — |
 | 4 эксплуатация | ⬜ по триггерам | — |
