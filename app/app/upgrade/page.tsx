@@ -44,7 +44,7 @@ const FEATURES: { label: string; basic: string; premium: string; ultra: string }
     label: "AI-оценка Writing/Speaking",
     basic: "—",
     premium: "—",
-    ultra: "Да",
+    ultra: "Скоро",
   },
 ];
 

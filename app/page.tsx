@@ -9,7 +9,7 @@ const TIERS: { name: string; line: string; highlight?: boolean }[] = [
     line: "Безлимит, полный разбор с evidence, аналитика и история.",
     highlight: true,
   },
-  { name: "Ultra", line: "Всё из Premium плюс AI-оценка Writing/Speaking." },
+  { name: "Ultra", line: "Всё из Premium плюс AI-оценка Writing/Speaking (скоро)." },
 ];
 
 export default function Home() {
