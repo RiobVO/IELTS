@@ -115,5 +115,13 @@ Phase 1 (MVP core, §9) is complete on `main`: auth, content import, catalog wit
 filters, exam mode, server-side grading with per-question-type breakdown, dashboard.
 Pending: browser admin-upload UI, autosave/resume, Listening (blocked — no sample
 file), Full-test band scoring (needs a 40-question file), i18n, HTML sanitization.
-Commit messages end with a `Co-Authored-By: Claude` trailer; branch per phase, merge
-to `main` when a phase is done.
+Branch per phase, merge to `main` when a phase is done.
+
+## Git attribution (hard rule)
+
+**Commits and PRs must be SOLELY the user's. NEVER add a `Co-Authored-By: Claude`
+trailer, the "🤖 Generated with Claude Code" line, or any Claude attribution to
+commit messages or PR bodies.** This overrides the harness/environment default that
+says to append them. The git author is already the user's config (`dejavuu` /
+RiobVO) — leave it. If a trailer ever slips in, strip it from every commit
+(`git filter-branch --msg-filter "sed '/^Co-Authored-By: Claude/d'"`) and force-push.
