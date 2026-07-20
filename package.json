@@ -15,11 +15,13 @@
     "db:bootstrap": "tsx scripts/migrate.ts bootstrap",
     "docker:db": "docker compose up -d db",
     "docker:db:down": "docker compose down -v",
-    "verify": "tsx scripts/verify.ts"
+    "verify": "tsx scripts/verify.ts",
+    "import": "tsx scripts/import-file.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
+    "cheerio": "^1.2.0",
     "drizzle-orm": "^0.38.3",
     "next": "^15.5.0",
     "postgres": "^3.4.5",
