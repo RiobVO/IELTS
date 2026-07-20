@@ -116,3 +116,95 @@ launch scale — can add a retry loop later if needed). The local
 columns the trigger reads (real Supabase `auth.users` already has them). Browser
 auth needs `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same
 public values as the server `SUPABASE_URL` / `SUPABASE_ANON_KEY`).
+
+## Phase 2A (migration `0003_phase2_ratings`): rating + leaderboard
+
+Decisions made building the Elo rating + leaderboard (BRIEF §4.6 / §5
+`leaderboard_entry`). The brief says only "Elo-style (старт 1000), хранить
+`peak_rating`" — Elo needs an opponent, which the brief leaves open; resolved as
+below.
+
+- **Test-side Elo (two new `content_item` columns).** `difficulty_rating`
+  (`integer NOT NULL DEFAULT 1000`) + `difficulty_count` (`integer NOT NULL
+  DEFAULT 0`). Each rated attempt is a "match" between the user and the test:
+  `expected = 1/(1+10^((Rtest-Ruser)/400))`, `performance = rawScore/total`
+  (∈[0,1]), `userDelta = round(K·(performance-expected))`, `testDelta =
+  -userDelta` (zero-sum), `K = 24`, both floored at `100`. The test rating
+  self-calibrates so hard tests are worth more. `peak_rating` tracked from the
+  floored new rating.
+- **Only the first attempt is rated (§4.6).** `rated` is derived in
+  `apply-post-submit.ts` by counting the user's `submitted` attempts for the test
+  *after* the row is inserted — `count === 1` ⇒ first ⇒ rated; retakes are
+  practice-only. (Latent coupling: this re-derivation assumes attempts are
+  inserted directly as `submitted`; when autosave/resume lands — `in_progress`
+  rows transitioned to `submitted` — switch to a transactional `rated` marker.)
+- **Streak / XP** updated on every submit (rated or not): UTC-day compare vs
+  `last_activity_date` (same day → unchanged, yesterday → +1, else → reset to 1);
+  `longest_streak = max(...)`; `xp += 10 + rawScore`.
+- **`leaderboard_entry` is a full rebuild** (`recomputeLeaderboard()`), run after
+  each *rated* submit, wrapped so a failure never breaks the submit. Full rebuild
+  is fine at launch scale (§6.1 wants precompute, not on-the-fly); incremental /
+  Vercel-cron is a later optimization.
+  - `all_time` score = `rating`; eligible if `rated_count > 0`.
+  - `weekly` / `monthly` score = `SUM(raw_score)` over each test's **first**
+    submitted attempt whose first attempt falls in the last 7 / 30 days. Counting
+    only the first attempt per `(user, content_item)` is the anti-farm guard —
+    replaying a test cannot pad period scores (mirrors first-attempt-only rating).
+  - `scope` per user = `'global'` + the user's `region_id` and every ancestor id
+    (walk `parent_id` to the country), so one attempt ranks them globally, in
+    their viloyat, and country-wide. `hidden_from_leaderboard` profiles are
+    excluded here (the precompute is the §4.6 gatekeeper, per the RLS note above).
+- **Leaderboard reads go through the Drizzle owner path**, not the anon client:
+  `profile` RLS is owner-only, so the anon client can't read *other* users'
+  rows. `readLeaderboard()` (server-only) selects ONLY public columns
+  (`display_name`, `avatar_url`, `rating`) — never `email` or private fields.
+- **Region seed.** `0003` seeds Uzbekistan (`country`) + its 14 first-level
+  divisions (`region`): Andijan, Bukhara, Fergana, Jizzakh, Khorezm, Namangan,
+  Navoiy, Kashkadarya, Samarkand, Syrdarya, Surkhandarya, Tashkent Region,
+  Tashkent City, Karakalpakstan. Idempotent (CTE guarded by `WHERE NOT EXISTS` on
+  `name='Uzbekistan'` + per-child name); `down.sql` deletes them and drops the two
+  columns. Tuman (district) level deferred (~200 rows, not blocking). Verified:
+  the local verify gate applies/reverts `0003` cleanly and the seed yields exactly
+  1 country + 14 regions.
+
+**Deferred to the autosave/resume milestone (real §4.6 gaps, not introduced by
+2A):** server-trusted timing — `attempt.started_at` is still derived from the
+client-supplied `timeUsedSeconds`, so the "too-fast → flag" check has no integrity
+until an `in_progress` row is stamped server-side at exam start; and submit
+rate-limit + `(user, test)` idempotency. The leaderboard-farming vector those would
+open is already closed by the first-attempt-only period scoring above.
+
+## Phase 2B (migration `0004_seed_badges`): badges
+
+Badge achievements (BRIEF §4.7; `badge`/`user_badge`; §11 `notification`). No
+schema change — those tables already existed.
+
+- **`badge.criteria` jsonb is a discriminated union on `type`**, shared verbatim
+  between the seed and the engine (`src/lib/progress/badges.ts`):
+  `{volume,tests}` · `{streak,days}` · `{rating,min}` · `{perfect}` ·
+  `{accuracy,qtype,minQuestions,minPct}` · `{first_place,scope,period}`. Unknown
+  `type` ⇒ never awarded. `0004` seeds 12 badges (first_test, tests_10/50,
+  streak_3/7/30, perfect, rating_1200/1500, tfng_sniper, completion_pro, champion),
+  idempotent via `ON CONFLICT (code) DO NOTHING`; `down.sql` deletes them (the
+  `user_badge` FK is `ON DELETE CASCADE`). Icons are emoji (no icon-asset system
+  yet). `first_place` is only computed for `global`/`all_time` rank 1 (champion).
+- **`evaluateBadges(userId)`** runs in `applyPostSubmit` AFTER the streak/rating
+  write and leaderboard recompute (so streak, rating, and first_place are current).
+  Best-effort (never throws). Stats computed once from the owner path: volume =
+  count of submitted attempts; `perfect` = an attempt whose `rawScore` equals the
+  summed `per_type_breakdown[*].total` (>0); per-qtype accuracy summed across
+  attempts; first_place from `leaderboard_entry`.
+- **Idempotency / no double-award, no double-notify.** Only not-yet-earned badges
+  are evaluated; `user_badge` insert is `onConflictDoNothing().returning()`, and
+  notifications + the returned "awarded" set are derived ONLY from the rows that
+  insert actually wrote — so a losing concurrent submit notifies nothing
+  (`notification` has no unique constraint to lean on).
+- **Unlock celebration is passed by value, not inferred by time.** `applyPostSubmit`
+  returns `awardedBadges`; the submit action puts their codes on the result
+  redirect (`?…&unlocked=code1,code2`); the result page renders `BadgeUnlock`
+  (client, `@keyframes badge-pop`, `prefers-reduced-motion` guarded) from those
+  codes. This avoids the earlier `earned_at >= submitted_at` query's cross-attempt
+  misattribution and app/DB clock-skew, and shows the celebration exactly once
+  (absent on revisits). `/app/badges` is the persistent showcase (earned vs locked),
+  read via the anon client (badge public + own `user_badge`, RLS + explicit
+  `user_id` filter).

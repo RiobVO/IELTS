@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
-import { answerKey, attempt, question } from "@/db/schema";
+import { answerKey, attempt, badge, question } from "@/db/schema";
 import { getUser } from "@/lib/auth";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { qtypeLabel } from "@/lib/labels";
+import BadgeUnlock from "./BadgeUnlock";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +15,12 @@ export default async function ResultPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ a?: string }>;
+  searchParams: Promise<{ a?: string; unlocked?: string }>;
 }) {
   const user = await getUser();
   if (!user) redirect("/auth");
   const { id } = await params;
-  const { a: attemptId } = await searchParams;
+  const { a: attemptId, unlocked } = await searchParams;
   if (!attemptId) notFound();
 
   const [att] = await db.select().from(attempt).where(eq(attempt.id, attemptId));
@@ -57,6 +58,28 @@ export default async function ResultPage({
     (a, b) => a[1].correct / a[1].total - b[1].correct / b[1].total,
   );
 
+  // Badges this submit just unlocked — passed as codes on the redirect from the
+  // submit action (the exact set, deduped server-side via the award insert's
+  // RETURNING). No timestamp inference, clock-skew, or cross-attempt
+  // misattribution; absent on revisits, so the celebration shows exactly once.
+  const unlockedCodes = (unlocked ?? "")
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean);
+  const unlockedBadges =
+    unlockedCodes.length > 0
+      ? await db
+          .select({
+            id: badge.id,
+            code: badge.code,
+            name: badge.name,
+            description: badge.description,
+            icon: badge.icon,
+          })
+          .from(badge)
+          .where(inArray(badge.code, unlockedCodes))
+      : [];
+
   return (
     <main style={S.page}>
       <div style={S.wrap}>
@@ -75,6 +98,8 @@ export default async function ResultPage({
             passage, поэтому процент.
           </div>
         </div>
+
+        {unlockedBadges.length > 0 && <BadgeUnlock badges={unlockedBadges} />}
 
         <h2 style={S.h2}>Разбивка по типам вопросов</h2>
         <p style={S.sub}>Где ты теряешь баллы — слабые типы вверху.</p>

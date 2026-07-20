@@ -76,9 +76,20 @@ export default async function Dashboard() {
           <Stat value={profile?.rating ?? 1000} label="Рейтинг" />
         </div>
 
-        <Link href="/app/reading" style={S.cta}>
-          Reading — каталог тестов →
-        </Link>
+        <div style={S.ctaRow}>
+          <Link href="/app/reading" style={S.cta}>
+            Reading — каталог тестов →
+          </Link>
+          <Link href="/app/leaderboard" style={S.ctaSecondary}>
+            Лидерборд →
+          </Link>
+          <Link href="/app/badges" style={S.ctaSecondary}>
+            Бейджи →
+          </Link>
+          <Link href="/app/invite" style={S.ctaSecondary}>
+            Пригласить →
+          </Link>
+        </div>
 
         <h2 style={S.h2}>История</h2>
         {attempts.length === 0 ? (
@@ -162,11 +173,21 @@ const S: Record<string, React.CSSProperties> = {
   },
   statValue: { fontSize: "1.8rem", fontWeight: 800, color: "#0f172a" },
   statLabel: { color: "#888", fontSize: ".78rem", marginTop: ".2rem" },
+  ctaRow: { display: "flex", flexWrap: "wrap", gap: ".6rem" },
   cta: {
     display: "inline-block",
     padding: ".7rem 1.1rem",
     background: "#6C5CE7",
     color: "#fff",
+    borderRadius: 10,
+    fontWeight: 700,
+  },
+  ctaSecondary: {
+    display: "inline-block",
+    padding: ".7rem 1.1rem",
+    background: "#fff",
+    color: "#6C5CE7",
+    border: "1px solid #6C5CE7",
     borderRadius: 10,
     fontWeight: 700,
   },
