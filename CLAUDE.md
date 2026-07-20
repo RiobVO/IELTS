@@ -114,7 +114,7 @@ module load.
 Phase 1 (MVP core, §9) is complete on `main`: auth, content import, catalog with
 filters, exam mode, server-side grading with per-question-type breakdown, dashboard.
 
-Phase 2 (Engagement) complete on `feat/phase-2`: rating+leaderboard, badges,
+Phase 2 (Engagement) complete and merged to `main`: rating+leaderboard, badges,
 referrals, tiers+payment. **2A (rating + leaderboard) done** (migration `0003`): Elo
 rating on first attempt + adaptive test difficulty, post-submit engine
 (`src/lib/progress/apply-post-submit.ts`: streak/XP + rating + leaderboard
@@ -146,13 +146,16 @@ landing pricing. Adversarial review (payment-integrity / access-control / auth-i
 caught a critical body-trust webhook escalation — fixed; lifecycle proven E2E
 (valid/duplicate/forged/mismatch) on local docker; `0006` applied. Known accepted
 gaps: daily-limit TOCTOU (soft nudge), HMAC signature is a placeholder until merchant
-keys (§10). See SCHEMA_NOTES "Phase 2D". Next: merge `feat/phase-2` → `main`; Phase 3
-(AI Writing/Speaking).
+keys (§10). See SCHEMA_NOTES "Phase 2D".
 
-Phase-1 tail closed on `feat/phase-1-tail`: MCQ single/multi parsing (the first
-real MCQ file, Banff, exposed the gap), passage HTML sanitization (XSS), server-
-stamped `in_progress` attempts + autosave/resume (§4.3) with server-trusted timing
-+ idempotent submit (§4.6), and the admin browser upload + publish UI (§4.2.1).
+Phase-1 tail merged to `main`: MCQ single/multi parsing (the first real MCQ file,
+Banff, exposed the gap), passage HTML sanitization (XSS), server-stamped
+`in_progress` attempts + autosave/resume (§4.3) with server-trusted timing +
+idempotent submit (§4.6), and the admin browser upload + publish UI (§4.2.1).
+
+**Phases 0, 1 (minus the blocked Listening + Full-band items), and 2 are all on
+`main`. Phase 3 (AI Writing/Speaking, §4.10) is next** — the first LLM in the
+codebase (core stays LLM-free per §4.2); `topic` table already exists as a stub.
 
 Pending: Listening (blocked — needs a sample Listening HTML + audio), Full-test
 band scoring (blocked — needs a 40-question file), submit rate-limit throttle
