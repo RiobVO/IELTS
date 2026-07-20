@@ -27,7 +27,16 @@ const REF_VARS = ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "DATABASE_URL", "D
 // Полный набор, который обязан присутствовать именно в .env.test.local (URL +
 // ключи). Ключи не резолвятся в ref, но унаследованный из shell чужой ключ дал
 // бы ложные результаты — поэтому требуем их наличия в файле (Codex Low #1).
-const ALL_REQUIRED_VARS = [...REF_VARS, "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"] as const;
+// NEXT_PUBLIC_SUPABASE_ANON_KEY — реальный ключ, которым пользуется браузер/SSR
+// (anon/authenticated supabase-js клиент), SUPABASE_ANON_KEY используется только
+// service-side; без проверки обоих файл мог пройти гейт с валидным server-key,
+// но пустым/чужим public-key (внешний ревью, находка B).
+const ALL_REQUIRED_VARS = [
+  ...REF_VARS,
+  "SUPABASE_ANON_KEY",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+] as const;
 
 export interface TestTargetEnv {
   ref: string;
