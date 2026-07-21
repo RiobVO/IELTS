@@ -39,9 +39,10 @@ export interface AwardedBadge {
 import {
   type Criteria,
   type UserStats,
-  type QtypeAgg,
+  type PerTypeBreakdown,
   isMet,
   badgeProgress,
+  aggregateAttemptStats,
 } from "./badge-criteria";
 
 // Чистые предикаты/типы критериев вынесены в ./badge-criteria (без IO-импортов —
@@ -49,9 +50,6 @@ import {
 // потребителей (badges/page, content/badges).
 export { isMet, badgeProgress };
 export type { Criteria, UserStats, BadgeProgress } from "./badge-criteria";
-
-/** Shape of an attempt's stored `per_type_breakdown` jsonb. */
-type PerTypeBreakdown = Record<string, { correct: number; total: number }>;
 
 /** Compute every stat a criteria can need, once, from the owner DB path. */
 export async function computeStats(userId: string): Promise<UserStats> {
@@ -69,10 +67,15 @@ export async function computeStats(userId: string): Promise<UserStats> {
       .from(profile)
       .where(eq(profile.id, userId))
       .limit(1),
+    // Все сданные попытки юзера; contentItemId + submittedAt нужны, чтобы
+    // aggregateAttemptStats схлопнул их до ПЕРВОЙ попытки каждого теста
+    // (анти-фарм пересдач, см. коммент к функции в ./badge-criteria).
     db
       .select({
+        contentItemId: attempt.contentItemId,
         rawScore: attempt.rawScore,
         perTypeBreakdown: attempt.perTypeBreakdown,
+        submittedAt: attempt.submittedAt,
       })
       .from(attempt)
       .where(and(eq(attempt.userId, userId), eq(attempt.status, "submitted"))),
@@ -88,8 +91,6 @@ export async function computeStats(userId: string): Promise<UserStats> {
       .groupBy(mistakeResolution.qtype),
   ]);
 
-  let hasPerfect = false;
-  const perQtype = new Map<string, QtypeAgg>();
   const closedByQtype = new Map<string, number>();
   let closedMistakesTotal = 0;
   for (const r of closedByQtypeRows) {
@@ -98,33 +99,16 @@ export async function computeStats(userId: string): Promise<UserStats> {
     closedMistakesTotal += n;
   }
 
-  for (const a of attempts) {
-    const breakdown = (a.perTypeBreakdown as PerTypeBreakdown | null) ?? {};
-
-    // Attempt total = sum of all qtype totals in its breakdown.
-    let attemptTotal = 0;
-    for (const v of Object.values(breakdown)) {
-      attemptTotal += Number(v?.total) || 0;
-    }
-
-    // 100%: rawScore equals the attempt's total question count (>0 to exclude
-    // a degenerate empty/zero-question attempt counting as perfect).
-    if (
-      attemptTotal > 0 &&
-      a.rawScore != null &&
-      Number(a.rawScore) === attemptTotal
-    ) {
-      hasPerfect = true;
-    }
-
-    // Per-qtype running sums across all submitted attempts.
-    for (const [qtype, v] of Object.entries(breakdown)) {
-      const agg = perQtype.get(qtype) ?? { correct: 0, total: 0 };
-      agg.correct += Number(v?.correct) || 0;
-      agg.total += Number(v?.total) || 0;
-      perQtype.set(qtype, agg);
-    }
-  }
+  // Дедуп до первой попытки каждого теста — volume/perfect/perQtype считаются
+  // только по ней (пересдачи не кормят статы). Чистая функция тестируется без БД.
+  const { volume, hasPerfect, perQtype } = aggregateAttemptStats(
+    attempts.map((a) => ({
+      contentItemId: a.contentItemId,
+      rawScore: a.rawScore,
+      perTypeBreakdown: a.perTypeBreakdown as PerTypeBreakdown | null,
+      submittedAt: a.submittedAt,
+    })),
+  );
 
   // first_place (champion): am I rank 1 of the global all_time board? Computed
   // directly from profile ratings — NOT from leaderboard_entry — so the badge
@@ -155,7 +139,7 @@ export async function computeStats(userId: string): Promise<UserStats> {
   return {
     rating: p?.rating ?? 0,
     currentStreak: p?.currentStreak ?? 0,
-    volume: attempts.length,
+    volume,
     hasPerfect,
     perQtype,
     isFirstPlaceGlobalAllTime,
