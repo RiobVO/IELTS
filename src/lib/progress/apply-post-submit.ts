@@ -17,6 +17,7 @@
 import { and, count, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { attempt, contentItem, profile } from "@/db/schema";
+import { createNotifications } from "@/lib/notifications/create";
 import { ELO_FLOOR, ratingDeltas } from "@/lib/rating/elo";
 import { type AwardedBadge, evaluateBadges } from "./badges";
 import { recomputeLeaderboard } from "./leaderboard";
@@ -188,6 +189,20 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
     // unlocked (deduped via the insert's RETURNING) — carried back so the
     // result page can celebrate them once, without timestamp inference.
     const awardedBadges = await evaluateBadges(input.userId);
+
+    // In-app уведомление о каждой разблокировке бейджа (BRIEF §11). Best-effort
+    // (createNotifications не бросает) — внутри общего guard'а applyPostSubmit.
+    if (awardedBadges.length > 0) {
+      await createNotifications(
+        awardedBadges.map((b) => ({
+          userId: input.userId,
+          type: "badge_unlocked" as const,
+          title: `Бейдж разблокирован: ${b.name}`,
+          body: b.description,
+          data: { code: b.code, icon: b.icon },
+        })),
+      );
+    }
 
     // Referral reward (BRIEF §4.9 / §11): rewards the invitee's pending referral
     // exactly once, only after their first completed test. Best-effort — never
