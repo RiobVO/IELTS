@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import { captureQuestions } from "./capture-questions";
-import { extractData, extractFunctionTable } from "./extract-js";
+import { extractData, extractFunctionTable, isExecutableScriptType } from "./extract-js";
 import {
   canonQuestionType,
   blankTypeWarning,
@@ -32,6 +32,12 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
     .toArray()
     .map((s) => $(s).html() ?? "")
     .join("\n");
+  // Исполняемые JS-блоки БЕЗ склейки для extractFunctionTable (каждый блок независим,
+  // как отдельный <script>); склеенный `script` остаётся входом extractData (поиск литералов).
+  const scriptBlocks = $("script")
+    .toArray()
+    .filter((s) => isExecutableScriptType($(s).attr("type")))
+    .map((s) => $(s).html() ?? "");
   const correctAnswers: Record<string, string> =
     (await extractData(script, "correctAnswers")) ?? {};
   const acceptableVariants: Record<string, string[]> =
@@ -44,9 +50,14 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
       : acceptableAnswers;
   const questionTypesRaw: Record<string, string> =
     (await extractData(script, "questionTypes")) ?? {};
+  // Inspera Style: getBandFor40 делегирует к getBandFor13 (`return getBandFor13(s)`). Весь
+  // скрипт исполняется в изоляции — обе декларации в одном eval-скоупе, делегатор вызывается
+  // без ReferenceError (deps не нужны). Самостоятельная legacy 13-шкала без getBandFor40 не
+  // извлекается как 0..40 (getBandFor40 не объявлена → null), упоминание в комментарии/regex
+  // ничего не materializes (регресс 2026-07-21).
   const bandScale =
-    (await extractFunctionTable(script, "getBand", 0, 40)) ??
-    (await extractFunctionTable(script, "getBandFor40", 0, 40));
+    (await extractFunctionTable(scriptBlocks, "getBand", 0, 40)) ??
+    (await extractFunctionTable(scriptBlocks, "getBandFor40", 0, 40));
   if (!bandScale) warnings.push("getBand function not found — no band scale.");
 
   const title =
@@ -68,7 +79,9 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
     const order = Number.parseInt($el.attr("data-part") ?? "", 10);
     if (!Number.isFinite(order)) return;
     sanitize($, $el);
-    const content = $el.find(".passage-content");
+    // Inspera Style обёртывает пассаж в .passageContent (#passageContent-p*) вместо
+    // .passage-content; без этого фолбэка bodyHtml забирал бы всю секцию с обёрткой.
+    const content = $el.find(".passage-content, .passageContent");
     const bodyHtml = ((content.length ? content.html() : $el.html()) ?? "").trim();
     const pTitle = $el.find(".sectionRubric h2").first().text().trim() || `Passage ${order}`;
     const questionsHtml =
@@ -162,8 +175,15 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
       const num = Number.parseInt($(el).attr("data-q") ?? "", 10);
       if (!Number.isFinite(num) || byNumber.has(num)) return;
       const section = $(el).attr("data-section") ?? "";
+      // Inspera Style: нет .drop-value/data-section — paragraph выводится из id
+      // родителя heading-line-A -> "Paragraph A" (как single-парсер parse-test.ts).
+      const para = ($(el).closest(".heading-drop-line").attr("id") ?? "").replace(
+        "heading-line-",
+        "",
+      );
       const prompt =
         $(el).find(".drop-value").text().replace(/\s+/g, " ").trim() ||
+        (para ? `Paragraph ${para}` : "") ||
         (section ? `Section ${section}` : "");
       byNumber.set(num, blank(num, partOf(el), prompt, headingBank));
     });
@@ -185,7 +205,8 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
       if (!Number.isFinite(num) || byNumber.has(num)) return;
       const line = $(el).closest(".ending-line, .dd-sentence, p, li");
       const clone = (line.length ? line : $(el).parent()).clone();
-      clone.find(".ending-drop, .dd-drop, .review-flag, .placeholder").remove();
+      // .q-num-box (Inspera Style) — ведущий номер вопроса; без выреза prompt тащит "33 ".
+      clone.find(".ending-drop, .dd-drop, .review-flag, .placeholder, .q-num-box").remove();
       const prompt = clone.text().replace(/\s+/g, " ").trim();
       byNumber.set(num, blank(num, partOf(el), prompt, endingBank));
     });
@@ -209,6 +230,30 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
       .map((r) => {
         const value = $(r).attr("value") ?? "";
         const label = $(r).closest("label").text().replace(/\s+/g, " ").trim();
+        return { value, label: label || value };
+      });
+    byNumber.set(num, blank(num, partOf(el), prompt, options));
+  });
+
+  // MCQ single (Inspera Style): standalone .mcq-single[id="question-N"] carrying its
+  // own .mcq-stem + .mcq-row radios (no enclosing .mcq-block). Prompt is the per-question
+  // stem, not the group rubric (which would repeat "Choose the correct letter" for all).
+  $(".mcq-single[id^='question-']").each((_, el) => {
+    const $el = $(el);
+    const num = Number.parseInt(($el.attr("id") ?? "").replace(/\D+/g, ""), 10);
+    if (!Number.isFinite(num) || byNumber.has(num)) return;
+    const prompt = $el
+      .find(".mcq-stem, .tfng-statement-text, .stem")
+      .first()
+      .text()
+      .replace(/\s+/g, " ")
+      .trim();
+    const options: ParsedOption[] = $el
+      .find(".mcq-row")
+      .toArray()
+      .map((row) => {
+        const value = $(row).find("input").attr("value") ?? "";
+        const label = $(row).find("span").last().text().replace(/\s+/g, " ").trim();
         return { value, label: label || value };
       });
     byNumber.set(num, blank(num, partOf(el), prompt, options));

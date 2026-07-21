@@ -32,8 +32,9 @@ describe("WorkerUnavailableError — new Worker(...) бросает синхро
   });
 
   it("extractFunctionTable пробрасывает WorkerUnavailableError наружу вместо null", async () => {
-    const src = "function band(r){ return r; }";
-    await expect(extractFunctionTable(src, "band", 0, 5)).rejects.toThrow(WorkerUnavailableError);
+    await expect(extractFunctionTable(["function band(r){ return r; }"], "band", 0, 5)).rejects.toThrow(
+      WorkerUnavailableError,
+    );
   });
 
   it("сообщение называет worker_threads и несёт исходную причину сборки", async () => {

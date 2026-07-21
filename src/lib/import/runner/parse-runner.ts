@@ -1,5 +1,11 @@
 import * as cheerio from "cheerio";
-import { extractData, extractFunctionTable, extractObjectLiteral, extractRangeBuilderTable } from "../extract-js";
+import {
+  extractData,
+  extractFunctionTable,
+  extractObjectLiteral,
+  extractRangeBuilderTable,
+  isExecutableScriptType,
+} from "../extract-js";
 import {
   canonQuestionType,
   isChooseManyLabel,
@@ -21,6 +27,16 @@ function scriptText(html: string): string {
   // Конкатенация всех inline <script> (ключи лежат в одном из них).
   const $ = cheerio.load(html);
   return $("script:not([src])").map((_, el) => $(el).html() ?? "").get().join("\n");
+}
+
+/** Inline <script> блоки БЕЗ склейки, только исполняемый JS (как браузер) — для
+ *  extractFunctionTable, где каждый блок компилируется/исполняется независимо. */
+function scriptBlocks(html: string): string[] {
+  const $ = cheerio.load(html);
+  return $("script:not([src])")
+    .toArray()
+    .filter((el) => isExecutableScriptType($(el).attr("type")))
+    .map((el) => $(el).html() ?? "");
 }
 
 function detectSection(html: string): "listening" | "reading" {
@@ -100,7 +116,14 @@ async function parseReadingRunner(html: string): Promise<RunnerParseResult> {
   for (const [groupKey, g] of Object.entries(mcqGroups)) {
     for (const n of g?.qs ?? []) mcqByNum.set(n, { groupKey, correct: g.correct ?? [] });
   }
-  const bandScale = await extractFunctionTable(src, "getBandFor40", 0, 40);
+  // Inspera Style называет реальную /40-шкалу getBandFor13, а getBandFor40 лишь делегирует
+  // (`return getBandFor13(s)`). Механизм исполняет ВЕСЬ скрипт в изоляции, поэтому обе
+  // декларации живут в одном eval-скоупе и делегатор вызывается без ReferenceError — deps не
+  // нужны. Самостоятельная legacy getBandFor13 (13-шкала) без getBandFor40 НЕ извлекается как
+  // /40-таблица (getBandFor40 не объявлена → globalThis.getBandFor40 undefined → null), иначе
+  // одиночный пассаж уехал бы в full_reading/60m (регресс 2026-07-21). Упоминание в
+  // комментарии/regex ничего не materializes — V8 не связывает несуществующую декларацию.
+  const bandScale = await extractFunctionTable(scriptBlocks(html), "getBandFor40", 0, 40);
 
   // Union: an mcq-multi member may live only in mcqGroups, not in correctAnswers.
   // Фильтр положительных целых (P4): нечисловые ключи "q1" (bespoke-диалект) иначе дают
@@ -227,7 +250,7 @@ async function parseListeningRunner(html: string): Promise<RunnerParseResult> {
         extractRangeBuilderTable(src, "QTYPE")
         ?? (await extractData<Record<string, string>>(src, "questionTypes"))
         ?? {};
-  const bandScale = await extractFunctionTable(src, "band", 0, 40);
+  const bandScale = await extractFunctionTable(scriptBlocks(html), "band", 0, 40);
 
   // Фильтр положительных целых (P4): нечисловые ключи "q1" не создают NaN-вопросов.
   const numbers = Object.keys(key)
