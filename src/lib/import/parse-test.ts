@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import { extractData } from "./extract-js";
+import { parseListening } from "./parse-listening";
 import { canonQuestionType } from "./question-types";
 import type {
   ParsedAnswerKey,
@@ -27,6 +28,10 @@ interface KeyData {
  * for review otherwise — finalized against their first real file (BRIEF §10).
  */
 export function parseTest(html: string): ParsedTest {
+  // Listening uses a different template (KEY/band, .part[data-part], audio) —
+  // route to its dedicated parser. Detected by an <audio> tag + part sections.
+  if (isListening(html)) return parseListening(html);
+
   const $ = cheerio.load(html);
   const warnings: string[] = [];
 
@@ -201,6 +206,9 @@ export function parseTest(html: string): ParsedTest {
     bandType: "reading_academic",
     durationSeconds,
     questionTypes,
+    // Single Reading passage (13Q) shows percent, not band (§11). Full Reading
+    // band extraction is a separate sub-step.
+    bandScale: null,
     passages,
     questions,
     warnings,
@@ -208,6 +216,12 @@ export function parseTest(html: string): ParsedTest {
 }
 
 /* ----------------------------- helpers --------------------------------- */
+
+/** Listening template marker: an <audio> element plus part sections. */
+function isListening(html: string): boolean {
+  const $ = cheerio.load(html);
+  return $("audio").length > 0 && $(".part[data-part]").length > 0;
+}
 
 function blank(
   number: number,
