@@ -99,15 +99,26 @@ export default async function ResultPage({
         </Link>
 
         <div style={S.scoreCard}>
-          <div style={S.score}>
-            {result.rawScore}
-            <span style={S.scoreTotal}>/{result.total}</span>
-          </div>
-          <div style={S.percent}>{result.percent}% правильных</div>
-          <div style={S.note}>
-            Band показываем только для Full-тестов (40 вопросов) — здесь одиночный
-            passage, поэтому процент.
-          </div>
+          {att.bandScore != null ? (
+            <>
+              <div style={S.score}>Band {att.bandScore}</div>
+              <div style={S.percent}>
+                {result.rawScore}/{result.total} · {result.percent}% правильных
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={S.score}>
+                {result.rawScore}
+                <span style={S.scoreTotal}>/{result.total}</span>
+              </div>
+              <div style={S.percent}>{result.percent}% правильных</div>
+              <div style={S.note}>
+                Band показываем только для Full-тестов (40 вопросов) — здесь
+                одиночный passage, поэтому процент.
+              </div>
+            </>
+          )}
         </div>
 
         {unlockedBadges.length > 0 && <BadgeUnlock badges={unlockedBadges} />}

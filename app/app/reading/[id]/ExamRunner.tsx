@@ -29,12 +29,15 @@ export default function ExamRunner({
   passages,
   questions,
   durationSeconds,
+  audioSrc,
 }: {
   attemptId: string;
   initialAnswers: Record<string, string>;
   passages: Passage[];
   questions: Question[];
   durationSeconds: number | null;
+  /** Listening: audio for the whole test. Absent for Reading. */
+  audioSrc?: string | null;
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
   const [elapsed, setElapsed] = useState(0);
@@ -74,6 +77,15 @@ export default function ExamRunner({
 
   return (
     <div style={S.shell}>
+      {audioSrc && (
+        // Listening audio (BRIEF §4.3). Sticky at the top so it stays reachable
+        // while scrolling the parts. MVP uses native controls; the strict
+        // single-pass rule (no rewind) is a later refinement.
+        <div style={S.audioBar}>
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <audio controls src={audioSrc} style={{ width: "100%" }} />
+        </div>
+      )}
       <div style={S.cols}>
         <section style={S.passageCol}>
           {passages.map((p, i) => (
@@ -155,6 +167,15 @@ const READING_FONT = 'Georgia, "Iowan Old Style", "Times New Roman", serif';
 
 const S: Record<string, React.CSSProperties> = {
   shell: { paddingBottom: 80 },
+  audioBar: {
+    position: "sticky",
+    top: 0,
+    zIndex: 10,
+    maxWidth: 1100,
+    margin: "0 auto",
+    padding: ".6rem 0",
+    background: "#fff",
+  },
   cols: {
     maxWidth: 1100,
     margin: "1rem auto 0",
