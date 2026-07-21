@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import {
   answerKey,
+  attempt,
   contentItem,
   passage as passageT,
   question as questionT,
@@ -10,6 +11,23 @@ import type { ParsedTest } from "./types";
 
 type ContentInsert = typeof contentItem.$inferInsert;
 type QuestionInsert = typeof questionT.$inferInsert;
+
+/**
+ * Повторный импорт того же файла делает DELETE content_item -> FK cascade сносит
+ * passage/question/answer_key И attempt (BRIEF §5 — onDelete cascade). Если по
+ * тесту уже есть попытки студентов, destructive re-import уничтожил бы их
+ * историю. Бросаем — правка пройденного теста требует Re-grade (отдельный путь,
+ * BRIEF §11), а не повторного импорта. Re-import draft без попыток разрешён.
+ */
+export class RegradeRequiredError extends Error {
+  constructor(public readonly attemptCount: number) {
+    super(
+      `Refusing destructive re-import: the test has ${attemptCount} attempt(s) ` +
+        `that a re-import would delete. Editing a sat test needs Re-grade.`,
+    );
+    this.name = "RegradeRequiredError";
+  }
+}
 
 /**
  * Persists a ParsedTest into content_item / passage / question / answer_key in
@@ -24,6 +42,25 @@ export async function persistTest(
 ): Promise<string> {
   return db.transaction(async (tx) => {
     if (opts.sourceFilePath) {
+      // Guard: не уничтожать историю попыток. Если прежняя версия теста уже
+      // проходилась, отказываем в destructive re-import (см. RegradeRequiredError).
+      const existing = await tx
+        .select({ id: contentItem.id })
+        .from(contentItem)
+        .where(eq(contentItem.sourceFilePath, opts.sourceFilePath));
+      if (existing.length > 0) {
+        const [row] = await tx
+          .select({ n: sql<number>`count(*)::int` })
+          .from(attempt)
+          .where(
+            inArray(
+              attempt.contentItemId,
+              existing.map((r) => r.id),
+            ),
+          );
+        const n = row?.n ?? 0;
+        if (n > 0) throw new RegradeRequiredError(n);
+      }
       await tx
         .delete(contentItem)
         .where(eq(contentItem.sourceFilePath, opts.sourceFilePath));

@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { contentItem } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { parseTest } from "@/lib/import/parse-test";
-import { persistTest } from "@/lib/import/persist";
+import { persistTest, RegradeRequiredError } from "@/lib/import/persist";
 
 function fail(message: string): never {
   redirect(`/admin?error=${encodeURIComponent(message)}`);
@@ -40,6 +40,13 @@ export async function uploadTest(formData: FormData) {
       warnings: parsed.warnings.length,
     };
   } catch (e) {
+    if (e instanceof RegradeRequiredError) {
+      console.error("admin uploadTest refused — test has attempts", e);
+      fail(
+        `У теста уже есть попытки (${e.attemptCount}) — повторный импорт удалил бы их. ` +
+          `Правка пройденного теста появится с Re-grade.`,
+      );
+    }
     console.error("admin uploadTest failed", e);
     fail("Не удалось обработать файл (парсинг или сохранение).");
   }
