@@ -27,6 +27,18 @@ export type QuestionType = (typeof QUESTION_TYPES)[number];
 // normalize: lowercase, keep letters only ("TRUE / FALSE / NOT GIVEN" -> "truefalsenotgiven")
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
 
+// Срезает декорации, из-за которых голый тип не совпадает с EXACT-таблицей целиком:
+//  - ведущий секционный префикс: «Section 2 — Note Completion» → «Note Completion»
+//  - хвостовой скобочный квалификатор: «Note Completion (ONE WORD ONLY)» → «Note Completion»
+// Работает по СЫРОЙ строке (до norm), т.к. norm уже съедает скобки/тире и границу теряет.
+// Применяется ТОЛЬКО как retry после промаха полного EXACT — семантичные суффиксы вроде
+// «(single)»/«(multiple)» матчатся полной формой раньше и до strip не доходят.
+const stripDecorations = (s: string) =>
+  s
+    .replace(/^\s*section\s+\d+\s*[—–:-]?\s*/i, "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim();
+
 // exact normalized label -> canon
 const EXACT: Record<string, QuestionType> = {
   truefalsenotgiven: "tfng",
@@ -34,12 +46,14 @@ const EXACT: Record<string, QuestionType> = {
   yesnonotgiven: "ynng",
   ynng: "ynng",
   multiplechoice: "mcq_single",
+  mcq: "mcq_single",
   multiplechoicesingle: "mcq_single",
   multiplechoicemultiple: "mcq_multi",
   matchingheadings: "matching_headings",
   matchinginformation: "matching_info",
   matchingfeatures: "matching_features",
   matchingsentenceendings: "matching_sentence_endings",
+  sentenceendings: "matching_sentence_endings",
   sentencecompletion: "sentence_completion",
   summarycompletion: "summary_completion",
   notecompletion: "note_completion",
@@ -96,6 +110,12 @@ export function canonQuestionType(label: string): CanonResult {
   const key = norm(label);
   if (!key) return { type: null, confident: false };
   if (EXACT[key]) return { type: EXACT[key], confident: true };
+  // Retry EXACT по строке без секц-префикса/скобочного хвоста: «Section 2 — Note
+  // Completion» и «Note Completion (ONE WORD ONLY)» — тот же уверенный note_completion,
+  // а не low-confidence шум на ревью-экране. Полный EXACT выше уже отсёк семантичные
+  // суффиксы (single)/(multiple), поэтому здесь strip их не искажает.
+  const stripped = norm(stripDecorations(label));
+  if (stripped !== key && EXACT[stripped]) return { type: EXACT[stripped], confident: true };
   for (const [needle, type] of CONTAINS) {
     if (key.includes(needle)) return { type, confident: false };
   }
