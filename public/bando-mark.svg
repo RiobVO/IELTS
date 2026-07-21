@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="bando">
+  <rect x="9" y="18" width="34" height="9" rx="4.5" fill="#8B5CF6"></rect>
+  <rect x="9" y="31" width="46" height="9" rx="4.5" fill="currentColor" opacity="0.92"></rect>
+  <rect x="9" y="44" width="22" height="9" rx="4.5" fill="currentColor" opacity="0.5"></rect>
+</svg>
