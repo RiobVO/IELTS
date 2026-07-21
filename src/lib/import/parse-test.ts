@@ -231,6 +231,7 @@ function blank(
 ): ParsedQuestion {
   return {
     number,
+    passageOrder: 1, // single Reading passage; Full Reading mapping is a later sub-step
     qtype: "",
     promptHtml,
     options,

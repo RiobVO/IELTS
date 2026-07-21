@@ -19,6 +19,8 @@ export interface ParsedOption {
 
 export interface ParsedQuestion {
   number: number;
+  /** which passage/part this question belongs to (passage.order); 1 for single. */
+  passageOrder: number;
   /** canon question_type enum value (e.g. "tfng", "note_completion") */
   qtype: string;
   promptHtml: string;
