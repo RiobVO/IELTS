@@ -37,3 +37,6 @@ npm-debug.log*
 *.m4a
 /listening-test.html
 /design-*.html
+
+# bando design system handoff — reference only, recreated in src/ + app/, not shipped as-is
+/design-drop/
