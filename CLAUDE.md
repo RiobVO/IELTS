@@ -193,6 +193,38 @@ emulation + verify gate.
   digest jobs/content + email provider still TODO.
 - **i18n** — deferred (EN at launch per §10).
 
+### 🎨 Frontend redesign — «bando» design-drop (in progress, screen-by-screen)
+Полный визуальный редизайн под дизайн-систему **bando** (handoff в `design-drop/`,
+gitignored — эталон вида всех экранов; собран отдельно в Claude Design). Стек **строго по
+BRIEF** — Next.js App Router + React 19 + TS, **inline-стили + CSS-переменные (токены)**,
+без Tailwind/CSS-in-JS, **ноль новых runtime-зависимостей** (`package.json` не менялся).
+
+**Принцип:** удаляем только СТАРЫЙ визуал, **логику и архитектуру сохраняем** (auth,
+grading, submit, RLS, tiers, рейтинг). На каждом экране: визуал из `design-drop`, проводка
+к данным/server-actions та же. Идём **поэтапно, один экран = один подтверждённый шаг**.
+
+- **Foundation (done):** `app/tokens/*.css` (7 токен-файлов, light-first, дословно из
+  `design-drop/tokens`, кроме `--font-*` → `next/font`); entry в `app/globals.css`; шрифты
+  `next/font` (Jakarta/Literata/JBMono) в `layout.tsx`; ребренд NINE→bando. Core-компоненты
+  `src/components/core/` (`util`, `icons` — zero-dep SVG, `IconName` union; `Button` 3D-push
+  + `href`-полиморфизм; `Card`; `Input`; `Logo` light-safe) + `marketing/FeatureGrid`.
+- **✅ Homepage (`/`)** — `app/page.tsx` + `app/landing.css`, **1:1 с `home.html`**. Лендинг
+  **самодостаточен** (свой `landing.css` с палитрой `--v` и т.д., route-scoped), client с
+  `useEffect` (hero-canvas, band-selector, reveals, marquee). Сверен построчно.
+- **✅ Auth (`/auth`)** — `app/auth/AuthScreen.tsx` (client, shutter-переход login↔signup)
+  + `Input`, 1:1 с `AuthScreen.jsx`. Формы подключены к существующим server-actions
+  (`signIn`/`signUp`), `actions.ts` **byte-identical**. В отличие от лендинга, экран строится
+  на ОБЩИХ токенах+компонентах (не самодостаточный CSS).
+- **TODO экраны** (из `design-drop/ui_kits/nine/*.jsx`, по одному): dashboard, catalog
+  (reading/listening), exam runner, result, leaderboard, badges, pricing, profile, admin.
+
+**Gotcha — dev-сервер на Windows:** `TaskStop` НЕ убивает дочерний `next` → зомби висят на
+:3000/:3001/:3002, новый dev уходит на следующий порт, браузер попадает на протухший (CSS
+404 / 500 / голый Times). Лечить: `netstat -ano | grep :300` → `taskkill //PID <pid> //F //T`
+по всем, затем один `npm run dev`. После переключения веток/`rm .next` обязательно перезапуск
+dev. **Проверять реальный порт из лога** («using available port 3001») и — по правилу
+`ui-verify-live-browser` — смотреть страницу в браузере, `fetch`-проба HTML стили не доказывает.
+
 ### 🧊 Phase 3 — AI Writing/Speaking (§4.10) — FROZEN, «coming soon», LAST
 Frozen 2026-06-15: audience-first; AI stays a marketing hook + Ultra upsell. NOT
 deleted — `topic` table + `topic_skill` enum remain stubs (core stays LLM-free per
