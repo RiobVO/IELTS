@@ -19,6 +19,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { captureServer } from "@/lib/analytics/server";
+import { captureError } from "@/lib/monitoring/capture";
 import { db } from "@/db";
 import { payment, profile } from "@/db/schema";
 import { type PaymentProviderKey, paymentSecret } from "@/env";
@@ -195,7 +196,10 @@ export async function applyCompletedPayment(
 
     return outcome;
   } catch (e) {
+    // Денежный путь: ошибка глотается в "error" (провайдер ретраит), но молча
+    // терять её из мониторинга нельзя — шлём в Sentry с ключом платежа (§11).
     console.error("applyCompletedPayment failed", e);
+    captureError(e, { provider, providerTransactionId });
     return "error";
   }
 }
