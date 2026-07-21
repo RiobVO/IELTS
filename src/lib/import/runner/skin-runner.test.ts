@@ -17,6 +17,7 @@ import { forceRunnerMode } from "./force-mode";
 
 const FIX = join(__dirname, "fixtures");
 const listeningFixture = readFileSync(join(FIX, "listening.html"), "utf8");
+const readingFixture = readFileSync(join(FIX, "reading.html"), "utf8");
 
 describe("skinRunnerGate", () => {
   const gate =
@@ -157,6 +158,53 @@ describe("skinRunnerBrand", () => {
   });
 });
 
+// Inspera live-desktop-shell (диагностика 2026-07-21): #startScreen + exam-header,
+// в каждом img.ielts-logo-img (внешний cloudfront-src → CSP режет → битая иконка) +
+// текст-фолбэк div.ielts-logo. RE_LOGO_IMG (brand-logo) картинку не матчит,
+// RE_LOGO_TEXT не глобальный → чинил лишь скрытый startScreen, видимая шапка «IELTS».
+const INSPERA_HEAD = `<!doctype html><html><head><title>Reading Passage 2</title></head><body class="fjord-theme">
+<div id="startScreen" class="start-screen"><div class="start-content">
+<img class="ielts-logo-img" src="https://d2snzxottmona5.cloudfront.net/releases/3.60.0/images/logo/ielts.svg" alt="IELTS" width="140" height="40" style="margin:0 auto 8px;">
+<div class="ielts-logo" aria-hidden="true" style="display:none">IELTS</div>
+<h1>Reading Passage 2</h1></div></div>
+<div class="test-wrapper"><header class="header"><div class="header__logo">
+<img class="ielts-logo-img" src="https://d2snzxottmona5.cloudfront.net/releases/3.60.0/images/logo/ielts.svg" alt="IELTS" width="96" height="28">
+<div class="ielts-logo" aria-hidden="true">IELTS</div>
+<div class="header__candidate">Test taker ID</div>
+</div></header></div>
+</body></html>`;
+
+describe("skinRunnerBrand — Inspera live-shell шапка", () => {
+  const out = skinRunnerBrand(INSPERA_HEAD);
+
+  it("снимает битые cloudfront-картинки (оба вхождения: startScreen + шапка)", () => {
+    expect(out).not.toContain("ielts-logo-img");
+    expect(out).not.toContain("cloudfront.net");
+    expect(out).not.toContain("ielts.svg");
+  });
+
+  it("заменяет текст-фолбэк div.ielts-logo на bando ГЛОБАЛЬНО (не только первый)", () => {
+    expect(out).not.toContain('class="ielts-logo"');
+    // оба вхождения (startScreen + header) стали bando-знаком
+    expect(out.match(/class="bando-brand"/g)).toHaveLength(2);
+    expect(out).toMatch(/band<i>o<\/i>/);
+  });
+
+  it("ни одного ielts-logo-маркера не осталось", () => {
+    expect(out).not.toMatch(/ielts-logo/i);
+    // wrapper-класс header__logo не тронут
+    expect(out).toContain('class="header__logo"');
+  });
+
+  it("инжектит bando-brand-skin перед </head>", () => {
+    expect(out.indexOf("bando-brand-skin")).toBeLessThan(out.indexOf("</head>"));
+  });
+
+  it("идемпотентен (повторный вызов не дублирует)", () => {
+    expect(skinRunnerBrand(out)).toBe(out);
+  });
+});
+
 describe("skinRunnerTableScroll", () => {
   const withTable =
     '<html><head><style>.matching-table{width:100%;overflow:hidden}</style></head>' +
@@ -228,6 +276,42 @@ describe("runnerBrandResidue (import-time guard)", () => {
 <span class="ielts-logo">IELTS</span>
 <a class="brand-telegram" href="https://t.me/CD_materialss">tg</a></div></body></html>`;
     expect(runnerBrandResidue(cdi)).toEqual([]);
+  });
+
+  it("чисто на распознанной Inspera-шапке (img+text вычищены skin'ом)", () => {
+    expect(runnerBrandResidue(INSPERA_HEAD)).toEqual([]);
+  });
+
+  // Страховка на БУДУЩИЕ вариации разметки: логотип с cloudfront-src ielts.svg на
+  // элементе, чей класс наши якоря НЕ матчат → skin его не снимет → residue обязан
+  // поднять warning (иначе битая иконка молча уедет на прод).
+  it("флагует выживший чужой logo-маркер на нераспознанной Inspera-вариации", () => {
+    const insperaVariant =
+      '<html><head></head><body><header class="header"><div class="header__logo">' +
+      '<img class="site-logo" src="https://d2snzxottmona5.cloudfront.net/releases/3.61.0/images/logo/ielts.svg" alt="IELTS">' +
+      "</div></header></body></html>";
+    expect(runnerBrandResidue(insperaVariant).length).toBeGreaterThan(0);
+  });
+});
+
+// Регресс: legacy-фикстуры (span.ielts-logo / brand-logo / span.logo) НЕ несут
+// Inspera-якорей (div.ielts-logo / img.ielts-logo-img) → аддитивные Inspera-ветки
+// обязаны быть no-op, поведение скина прежнее.
+describe("skinRunnerBrand — регресс на legacy-фикстурах (Inspera-ветки no-op)", () => {
+  it("listening.html: brand handling прежний, Inspera-ветки ничего не тронули", () => {
+    const out = skinRunnerBrand(listeningFixture);
+    expect(out).toContain("bando-brand");
+    // img.brand-logo снят (CSS-селектор .brand-logo в <style> остаётся — не наш тег)
+    expect(out).not.toMatch(/<img\b[^>]*class=["'][^"']*brand-logo/i);
+    expect(out).not.toContain("ielts-logo-img"); // Inspera-якоря в фикстуре нет — no-op
+  });
+
+  it("reading.html: RE_LOGO_TEXT (не глоб.) снимает лишь ПЕРВЫЙ span.ielts-logo — второй цел", () => {
+    // Часовой: если Inspera-текст-якорь станет глобальным / начнёт матчить span,
+    // второй span.ielts-logo исчезнет и этот счётчик упадёт с 1 до 0.
+    const out = skinRunnerBrand(readingFixture);
+    expect(out).toContain("bando-brand");
+    expect(out.match(/class="ielts-logo"/g)).toHaveLength(1);
   });
 });
 
