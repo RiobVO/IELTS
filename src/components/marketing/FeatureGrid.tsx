@@ -128,7 +128,7 @@ export function FeatureGrid({ features = [], columns = 2, variant = "plain", onS
         ...style,
       }}
     >
-      {features.map((f, i) => <FeatureCard key={i} feature={f} variant={variant} onSelect={onSelect} />)}
+      {features.map((f) => <FeatureCard key={f.title} feature={f} variant={variant} onSelect={onSelect} />)}
     </div>
   );
 }
