@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import { extractData } from "./extract-js";
+import { parseFullReading } from "./parse-reading-full";
 import { parseListening } from "./parse-listening";
 import { canonQuestionType } from "./question-types";
 import type {
@@ -31,6 +32,8 @@ export function parseTest(html: string): ParsedTest {
   // Listening uses a different template (KEY/band, .part[data-part], audio) —
   // route to its dedicated parser. Detected by an <audio> tag + part sections.
   if (isListening(html)) return parseListening(html);
+  // Full Reading: 3 passage sections (vs one #passageContent in single).
+  if (isFullReading(html)) return parseFullReading(html);
 
   const $ = cheerio.load(html);
   const warnings: string[] = [];
@@ -160,6 +163,77 @@ export function parseTest(html: string): ParsedTest {
     });
   });
 
+  // matching headings: drop zones (#drop-qN) sit on paragraph lines; the options
+  // are the shared heading bank (roman numerals). Each drop's paragraph comes
+  // from its line id (heading-line-A -> "Paragraph A").
+  const headingBank: ParsedOption[] = $(".heading-bank .heading-token[data-heading]")
+    .toArray()
+    .map((t) => ({
+      value: $(t).attr("data-heading") ?? "",
+      label: $(t).text().replace(/\s+/g, " ").trim(),
+    }));
+  if (headingBank.length > 0) {
+    $(".heading-drop[data-q]").each((_, el) => {
+      const num = Number.parseInt($(el).attr("data-q") ?? "", 10);
+      if (!Number.isFinite(num) || byNumber.has(num)) return;
+      const para = ($(el).closest(".heading-drop-line").attr("id") ?? "").replace(
+        "heading-line-",
+        "",
+      );
+      byNumber.set(
+        num,
+        blank(
+          num,
+          para ? `Paragraph ${para}` : "",
+          headingBank,
+          grpKey($(el).closest(".question").attr("id")),
+        ),
+      );
+    });
+  }
+
+  // matching (info/features): radio rows in a matching-table (.q-text = prompt,
+  // radio values = the A.. options). Same markup the Full Reading parser uses.
+  $("table.matching-table tr[id^='question-']").each((_, el) => {
+    const $el = $(el);
+    const num = Number.parseInt(($el.attr("id") ?? "").replace(/\D+/g, ""), 10);
+    if (!Number.isFinite(num) || byNumber.has(num)) return;
+    const prompt = $el.find(".q-text").text().trim();
+    const options = $el
+      .find('input[type="radio"]')
+      .toArray()
+      .map((r) => ({ value: $(r).attr("value") ?? "", label: $(r).attr("value") ?? "" }));
+    byNumber.set(
+      num,
+      blank(num, prompt, options, grpKey($el.closest(".question").attr("id"))),
+    );
+  });
+
+  // matching sentence endings: drop zones ending a sentence stem; options are the
+  // endings bank (letters). Covers both markup variants (.ending-* and .dd-*).
+  const endingBank: ParsedOption[] = $(
+    ".ending-token[data-ending], .dd-token[data-letter]",
+  )
+    .toArray()
+    .map((t) => ({
+      value: $(t).attr("data-ending") ?? $(t).attr("data-letter") ?? "",
+      label: $(t).text().replace(/\s+/g, " ").trim(),
+    }));
+  if (endingBank.length > 0) {
+    $(".ending-drop[data-q], .dd-drop[data-q]").each((_, el) => {
+      const num = Number.parseInt($(el).attr("data-q") ?? "", 10);
+      if (!Number.isFinite(num) || byNumber.has(num)) return;
+      const line = $(el).closest(".ending-line, .dd-sentence, p, li");
+      const clone = (line.length ? line : $(el).parent()).clone();
+      clone.find(".ending-drop, .dd-drop, .review-flag").remove();
+      const prompt = clone.text().replace(/\s+/g, " ").trim();
+      byNumber.set(
+        num,
+        blank(num, prompt, endingBank, grpKey($(el).closest(".question").attr("id"))),
+      );
+    });
+  }
+
   // assign canon type + answer key per question
   for (const [num, q] of byNumber) {
     if (mcqByNum.has(num)) {
@@ -221,6 +295,12 @@ export function parseTest(html: string): ParsedTest {
 function isListening(html: string): boolean {
   const $ = cheerio.load(html);
   return $("audio").length > 0 && $(".part[data-part]").length > 0;
+}
+
+/** Full Reading marker: multiple passage sections (single uses one #passageContent). */
+function isFullReading(html: string): boolean {
+  const $ = cheerio.load(html);
+  return $(".passage-section[data-part]").length >= 2;
 }
 
 function blank(
