@@ -1,9 +1,9 @@
 import { CatalogView } from "../_CatalogView";
-import { READING_CATEGORIES } from "@/lib/labels";
+import { LISTENING_CATEGORIES } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReadingCatalog({
+export default async function ListeningCatalog({
   searchParams,
 }: {
   searchParams: Promise<{ category?: string; q_type?: string }>;
@@ -11,11 +11,11 @@ export default async function ReadingCatalog({
   const sp = await searchParams;
   return (
     <CatalogView
-      section="reading"
-      categories={READING_CATEGORIES}
-      title="Reading"
+      section="listening"
+      categories={LISTENING_CATEGORIES}
+      title="Listening"
       sub="Выбери тест. Фильтруй по части и типам вопросов."
-      filterBase="/app/reading"
+      filterBase="/app/listening"
       sp={sp}
     />
   );

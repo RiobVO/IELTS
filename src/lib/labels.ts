@@ -39,6 +39,14 @@ export const READING_CATEGORIES = [
   "full_reading",
 ] as const;
 
+export const LISTENING_CATEGORIES = [
+  "part_1",
+  "part_2",
+  "part_3",
+  "part_4",
+  "full_listening",
+] as const;
+
 export const PERIOD_LABELS: Record<string, string> = {
   weekly: "Эта неделя",
   monthly: "Этот месяц",
