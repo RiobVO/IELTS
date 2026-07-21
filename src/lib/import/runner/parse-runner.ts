@@ -44,6 +44,28 @@ function detectSection(html: string): "listening" | "reading" {
   return $("audio").length > 0 ? "listening" : "reading";
 }
 
+/**
+ * Номер одиночного пассажа из шапки стартового экрана. Клиентский Inspera-генератор
+ * кладёт «Reading Passage N» в заголовок `#startScreen`/`.start-screen` (реальный пример:
+ * `<div id="startScreen" class="start-screen">…<h1>Reading Passage 2</h1>`). Якорь —
+ * заголовок стартового экрана, а НЕ первое вхождение по файлу: одноимённая строка
+ * внутри текста рубрики («Reading Passage 2 has five sections») не должна ложно детектиться.
+ * Паттерн заякорен на начало текста заголовка (`^`), N ограничен 1..3 (валидные
+ * content_category). Не найдено → null → вызывающий берёт прежний дефолт passage_1.
+ */
+function detectPassageNumber(html: string): 1 | 2 | 3 | null {
+  const $ = cheerio.load(html);
+  const start = $("#startScreen, .start-screen").first();
+  if (start.length === 0) return null;
+  let found: 1 | 2 | 3 | null = null;
+  start.find("h1, h2").each((_, el) => {
+    if (found) return;
+    const m = /^\s*(?:reading\s+)?passage\s+([1-3])\b/i.exec($(el).text());
+    if (m) found = Number(m[1]) as 1 | 2 | 3;
+  });
+  return found;
+}
+
 export async function parseRunner(html: string): Promise<RunnerParseResult> {
   const section = detectSection(html);
   return section === "listening" ? await parseListeningRunner(html) : await parseReadingRunner(html);
@@ -193,11 +215,15 @@ async function parseReadingRunner(html: string): Promise<RunnerParseResult> {
 
   // Full Reading (40Q) несёт getBandFor40 → bandScale; одиночный пассаж — нет.
   // По этому признаку разводим категорию/длительность (иначе 13Q-пассаж покажется
-  // в каталоге как «Full Reading · 60m»). Номер пассажа из файла не известен → passage_1.
+  // в каталоге как «Full Reading · 60m»). Номер одиночного пассажа берём из шапки
+  // стартового экрана (detectPassageNumber); не найден → passage_1.
   // Страховка счётом вопросов (Vol7/Mock, QA 2026-07-02): источник без band-функции
   // ронял 40-вопросный мок в passage_1 · 20m. Одиночный пассаж — это 13-14 вопросов,
   // полный тест — 40; порог 30 разделяет их с запасом.
   const isFull = bandScale != null || questions.length >= 30;
+  // Одиночный пассаж: номер берём из шапки стартового экрана (клиент шлёт «Reading
+  // Passage N»); не найдено → прежний дефолт passage_1. Full-тест номером не трогаем.
+  const passageNumber = isFull ? null : detectPassageNumber(html);
   // F3-min (2026-07-12): full test (по числовой эвристике) без getBandFor40 — прод уже
   // показал, что такой тест публикуется с bandScale=null и студент видит percent вместо
   // band. Здесь только сигнал для review-экрана; фактический блокер — publish-гейт.
@@ -207,7 +233,7 @@ async function parseReadingRunner(html: string): Promise<RunnerParseResult> {
   const parsed: ParsedTest = {
     title: extractTitle(html, "Reading"),
     section: "reading",
-    category: isFull ? "full_reading" : "passage_1",
+    category: isFull ? "full_reading" : `passage_${passageNumber ?? 1}`,
     bandType: "reading_academic",
     durationSeconds: isFull ? 60 * 60 : 20 * 60,
     questionTypes: [...new Set(questions.map((q) => q.qtype))],
