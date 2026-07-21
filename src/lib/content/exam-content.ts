@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { contentItem, passage, question } from "@/db/schema";
+import { stripAnalysisLeak } from "@/lib/import/runner/sanitize-runner";
 
 /**
  * Per-test cache tag (W2-6 load insurance). Кэши контента одного теста несут ЭТОТ
@@ -119,7 +120,17 @@ async function loadExamContent(
       .orderBy(asc(question.number)),
   ]);
 
-  return { test, passages, questions } as ExamContent;
+  // Read-time анти-утечка: verbatim `questions_html` (атомизированный practice-путь,
+  // рендерится QuestionHtml) несёт Inspera `[data-analysis]` разборы с ответом в DOM,
+  // скрытые ЛИШЬ CSS (`.q-verbatim .analysis{display:none}`) — клиентский read их бы
+  // достал. Вырезаем на сервере перед отдачей (не полагаясь на CSS-сокрытие). Тот же
+  // общий strip, что и у runner-пути; string-guard = no-op для фрагментов без маркера.
+  const safePassages = passages.map((p) => ({
+    ...p,
+    questions_html: p.questions_html ? stripAnalysisLeak(p.questions_html) : null,
+  }));
+
+  return { test, passages: safePassages, questions } as ExamContent;
 }
 
 export function getExamContent(id: string): Promise<ExamContent | null> {

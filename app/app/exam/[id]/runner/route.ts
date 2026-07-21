@@ -6,6 +6,7 @@ import { getUser, isAdminProfile } from "@/lib/auth";
 import { retargetBridgeOrigin } from "@/lib/import/runner/bridge";
 import { forceRunnerMode } from "@/lib/import/runner/force-mode";
 import { polyfillRunnerStorage } from "@/lib/import/runner/runner-storage";
+import { stripAnalysisLeak } from "@/lib/import/runner/sanitize-runner";
 import {
   skinRunnerGate,
   skinRunnerBrand,
@@ -145,7 +146,15 @@ export async function GET(
     ? forceRunnerMode(skinned, att.mode, att.mode === "mock" ? minutes : null)
     : skinned;
 
-  return new Response(html, {
+  // Read-time анти-утечка: исторический runner_html (импортирован ДО ввода strip'а)
+  // несёт Inspera `[data-analysis]` разборы с правильным ответом прямо в DOM (скрыты
+  // лишь исходным CSS). Переимпорт как лечение недоступен — RegradeRequiredError при
+  // существующих попытках. Вырезаем на выдаче. ПОСЛЕ всех трансформов: их regex-якоря
+  // работают по исходным байтам runner_html, а не по cheerio-реэмиссии. string-guard
+  // внутри = байт-в-байт no-op для рядов без маркера (listening / non-Inspera reading).
+  const safe = stripAnalysisLeak(html);
+
+  return new Response(safe, {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",

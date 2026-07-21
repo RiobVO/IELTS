@@ -92,8 +92,43 @@ function blankFunction(src: string, name: string): string {
   return src.slice(0, m.index) + `function ${name}(){return 0;}` + src.slice(end);
 }
 
+/**
+ * Вырезает answer-reveal блоки `[data-analysis]` из DOM (Inspera Style источник,
+ * 2026-07-21). Эти элементы несут ПРАВИЛЬНЫЙ ОТВЕТ в тексте (`<strong>TRUE</strong>`
+ * и т.п.) и скрыты лишь исходным CSS (`.analysis{display:none}` / `.q-verbatim
+ * .analysis{display:none}`), а НЕ <script>-объектом — поэтому assertNoKeyLeak
+ * (сканирует только script) их не видит, а в браузере они читаются через view-source
+ * или отключение CSS.
+ *
+ * Критерий — АТРИБУТ `[data-analysis]`, НЕ класс `.analysis`. В reading-раннере каждый
+ * per-question разбор несёт `data-analysis="N"` (Inspera-фикстуры: 40/40 в reading.html,
+ * все 16 в reading-inspera.html, 40 в Antarctica sample — 41-е вхождение `data-analysis`
+ * там это JS-селектор `'.analysis[data-analysis="'+q+'"]'`, не DOM-элемент). А
+ * listening-раннер держит под
+ * ГОЛЫМ `.analysis` (без data-analysis) легитимный results-контейнер дашборда
+ * (#typeBreakdown / #partBreakdown), который его же JS заполняет в рантайме — снос по
+ * КЛАССУ сломал бы ВСЕ listening-раннеры. Атрибут самоописателен в разметке, поэтому одна
+ * функция работает и import-time (sanitizeRunner), и read-time (route.ts над runner_html,
+ * exam-content над questions_html) без знания секции.
+ *
+ * Работает и на полном документе (runner_html), и на фрагменте (questions_html):
+ * isDocument-флаг определяем по наличию `<html>` — иначе cheerio.load обернул бы фрагмент
+ * в `<html><head><body>` (порча questions_html) либо срезал бы doctype/head документа.
+ * Быстрый string-guard перед парсом: 200КБ runner_html на hot-path (route) не гоняет
+ * cheerio без маркера (listening + non-Inspera reading = байт-в-байт no-op). cheerio, а не
+ * regex — разметка reveal-блока держит вложенные strong/em, но именно эти блоки НЕ содержат
+ * вложенных div, так что удаление элемента по атрибуту точно и безопасно.
+ */
+export function stripAnalysisLeak(html: string): string {
+  if (!html.includes("data-analysis")) return html;
+  const isDocument = /<html[\s/>]/i.test(html);
+  const $ = cheerio.load(html, undefined, isDocument);
+  $("[data-analysis]").remove();
+  return $.html();
+}
+
 export function sanitizeRunner(html: string, opts: SanitizeOpts): string {
-  let out = html;
+  let out = stripAnalysisLeak(html);
 
   // 1. Вырезать ключи + band-функции
   for (const name of ALL_KEYS) out = blankObject(out, name);
