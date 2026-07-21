@@ -318,6 +318,8 @@ export async function parseListening(html: string): Promise<ParsedTest> {
 
   questions.sort((a, b) => a.number - b.number);
 
+  for (const q of questions) warnEmptyPrompt(q.number, q.promptHtml, q.qtype, warnings);
+
   const keyCount = Object.keys(key).length;
   if (keyCount !== questions.length) {
     warnings.push(
@@ -434,6 +436,26 @@ function resolvePartSections($: CheerioAPI, warnings: string[]) {
     return { el, order: nextSynthetic++, valid: false };
   });
   return { parts, malformed };
+}
+
+/**
+ * Тихая порча: вопрос доходит сюда с пустым/обрезанным prompt, если его собрали из
+ * незнакомой вёрстки — клон гэп-контейнера, не совпавшего ни с одним известным классом,
+ * даёт "" (а выделенный .stem/.mtext может отсутствовать). Ни gap-гейт (номер есть),
+ * ни empty_key (ключ есть) этого не ловят — только warning в общий поток. map_labelling
+ * подписывает позиции на плане и может нести prompt лишь визуально — исключён.
+ */
+const PROMPT_MIN_LEN = 4;
+function warnEmptyPrompt(
+  num: number,
+  promptHtml: string,
+  qtype: string,
+  warnings: string[],
+): void {
+  if (qtype === "map_labelling") return;
+  if (promptHtml.trim().length < PROMPT_MIN_LEN) {
+    warnings.push(`Q${num}: empty prompt`);
+  }
 }
 
 /** Build a ParsedQuestion with its answer routed from KEY (variants). */

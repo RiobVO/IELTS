@@ -326,6 +326,46 @@ describe("parseFullReading gap fixtures", () => {
   });
 });
 
+// Тихая порча (2026-07-21): matching-строка с ПУСТЫМ .q-text → prompt "". Вопрос
+// создаётся (номер из id, ключ есть, тип валиден), gap/empty_key/type-гейты молчат.
+// Warning `Q9: empty prompt` — единственный сигнал.
+const FOREIGN_EMPTY_PROMPT_FULL_HTML = `<!doctype html><html><head><title>Full Reading - Foreign</title></head>
+<body>
+  <section class="passage-section" data-part="1">
+    <div class="sectionRubric"><h2>Reading Passage 1</h2></div>
+    <div class="passage-content"><p>Body one.</p></div>
+  </section>
+  <section class="passage-section" data-part="2">
+    <div class="sectionRubric"><h2>Reading Passage 2</h2></div>
+    <div class="passage-content"><p>Body two.</p></div>
+  </section>
+  <div class="questions-section" data-part="2">
+    <table class="matching-table">
+      <tr id="question-9">
+        <td class="q-text"></td>
+        <td><input type="radio" name="q9" value="A"></td>
+        <td><input type="radio" name="q9" value="B"></td>
+      </tr>
+    </table>
+  </div>
+  <script>
+    const correctAnswers = { "9": "A" };
+    const questionTypes = { "9": "Matching Information" };
+    function getBand(s){ return s >= 1 ? 9 : 0; }
+  </script>
+</body></html>`;
+
+describe("parseFullReading — пустой prompt из чужой вёрстки даёт warning", () => {
+  it("вопрос создан, prompt пустой, тип валиден, но warning есть", async () => {
+    const t = await parseTest(FOREIGN_EMPTY_PROMPT_FULL_HTML);
+    const q9 = t.questions.find((q) => q.number === 9)!;
+    expect(q9).toBeDefined();
+    expect(q9.promptHtml.trim()).toBe("");
+    expect(q9.qtype).toBe("matching_info"); // тип НЕ unknown
+    expect(t.warnings).toContain("Q9: empty prompt");
+  });
+});
+
 const fullTemplate = sample("Full Test Template.html");
 describe.skipIf(!fullTemplate)("real sample — Full Test Template (40Q / 3 passages)", () => {
   it("3 пассажа / 40 вопросов с band-шкалой, каждый вопрос с ключом", async () => {

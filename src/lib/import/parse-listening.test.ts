@@ -278,6 +278,37 @@ describe("parseListening — категория по числу частей (BR
   });
 });
 
+// Тихая порча (2026-07-21): MCQ с ПУСТЫМ .stem → prompt "". Вопрос создаётся (номер из
+// data-q, ключ есть, тип mcq_single валиден), gap/empty_key-гейты молчат. Warning
+// `Q1: empty prompt` — единственный сигнал.
+const FOREIGN_EMPTY_PROMPT_LISTENING_HTML = `<!doctype html><html><head><title>IELTS Listening Foreign</title></head>
+<body>
+  <audio src="audio/foreign.mp3"></audio>
+  <section class="part" data-part="1">
+    <div class="part-banner">Part 1</div>
+    <p class="q-instruction">Choose the correct letter.</p>
+    <div class="mcq" data-q="1">
+      <p class="stem"></p>
+      <label><input type="radio" name="q1" value="A"> Alpha</label>
+      <label><input type="radio" name="q1" value="B"> Beta</label>
+    </div>
+  </section>
+  <script>
+    const KEY = { "1": ["A"] };
+  </script>
+</body></html>`;
+
+describe("parseListening — пустой prompt из чужой вёрстки даёт warning", () => {
+  it("вопрос создан, prompt пустой, тип mcq_single, но warning есть", async () => {
+    const t = await parseTest(FOREIGN_EMPTY_PROMPT_LISTENING_HTML);
+    const q1 = t.questions.find((q) => q.number === 1)!;
+    expect(q1).toBeDefined();
+    expect(q1.promptHtml.trim()).toBe("");
+    expect(q1.qtype).toBe("mcq_single");
+    expect(t.warnings).toContain("Q1: empty prompt");
+  });
+});
+
 const listening = sample("listening-test.html");
 describe.skipIf(!listening)("real sample — listening-test (40Q)", () => {
   it("4 части / 40 вопросов с аудио и band-шкалой, без предупреждений", async () => {
