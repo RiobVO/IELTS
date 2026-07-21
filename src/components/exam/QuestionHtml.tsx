@@ -3,6 +3,7 @@
 import {
   createContext,
   createElement,
+  Fragment,
   useContext,
   useEffect,
   useMemo,
@@ -76,6 +77,25 @@ function Slot({ q, qtype, value }: { q: number; qtype: string; value?: string })
   );
 }
 
+/** Ascending + deduped список чисел. Порядок отрисовки practice-аффордансов
+ *  verbatim-панели: слоты одного вопроса (radio-группа) дают дубли, разные вопросы
+ *  внутри блока — произвольный DOM-порядок; приводим к «1,2,3…» по номеру. */
+function orderUnique(nums: number[]): number[] {
+  return [...new Set(nums)].sort((a, b) => a - b);
+}
+
+/** Номера вопросов (data-q слотов) внутри top-level блока verbatim-панели —
+ *  куда монтировать аффордансы после этого блока (под таблицей/группой, каждый со
+ *  ссылкой на номер). */
+function slotNumbersIn(el: Element): number[] {
+  const nums: number[] = [];
+  for (const s of Array.from(el.querySelectorAll(".q-slot"))) {
+    const q = Number(s.getAttribute("data-q"));
+    if (Number.isFinite(q)) nums.push(q);
+  }
+  return orderUnique(nums);
+}
+
 function convert(node: ChildNode, key: string): ReactNode {
   if (node.nodeType === 3) return node.textContent; // text
   if (node.nodeType !== 1) return null;
@@ -103,35 +123,71 @@ export function QuestionHtml({
   onAnswer,
   onToggle,
   fallback,
+  renderAffordances,
 }: {
   html: string;
   answers: Record<string, string | string[]>;
   onAnswer: (n: number, v: string) => void;
   onToggle: (n: number, letter: string) => void;
   fallback: ReactNode;
+  /** Practice: рендер учебных аффордансов ОДНОГО вопроса (Check/Reveal/подсказки).
+   *  undefined в mock/non-practice → verbatim рисуется как прежде, без аффордансов.
+   *  Живёт в ExamRunner (владелец practice-стейта) — вызывается на каждом рендере
+   *  вне tree-мемо, поэтому вердикты/ответы всегда свежие. */
+  renderAffordances?: (questionNumber: number) => ReactNode;
 }) {
   // mounted-гейт: SSR и первый клиентский рендер = fallback (нет DOMParser на
   // сервере) → нет hydration-mismatch; после mount парсим и показываем verbatim.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const tree = useMemo(() => {
+  // Memo держит СТРУКТУРУ (verbatim-узлы + номера вопросов каждого top-level блока),
+  // зависит только от [html, mounted] — тик таймера её не пересобирает. Аффордансы
+  // НЕ внутри мемо (иначе вердикты/ответы застыли бы): монтируются в render ниже
+  // через renderAffordances. Инпуты слотов остаются живыми через Ctx.
+  const blocks = useMemo(() => {
     if (!mounted) return null;
     try {
       const doc = new DOMParser().parseFromString(`<body><div id="r">${html}</div></body>`, "text/html");
       const root = doc.getElementById("r");
       if (!root) return null;
-      const nodes = Array.from(root.childNodes).map((c, i) => convert(c, String(i)));
-      return nodes.length ? nodes : null;
+      const out = Array.from(root.childNodes).map((c, i) => ({
+        node: convert(c, String(i)),
+        // Аффордансы вешаем ПОСЛЕ каждого top-level блока (группа/таблица), по номерам
+        // слотов внутри него — не инлайном у слота: слот может быть ячейкой таблицы или
+        // одним из radio-группы (вставка сломала бы вёрстку / задублировала бы аффорданс).
+        numbers: c.nodeType === 1 ? slotNumbersIn(c as Element) : [],
+      }));
+      return out.length ? out : null;
     } catch {
       return null; // битый HTML → фоллбэк
     }
   }, [html, mounted]);
 
-  if (!mounted || tree == null) return <>{fallback}</>;
+  // Мемо значения контекста: без него каждый ре-рендер (например тик таймера родителя
+  // ExamRunner) создаёт новый объект → все Slot'ы ре-рендерятся, хотя ответы не менялись.
+  const ctxValue = useMemo<SlotCtx>(
+    () => ({ answers, onAnswer, onToggle }),
+    [answers, onAnswer, onToggle],
+  );
+
+  if (!mounted || blocks == null) return <>{fallback}</>;
   return (
-    <Ctx.Provider value={{ answers, onAnswer, onToggle }}>
+    <Ctx.Provider value={ctxValue}>
       <style>{Q_CSS}</style>
-      <div className="q-verbatim">{tree}</div>
+      <div className="q-verbatim">
+        {blocks.map((b, i) => (
+          <Fragment key={i}>
+            {b.node}
+            {renderAffordances && b.numbers.length > 0 && (
+              <div className="qa-cluster">
+                {b.numbers.map((n) => (
+                  <Fragment key={n}>{renderAffordances(n)}</Fragment>
+                ))}
+              </div>
+            )}
+          </Fragment>
+        ))}
+      </div>
     </Ctx.Provider>
   );
 }
@@ -183,6 +239,16 @@ const Q_CSS = `
 .q-verbatim .stem{display:flex;gap:8px;margin-bottom:10px;font-weight:600}
 .q-verbatim .materials-box,.q-verbatim .form-box,.q-verbatim .summary-wrap{margin:10px 0;padding:14px 16px;background:var(--surface-hover);border:1px solid var(--border);border-radius:8px}
 .q-verbatim .analysis{display:none}
+/* Practice-аффордансы (Check/Reveal/подсказки) монтируются кластером ПОД каждым
+   блоком вопросов. В verbatim нет карточки-номера как в атомизированном списке →
+   каждый пункт несёт свой заголовок «Question N» и якорь id (deep-link/навигатор).
+   Классы аффордансов (.exam-*) идут из READING_CSS шелла (общие для обоих путей);
+   их 39px-отступ под номер здесь не нужен (номер уже в .qa-num) — зануляем. */
+.q-verbatim .qa-cluster{display:flex;flex-direction:column;gap:10px;margin:6px 0 26px}
+.q-verbatim .qa-item{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-inset)}
+.q-verbatim .qa-num{margin-bottom:4px;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.q-verbatim .qa-item .exam-check,.q-verbatim .qa-item .exam-fmt-hint,.q-verbatim .qa-item .exam-strategy,.q-verbatim .qa-item .exam-wtl{padding-left:0}
+.q-verbatim .qa-item .exam-strategy-list{padding-left:22px}
 /* Широкие таблицы вопросов скроллятся сами вместо клиппинга всей панели —
    безусловно: одноколоночный (табовый) режим раннера живёт до 1024px
    (ExamRunner min-width:1024px), а этот фикс раньше был заперт в ≤430px и не
