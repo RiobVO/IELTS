@@ -61,6 +61,17 @@ describe("captureListeningPart — single MCQ / map-mcq", () => {
     const out = captureListeningPart(part(`<div class="mcq" data-q="11"><div class="stem">Q</div></div>`));
     expect(out).toBe("");
   });
+
+  it("radio с пустым value → fail-closed (незаполнимый вопрос, coverage прошёл бы по номеру)", () => {
+    const out = captureListeningPart(
+      part(
+        `<div class="mcq" data-q="11"><div class="stem">Q</div>` +
+          `<label><input type="radio" name="q11" value=""><span>A</span></label>` +
+          `<label><input type="radio" name="q11" value="B"><span>B</span></label></div>`,
+      ),
+    );
+    expect(out).toBe("");
+  });
 });
 
 describe("captureListeningPart — choose-TWO/THREE (.mcq.multi[data-qs])", () => {
@@ -174,6 +185,37 @@ describe("captureListeningPart — matching (.dropzone[data-q])", () => {
     );
     expect(out).toBe("");
   });
+
+  it("пустая буква чипа (data-letter='') → fail-closed", () => {
+    const out = captureListeningPart(
+      part(
+        `<div class="dd-wrap"><div class="match-row"><div class="mtext">X</div>` +
+          `<div class="dropzone" data-q="17"></div></div>` +
+          `<div class="chip-bank"><div class="chip" data-letter="">orphan</div></div></div>`,
+      ),
+    );
+    expect(out).toBe("");
+  });
+
+  it("вложенный в чип reveal (.analysis[data-analysis]) НЕ отмывается в label data-options (B1)", () => {
+    // findLeakMarkerToken пропускает [data-analysis] (санкционированный) — панель НЕ фейлится,
+    // поэтому синтез data-options реально исполняется; без textWithoutLeaks текст ключа осел бы
+    // в JSON опции ДО общей гигиены и пережил бы её.
+    const out = captureListeningPart(
+      part(
+        `<div class="dd-wrap"><div class="match-row"><div class="mtext">Prepping</div>` +
+          `<div class="dropzone" data-q="17"></div></div>` +
+          `<div class="chip-bank"><div class="chip" data-letter="A">well-organised` +
+          `<span class="analysis" data-analysis="1">Correct for Q17</span></div></div></div>`,
+      ),
+    );
+    expect(out).not.toBe("");
+    const $ = load(out, null, false);
+    const opts = JSON.parse($('.q-slot[data-q="17"]').attr("data-options") ?? "[]");
+    expect(opts).toEqual([{ v: "A", label: "well-organised" }]);
+    expect(out).not.toMatch(/Correct for Q17/);
+    expect(out).not.toMatch(/analysis/i);
+  });
 });
 
 describe("captureListeningPart — map labelling (.place-chip[data-q])", () => {
@@ -250,6 +292,33 @@ describe("captureListeningPart — leak-гигиена", () => {
     );
     expect(out).not.toContain("Part 1 banner");
     expect(questionsHtmlCoversAll(out, [1])).toBe(true);
+  });
+
+  it("вырезает aria-label/title источника (ключ в ЗНАЧЕНИИ атрибута, не имени)", () => {
+    const out = captureListeningPart(
+      part(
+        `<div class="mcq" data-q="1"><div class="stem" title="Correct answer: A" aria-label="The answer is A">Q</div>` +
+          `<label><input type="radio" name="q1" value="A"><span class="opt-letter">A</span> alpha</label></div>`,
+      ),
+    );
+    expect(out).not.toBe("");
+    expect(out).not.toMatch(/aria-label/i);
+    expect(out).not.toMatch(/title=/i);
+    expect(out).not.toMatch(/Correct answer/i);
+    expect(out).not.toMatch(/The answer is A/);
+    expect(out).toContain("alpha"); // легитимный видимый текст цел
+  });
+
+  it("вырезает answer-токены КЛАССА (частичные, мимо findLeakMarkerToken), легитимные токены цел", () => {
+    // class="form-box answerbox": 'answerbox' не цельный reveal-маркер (findLeakMarkerToken его
+    // не фейлит), но stripCapturedLeaks режет токен по /(answer|…)/i, оставляя 'form-box'.
+    const out = captureListeningPart(
+      part(`<div class="form-box answerbox"><div class="form-row">Name: <input class="gap" data-q="1"></div></div>`),
+    );
+    expect(out).not.toBe("");
+    expect(out).not.toMatch(/answerbox/i);
+    expect(out).toContain("form-box"); // легитимный класс раскладки сохранён
+    expect(out).toContain("Name:");
   });
 });
 

@@ -85,8 +85,10 @@ function __collect(){
     var radio = document.querySelector('input[name="q'+q+'"]:checked');
     if (radio){ a[q] = radio.value; continue; }
     // map labelling: чип отвечает за N, буква зоны — с ближайшего .map-dz-родителя
-    // (зеркалит getUserAnswer). Чип вне .map-dz (не размещён на карте) → ''.
-    var pc = document.querySelector('.place-chip[data-q="'+q+'"]');
+    // (зеркалит getUserAnswer). Сперва берём РАЗМЕЩЁННЫЙ чип (внутри .map-dz): при дубле
+    // (один в банке, один в зоне) голый querySelector взял бы первый (банковский) и вернул
+    // '' вместо буквы. Нет размещённого → любой чип: вне .map-dz (не размещён) → ''.
+    var pc = document.querySelector('.map-dz .place-chip[data-q="'+q+'"]') || document.querySelector('.place-chip[data-q="'+q+'"]');
     if (pc){ var zone = pc.closest('.map-dz'); a[q] = zone ? (zone.getAttribute('data-letter') || '') : ''; continue; }
     var dz = document.querySelector('.dropzone[data-q="'+q+'"]');
     if (dz){ a[q] = dz.getAttribute('data-value') || ''; continue; }

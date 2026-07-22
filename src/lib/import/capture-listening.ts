@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { findLeakMarkerToken, stripCapturedLeaks } from "./capture-sanitize";
+import { findLeakMarkerToken, stripCapturedLeaks, textWithoutLeaks } from "./capture-sanitize";
 import type { DropOption } from "./dnd-capture";
 
 /**
@@ -141,10 +141,13 @@ export function captureListeningPart(
       .toArray()
       .map((c) => ({
         v: ($(c).attr("data-letter") ?? "").trim(),
-        label: $(c).text().replace(/\s+/g, " ").trim(),
-      }))
-      .filter((o) => o.v);
-    if (chips.length === 0) {
+        // Текст из очищенного клона (B1): вложенный в чип reveal-узел (`.analysis` и пр.)
+        // не должен отмыться в label ДО общей гигиены.
+        label: textWithoutLeaks($(c)).replace(/\s+/g, " ").trim(),
+      }));
+    // Пустая буква чипа (data-letter="") = незаполнимая опция → fail-close (как прочие
+    // структурные дефекты), не тихий фильтр.
+    if (chips.length === 0 || chips.some((o) => !o.v)) {
       bad = true;
       return;
     }
@@ -156,28 +159,31 @@ export function captureListeningPart(
   // Опции — буквы зон .map-dz (aria-label как подпись). Саму карту-картинку
   // (.map-stage: base64-img + оверлеи) вырезаем ниже — без исходного CSS позиции
   // зон бессмысленны, а base64 раздул бы сохранённый HTML.
-  const mapOptions = dedupeByV(
-    root
-      .find(".map-dz[data-letter]")
-      .toArray()
-      .map((z) => {
-        const v = ($(z).attr("data-letter") ?? "").trim();
-        const label = ($(z).attr("aria-label") ?? v).replace(/\s+/g, " ").trim();
-        return { v, label: label || v };
-      })
-      .filter((o) => o.v),
-  );
+  const mapZones = root
+    .find(".map-dz[data-letter]")
+    .toArray()
+    .map((z) => {
+      const v = ($(z).attr("data-letter") ?? "").trim();
+      const label = ($(z).attr("aria-label") ?? v).replace(/\s+/g, " ").trim();
+      return { v, label: label || v };
+    });
+  // Пустая буква зоны (data-letter="") = незаполнимая опция → фейлим часть, но ТОЛЬКО
+  // когда её реально потребляет place-chip (проверка в цикле): стрэй-зона в не-map части
+  // не должна ложно фейлить панель.
+  const mapZonesHaveEmpty = mapZones.some((o) => !o.v);
+  const mapOptions = dedupeByV(mapZones.filter((o) => o.v));
   root.find(".place-chip[data-q]").each((_, el) => {
     if (bad) return;
     const $chip = $(el);
     if (!claim(parseNum($chip.attr("data-q")))) return;
-    if (mapOptions.length === 0) {
+    if (mapOptions.length === 0 || mapZonesHaveEmpty) {
       bad = true;
       return;
     }
     const line = $('<div class="lst-map-line"></div>');
-    const numTxt = $chip.find(".pc-num").text().trim();
-    const placeTxt = $chip.find(".pc-text").text().replace(/\s+/g, " ").trim();
+    // Текст номера/подписи — из очищенного клона (B1): вложенный reveal не отмывается.
+    const numTxt = textWithoutLeaks($chip.find(".pc-num")).trim();
+    const placeTxt = textWithoutLeaks($chip.find(".pc-text")).replace(/\s+/g, " ").trim();
     if (numTxt) line.append($('<span class="lst-map-num"></span>').text(numTxt));
     line.append($('<span class="lst-map-place"></span>').text(placeTxt));
     line.append(dropSlot(parseNum($chip.attr("data-q")), mapOptions));
@@ -207,6 +213,16 @@ export function captureListeningPart(
     if (radios.length === 0) {
       bad = true;
       return;
+    }
+    // Пустое/пробельное value radio → незаполнимый вопрос (слот с data-value="" пишет
+    // onAnswer(n,"")), хотя coverage-гейт прошёл бы по номеру блока → fail-close (как
+    // choose-TWO чекбоксы, что уже валидируют value). Значение слота храним НЕтриммленным —
+    // оно должно совпасть с answer_key байт-в-байт (валидируем лишь на пустоту).
+    for (const r of radios) {
+      if (!($(r).attr("value") ?? "").trim()) {
+        bad = true;
+        return;
+      }
     }
     for (const r of radios) {
       $(r).replaceWith(slot(n, "radio", $(r).attr("value") ?? ""));

@@ -67,6 +67,20 @@ export function findLeakMarkerToken($: CheerioAPI, root: Cheerio<AnyNode>): stri
 }
 
 /**
+ * Текст элемента с вырезанными leak-узлами (тот же набор `LEAK_NODES`, что удаляет
+ * `stripCapturedLeaks`) — для случаев, когда текст извлекается ДО общей гигиены (синтез
+ * drop-опций и подписей в `capture-listening`): источник мог вложить reveal-ответ прямо
+ * в чип/подпись (`<span class="analysis">Correct for Q27</span>`), и наивный `.text()`
+ * отмыл бы ключ в `data-options`/подпись — тот пережил бы поздний `stripCapturedLeaks`.
+ * Работает на КЛОНЕ — исходный DOM не мутирует (узлы ещё нужны последующим шагам).
+ */
+export function textWithoutLeaks(nodes: Cheerio<AnyNode>): string {
+  const clone = nodes.clone();
+  clone.find(LEAK_NODES).remove();
+  return clone.text();
+}
+
+/**
  * Единая leak-гигиена вопрос-панели: reading (`capture-questions`) и listening
  * (`capture-listening`) делят её, чтобы строгость анти-утечки ключа (BRIEF §6.1)
  * была ИДЕНТИЧНОЙ на обоих путях. Вырезает leak-узлы (`LEAK_NODES`) и вычищает
@@ -84,7 +98,15 @@ export function stripCapturedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void 
   root.find("*").each((_, el) => {
     if (!("attribs" in el)) return;
     for (const name of Object.keys(el.attribs)) {
-      if (/^on/i.test(name) || name === "style" || /(correct|answer|solution)/i.test(name)) {
+      if (
+        /^on/i.test(name) ||
+        name === "style" ||
+        /(correct|answer|solution)/i.test(name) ||
+        // aria-label/title/alt источника могут нести ключ прямым текстом значения, а не
+        // именем («aria-label="Correct answer: B"»); слоты, что синтезирует сам захват,
+        // aria/title/alt НЕ несут (их пишет рендерер QuestionHtml на клиенте) — режем безусловно.
+        /^(aria-label|title|alt)$/i.test(name)
+      ) {
         $(el).removeAttr(name);
       } else if (
         /^(href|src|xlink:href|formaction|action)$/i.test(name) &&
@@ -92,6 +114,16 @@ export function stripCapturedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void 
       ) {
         $(el).removeAttr(name);
       }
+    }
+    // class может нести ключ ЗНАЧЕНИЕМ токена (class="answer-key"/"correct-b"), а не только
+    // именем атрибута; findLeakMarkerToken ловит лишь цельные reveal-токены, частичные
+    // («correct-b») проскакивают. Вырезаем ТОЛЬКО матчащие токены, не весь class —
+    // легитимные стили таблиц/раскладки/слотов остаются (их токены под regex не попадают).
+    const cls = el.attribs["class"];
+    if (cls) {
+      const kept = cls.split(/\s+/).filter((t) => t && !/(correct|answer|solution|key)/i.test(t));
+      if (kept.length) $(el).attr("class", kept.join(" "));
+      else $(el).removeAttr("class");
     }
   });
 }
