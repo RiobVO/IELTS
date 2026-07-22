@@ -30,6 +30,9 @@ export function withinAudioCap(bytes: number): boolean {
   return bytes <= MAX_IMPORT_AUDIO_BYTES;
 }
 
+/** Онлайн-сжималка для actionable-отказов бота (работает с телефона). */
+export const AUDIO_COMPRESS_URL = "https://www.mp3smaller.com/ru/";
+
 /**
  * Actionable-сообщение боту (RU) при превышении лимита: сколько весит файл, каков
  * лимит и что делать (пережать до целевого битрейта и прислать заново).
@@ -37,6 +40,7 @@ export function withinAudioCap(bytes: number): boolean {
 export function audioTooLargeMessage(bytes: number): string {
   return (
     `Файл ${bytesToMb(bytes)} MB превышает лимит ${MAX_IMPORT_AUDIO_MB} MB — ` +
-    `пережми mp3: mono, 48 kbps, 32 kHz — и пришли снова.`
+    `сожми mp3 тут: ${AUDIO_COMPRESS_URL} (профиль: mono, 48 kbps, 32 kHz) ` +
+    `и пришли снова.`
   );
 }

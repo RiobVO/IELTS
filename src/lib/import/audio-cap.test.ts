@@ -30,7 +30,7 @@ describe("audioTooLargeMessage", () => {
     const msg = audioTooLargeMessage(12 * 1024 * 1024);
     expect(msg).toContain("12.0 MB");
     expect(msg).toContain(`${MAX_IMPORT_AUDIO_MB} MB`);
-    expect(msg).toMatch(/пережми mp3/);
+    expect(msg).toContain("https://www.mp3smaller.com/ru/");
     expect(msg).toMatch(/mono, 48 kbps, 32 kHz/);
     expect(msg).toMatch(/пришли снова/);
   });

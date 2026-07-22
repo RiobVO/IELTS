@@ -27,6 +27,7 @@ import {
   withinAudioCap,
   audioTooLargeMessage,
   MAX_IMPORT_AUDIO_MB,
+  AUDIO_COMPRESS_URL,
 } from "@/lib/import/audio-cap";
 import { audioObjectKey } from "@/lib/import/audio-key";
 
@@ -219,7 +220,7 @@ async function handleHtmlUpload(
     const isListening = r.hasAudio || /listening/i.test(r.title);
     const audioHint = r.audioTooLarge
       ? `\n🎧 Аудио в файле больше ${MAX_IMPORT_AUDIO_MB} MB и НЕ прикреплено — ` +
-        "пережми mp3 (mono, 48 kbps, 32 kHz) и пришли отдельным файлом."
+        `сожми mp3 тут: ${AUDIO_COMPRESS_URL} (mono, 48 kbps, 32 kHz) и пришли отдельным файлом.`
       : !r.hasAudio && isListening
         ? "\n🎧 Это Listening без аудио в файле — пришли mp3 следующим файлом."
         : r.hasAudio
