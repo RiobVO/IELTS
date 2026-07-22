@@ -108,6 +108,15 @@ describe("listening-client golden fixture — parseTest (atom-путь)", () => 
     expect(captured).not.toMatch(/transcript/i);
     expect(captured).not.toMatch(/class="analysis"/i);
     expect(captured).not.toMatch(/data-analysis/i);
+    // Общий паттерн answer-reveal атрибутов (data-correct="…"/data-answer="…"/…), а не
+    // только конкретные имена выше — ловит любой источник с иным неймингом.
+    expect(captured).not.toMatch(/[\w-]*(correct|answer|solution)[\w-]*\s*=\s*"/i);
+    // Конкретные ответы из KEY (Part 4 gap-заполнение), которых НЕТ в легитимном тексте
+    // вопросов — в отличие, например, от "cost" (легитимный заголовок колонки в Part 1,
+    // KEY[32] тоже содержит "tax", но "cost" как слово в разметке — не answer-leak).
+    for (const word of ["pollution", "diving", "vegan"]) {
+      expect(captured.toLowerCase()).not.toContain(word);
+    }
   });
 });
 
@@ -124,6 +133,11 @@ describe("listening-client golden fixture — mergeAtomization", () => {
 
     const dist = new Set(merged.parsed.questions.map((q) => q.qtype));
     expect(dist.has("mcq_multi")).toBe(true);
+    // Top-level questionTypes (персистится в content_item, каталог-фильтр) пересчитан из
+    // итоговых qtype после промоции — точный отсортированный набор, без mcq_single.
+    expect([...merged.parsed.questionTypes].sort()).toEqual(
+      ["flowchart_completion", "map_labelling", "mcq_multi", "note_completion", "table_completion"].sort(),
+    );
     // Все runner-mcq_single (Q11-14, Q21-26 — choose-TWO по разметке .mcq.multi) промотированы;
     // остальные типы (table/note/flowchart/map) остаются runner-семантикой.
     const byType: Record<string, number> = {};

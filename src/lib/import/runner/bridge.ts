@@ -55,7 +55,8 @@ function __collect(){
   return a;
 }`;
 
-// Listening getUserAnswer(q): gap → multi(checkbox) → radio → dropzone.
+// Listening getUserAnswer(q): gap → multi(checkbox) → radio → place-chip(map
+// labelling) → dropzone.
 // multi: чекбоксы в .mcq.multi[data-qs="N1,N2"] без name; выбранные буквы
 // СОРТИРУЮТСЯ и раздаются по позиции (letters[0]→первый q группы и т.д.) —
 // иначе text_accept-грейд по KEY[q] не сойдётся.
@@ -83,6 +84,10 @@ function __collect(){
     if (m !== null){ a[q] = m; continue; }
     var radio = document.querySelector('input[name="q'+q+'"]:checked');
     if (radio){ a[q] = radio.value; continue; }
+    // map labelling: чип отвечает за N, буква зоны — с ближайшего .map-dz-родителя
+    // (зеркалит getUserAnswer). Чип вне .map-dz (не размещён на карте) → ''.
+    var pc = document.querySelector('.place-chip[data-q="'+q+'"]');
+    if (pc){ var zone = pc.closest('.map-dz'); a[q] = zone ? (zone.getAttribute('data-letter') || '') : ''; continue; }
     var dz = document.querySelector('.dropzone[data-q="'+q+'"]');
     if (dz){ a[q] = dz.getAttribute('data-value') || ''; continue; }
     a[q] = '';
