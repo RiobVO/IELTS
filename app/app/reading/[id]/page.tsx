@@ -21,6 +21,7 @@ import { isUuid } from "@/lib/uuid";
 import { normalizePassageHtml } from "@/lib/reading/normalize-passage";
 import { neutralizeHeadingDrops } from "@/lib/reading/neutralize-heading-drops";
 import ExamRunner from "./ExamRunner";
+import ListeningPractice from "./ListeningPractice";
 
 export const dynamic = "force-dynamic";
 
@@ -79,12 +80,22 @@ export default async function ReadingTestPage({
   // (незакрытая попытка / была ли сдача) — per-user, считаются ВНЕ кэша, на каждый
   // запрос, параллельно с чтением контента. answer_key намеренно НЕ читается (в кэш
   // не попадает; не утекает до submit).
-  const [cached, profile, existing, attempted] = await Promise.all([
+  const [cached, profile, existing, attempted, [runnerRow]] = await Promise.all([
     getExamContent(id),
     getProfile(),
     findInProgressAttempt(user.id, id),
     hasSubmittedAttempt(user.id, id),
+    // Наличие runner_html — маршрутизация listening-practice на iframe-поверхность
+    // (тот же sandboxed раннер, что и mock). Только булев флаг, не сам HTML (~200КБ);
+    // отдельный лёгкий запрос, а не смена shape кэшированного getExamContent (иначе
+    // stale-кэш окно деплоя). Owner-path, несекретный факт.
+    db
+      .select({ has: sql<boolean>`${contentItem.runnerHtml} IS NOT NULL` })
+      .from(contentItem)
+      .where(eq(contentItem.id, id))
+      .limit(1),
   ]);
+  const hasRunner = !!runnerRow?.has;
   // getExamContent гейтит status='published' (owner-путь обходит RLS) → draft/
   // отсутствие = null, тот же гейт, что раньше давал anon-клиент.
   const isAdmin = isAdminProfile(profile);
@@ -267,6 +278,23 @@ export default async function ReadingTestPage({
   // bypass'ом, не расходом слота): forced false, иначе admin съел бы свой trial-
   // слот QA-прогоном черновика.
   const isTrial = !isDraftPreview && !meetsTier(userTier, test.tier_required as Tier);
+
+  // Listening-practice с runner_html → iframe-поверхность (тот же sandboxed раннер, что и
+  // mock, «точь-в-точь экзамен») + внешние practice-контролы (аудио-док + уверенность),
+  // вместо verbatim-панели ExamRunner. Атомизированный listening БЕЗ runner_html и reading
+  // (обе ветки) остаются на ExamRunner. Попытка/капы стартуют здесь тем же startAttempt
+  // (mode='practice'); аннотации/локатор атомизированному пути не нужны — их запросы
+  // пропускаем, поэтому отдельный startAttempt вместо общего batch ниже.
+  if (listeningSection && hasRunner && mode === "practice") {
+    const { attemptId } = await startAttempt(user.id, id, mode, isTrial, resume, userTier);
+    return (
+      <>
+        {isDraftPreview && <DraftPreviewBadge />}
+        <ListeningPractice attemptId={attemptId} contentItemId={id} questionCount={questionCount} />
+      </>
+    );
+  }
+
   const [{ attemptId, answers: savedAnswers, mode: attemptMode }, annotations, locatableRows] = await Promise.all([
     // `resume` из батча выше (с mock→practice конверсией admin-preview) — резюм без
     // повторного SELECT той же строки. userTier — авторитетная Basic-кап проверка
