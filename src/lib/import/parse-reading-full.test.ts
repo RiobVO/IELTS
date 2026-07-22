@@ -7,6 +7,7 @@ import { parseTest } from "./parse-test";
 import { parseRunner } from "./runner/parse-runner";
 import { mergeAtomization } from "./runner/atomize-merge";
 import { isUnresolvedQuestionTypeWarning, UNKNOWN_TYPE_FALLBACK } from "./question-types";
+import { questionsHtmlCoversAll } from "../exam/question-html-coverage";
 
 const sample = (name: string): string | null => {
   const p = fileURLToPath(new URL(`../../../samples/${name}`, import.meta.url));
@@ -651,6 +652,27 @@ describe("Inspera golden fixture — parseFullReading (committed file)", () => {
       "lanterns",
       "lantern",
     ]);
+  });
+
+  // DnD (Matching Headings p2 / Sentence Endings p3): после проводки drag-drop
+  // verbatim-захват КАЖДОГО пассажа покрывает ВСЕ его вопросы (drop-слоты + прочие),
+  // поэтому practice-verbatim гейт (questionsHtmlCoversAll) включается для всего теста.
+  it("DnD-пассажи получают questions_html с полным покрытием (drop-слоты)", () => {
+    for (const p of t.passages) {
+      const nums = t.questions.filter((x) => x.passageOrder === p.order).map((x) => x.number);
+      expect(questionsHtmlCoversAll(p.questionsHtml ?? "", nums)).toBe(true);
+    }
+    const p2 = t.passages.find((p) => p.order === 2)!.questionsHtml ?? "";
+    const p3 = t.passages.find((p) => p.order === 3)!.questionsHtml ?? "";
+    // headings → синтезированные строки; endings → drop-слоты в блоке
+    expect(p2).toContain("heading-match-lines");
+    expect(p2).toContain('data-qtype="drop"');
+    expect(p3).toContain('data-qtype="drop"');
+    // канон-значения в опциях (роман для headings, буква для endings)
+    const opts5 = JSON.parse(
+      /data-q="5" data-qtype="drop" data-options="([^"]*)"/.exec(p2)?.[1]?.replace(/&quot;/g, '"').replace(/&amp;/g, "&") ?? "[]",
+    );
+    expect(opts5.every((o: { v: string; label: string }) => o.v && o.label)).toBe(true);
   });
 
   // Анти-утечка (BRIEF §6.1): verbatim-захват вопрос-панели обязан вырезать .analysis-дивы

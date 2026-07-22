@@ -581,6 +581,17 @@ const PASSAGE_CSS = `
   float:left;font-family:var(--font-reading);font-size:3.4em;line-height:.82;font-weight:600;
   padding:.06em .12em 0 0;color:var(--brand);
 }
+/* Practice-verbatim: пассивная метка Matching-Headings (drop-зона нейтрализована,
+   вопрос рендерится select'ом в панели). Небольшой приглушённый номер-чип, без
+   интерактивного вида. */
+.bando-reading.editorial .heading-drop.hd-passive{
+  display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;
+  padding:0 8px;margin:0 0 6px;border:1px dashed var(--reading-rule);border-radius:var(--radius-full);
+  font-family:var(--font-ui);font-size:12px;font-weight:700;color:var(--reading-muted);
+  background:transparent;cursor:default;pointer-events:none;user-select:none;
+}
+.bando-reading.editorial .heading-drop.hd-passive .placeholder{color:inherit}
+.bando-reading.editorial .heading-drop-line{margin:0 0 4px}
 .bando-reading.editorial mark{background:var(--reading-mark);border-radius:3px;padding:0 .08em;cursor:pointer}
 .bando-reading.editorial mark[data-kind="note"]{
   background:var(--reading-note);border-bottom:2px solid color-mix(in oklab,var(--brand) 60%,transparent);

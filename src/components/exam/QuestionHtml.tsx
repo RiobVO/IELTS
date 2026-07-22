@@ -49,10 +49,54 @@ const SKIP = new Set([
   "object", "embed", "noscript", "textarea", "select", "audio", "video",
 ]);
 
-function Slot({ q, qtype, value }: { q: number; qtype: string; value?: string }) {
+/** Парс `data-options` drop-слота (Matching Headings / Sentence Endings). Битый
+ *  JSON или неверная форма → null (рендерер покажет инертный плейсхолдер, не крашит
+ *  всю панель). Экспортируется для юнит-теста. */
+export function parseDropOptions(raw?: string): { v: string; label: string }[] | null {
+  if (!raw) return null;
+  try {
+    const arr: unknown = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    const out = arr.filter(
+      (o): o is { v: string; label: string } =>
+        !!o &&
+        typeof (o as { v?: unknown }).v === "string" &&
+        (o as { v: string }).v.length > 0 &&
+        typeof (o as { label?: unknown }).label === "string",
+    );
+    return out.length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+function Slot({ q, qtype, value, options }: { q: number; qtype: string; value?: string; options?: string }) {
   const ctx = useContext(Ctx);
   if (!ctx) return null;
   const a = ctx.answers[String(q)];
+  if (qtype === "drop") {
+    const opts = parseDropOptions(options);
+    // Битые опции → инертный плейсхолдер (панель не падает).
+    if (!opts) return <span className="q-drop-broken" style={S.dropBroken} aria-hidden />;
+    const cur = typeof a === "string" ? a : "";
+    return (
+      <select
+        value={cur}
+        onChange={(e) => ctx.onAnswer(q, e.target.value)}
+        aria-label={`Answer for question ${q}`}
+        data-q={q}
+        className="q-drop"
+        style={S.select(!!cur)}
+      >
+        <option value="">— Select —</option>
+        {opts.map((o) => (
+          <option key={o.v} value={o.v}>
+            {o.v} — {o.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
   if (qtype === "radio") {
     const sel = a === value;
     return (
@@ -103,7 +147,7 @@ function convert(node: ChildNode, key: string): ReactNode {
   if (el.classList && el.classList.contains("q-slot")) {
     const q = Number(el.getAttribute("data-q"));
     if (!Number.isFinite(q)) return null;
-    return <Slot key={key} q={q} qtype={el.getAttribute("data-qtype") ?? "text"} value={el.getAttribute("data-value") ?? undefined} />;
+    return <Slot key={key} q={q} qtype={el.getAttribute("data-qtype") ?? "text"} value={el.getAttribute("data-value") ?? undefined} options={el.getAttribute("data-options") ?? undefined} />;
   }
   const tag = el.tagName.toLowerCase();
   if (SKIP.has(tag)) return null;
@@ -200,6 +244,19 @@ const S = {
     background: "var(--surface-raised)", color: "var(--text-primary)",
     fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, outline: "none",
   }),
+  select: (filled: boolean): CSSProperties => ({
+    display: "inline-block", minWidth: 130, maxWidth: 340, height: 32, margin: "0 5px",
+    padding: "0 8px", verticalAlign: "baseline", borderRadius: "var(--radius-sm)",
+    border: `1px solid ${filled ? "var(--brand)" : "var(--border-strong)"}`,
+    background: "var(--surface-raised)", color: "var(--text-primary)",
+    fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, outline: "none",
+    cursor: "pointer",
+  }),
+  dropBroken: {
+    display: "inline-block", minWidth: 90, height: 30, margin: "0 5px", verticalAlign: "baseline",
+    borderRadius: "var(--radius-sm)", border: "1px dashed var(--border-strong)",
+    background: "var(--surface-inset)",
+  } as CSSProperties,
   radio: (sel: boolean): CSSProperties => ({
     width: 20, height: 20, flex: "none", borderRadius: "50%", padding: 0, cursor: "pointer",
     border: `2px solid ${sel ? "var(--brand)" : "var(--border-strong)"}`,
@@ -239,6 +296,20 @@ const Q_CSS = `
 .q-verbatim .stem{display:flex;gap:8px;margin-bottom:10px;font-weight:600}
 .q-verbatim .materials-box,.q-verbatim .form-box,.q-verbatim .summary-wrap{margin:10px 0;padding:14px 16px;background:var(--surface-hover);border:1px solid var(--border);border-radius:8px}
 .q-verbatim .analysis{display:none}
+/* Matching Headings: банк-референс (список заголовков) остаётся read-only. */
+.q-verbatim .heading-bank,.q-verbatim .ending-bank{margin:10px 0;padding:12px 14px;background:var(--surface-hover);border:1px solid var(--border);border-radius:8px}
+.q-verbatim .heading-bank-title,.q-verbatim .ending-bank-title{font-weight:800;margin:0 0 8px}
+.q-verbatim .heading-slot,.q-verbatim .ending-slot{margin:6px 0}
+.q-verbatim .heading-token,.q-verbatim .ending-token{padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface-raised);font-size:var(--text-sm)}
+/* Синтезированные строки Matching Headings (Question N — Paragraph X: [select]). */
+.q-verbatim .heading-match-lines{margin:12px 0}
+.q-verbatim .heading-match-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:0 0 12px;border-bottom:1px solid var(--border)}
+.q-verbatim .hm-num{font-weight:800;min-width:26px}
+.q-verbatim .hm-para{font-weight:600;color:var(--text-secondary)}
+/* Sentence Endings: строка утверждения + select концовки. */
+.q-verbatim .ending-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;padding:0 0 12px;border-bottom:1px solid var(--border)}
+.q-verbatim .q-num-box{font-weight:800}
+.q-verbatim .ending-stmt{font-weight:600}
 /* Practice-аффордансы (Check/Reveal/подсказки) монтируются кластером ПОД каждым
    блоком вопросов. В verbatim нет карточки-номера как в атомизированном списке →
    каждый пункт несёт свой заголовок «Question N» и якорь id (deep-link/навигатор).
@@ -262,8 +333,12 @@ const Q_CSS = `
 }
 /* Тап-таргеты ≥44px на touch — не только узкие телефоны (планшеты/landscape тоже). */
 @media (pointer:coarse){
-  .q-verbatim .q-text{min-height:44px!important}
+  .q-verbatim .q-text,.q-verbatim .q-drop{min-height:44px!important}
   .q-verbatim .q-hit{position:relative}
   .q-verbatim .q-hit::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
+}
+@media (max-width:430px){
+  /* iOS зумит вьюпорт при фокусе контрола с font-size <16px. */
+  .q-verbatim .q-drop{font-size:16px!important;max-width:100%!important}
 }
 `;

@@ -1,6 +1,11 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import { captureQuestions } from "./capture-questions";
+import {
+  extractEndingBank,
+  extractHeadingBank,
+  extractHeadingTargets,
+} from "./dnd-capture";
 import { extractData, extractFunctionTable, isExecutableScriptType } from "./extract-js";
 import {
   canonQuestionType,
@@ -84,14 +89,19 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
     const content = $el.find(".passage-content, .passageContent");
     const bodyHtml = ((content.length ? content.html() : $el.html()) ?? "").trim();
     const pTitle = $el.find(".sectionRubric h2").first().text().trim() || `Passage ${order}`;
+    // DnD: heading-цели — в теле этого пассажа ($el); банки концовок/заголовков — в
+    // секции вопросов той же части.
+    const qSection = $(
+      `.questions-section[data-part='${order}'], .questions-part[data-part='${order}']`,
+    );
     const questionsHtml =
       captureQuestions(
-        $(
-          `.questions-section[data-part='${order}'] .question, ` +
-            `.questions-part[data-part='${order}'] .question`,
-        )
-          .toArray()
-          .map((b) => $.html(b)),
+        qSection.find(".question").toArray().map((b) => $.html(b)),
+        {
+          headingTargets: extractHeadingTargets($, $el),
+          headingBank: extractHeadingBank($, qSection),
+          endingBank: extractEndingBank($, qSection),
+        },
       ) || null;
     passages.push({ order, title: pTitle, bodyHtml, audioPath: null, questionsHtml });
   });

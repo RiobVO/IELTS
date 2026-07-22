@@ -9,6 +9,10 @@ import { fileURLToPath } from "node:url";
 // create/poll actions), которые обязаны жить в app/ (Next.js routing); `e2e/**` —
 // чистый предикат stateful-e2e гейта (e2e/stateful-gate.ts), тестируем без Playwright.
 export default defineConfig({
+  // tsconfig держит `jsx: preserve` (Next.js сам трансформит) — для co-located тестов
+  // React-компонентов (напр. QuestionHtml drop-слот в jsdom) переключаем oxc (движок
+  // трансформа Vitest 4) на automatic-runtime, иначе vite не распарсит JSX. Тест-only.
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "scripts/**/*.test.ts", "app/**/*.test.ts", "e2e/**/*.test.ts"],
