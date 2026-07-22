@@ -14,7 +14,7 @@ export default async function ListeningCatalog({
       section="listening"
       categories={LISTENING_CATEGORIES}
       title="Listening"
-      sub="Выбери тест. Фильтруй по части и типам вопросов."
+      sub="Pick your weak spot. Filter by part and by question type."
       filterBase="/app/listening"
       sp={sp}
     />
