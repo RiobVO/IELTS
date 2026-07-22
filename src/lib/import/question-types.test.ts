@@ -88,6 +88,35 @@ describe("canonQuestionType", () => {
       confident: false,
     });
   });
+
+  // Listening-контекст: голое «Matching» — официальный тип (атом-парсер даёт matching_features
+  // для тех же вопросов структурно), поэтому секционно переопределяется в confident-канон.
+  // Reading-поведение (дефолтный/явный section="reading") остаётся байт-в-байт прежним.
+  it("листенинг: голое «Matching» → matching_features, confident=true", () => {
+    expect(canonQuestionType("Matching", "listening")).toEqual({
+      type: "matching_features",
+      confident: true,
+    });
+  });
+
+  it("листенинг: декорированный вариант «Matching» (секц-префикс/скобочный хвост) тоже confident", () => {
+    expect(canonQuestionType("Matching (Part 3)", "listening")).toEqual({
+      type: "matching_features",
+      confident: true,
+    });
+    expect(canonQuestionType("Section 3 — Matching", "listening")).toEqual({
+      type: "matching_features",
+      confident: true,
+    });
+  });
+
+  it("ридинг: голое «Matching» остаётся low-confidence (section по умолчанию/явно reading)", () => {
+    expect(canonQuestionType("Matching")).toEqual({ type: "matching_info", confident: false });
+    expect(canonQuestionType("Matching", "reading")).toEqual({
+      type: "matching_info",
+      confident: false,
+    });
+  });
 });
 
 // QTYPE hard-block (2026-07-11, BACKLOG W2-3b): и пустой, и непустой нераспознанный qtype

@@ -112,8 +112,14 @@ export interface CanonResult {
   confident: boolean;
 }
 
-/** Map a raw label to the canon enum. confident=false => flag for admin review. */
-export function canonQuestionType(label: string): CanonResult {
+export type QuestionTypeSection = "reading" | "listening";
+
+/** Map a raw label to the canon enum. confident=false => flag for admin review.
+ *  section по умолчанию "reading" — байт-в-байт прежнее поведение вызывающих без аргумента. */
+export function canonQuestionType(
+  label: string,
+  section: QuestionTypeSection = "reading",
+): CanonResult {
   const key = norm(label);
   if (!key) return { type: null, confident: false };
   if (EXACT[key]) return { type: EXACT[key], confident: true };
@@ -123,6 +129,13 @@ export function canonQuestionType(label: string): CanonResult {
   // суффиксы (single)/(multiple), поэтому здесь strip их не искажает.
   const stripped = norm(stripDecorations(label));
   if (stripped !== key && EXACT[stripped]) return { type: EXACT[stripped], confident: true };
+  // Listening-only: голое «Matching» (и его декорированные варианты после strip) — это
+  // стандартный официальный тип, а атом-парсер (parse-listening.ts) для тех же вопросов
+  // структурно даёт matching_features. В reading тот же голый ярлык осознанно остаётся
+  // low-confidence через CONTAINS ниже — там matching многозначен (headings/info/features).
+  if (section === "listening" && (key === "matching" || stripped === "matching")) {
+    return { type: "matching_features", confident: true };
+  }
   for (const [needle, type] of CONTAINS) {
     if (key.includes(needle)) return { type, confident: false };
   }

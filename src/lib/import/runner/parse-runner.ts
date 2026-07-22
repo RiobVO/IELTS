@@ -276,7 +276,11 @@ async function parseListeningRunner(html: string): Promise<RunnerParseResult> {
         extractRangeBuilderTable(src, "QTYPE")
         ?? (await extractData<Record<string, string>>(src, "questionTypes"))
         ?? {};
-  const bandScale = await extractFunctionTable(scriptBlocks(html), "band", 0, 40);
+  // Band-таблица объявляется под именем "band"; часть источников зовёт её
+  // calculateIELTSScore (тот же фолбэк, что и в parse-listening.ts).
+  const bandScale =
+    (await extractFunctionTable(scriptBlocks(html), "band", 0, 40)) ??
+    (await extractFunctionTable(scriptBlocks(html), "calculateIELTSScore", 0, 40));
 
   // Фильтр положительных целых (P4): нечисловые ключи "q1" не создают NaN-вопросов.
   const numbers = Object.keys(key)
@@ -296,7 +300,7 @@ async function parseListeningRunner(html: string): Promise<RunnerParseResult> {
     // label и непустой нераспознанный дают разный текст, но оба блокируют publish
     // (QTYPE hard-block, 2026-07-11) — см. question-types.ts.
     const rawType = types[String(n)] ?? "";
-    const canon = canonQuestionType(rawType);
+    const canon = canonQuestionType(rawType, "listening");
     if (canon.type === null) {
       warnings.push(rawType.trim() === "" ? blankTypeWarning(n) : unknownTypeWarning(n, rawType));
     } else if (!canon.confident) {
