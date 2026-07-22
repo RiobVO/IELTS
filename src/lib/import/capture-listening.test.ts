@@ -216,6 +216,33 @@ describe("captureListeningPart — matching (.dropzone[data-q])", () => {
     expect(out).not.toMatch(/Correct for Q17/);
     expect(out).not.toMatch(/analysis/i);
   });
+
+  it("data-analysis ПРЯМО на .chip (корневой leak-узел) — текст ключа не в label (B1 root)", () => {
+    // textWithoutLeaks чистит потомков find()'ом; корневой .chip с data-analysis должен
+    // исключаться отдельно (.not) — иначе его текст отмылся бы в option-label.
+    const out = captureListeningPart(
+      part(
+        `<div class="dd-wrap"><div class="match-row"><div class="mtext">Prepping</div>` +
+          `<div class="dropzone" data-q="17"></div></div>` +
+          `<div class="chip-bank"><div class="chip" data-letter="A">safe</div>` +
+          `<div class="chip" data-letter="B" data-analysis="1">Correct-for-Q17</div></div></div>`,
+      ),
+    );
+    expect(out).not.toBe("");
+    expect(out).not.toMatch(/Correct-for-Q17/);
+  });
+
+  it("чип БЕЗ data-letter → fail-closed (обход fail-close отсутствующим атрибутом)", () => {
+    const out = captureListeningPart(
+      part(
+        `<div class="dd-wrap"><div class="match-row"><div class="mtext">X</div>` +
+          `<div class="dropzone" data-q="17"></div></div>` +
+          `<div class="chip-bank"><div class="chip" data-letter="A">a</div>` +
+          `<div class="chip">no-letter</div></div></div>`,
+      ),
+    );
+    expect(out).toBe("");
+  });
 });
 
 describe("captureListeningPart — map labelling (.place-chip[data-q])", () => {
@@ -230,7 +257,7 @@ describe("captureListeningPart — map labelling (.place-chip[data-q])", () => {
         `</div></div></div>`,
     );
 
-  it(".place-chip → строка с drop-слотом; карта-картинка вырезана", () => {
+  it(".place-chip → строка с drop-слотом; карта-картинка вырезана; подпись опции = буква (не aria-label)", () => {
     const out = captureListeningPart(
       mapPart(
         [
@@ -248,15 +275,57 @@ describe("captureListeningPart — map labelling (.place-chip[data-q])", () => {
     const $ = load(out, null, false);
     expect($('.q-slot[data-qtype="drop"][data-q="15"]').length).toBe(1);
     const opts = JSON.parse($('.q-slot[data-q="15"]').attr("data-options") ?? "[]");
+    // Зоны-точки карты без видимого текста → подпись падает на саму букву; aria-label
+    // источника («Building A») в синтез НЕ копируется (мог бы нести ключ).
     expect(opts).toEqual([
-      { v: "A", label: "Building A" },
-      { v: "B", label: "Building B" },
+      { v: "A", label: "A" },
+      { v: "B", label: "B" },
     ]);
+    expect(out).not.toContain("Building A");
     // подпись места сохранена, base64-картинка и .map-dz вырезаны
     expect(out).toContain("Exhibition");
     expect(out).not.toMatch(/data:image/);
     expect(out).not.toContain("map-dz");
     expect(out).not.toContain("place-chip");
+  });
+
+  it("aria-label зоны с ключом НЕ попадает в option-label (синтез из видимого текста)", () => {
+    const out = captureListeningPart(
+      mapPart([[15, "Exhibition"]], [["A", "Correct answer: A"], ["B", "Building B"]]),
+    );
+    expect(out).not.toBe("");
+    const $ = load(out, null, false);
+    const opts = JSON.parse($('.q-slot[data-q="15"]').attr("data-options") ?? "[]");
+    expect(opts).toEqual([
+      { v: "A", label: "A" },
+      { v: "B", label: "B" },
+    ]);
+    expect(out).not.toMatch(/Correct answer/i);
+  });
+
+  it("data-analysis ПРЯМО на .pc-text (корневой leak-узел) — текст ключа не в подписи (B1 root)", () => {
+    const out = captureListeningPart(
+      part(
+        `<div class="map-dd"><div class="map-stage">` +
+          `<div class="map-dz" data-letter="A" aria-label="A"></div></div>` +
+          `<div class="place-bank"><div class="place-chip" data-q="15">` +
+          `<span class="pc-num">15</span><span class="pc-text" data-analysis="1">Correct-for-Q15</span></div></div></div>`,
+      ),
+    );
+    expect(out).not.toBe("");
+    expect(out).not.toMatch(/Correct-for-Q15/);
+  });
+
+  it("зона без data-letter → fail-closed (обход fail-close отсутствующим атрибутом)", () => {
+    const out = captureListeningPart(
+      part(
+        `<div class="map-dd"><div class="map-stage">` +
+          `<div class="map-dz" data-letter="A" aria-label="A"></div>` +
+          `<div class="map-dz" aria-label="B"></div></div>` + // без data-letter
+          `<div class="place-bank"><div class="place-chip" data-q="15"><span class="pc-text">X</span></div></div></div>`,
+      ),
+    );
+    expect(out).toBe("");
   });
 
   it("нет зон карты → fail-closed", () => {
@@ -309,16 +378,45 @@ describe("captureListeningPart — leak-гигиена", () => {
     expect(out).toContain("alpha"); // легитимный видимый текст цел
   });
 
-  it("вырезает answer-токены КЛАССА (частичные, мимо findLeakMarkerToken), легитимные токены цел", () => {
-    // class="form-box answerbox": 'answerbox' не цельный reveal-маркер (findLeakMarkerToken его
-    // не фейлит), но stripCapturedLeaks режет токен по /(answer|…)/i, оставляя 'form-box'.
+  it("канон-точная вычистка класса: легитимный .map-answers (DAY6 map-mcq grid) СОХРАНЯЕТСЯ", () => {
+    // Подстрочный regex снёс бы 'map-answers'/'answered'/'answer-input'; канон-точное
+    // сравнение (mapanswers ∉ набора) их сохраняет — реальная разметка DAY6.
     const out = captureListeningPart(
-      part(`<div class="form-box answerbox"><div class="form-row">Name: <input class="gap" data-q="1"></div></div>`),
+      part(
+        `<div class="map-answers"><div class="mcq map-mcq" data-q="11"><div class="stem">Q</div>` +
+          `<label><input type="radio" name="q11" value="A"><span class="opt-letter">A</span></label>` +
+          `<label><input type="radio" name="q11" value="B"><span class="opt-letter">B</span></label></div></div>`,
+      ),
     );
     expect(out).not.toBe("");
-    expect(out).not.toMatch(/answerbox/i);
-    expect(out).toContain("form-box"); // легитимный класс раскладки сохранён
-    expect(out).toContain("Name:");
+    expect(questionsHtmlCoversAll(out, [11])).toBe(true);
+    expect(out).toContain("map-answers");
+  });
+
+  it("канон-точная вычистка: голые токены 'answer'/'key' режутся, легитимный 'answered' цел", () => {
+    // 'answer'/'key' мимо findLeakMarkerToken (не в его наборе) → доходят до вычистки и
+    // режутся канон-точно; 'answered' (канон answered) остаётся.
+    const out = captureListeningPart(
+      part(`<div class="answer key answered"><input class="gap" data-q="1"></div>`),
+    );
+    expect(out).not.toBe("");
+    const $ = load(out, null, false);
+    const tokens = ($("div").first().attr("class") ?? "").split(/\s+/);
+    expect(tokens).toContain("answered");
+    expect(tokens).not.toContain("answer");
+    expect(tokens).not.toContain("key");
+  });
+
+  it("defense-in-depth: атрибут источника со значением-ответом (data-note='Correct answer: B') снят", () => {
+    const out = captureListeningPart(
+      part(
+        `<div class="mcq" data-q="1" data-note="Correct answer: B"><div class="stem">Q</div>` +
+          `<label><input type="radio" name="q1" value="A">A</label></div>`,
+      ),
+    );
+    expect(out).not.toBe("");
+    expect(out).not.toMatch(/data-note/i);
+    expect(out).not.toMatch(/Correct answer/i);
   });
 });
 

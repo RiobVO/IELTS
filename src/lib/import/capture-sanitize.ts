@@ -38,6 +38,30 @@ const LEAK_MARKER_TOKENS = new Set(
 );
 
 /**
+ * Токены класса, вычищаемые из ОСТАВШИХСЯ узлов (`stripCapturedLeaks`) — узел прошёл
+ * fail-closed детектор, но всё ещё несёт reveal-класс. Сравнение ТОЧНОЕ по канон-форме
+ * (тот же `canonToken`, что у `findLeakMarkerToken` — консистентность), НЕ подстрокой:
+ * `answer-key`/`correctAnswer` умирают, а легитимные корпус-классы `map-answers`
+ * (DAY6 map-mcq grid), `answered`, `answer-input` (канон `mapanswers`/`answered`/
+ * `answerinput` ∉ набора) — выживают. Подстрочный regex ошибочно сносил бы их.
+ */
+const CLASS_LEAK_TOKENS = new Set(
+  ["answer", "answers", "answer-key", "correct", "correct-answer", "solution", "key", "reveal", "analysis"].map(
+    canonToken,
+  ),
+);
+
+/**
+ * Значение атрибута, несущее ответ прямым текстом (`data-note="Correct answer: B"`,
+ * `title="Solution: 42"`) — defense-in-depth поверх вычистки имён/aria: любой ОСТАВШИЙСЯ
+ * атрибут источника с таким значением снимается целиком. Наши синтезируемые слот-атрибуты
+ * (`SYNTH_SLOT_ATTRS`) исключены — их значения (буква/JSON опций) построены из уже
+ * очищенного видимого текста и легитимны.
+ */
+const ANSWER_VALUE_RE = /correct\s*answer|answer\s*[:=]|solution/i;
+const SYNTH_SLOT_ATTRS = new Set(["data-q", "data-qtype", "data-value", "data-options"]);
+
+/**
  * Fail-closed детектор утечки ключа в захваченной панели: возвращает первый найденный
  * подозрительный маркер (class-токен или значение id, в исходном виде — для warning),
  * либо null. Санкционированный `[data-analysis]`-блок и его потомков пропускаем — их
@@ -77,7 +101,10 @@ export function findLeakMarkerToken($: CheerioAPI, root: Cheerio<AnyNode>): stri
 export function textWithoutLeaks(nodes: Cheerio<AnyNode>): string {
   const clone = nodes.clone();
   clone.find(LEAK_NODES).remove();
-  return clone.text();
+  // find() ищет только потомков — сам корневой узел селекции может быть leak-узлом
+  // (data-analysis/.analysis прямо на .pc-text/.chip), поэтому корни, матчащие LEAK_NODES,
+  // исключаем отдельно (иначе их текст «отмылся» бы в подпись/опцию, пережив общую гигиену).
+  return clone.not(LEAK_NODES).text();
 }
 
 /**
@@ -98,6 +125,7 @@ export function stripCapturedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void 
   root.find("*").each((_, el) => {
     if (!("attribs" in el)) return;
     for (const name of Object.keys(el.attribs)) {
+      const value = el.attribs[name];
       if (
         /^on/i.test(name) ||
         name === "style" ||
@@ -110,18 +138,22 @@ export function stripCapturedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void 
         $(el).removeAttr(name);
       } else if (
         /^(href|src|xlink:href|formaction|action)$/i.test(name) &&
-        /^\s*(javascript|data|vbscript):/i.test(el.attribs[name] ?? "")
+        /^\s*(javascript|data|vbscript):/i.test(value ?? "")
       ) {
+        $(el).removeAttr(name);
+      } else if (!SYNTH_SLOT_ATTRS.has(name) && value != null && ANSWER_VALUE_RE.test(value)) {
+        // defense-in-depth: значение любого прочего атрибута источника несёт ответ прямым
+        // текстом (data-note="Correct answer: B") — снимаем. Свои слот-атрибуты исключены.
         $(el).removeAttr(name);
       }
     }
-    // class может нести ключ ЗНАЧЕНИЕМ токена (class="answer-key"/"correct-b"), а не только
-    // именем атрибута; findLeakMarkerToken ловит лишь цельные reveal-токены, частичные
-    // («correct-b») проскакивают. Вырезаем ТОЛЬКО матчащие токены, не весь class —
-    // легитимные стили таблиц/раскладки/слотов остаются (их токены под regex не попадают).
+    // class может нести ключ ЗНАЧЕНИЕМ токена (class="answer-key"/"correctAnswer"), а не
+    // только именем атрибута; findLeakMarkerToken ловит цельные reveal-токены до этого шага,
+    // здесь дочищаем по ТОЧНОМУ канон-набору (не подстрокой — иначе легитимный `map-answers`
+    // умер бы). Режем лишь матчащие токены, легитимные стили раскладки/слотов сохраняются.
     const cls = el.attribs["class"];
     if (cls) {
-      const kept = cls.split(/\s+/).filter((t) => t && !/(correct|answer|solution|key)/i.test(t));
+      const kept = cls.split(/\s+/).filter((t) => t && !CLASS_LEAK_TOKENS.has(canonToken(t)));
       if (kept.length) $(el).attr("class", kept.join(" "));
       else $(el).removeAttr("class");
     }

@@ -78,6 +78,10 @@ export function captureListeningPart(
     const seen = new Set<string>();
     return opts.filter((o) => (seen.has(o.v) ? false : (seen.add(o.v), true)));
   };
+  // Буква опции (чип концовки / зона карты) — структурный токен ответа: ровно один
+  // символ A–Z/a–z/0–9. Пустая/отсутствующая/многосимвольная (в т.ч. отмытый в data-letter
+  // текст ответа) → часть fail-close'ится, а не молча теряет/протаскивает опцию.
+  const validLetter = (v: string) => /^[A-Za-z0-9]$/.test(v);
 
   // --- 1) choose-TWO/THREE (.mcq.multi[data-qs]) — до одиночных чекбоксов/радио ---
   // Все чекбоксы блока делят group_key; сервер грейдит каждого члена (ExamRunner
@@ -136,7 +140,9 @@ export function captureListeningPart(
     const $dz = $(el);
     if (!claim(parseNum($dz.attr("data-q")))) return;
     const scope = $dz.closest(".dd-wrap");
-    const chipSel = ".chip-bank .chip[data-letter], .chip[data-letter]";
+    // Селектор БЕЗ фильтра по [data-letter]: чип без атрибута иначе просто не попал бы в
+    // проверку (слот создался бы, гейт прошёл) — перечисляем все .chip и валидируем букву.
+    const chipSel = ".chip-bank .chip, .chip";
     const chips = (scope.length ? scope.find(chipSel) : root.find(chipSel))
       .toArray()
       .map((c) => ({
@@ -145,9 +151,9 @@ export function captureListeningPart(
         // не должен отмыться в label ДО общей гигиены.
         label: textWithoutLeaks($(c)).replace(/\s+/g, " ").trim(),
       }));
-    // Пустая буква чипа (data-letter="") = незаполнимая опция → fail-close (как прочие
-    // структурные дефекты), не тихий фильтр.
-    if (chips.length === 0 || chips.some((o) => !o.v)) {
+    // Отсутствующая/пустая/невалидная буква чипа = незаполнимая или обфусцированная опция
+    // → fail-close (как прочие структурные дефекты), не тихий фильтр.
+    if (chips.length === 0 || chips.some((o) => !validLetter(o.v))) {
       bad = true;
       return;
     }
@@ -156,27 +162,30 @@ export function captureListeningPart(
   if (bad) return "";
 
   // --- 3) map labelling: .place-chip[data-q] → строка «N место [select]» ---
-  // Опции — буквы зон .map-dz (aria-label как подпись). Саму карту-картинку
-  // (.map-stage: base64-img + оверлеи) вырезаем ниже — без исходного CSS позиции
-  // зон бессмысленны, а base64 раздул бы сохранённый HTML.
+  // Опции — буквы зон .map-dz. Саму карту-картинку (.map-stage: base64-img + оверлеи)
+  // вырезаем ниже — без исходного CSS позиции зон бессмысленны, а base64 раздул бы HTML.
+  // Селектор БЕЗ [data-letter] (зона без атрибута иначе обошла бы проверку); подпись зоны —
+  // ТОЛЬКО из очищенного видимого текста, aria-label источника НЕ используем (он мог бы
+  // нести «Correct answer: A» и отмылся бы в option-label — синтезируемый нами вывод не
+  // должен содержать значений атрибутов источника, кроме структурной буквы).
   const mapZones = root
-    .find(".map-dz[data-letter]")
+    .find(".map-dz")
     .toArray()
     .map((z) => {
       const v = ($(z).attr("data-letter") ?? "").trim();
-      const label = ($(z).attr("aria-label") ?? v).replace(/\s+/g, " ").trim();
+      const label = textWithoutLeaks($(z)).replace(/\s+/g, " ").trim();
       return { v, label: label || v };
     });
-  // Пустая буква зоны (data-letter="") = незаполнимая опция → фейлим часть, но ТОЛЬКО
-  // когда её реально потребляет place-chip (проверка в цикле): стрэй-зона в не-map части
-  // не должна ложно фейлить панель.
-  const mapZonesHaveEmpty = mapZones.some((o) => !o.v);
-  const mapOptions = dedupeByV(mapZones.filter((o) => o.v));
+  // Отсутствующая/пустая/невалидная буква зоны → фейлим часть, но ТОЛЬКО когда её реально
+  // потребляет place-chip (проверка в цикле): стрэй-зона в не-map части не должна ложно
+  // фейлить панель.
+  const mapZonesInvalid = mapZones.some((o) => !validLetter(o.v));
+  const mapOptions = dedupeByV(mapZones.filter((o) => validLetter(o.v)));
   root.find(".place-chip[data-q]").each((_, el) => {
     if (bad) return;
     const $chip = $(el);
     if (!claim(parseNum($chip.attr("data-q")))) return;
-    if (mapOptions.length === 0 || mapZonesHaveEmpty) {
+    if (mapOptions.length === 0 || mapZonesInvalid) {
       bad = true;
       return;
     }
