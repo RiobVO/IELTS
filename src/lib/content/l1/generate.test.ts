@@ -107,6 +107,14 @@ describe("generateL1ForPassage", () => {
     await expect(generateL1ForPassage(passageInput)).rejects.toThrow();
   });
 
+  it("не ретраит не-JSON ответ, даже если его текст выглядит транзиентом", async () => {
+    // SyntaxError от JSON.parse цитирует вход — «UNAVAILABLE» в тексте модели не
+    // должен уводить детерминированный сбой в ретрай (парсинг живёт вне ретрая).
+    generateContent.mockResolvedValue({ text: "UNAVAILABLE" });
+    await expect(generateL1ForPassage(passageInput)).rejects.toThrow();
+    expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
   it("requests JSON with a responseSchema and a maxOutputTokens cap", async () => {
     generateContent.mockResolvedValue({ text: JSON.stringify(validResponse) });
     await generateL1ForPassage(passageInput);
@@ -149,6 +157,35 @@ describe("withTransientRetry", () => {
       }, NO_DELAYS),
     ).rejects.toThrow(/503/);
     expect(calls).toBe(3); // 1 + 2 ретрая
+  });
+
+  it("числовой ApiError.status (408) — транзиент, ретраится", async () => {
+    class FakeApiError extends Error {
+      status = 408;
+    }
+    let calls = 0;
+    const result = await withTransientRetry(async () => {
+      calls++;
+      if (calls === 1) throw new FakeApiError("Request Timeout");
+      return "ok";
+    }, NO_DELAYS);
+    expect(result).toBe("ok");
+    expect(calls).toBe(2);
+  });
+
+  it("числовой status 400 — НЕ транзиент, не ретраится", async () => {
+    class FakeApiError extends Error {
+      status = 400;
+    }
+    let calls = 0;
+    await expect(
+      withTransientRetry(async () => {
+        calls++;
+        // message с «UNAVAILABLE» не должен перебивать числовой не-транзиентный статус
+        throw new FakeApiError("thinkingBudget invalid; UNAVAILABLE mentioned in body");
+      }, NO_DELAYS),
+    ).rejects.toThrow(/thinkingBudget/);
+    expect(calls).toBe(1);
   });
 
   it("сетевой fetch failed — тоже транзиент", async () => {
