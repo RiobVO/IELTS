@@ -250,7 +250,7 @@ const S: Record<string, React.CSSProperties> = {
   toggleBtn: { display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 18px", border: "none", borderRadius: "var(--radius-full)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer" },
   saveTag: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, color: "var(--success-text)", background: "var(--success-subtle)", padding: "2px 7px", borderRadius: "var(--radius-full)" },
 
-  plans: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18, alignItems: "start", maxWidth: 920, margin: "0 auto" },
+  plans: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 18, alignItems: "start", maxWidth: 920, margin: "0 auto" },
   ribbon: { display: "inline-flex", alignItems: "center", gap: 5, background: "var(--brand)", color: "var(--text-on-brand)", fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", padding: "5px 12px", borderRadius: "var(--radius-full)", boxShadow: "0 3px 0 0 var(--brand-edge)" },
   planName: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--text-primary)" },
   tagline: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", minHeight: 38, lineHeight: 1.4 },
