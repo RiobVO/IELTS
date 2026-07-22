@@ -5,7 +5,9 @@ import { memo, useCallback, useEffect, useRef, useState, useTransition } from "r
 import { categoryLabel } from "@/lib/labels";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
-import { AudioPlayer } from "./AudioPlayer";
+import { AudioPlayer } from "@/components/exam/AudioPlayer";
+import { ExamTimer } from "@/components/exam/ExamTimer";
+import { QuestionNavigator } from "@/components/exam/QuestionNavigator";
 import { saveProgress, submitAttempt } from "./actions";
 
 interface Question {
@@ -25,50 +27,6 @@ function fmt(sec: number): string {
   const s = Math.max(0, Math.floor(sec));
   const m = Math.floor(s / 60);
   return `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-}
-
-/**
- * ExamTimer — серверно-авторитетный отсчёт. Спокойный по умолчанию; warn ≤5мин,
- * error (с мягким миганием) ≤1мин. Цифры mono, тонкий рейл показывает израсходованное
- * время. Без durationSeconds (нет лимита) — спокойный счёт вверх по elapsed, без рейла.
- * Перенос 1:1 с design-drop ExamTimer.
- */
-function ExamTimer({ remaining, total, elapsed }: { remaining: number | null; total: number | null; elapsed: number }) {
-  const hasCountdown = remaining != null && total != null;
-  const secs = hasCountdown ? remaining : elapsed;
-  const critical = hasCountdown && remaining <= 60;
-  const warning = hasCountdown && !critical && remaining <= 300;
-  const tone = critical ? "var(--error)" : warning ? "var(--warn)" : "var(--text-primary)";
-  const rail = critical ? "var(--error)" : warning ? "var(--warn)" : "var(--brand)";
-  const ratio = hasCountdown && total ? Math.max(0, Math.min(1, remaining / total)) : 0;
-
-  return (
-    <div
-      role="timer"
-      aria-label={hasCountdown ? "Time remaining" : "Time elapsed"}
-      style={{
-        position: "relative", display: "inline-flex", alignItems: "center", gap: 10,
-        padding: "9px 14px", background: "var(--surface-raised)",
-        border: `1px solid ${critical ? "var(--error)" : warning ? "var(--warn)" : "var(--border)"}`,
-        borderRadius: "var(--radius-md)", overflow: "hidden",
-        boxShadow: critical ? "var(--glow-brand)" : "var(--shadow-xs)",
-      }}
-    >
-      <Icon name="clock" size={18} style={{ color: tone }} />
-      <span
-        style={{
-          fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
-          fontSize: "var(--text-lg)", fontWeight: 500, letterSpacing: "-0.02em",
-          color: tone, animation: critical ? "nine-blink 1s var(--ease-in-out) infinite" : "none",
-        }}
-      >
-        {fmt(secs)}
-      </span>
-      {hasCountdown && (
-        <span style={{ position: "absolute", left: 0, bottom: 0, height: 2, width: `${ratio * 100}%`, background: rail, transition: "width 1s linear, background-color var(--duration-base) var(--ease-standard)" }} />
-      )}
-    </div>
-  );
 }
 
 export default function ExamRunner({
@@ -98,6 +56,18 @@ export default function ExamRunner({
   const [current, setCurrent] = useState(questions[0]?.number ?? 1);
   const [pending, startSubmit] = useTransition();
   const qScrollRef = useRef<HTMLDivElement>(null);
+
+  // Listening: раннер владеет <audio> и часами; AudioPlayer — контролируемый presentational.
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioCur, setAudioCur] = useState(0);
+  const [audioDur, setAudioDur] = useState(0);
+  const toggleAudio = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) void a.play();
+    else a.pause();
+  };
 
   useEffect(() => {
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
@@ -142,8 +112,13 @@ export default function ExamRunner({
   const isListening = !!audioSrc;
   const meta = `${categoryLabel(category)} · ${questions.length} questions`;
 
+  const navQuestions = questions.map((q) => ({
+    number: q.number,
+    answered: !!answers[String(q.number)]?.trim(),
+    flagged: !!flags[String(q.number)],
+  }));
   const nav = (
-    <NavStrip questions={questions} answers={answers} flags={flags} current={current} onJump={jump} />
+    <QuestionNavigator questions={navQuestions} current={current} onJump={jump} columns={10} />
   );
   const answeredCounter = (
     <span style={S.counter}>
@@ -165,7 +140,13 @@ export default function ExamRunner({
           <div style={S.topMeta}>{meta}</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
-          <ExamTimer remaining={remaining} total={durationSeconds} elapsed={elapsed} />
+          {durationSeconds != null && remaining != null ? (
+            <ExamTimer remainingSeconds={remaining} totalSeconds={durationSeconds} />
+          ) : (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", background: "var(--surface-raised)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "var(--text-lg)", fontWeight: 500, color: "var(--text-primary)" }}>
+              <Icon name="clock" size={18} style={{ color: "var(--text-muted)" }} /> {fmt(elapsed)}
+            </span>
+          )}
           <Button trailingIcon="arrow-right" onClick={submit} loading={pending}>
             Submit
           </Button>
@@ -175,10 +156,32 @@ export default function ExamRunner({
       {isListening ? (
         <>
           {/* Audio banner (BRIEF §4.3) — bando single-pass player: waveform, no
-              rewind/seek (waveform not interactive), «Plays once» badge. */}
+              rewind/seek (waveform not interactive), «Plays once» badge. Раннер
+              владеет <audio>, AudioPlayer контролируемый. */}
           <div style={S.audioBar}>
             <div style={{ maxWidth: 720, margin: "0 auto" }}>
-              {audioSrc && <AudioPlayer src={audioSrc} />}
+              {audioSrc && (
+                <>
+                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                  <audio
+                    ref={audioRef}
+                    src={audioSrc}
+                    preload="metadata"
+                    onLoadedMetadata={(e) => setAudioDur(e.currentTarget.duration || 0)}
+                    onTimeUpdate={(e) => setAudioCur(e.currentTarget.currentTime)}
+                    onPlay={() => setAudioPlaying(true)}
+                    onPause={() => setAudioPlaying(false)}
+                    onEnded={() => setAudioPlaying(false)}
+                    style={{ display: "none" }}
+                  />
+                  <AudioPlayer
+                    progress={audioDur > 0 ? audioCur / audioDur : 0}
+                    playing={audioPlaying}
+                    totalSeconds={audioDur}
+                    onTogglePlay={toggleAudio}
+                  />
+                </>
+              )}
             </div>
           </div>
 
@@ -243,60 +246,6 @@ export default function ExamRunner({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function NavStrip({
-  questions,
-  answers,
-  flags,
-  current,
-  onJump,
-}: {
-  questions: Question[];
-  answers: Record<string, string>;
-  flags: Record<string, boolean>;
-  current: number;
-  onJump: (n: number) => void;
-}) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 6 }}>
-      {questions.map((q) => {
-        const n = q.number;
-        const isAnswered = !!answers[String(n)]?.trim();
-        const isFlagged = !!flags[String(n)];
-        const active = n === current;
-        let bg = "transparent",
-          fg = "var(--text-muted)",
-          ring = "inset 0 0 0 1.5px var(--border)";
-        if (isAnswered) {
-          bg = "var(--surface-hover)";
-          fg = "var(--text-primary)";
-          ring = "inset 0 0 0 1.5px var(--border-strong)";
-        }
-        if (isFlagged) {
-          bg = "var(--warn-subtle)";
-          fg = "var(--warn-text)";
-          ring = "inset 0 0 0 1.5px var(--warn)";
-        }
-        if (active) {
-          bg = "var(--brand)";
-          fg = "var(--text-on-brand)";
-          ring = "none";
-        }
-        return (
-          <button
-            key={n}
-            onClick={() => onJump(n)}
-            aria-label={`Question ${n}`}
-            style={{ position: "relative", aspectRatio: "1/1", border: "none", borderRadius: 9, background: bg, color: fg, boxShadow: ring, fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 500, cursor: "pointer", transition: "var(--transition-colors)" }}
-          >
-            {n}
-            {isFlagged && <span style={{ position: "absolute", top: 2, right: 2, width: 4, height: 4, borderRadius: "50%", background: "var(--warn)" }} />}
-          </button>
-        );
-      })}
     </div>
   );
 }
