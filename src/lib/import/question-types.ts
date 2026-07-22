@@ -62,6 +62,13 @@ const EXACT: Record<string, QuestionType> = {
   // «Match each statement with the correct researcher, A-E» — сопоставление людей
   // с утверждениями = features; generic CONTAINS "matching" уводил бы в matching_info.
   matchingresearcher: "matching_features",
+  // «Matching People» (Inspera-канон клиента) — та же семантика, что matchingresearcher:
+  // люди↔утверждения = features; generic CONTAINS "matching" уводил в matching_info.
+  matchingpeople: "matching_features",
+  // «Matching Paragraph(s)» — «какой абзац содержит информацию» = matching_info; до этого
+  // падал в тот же generic-фоллбэк low-confidence и шумел на ревью-экране.
+  matchingparagraph: "matching_info",
+  matchingparagraphs: "matching_info",
   flowchartcompletion: "flowchart_completion",
   flowchartcompletion2: "flowchart_completion",
   tablecompletion: "table_completion",

@@ -28,6 +28,9 @@ describe("canonQuestionType", () => {
     ["Notes Completion", "note_completion"],
     ["Classification", "matching_features"], // спец-ремап классификации
     ["Matching Researcher", "matching_features"], // сопоставление людей с утверждениями — features, не info
+    ["Matching People", "matching_features"], // Inspera-канон клиента: люди↔утверждения — features, не info
+    ["Matching Paragraph", "matching_info"], // Inspera-канон: «какой абзац содержит…» = matching_info
+    ["Matching Paragraphs", "matching_info"],
     ["Flowchart Completion", "flowchart_completion"],
     ["Table Completion", "table_completion"],
     ["Diagram Label Completion", "diagram_label"],
