@@ -714,9 +714,9 @@ export default function Home() {
           </div>
           <div>
             <h4>Company</h4>
-            <a href="#">About</a>
-            <a href="#">Privacy</a>
-            <a href="#">Terms</a>
+            <a href="/about">About</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
           </div>
         </div>
         <div className="wrap copy">© 2026 bando · Stop guessing your band. · *Illustrative — pilot cohort.</div>
