@@ -277,6 +277,32 @@ describe("captureListeningPart — reveal-marker fail-closed (B1)", () => {
     expect(leaks).toEqual(["correct"]);
   });
 
+  // Нормализация: регистр + стиль разделителей не должны обходить детектор.
+  it.each([
+    ["Correct-Answer"],
+    ["correctAnswer"],
+    ["correct_answer"],
+    ["ANSWER-KEY"],
+  ])("class-вариант '%s' → fail-closed + onLeak(исходный токен)", (cls) => {
+    const leaks: string[] = [];
+    const out = captureListeningPart(
+      part(`<input class="gap" data-q="1"><div class="${cls}">PIZZA</div>`),
+      (t) => leaks.push(t),
+    );
+    expect(out).toBe("");
+    expect(leaks).toEqual([cls]);
+  });
+
+  it("reveal-маркер под id (без class) → fail-closed", () => {
+    const leaks: string[] = [];
+    const out = captureListeningPart(
+      part(`<input class="gap" data-q="1"><div id="correct-answer">Correct answer: PIZZA</div>`),
+      (t) => leaks.push(t),
+    );
+    expect(out).toBe("");
+    expect(leaks).toEqual(["correct-answer"]);
+  });
+
   it("санкционированный [data-analysis] НЕ триггерит fail-closed (штатный стрип)", () => {
     const leaks: string[] = [];
     const out = captureListeningPart(
@@ -288,12 +314,13 @@ describe("captureListeningPart — reveal-marker fail-closed (B1)", () => {
     expect(out).not.toMatch(/analysis/i);
   });
 
-  it("легитимные классы реального корпуса (cstat answered / map-answers / answer-input) НЕ триггерят", () => {
+  it("легитимные class/id реального корпуса (cstat answered / map-answers / answer-input) НЕ триггерят", () => {
     const leaks: string[] = [];
     const out = captureListeningPart(
       part(
         `<div class="cstat answered">1</div><div class="cstat unanswered">2</div>` +
           `<div class="map-answers">grid</div><span class="answer-input">x</span>` +
+          `<div id="map-answers"></div><div id="answered"></div><div id="answer-input"></div>` +
           `<input class="gap" data-q="1">`,
       ),
       (t) => leaks.push(t),

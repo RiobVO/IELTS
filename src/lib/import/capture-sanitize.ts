@@ -18,42 +18,47 @@ const LEAK_NODES =
   "script, style, link, meta, iframe, object, embed, noscript, form, button";
 
 /**
- * Reveal-маркеры ответа по CLASS-ТОКЕНАМ — источник может прятать ключ не только в
- * санкционированном `[data-analysis]` (Inspera-канон), но и под чужим классом
- * (`<div class="correct-answer">Correct answer: …</div>`). Сравнение СТРОГО по токенам
- * класс-листа (split по whitespace, точное равенство), НЕ подстрокой: иначе легитимные
- * `cstat answered`/`map-answers`/`answer-input` реального корпуса дали бы ложные срабатывания.
+ * Канон-форма токена для сравнения: нижний регистр без разделителей `-`/`_`
+ * (`Correct-Answer`/`correctAnswer`/`ANSWER_KEY` → `correctanswer`/`answerkey`). Даёт
+ * устойчивость к регистру и стилю разделителей, оставаясь сравнением ТОКЕН-НА-ТОКЕН,
+ * а не подстрокой: `map-answers`→`mapanswers`, `answer-input`→`answerinput`,
+ * `answered` не равны ни одному канон-токену (ложных срабатываний нет).
  */
-const LEAK_CLASS_TOKENS = new Set([
-  "analysis",
-  "correct",
-  "correct-answer",
-  "answer-key",
-  "solution",
-  "reveal",
-]);
+const canonToken = (t: string) => t.toLowerCase().replace(/[-_]/g, "");
+
+/**
+ * Reveal-маркеры ответа — источник может прятать ключ не только в санкционированном
+ * `[data-analysis]` (Inspera-канон), но и под чужим class/id
+ * (`<div class="correct-answer">`/`<div id="correct-answer">Correct answer: …</div>`).
+ * Набор храним в канон-форме (см. `canonToken`); сравнение по цельным токенам класс-листа
+ * и по значению id, НЕ подстрокой.
+ */
+const LEAK_MARKER_TOKENS = new Set(
+  ["analysis", "correct", "correct-answer", "answer-key", "solution", "reveal"].map(canonToken),
+);
 
 /**
  * Fail-closed детектор утечки ключа в захваченной панели: возвращает первый найденный
- * подозрительный class-токен (или null). Санкционированный `[data-analysis]`-блок и его
- * потомков пропускаем — их штатно вырезает `stripCapturedLeaks` (и read-time route.ts);
- * любой ДРУГОЙ элемент с reveal-токеном = чужой/обфусцированный маркер → вызывающий
- * возвращает пустую панель + warning, вся часть уходит в атомизированный фоллбэк.
- * Тихое удаление (как у `stripCapturedLeaks`) здесь опасно: могло бы вырезать легитимный
- * контент и скрыть проблему, а fail-closed безопасен по построению (атомизация не
- * использует raw HTML). См. блокер B1.
+ * подозрительный маркер (class-токен или значение id, в исходном виде — для warning),
+ * либо null. Санкционированный `[data-analysis]`-блок и его потомков пропускаем — их
+ * штатно вырезает `stripCapturedLeaks` (и read-time route.ts); любой ДРУГОЙ элемент с
+ * reveal-маркером = чужой/обфусцированный ключ → вызывающий возвращает пустую панель +
+ * warning, вся часть уходит в атомизированный фоллбэк. Тихое удаление (как у
+ * `stripCapturedLeaks`) здесь опасно: могло бы вырезать легитимный контент и скрыть
+ * проблему, а fail-closed безопасен по построению (атомизация не использует raw HTML).
+ * См. блокер B1.
  */
-export function findLeakClassToken($: CheerioAPI, root: Cheerio<AnyNode>): string | null {
+export function findLeakMarkerToken($: CheerioAPI, root: Cheerio<AnyNode>): string | null {
   let token: string | null = null;
   root.find("*").each((_, el) => {
     if (token || !("attribs" in el)) return;
     // Известная легитимная структура — санкционированный Inspera reveal (сам блок + дети).
     if ($(el).closest("[data-analysis]").length > 0) return;
-    const cls = el.attribs["class"];
-    if (!cls) return;
-    for (const t of cls.split(/\s+/)) {
-      if (t && LEAK_CLASS_TOKENS.has(t)) {
-        token = t;
+    // class — цельные токены класс-листа; id — единое значение. Оба сверяем в канон-форме.
+    const candidates = [...(el.attribs["class"]?.split(/\s+/) ?? []), el.attribs["id"] ?? ""];
+    for (const c of candidates) {
+      if (c && LEAK_MARKER_TOKENS.has(canonToken(c))) {
+        token = c;
         return;
       }
     }

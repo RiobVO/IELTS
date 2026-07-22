@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
-import { findLeakClassToken, stripCapturedLeaks } from "./capture-sanitize";
+import { findLeakMarkerToken, stripCapturedLeaks } from "./capture-sanitize";
 import type { CaptureDnd, DropOption } from "./dnd-capture";
 
 /**
@@ -212,10 +212,10 @@ export function captureQuestions(
     $(el).removeAttr("draggable").removeAttr("tabindex").removeAttr("role");
   });
 
-  // Fail-closed на reveal-маркер ответа под чужим классом (вне `[data-analysis]`, B1):
+  // Fail-closed на reveal-маркер ответа под чужим class/id (вне `[data-analysis]`, B1):
   // тихий стрип мог бы убить легитимный контент и скрыть утечку — уводим пассаж в
   // атомизацию и сигналим ревью-экрану через onLeak.
-  const leak = findLeakClassToken($, root);
+  const leak = findLeakMarkerToken($, root);
   if (leak) {
     onLeak?.(leak);
     return "";
