@@ -1362,7 +1362,21 @@ export default function ExamRunner({
               <div style={S.sheetHead}>
                 <span style={S.sheetHint}>{mode === "practice" ? "Practice — pause, seek, or replay the recording as you work." : "Answer as you listen — the recording plays once."}</span>
               </div>
-              {questionList}
+              {/* Verbatim-панель listening (та же проводка, что reading-ветка): сервер
+                  отдаёт questionsHtml лишь когда coverage-гейт покрыл все вопросы части,
+                  иначе — атомизированный fallback. Practice → аффордансы, mock → undefined. */}
+              {questionsHtml ? (
+                <QuestionHtml
+                  html={questionsHtml}
+                  answers={answers}
+                  onAnswer={set}
+                  onToggle={toggle}
+                  fallback={questionList}
+                  renderAffordances={isPractice ? renderAffordances : undefined}
+                />
+              ) : (
+                questionList
+              )}
             </div>
           </div>
         </>

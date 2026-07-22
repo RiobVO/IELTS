@@ -152,3 +152,22 @@ describe("QuestionHtml — choose-TWO group-anchor", () => {
     expect(container.textContent).toContain("AFF-24");
   });
 });
+
+// Listening verbatim (проводка fix 0 в ExamRunner): capture-listening отдаёт те же
+// q-slot-типы (text/radio/checkbox/drop/group-anchor), что и reading-захват — одна и та
+// же QuestionHtml обслуживает обе секции. Проверяем, что каждый listening-механизм
+// проходит через ветку Slot и рендерит интерактивный контрол (а не сваливается в fallback).
+describe("QuestionHtml — listening q-slot типы", () => {
+  it("gap(text) / radio / map-drop рендерятся как интерактивные контролы", () => {
+    const html =
+      `<div class="form-box"><span class="q-slot" data-q="1" data-qtype="text"></span></div>` +
+      `<div class="mcq"><span class="q-slot" data-q="2" data-qtype="radio" data-value="A"></span>` +
+      `<span class="q-slot" data-q="2" data-qtype="radio" data-value="B"></span></div>` +
+      `<div class="lst-map-line"><span class="q-slot" data-q="15" data-qtype="drop" data-options='[{"v":"A","label":"Building A"}]'></span></div>`;
+    const container = mount(html, vi.fn());
+    expect(container.querySelector("input.q-text")).toBeTruthy();
+    expect(container.querySelectorAll('[role="radio"]')).toHaveLength(2);
+    expect(container.querySelector("select.q-drop")).toBeTruthy();
+    expect(container.textContent).not.toContain("FALLBACK");
+  });
+});
