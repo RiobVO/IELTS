@@ -169,7 +169,7 @@ export function AuthScreen({ error, message, refCode, next }: AuthScreenProps) {
                   </div>
                 </div>
                 <div className="auth-rise" style={{ textAlign: "right", marginTop: 10, animationDelay: "260ms" }}>
-                  <a href="#" onClick={(e) => e.preventDefault()} style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-link)" }}>Forgot password?</a>
+                  <a href="/auth/reset" style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-link)" }}>Forgot password?</a>
                 </div>
                 <div className="auth-rise" style={{ marginTop: 18, animationDelay: "300ms" }}>
                   <Button size="lg" fullWidth trailingIcon="arrow-right" type="submit">Log in</Button>
