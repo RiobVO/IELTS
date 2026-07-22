@@ -15,8 +15,12 @@ export const getUser = cache(async () => {
   return user;
 });
 
-/** The current user's profile row (or null). Read under RLS (own row only). */
-export async function getProfile() {
+/**
+ * The current user's profile row (or null). Read under RLS (own row only).
+ * Request-memoized via React `cache()` — страница и общий каркас (AppShell)
+ * делят один запрос profile вместо двух.
+ */
+export const getProfile = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -28,7 +32,7 @@ export async function getProfile() {
     .eq("id", user.id)
     .single();
   return data;
-}
+});
 
 /** Redirects to /auth if not signed in; otherwise returns the user. */
 export async function requireUser() {
