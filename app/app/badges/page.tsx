@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { AppShell } from "../_AppShell";
+import { Icon, type IconName } from "@/components/core/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +32,7 @@ export default async function BadgesPage() {
 
   const badges = (badgeData ?? []) as BadgeRow[];
   const earned = (earnedData ?? []) as UserBadgeRow[];
-
-  const earnedMap = new Map<string, string>(
-    earned.map((e) => [e.badge_id, e.earned_at]),
-  );
+  const earnedMap = new Map<string, string>(earned.map((e) => [e.badge_id, e.earned_at]));
 
   // Earned first, then locked; stable within each group by source order.
   const sorted = [...badges].sort((a, b) => {
@@ -44,85 +42,86 @@ export default async function BadgesPage() {
   });
 
   return (
-    <main style={S.page}>
+    <AppShell active="badges">
       <div style={S.wrap}>
-        <Link href="/app" style={S.back}>
-          ← Дашборд
-        </Link>
-
-        <h1 style={S.h1}>Бейджи</h1>
-        <p style={S.count}>
-          {earnedMap.size}/{badges.length} бейджей
-        </p>
+        <div style={S.head}>
+          <div style={{ flex: 1 }}>
+            <h1 style={S.h1}>Badges</h1>
+            <p style={S.sub}>Milestones that prove your progress — not participation trophies.</p>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={S.count}>
+              {earnedMap.size}
+              <span style={{ color: "var(--text-muted)", fontSize: "var(--text-base)" }}>/{badges.length}</span>
+            </div>
+            <div style={S.countLabel}>earned</div>
+          </div>
+        </div>
 
         <div style={S.grid}>
-          {sorted.map((b) => {
-            const earnedAt = earnedMap.get(b.id);
-            const isEarned = earnedAt !== undefined;
-            return (
-              <div
-                key={b.id}
-                style={isEarned ? S.card : { ...S.card, ...S.cardLocked }}
-              >
-                <div
-                  style={isEarned ? S.icon : { ...S.icon, ...S.iconLocked }}
-                >
-                  {b.icon ?? "🏅"}
-                </div>
-                <div style={S.name}>{b.name}</div>
-                {b.description && <div style={S.desc}>{b.description}</div>}
-                {isEarned && (
-                  <div style={S.earnedAt}>
-                    Получен{" "}
-                    {new Date(earnedAt).toLocaleDateString("ru-RU")}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {sorted.map((b) => (
+            <Tile key={b.id} b={b} earnedAt={earnedMap.get(b.id)} />
+          ))}
         </div>
       </div>
-    </main>
+    </AppShell>
   );
 }
 
-const FONT =
-  "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+function Tile({ b, earnedAt }: { b: BadgeRow; earnedAt: string | undefined }) {
+  const isEarned = earnedAt !== undefined;
+  return (
+    <div
+      style={{
+        background: isEarned ? "linear-gradient(180deg, var(--brand-subtle), var(--surface))" : "var(--surface)",
+        border: `2px solid ${isEarned ? "var(--brand-border)" : "var(--border)"}`,
+        borderRadius: "var(--radius-lg)",
+        boxShadow: "var(--shadow-solid)",
+        padding: "20px 18px",
+        textAlign: "center",
+        position: "relative",
+        opacity: isEarned ? 1 : 0.96,
+      }}
+    >
+      {isEarned && (
+        <span style={{ position: "absolute", top: 12, right: 12 }}>
+          <Icon name="circle-check" size={18} style={{ color: "var(--success-text)" }} />
+        </span>
+      )}
+      <div style={{ position: "relative", width: 64, height: 64, margin: "0 auto 14px" }}>
+        <div
+          style={{
+            position: "absolute",
+            inset: 8,
+            borderRadius: "50%",
+            display: "grid",
+            placeItems: "center",
+            background: isEarned ? "linear-gradient(165deg, var(--brand), var(--brand-active))" : "var(--surface-inset)",
+            color: isEarned ? "var(--text-on-brand)" : "var(--text-disabled)",
+            boxShadow: isEarned ? "var(--glow-brand)" : "none",
+          }}
+        >
+          <Icon name={isEarned ? ((b.icon as IconName) || "trophy") : "lock"} size={24} strokeWidth={2.2} />
+        </div>
+      </div>
+      <div style={S.name}>{b.name}</div>
+      {b.description && <div style={S.desc}>{b.description}</div>}
+      {earnedAt && (
+        <div style={S.earnedAt}>Earned {new Date(earnedAt).toLocaleDateString("en-US")}</div>
+      )}
+    </div>
+  );
+}
+
 const S: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", padding: "2rem 1.25rem 4rem", fontFamily: FONT },
-  wrap: { maxWidth: 720, margin: "0 auto" },
-  back: { color: "#6C5CE7", fontSize: ".9rem" },
-  h1: { fontSize: "1.7rem", margin: "1rem 0 .25rem" },
-  count: { color: "#888", margin: "0 0 1.5rem", fontWeight: 600 },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-    gap: ".75rem",
-  },
-  card: {
-    background: "#fff",
-    border: "1px solid #ececf1",
-    borderRadius: 12,
-    padding: "1.1rem .9rem",
-    textAlign: "center",
-  },
-  cardLocked: {
-    opacity: 0.55,
-    background: "#fafafa",
-  },
-  icon: { fontSize: "2.4rem", lineHeight: 1 },
-  iconLocked: { filter: "grayscale(1)" },
-  name: { fontWeight: 700, fontSize: ".95rem", marginTop: ".5rem" },
-  desc: {
-    color: "#888",
-    fontSize: ".78rem",
-    marginTop: ".3rem",
-    lineHeight: 1.4,
-  },
-  earnedAt: {
-    color: "#6C5CE7",
-    fontSize: ".72rem",
-    fontWeight: 600,
-    marginTop: ".5rem",
-  },
+  wrap: { maxWidth: 980, margin: "0 auto", padding: "30px 28px 48px" },
+  head: { display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 22 },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 4px" },
+  sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: 0 },
+  count: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xl)", fontWeight: 600, color: "var(--brand)" },
+  countLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 },
+  name: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", marginBottom: 4 },
+  desc: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", lineHeight: 1.45, minHeight: 32 },
+  earnedAt: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", color: "var(--text-link)", fontWeight: 600, marginTop: 10 },
 };
