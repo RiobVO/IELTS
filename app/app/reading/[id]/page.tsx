@@ -1,9 +1,7 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
-import { categoryLabel } from "@/lib/labels";
 import { ensureAttempt } from "./actions";
 import ExamRunner from "./ExamRunner";
 
@@ -72,44 +70,15 @@ export default async function ReadingTestPage({
   const { attemptId, answers: savedAnswers } = await ensureAttempt(id);
 
   return (
-    <main style={{ minHeight: "100dvh", padding: "1.25rem", fontFamily: FONT }}>
-      <div style={head}>
-        <Link href="/app/reading" style={back}>
-          ← Каталог
-        </Link>
-        <div style={{ display: "flex", gap: ".6rem", alignItems: "center" }}>
-          <span style={badge}>{categoryLabel(test.category)}</span>
-          <span style={{ fontWeight: 700 }}>{test.title}</span>
-        </div>
-      </div>
-
-      <ExamRunner
-        attemptId={attemptId}
-        initialAnswers={savedAnswers}
-        passages={(passages ?? []) as never}
-        questions={(questionsData ?? []) as Question[]}
-        durationSeconds={test.duration_seconds}
-        audioSrc={audioSrc}
-      />
-    </main>
+    <ExamRunner
+      attemptId={attemptId}
+      initialAnswers={savedAnswers}
+      passages={(passages ?? []) as never}
+      questions={(questionsData ?? []) as Question[]}
+      durationSeconds={test.duration_seconds}
+      audioSrc={audioSrc}
+      title={test.title}
+      category={test.category}
+    />
   );
 }
-
-const FONT =
-  "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-const head: React.CSSProperties = {
-  maxWidth: 1100,
-  margin: "0 auto",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-};
-const back: React.CSSProperties = { color: "#6C5CE7", fontSize: ".9rem" };
-const badge: React.CSSProperties = {
-  background: "#efeafe",
-  color: "#5a44d6",
-  fontWeight: 700,
-  fontSize: ".72rem",
-  padding: "3px 9px",
-  borderRadius: 6,
-};
