@@ -1,5 +1,7 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
+import { captureListeningPart } from "./capture-listening";
+import { questionsHtmlCoversAll } from "../exam/question-html-coverage";
 import { extractData, extractFunctionTable, isExecutableScriptType } from "./extract-js";
 import type {
   ParsedAnswerKey,
@@ -71,6 +73,10 @@ export async function parseListening(html: string): Promise<ParsedTest> {
       // One audio file for the whole test — attach to each part; the player uses
       // the first non-null path.
       audioPath: audioSrc,
+      // Verbatim question-panel (real-IELTS render): interactive controls of the
+      // listening template lowered to the canonical `.q-slot` structure. "" → null →
+      // atomized fallback. Per-part coverage is asserted below (mirrors reading).
+      questionsHtml: captureListeningPart($.html($sec)) || null,
     });
 
     // Completion sub-type is set by the part's instruction (form / notes), or
@@ -317,6 +323,17 @@ export async function parseListening(html: string): Promise<ParsedTest> {
   }
 
   questions.sort((a, b) => a.number - b.number);
+
+  // Fail-closed на under-capture (зеркало parse-reading-full): captureListeningPart уже
+  // возвращает "" на структурной неполноте, но слоты `.q-slot[data-q]` каждой части
+  // обязаны покрыть ВСЕ её номера вопросов — иначе часть аффордансов/полей молча
+  // потерялась бы. Непокрытая часть → null → атомизированный фоллбэк для всего теста
+  // (practice-гейт page.tsx требует questionsHtml у КАЖДОГО пассажа).
+  for (const p of passages) {
+    if (!p.questionsHtml) continue;
+    const nums = questions.filter((q) => q.passageOrder === p.order).map((q) => q.number);
+    if (!questionsHtmlCoversAll(p.questionsHtml, nums)) p.questionsHtml = null;
+  }
 
   for (const q of questions) warnEmptyPrompt(q.number, q.promptHtml, q.qtype, warnings);
 
