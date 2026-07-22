@@ -3,8 +3,158 @@ import { load } from "cheerio";
 import { captureQuestions } from "./capture-questions";
 import { extractHeadingBank, extractHeadingTargets } from "./dnd-capture";
 import type { CaptureDnd } from "./dnd-capture";
+import { questionsHtmlCoversAll } from "../exam/question-html-coverage";
 
 const EMPTY_DND: CaptureDnd = { headingTargets: [], headingBank: [], endingBank: [] };
+
+// choose-TWO/THREE (Inspera .mcq-block[data-mcq-group]): физические чекбоксы одного
+// блока делят group_key; сервер грейдит каждого члена полным набором (mcq_set). Захват
+// обязан покрыть КАЖДОГО члена слотом — иначе coverage-гейт (questionsHtmlCoversAll)
+// откатывает practice-verbatim в атомизацию (баг: раньше ancestor-фоллбэк num() кеил все
+// чекбоксы на первое число id группы, второй член терял слот).
+describe("captureQuestions — choose-TWO/THREE (.mcq-block[data-mcq-group])", () => {
+  // Разметка «Passage 2 Population» (7228-7236): все чекбоксы name="mcq-23-24", номера
+  // только на чипах .mcq-q-num-box, data-correct на блоке.
+  const groupBlock = (group: string, nums: number[], letters: string[], correct = "") =>
+    `<div class="question" id="question-group-${group}">` +
+    `<div class="question-rubric"><p>Choose <strong>TWO</strong> letters.</p></div>` +
+    `<div class="question-content">` +
+    `<div class="mcq-block" data-mcq-group="${group}"${correct ? ` data-correct="${correct}"` : ""}>` +
+    `<div class="mcq-q-labels">${nums.map((n) => `<span class="mcq-q-num-box">${n}</span>`).join("")}</div>` +
+    `<div class="mcq-options">` +
+    letters
+      .map(
+        (v) =>
+          `<label class="mcq-row"><input type="checkbox" name="mcq-${group}" value="${v}"><span class="mcq-letter">${v}</span><span>opt ${v}</span></label>`,
+      )
+      .join("") +
+    `</div></div></div></div>`;
+
+  it("оба члена покрыты: checkbox-слоты на первом номере + group-anchor на втором", () => {
+    const out = captureQuestions([groupBlock("23-24", [23, 24], ["A", "B", "C", "D", "E"], "A,E")]);
+    expect(out).not.toBe("");
+    expect(questionsHtmlCoversAll(out, [23, 24])).toBe(true);
+    const $ = load(out, null, false);
+    // 5 checkbox-слотов, все на первом номере 23; ни одного на 24
+    expect($('.q-slot[data-qtype="checkbox"]').length).toBe(5);
+    expect($('.q-slot[data-qtype="checkbox"][data-q="23"]').length).toBe(5);
+    expect($('.q-slot[data-qtype="checkbox"][data-q="24"]').length).toBe(0);
+    // ровно один group-anchor — второй член
+    expect($('.q-slot[data-qtype="group-anchor"]').length).toBe(1);
+    expect($('.q-slot[data-qtype="group-anchor"][data-q="24"]').length).toBe(1);
+    // канон-буквы сохранены на слотах
+    expect($('.q-slot[data-qtype="checkbox"][data-value="E"]').length).toBe(1);
+  });
+
+  it("номера из ЧИПОВ, не из парса диапазона: '8-12' с 5 чипами покрывает 8..12", () => {
+    const out = captureQuestions([
+      groupBlock("8-12", [8, 9, 10, 11, 12], ["A", "B", "C", "D", "E", "F"]),
+    ]);
+    expect(out).not.toBe("");
+    expect(questionsHtmlCoversAll(out, [8, 9, 10, 11, 12])).toBe(true);
+    const $ = load(out, null, false);
+    // первый = 8: чекбоксы на 8, anchors на 9..12
+    expect($('.q-slot[data-qtype="checkbox"][data-q="8"]').length).toBe(6);
+    expect($('.q-slot[data-qtype="group-anchor"]').length).toBe(4);
+  });
+
+  it("data-correct блока вычищен (анти-утечка ключа)", () => {
+    const out = captureQuestions([groupBlock("23-24", [23, 24], ["A", "B"], "A,B")]);
+    expect(out).not.toMatch(/data-correct/i);
+  });
+
+  it("обычный choose-ONE не задет: две группы в одном пассаже покрыты обе", () => {
+    const out = captureQuestions([
+      groupBlock("23-24", [23, 24], ["A", "B", "C"], "A,C"),
+      groupBlock("25-26", [25, 26], ["A", "B", "C"], "B,C"),
+    ]);
+    expect(questionsHtmlCoversAll(out, [23, 24, 25, 26])).toBe(true);
+  });
+
+  describe("fail-closed → '' на весь пассаж", () => {
+    it("блок без чекбоксов", () => {
+      const block =
+        `<div class="mcq-block" data-mcq-group="1-2">` +
+        `<div class="mcq-q-labels"><span class="mcq-q-num-box">1</span><span class="mcq-q-num-box">2</span></div>` +
+        `</div>`;
+      expect(captureQuestions([block])).toBe("");
+    });
+    it("<2 уникальных валидных чипа", () => {
+      expect(captureQuestions([groupBlock("4-4", [4], ["A", "B"])])).toBe("");
+    });
+    it("дублирующийся value чекбокса", () => {
+      expect(captureQuestions([groupBlock("4-5", [4, 5], ["A", "A"])])).toBe("");
+    });
+    it("пустой value чекбокса", () => {
+      expect(captureQuestions([groupBlock("4-5", [4, 5], ["A", ""])])).toBe("");
+    });
+    it("номер группы пересекается с другой группой", () => {
+      const out = captureQuestions([
+        groupBlock("4-5", [4, 5], ["A", "B"]),
+        groupBlock("5-6", [5, 6], ["A", "B"]),
+      ]);
+      expect(out).toBe("");
+    });
+    it("номер группы пересекается с одиночным text-вопросом", () => {
+      const single = `<div class="question" id="question-4"><p>Gap <input type="text" name="q4"></p></div>`;
+      expect(captureQuestions([groupBlock("4-5", [4, 5], ["A", "B"]), single])).toBe("");
+    });
+    it("unsafe номер чипа (400-значный) отсекается → <2 валидных → fail", () => {
+      const huge = "9".repeat(400);
+      const block =
+        `<div class="mcq-block" data-mcq-group="x">` +
+        `<div class="mcq-q-labels"><span class="mcq-q-num-box">${huge}</span><span class="mcq-q-num-box">4</span></div>` +
+        `<label class="mcq-row"><input type="checkbox" name="mcq-x" value="A"></label>` +
+        `<label class="mcq-row"><input type="checkbox" name="mcq-x" value="B"></label>` +
+        `</div>`;
+      expect(captureQuestions([block])).toBe("");
+    });
+    it("чекбокс в блоке ВНЕ .mcq-row (расходится с атомайзером) → fail-closed", () => {
+      const block =
+        `<div class="mcq-block" data-mcq-group="4-5">` +
+        `<div class="mcq-q-labels"><span class="mcq-q-num-box">4</span><span class="mcq-q-num-box">5</span></div>` +
+        `<label class="mcq-row"><input type="checkbox" name="mcq-4-5" value="A"></label>` +
+        `<label class="mcq-row"><input type="checkbox" name="mcq-4-5" value="B"></label>` +
+        // паразитный чекбокс вне .mcq-row — атомайзер (optionsIn по .mcq-row) его не читает
+        `<label class="mcq-extra"><input type="checkbox" name="mcq-4-5" value="C"></label>` +
+        `</div>`;
+      expect(captureQuestions([block])).toBe("");
+    });
+    it("нет чекбоксов внутри .mcq-row (все вне) → fail-closed", () => {
+      const block =
+        `<div class="mcq-block" data-mcq-group="4-5">` +
+        `<div class="mcq-q-labels"><span class="mcq-q-num-box">4</span><span class="mcq-q-num-box">5</span></div>` +
+        `<label class="mcq-extra"><input type="checkbox" name="mcq-4-5" value="A"></label>` +
+        `<label class="mcq-extra"><input type="checkbox" name="mcq-4-5" value="B"></label>` +
+        `</div>`;
+      expect(captureQuestions([block])).toBe("");
+    });
+    it("чекбокс с собственным name=qN (индивидуально ключенный) → неоднозначно", () => {
+      const block =
+        `<div class="mcq-block" data-mcq-group="4-5">` +
+        `<div class="mcq-q-labels"><span class="mcq-q-num-box">4</span><span class="mcq-q-num-box">5</span></div>` +
+        `<label class="mcq-row"><input type="checkbox" name="q4" value="A"></label>` +
+        `<label class="mcq-row"><input type="checkbox" name="q5" value="B"></label>` +
+        `</div>`;
+      expect(captureQuestions([block])).toBe("");
+    });
+  });
+
+  it("обычные radio-опции одного вопроса (общий номер) НЕ регрессируют", () => {
+    // radio-блок: 3 инпута name='q1' → 3 radio-слота data-q=1 (легитимный общий номер).
+    const block =
+      `<div class="tfng-question" id="question-1">` +
+      `<label><input type="radio" name="q1" value="TRUE">TRUE</label>` +
+      `<label><input type="radio" name="q1" value="FALSE">FALSE</label>` +
+      `<label><input type="radio" name="q1" value="NOT GIVEN">NG</label>` +
+      `</div>`;
+    const out = captureQuestions([block]);
+    expect(out).not.toBe("");
+    const $ = load(out, null, false);
+    expect($('.q-slot[data-qtype="radio"][data-q="1"]').length).toBe(3);
+    expect(questionsHtmlCoversAll(out, [1])).toBe(true);
+  });
+});
 
 describe("captureQuestions answer-key hygiene", () => {
   // Утечка ключа №1 (BRIEF §4.2/§6.1): захваченный HTML вопрос-панели рендерится

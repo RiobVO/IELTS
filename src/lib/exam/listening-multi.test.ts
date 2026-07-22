@@ -5,6 +5,7 @@ import {
   bridgeLetterFor,
   bridgeLettersFor,
   groupMembers,
+  readingGroupToggle,
   toggleGroupLetter,
   unionChosen,
 } from "./listening-multi";
@@ -122,6 +123,29 @@ describe("toggleGroupLetter", () => {
 
   it("тоггл на пустой группе добавляет первую букву", () => {
     expect(toggleGroupLetter({}, [11, 12], "B")).toEqual(["B"]);
+  });
+});
+
+describe("readingGroupToggle (reading choose-TWO — полный набор, НЕ позиционно)", () => {
+  it("добавляет букву к union членов и сортирует", () => {
+    expect(readingGroupToggle({ "23": ["A"], "24": ["A"] }, [23, 24], "E")).toEqual(["A", "E"]);
+  });
+
+  it("снимает уже выбранную букву", () => {
+    expect(readingGroupToggle({ "23": ["A", "E"], "24": ["A", "E"] }, [23, 24], "E")).toEqual(["A"]);
+  });
+
+  it("дивергентный resume: клик НЕ теряет букву соседнего члена (union, не кликнутый массив)", () => {
+    // Легаси-попытка разошлась (Q23=[A], Q24=[E]). Клик по первому члену (n=23) с буквой B
+    // должен дать полный union {A,E}+B, а не {A}+B — иначе E терялась бы и персистилась.
+    expect(readingGroupToggle({ "23": ["A"], "24": ["E"] }, [23, 24], "B")).toEqual(["A", "B", "E"]);
+    // Снятие A из дивергентного старта оставляет E (не воскрешает из соседа).
+    expect(readingGroupToggle({ "23": ["A"], "24": ["E"] }, [23, 24], "A")).toEqual(["E"]);
+  });
+
+  it("пустой/legacy string член → union как одиночная буква", () => {
+    expect(readingGroupToggle({ "23": "", "24": undefined }, [23, 24], "A")).toEqual(["A"]);
+    expect(readingGroupToggle({ "23": "A", "24": [] }, [23, 24], "E")).toEqual(["A", "E"]);
   });
 });
 

@@ -91,6 +91,26 @@ export function toggleGroupLetter(
 }
 
 /**
+ * READING choose-TWO/THREE: тоггл буквы в наборе группы БЕЗ позиционной раздачи (в
+ * отличие от submit-раздачи listening через bridgeLettersFor). Сервер грейдит КАЖДОГО
+ * члена ПОЛНЫМ набором (mcq_set), поэтому итоговый массив пишется во все члены как есть.
+ * БАЗОВЫЙ набор — union массивов ВСЕХ членов (unionChosen), НЕ только кликнутого: при
+ * дивергентном resume (легаси-попытка Q23=[A], Q24=[E]) toggle от одного члена затёр бы
+ * букву соседа — первый клик персистил бы потерю в autosave/submit. Возвращает новый
+ * отсортированный массив (порядок множеству-грейдеру не важен; сортировка — стабильное
+ * отображение). Тело совпадает с toggleGroupLetter — семантику (полный набор vs
+ * позиционная раздача) задаёт submit-путь (toServerValue/buildSubmitAnswers по listeningSection).
+ */
+export function readingGroupToggle(
+  valuesByNumber: Record<string, string | string[] | undefined>,
+  memberNumbers: number[],
+  letter: string,
+): string[] {
+  const cur = unionChosen(valuesByNumber, memberNumbers);
+  return (cur.includes(letter) ? cur.filter((x) => x !== letter) : [...cur, letter]).sort();
+}
+
+/**
  * Номера членов choose-TWO/THREE группы по groupKey, отсортированные по возрастанию
  * (порядок, в котором мост раздаёт буквы по позиции). Члены группы — все вопросы
  * теста с ТЕМ ЖЕ group_key (в данных группы вида "11-12" номера соседние, но берём

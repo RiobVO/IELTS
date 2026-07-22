@@ -114,6 +114,10 @@ function Slot({ q, qtype, value, options }: { q: number; qtype: string; value?: 
       </button>
     );
   }
+  // group-anchor (choose-TWO/THREE): невидимый маркер второго+ члена группы. Физические
+  // чекбоксы группы живут под первым номером; anchor нужен лишь чтобы slotNumbersIn
+  // смонтировал аффордансы этого члена и coverage-гейт увидел его номер. Не интерактивен.
+  if (qtype === "group-anchor") return <span aria-hidden style={S.anchor} />;
   // text (default)
   const v = typeof a === "string" ? a : "";
   return (
@@ -270,6 +274,7 @@ const S = {
     display: "inline-flex", alignItems: "center", justifyContent: "center",
   }),
   tick: { color: "var(--text-on-brand)", fontSize: 13, lineHeight: 1 } as CSSProperties,
+  anchor: { display: "none" } as CSSProperties,
 };
 
 const Q_CSS = `

@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import { captureQuestions } from "./capture-questions";
+import { questionsHtmlCoversAll } from "../exam/question-html-coverage";
 import {
   extractEndingBank,
   extractHeadingBank,
@@ -453,6 +454,17 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
   }
 
   const questions = [...byNumber.values()].sort((a, b) => a.number - b.number);
+
+  // Fail-closed на under-capture (см. parse-test.ts): captureQuestions видит только
+  // `.question`-блоки секции вопросов, а атомайзер парсит и вне обёртки → verbatim мог
+  // бы покрыть не все номера пассажа. Проверяем ПОКРЫТИЕ ПОФАЙЛОВО, номера — по
+  // passageOrder; не покрыт хоть один → questions_html этого пассажа = null (атомизация).
+  for (const p of passages) {
+    if (!p.questionsHtml) continue;
+    const nums = questions.filter((q) => q.passageOrder === p.order).map((q) => q.number);
+    if (!questionsHtmlCoversAll(p.questionsHtml, nums)) p.questionsHtml = null;
+  }
+
   const keyCount = Object.keys(correctAnswers).length;
   if (keyCount !== questions.length) {
     warnings.push(
