@@ -11,7 +11,7 @@ vi.mock("@google/genai", () => ({
 // env exposes l1GenConfig() (getter style), not a bare env object — see src/env.ts.
 vi.mock("@/env", () => ({ l1GenConfig: () => ({ apiKey: "test-key", model: "gemini-2.5-flash-lite" }) }));
 
-import { buildL1Prompt, generateL1ForPassage, L1_PROMPT_VERSION, type L1PassageInput } from "./generate";
+import { buildL1Prompt, generateL1ForPassage, withTransientRetry, L1_PROMPT_VERSION, type L1PassageInput } from "./generate";
 
 const passageInput: L1PassageInput = {
   passageBodyHtml: "<p>Mining began in the region in <b>1850</b>.</p>",
@@ -114,5 +114,63 @@ describe("generateL1ForPassage", () => {
     expect(config.responseMimeType).toBe("application/json");
     expect(config.responseSchema).toBeTruthy();
     expect(config.maxOutputTokens).toBeGreaterThan(0);
+    // thinking выключен явно: его токены входят в maxOutputTokens и обрезали JSON.
+    expect(config.thinkingConfig).toEqual({ thinkingBudget: 0 });
+  });
+
+});
+
+// Ретрай тестируется на чистых замыканиях, НЕ через vi.fn-мок SDK: трекинг результатов
+// vi.fn вешает на реджект мока собственный промис и ложно валит соседний тест
+// unhandled-rejection детектором vitest. Нулевые задержки — чтобы не спать 2s/6s.
+describe("withTransientRetry", () => {
+  // Формат message — фактический из прод-error_log (SDK кладёт JSON-тело в message).
+  const transient503 = () =>
+    new Error('{"error":{"code":503,"message":"high demand","status":"UNAVAILABLE"}}');
+  const NO_DELAYS = [0, 0] as const;
+
+  it("ретраит транзиентный 503 и возвращает результат со второй попытки", async () => {
+    let calls = 0;
+    const result = await withTransientRetry(async () => {
+      calls++;
+      if (calls === 1) throw transient503();
+      return "ok";
+    }, NO_DELAYS);
+    expect(result).toBe("ok");
+    expect(calls).toBe(2);
+  });
+
+  it("после исчерпания повторов транзиент всё же пробрасывается", async () => {
+    let calls = 0;
+    await expect(
+      withTransientRetry(async () => {
+        calls++;
+        throw transient503();
+      }, NO_DELAYS),
+    ).rejects.toThrow(/503/);
+    expect(calls).toBe(3); // 1 + 2 ретрая
+  });
+
+  it("сетевой fetch failed — тоже транзиент", async () => {
+    let calls = 0;
+    const result = await withTransientRetry(async () => {
+      calls++;
+      if (calls === 1) throw new TypeError("fetch failed");
+      return "ok";
+    }, NO_DELAYS);
+    expect(result).toBe("ok");
+    expect(calls).toBe(2);
+  });
+
+  it("детерминированный сбой (parse/schema) НЕ ретраится", async () => {
+    let calls = 0;
+    await expect(
+      withTransientRetry(async () => {
+        calls++;
+        JSON.parse("not json"); // тот же класс ошибки, что обрезанный ответ модели
+        return "unreachable";
+      }, NO_DELAYS),
+    ).rejects.toThrow();
+    expect(calls).toBe(1);
   });
 });
