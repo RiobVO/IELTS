@@ -3,6 +3,8 @@ import { db } from "@/db";
 import { contentItem } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { categoryLabel } from "@/lib/labels";
+import { Button } from "@/components/core/Button";
+import { Badge } from "@/components/core/Badge";
 import { setStatus, uploadTest } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -10,12 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    uploaded?: string;
-    q?: string;
-    w?: string;
-    error?: string;
-  }>;
+  searchParams: Promise<{ uploaded?: string; q?: string; w?: string; error?: string }>;
 }) {
   const profile = await requireAdmin();
   const sp = await searchParams;
@@ -38,40 +35,31 @@ export default async function AdminPage({
       <div style={S.wrap}>
         <h1 style={S.h1}>Admin</h1>
         <p style={S.sub}>
-          {profile.email} · role=admin · {items.length} тест(ов)
+          {profile.email} · role=admin · {items.length} test(s)
         </p>
 
         {sp.error && <p style={S.err}>{sp.error}</p>}
         {sp.uploaded && (
           <p style={S.ok}>
-            Загружено: «{sp.uploaded}» — {sp.q} вопрос(ов)
-            {Number(sp.w) > 0 ? `, ${sp.w} предупреждение(й)` : ""}. Статус: draft.
+            Uploaded “{sp.uploaded}” — {sp.q} question(s)
+            {Number(sp.w) > 0 ? `, ${sp.w} warning(s)` : ""}. Status: draft.
           </p>
         )}
 
         <section style={S.card}>
-          <div style={S.cardTitle}>Загрузить тест (HTML)</div>
+          <div style={S.cardTitle}>Upload a test (HTML)</div>
           <p style={S.hint}>
-            Готовый HTML по шаблону (§4.2.1). Парсер извлечёт passage, вопросы и
-            ключ; тест сохранится как draft до публикации.
+            Template-conformant HTML (§4.2.1). The parser extracts passage, questions and key; the test is saved as a draft until published.
           </p>
           <form action={uploadTest} style={S.uploadForm}>
-            <input
-              type="file"
-              name="file"
-              accept=".html,.htm,text/html"
-              required
-              style={S.file}
-            />
-            <button type="submit" style={S.primary}>
-              Загрузить
-            </button>
+            <input type="file" name="file" accept=".html,.htm,text/html" required style={S.file} />
+            <Button type="submit">Upload</Button>
           </form>
         </section>
 
-        <div style={S.listHead}>Контент</div>
+        <div style={S.listHead}>Content</div>
         {items.length === 0 ? (
-          <p style={S.hint}>Пока ничего не загружено.</p>
+          <p style={S.hint}>Nothing uploaded yet.</p>
         ) : (
           <ul style={S.list}>
             {items.map((it) => (
@@ -79,24 +67,18 @@ export default async function AdminPage({
                 <div style={{ minWidth: 0 }}>
                   <div style={S.rowTitle}>{it.title}</div>
                   <div style={S.meta}>
-                    <span style={S.tag}>{categoryLabel(it.category)}</span>
+                    <Badge tone="brand">{categoryLabel(it.category)}</Badge>
                     <span>{it.section}</span>
-                    <span>· {it.questions} вопр.</span>
-                    <span style={it.status === "published" ? S.pub : S.draft}>
-                      {it.status}
-                    </span>
+                    <span>· {it.questions} q.</span>
+                    <Badge tone={it.status === "published" ? "success" : "warn"}>{it.status}</Badge>
                   </div>
                 </div>
                 <form action={setStatus}>
                   <input type="hidden" name="id" value={it.id} />
-                  <input
-                    type="hidden"
-                    name="status"
-                    value={it.status === "published" ? "draft" : "published"}
-                  />
-                  <button type="submit" style={S.ghost}>
-                    {it.status === "published" ? "Снять" : "Опубликовать"}
-                  </button>
+                  <input type="hidden" name="status" value={it.status === "published" ? "draft" : "published"} />
+                  <Button type="submit" variant="secondary" size="sm">
+                    {it.status === "published" ? "Unpublish" : "Publish"}
+                  </Button>
                 </form>
               </li>
             ))}
@@ -107,96 +89,21 @@ export default async function AdminPage({
   );
 }
 
-const FONT =
-  "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
 const S: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", padding: "2.5rem 1.5rem 4rem", fontFamily: FONT },
+  page: { minHeight: "100dvh", padding: "2.5rem 1.5rem 4rem", background: "var(--bg-base)" },
   wrap: { maxWidth: 760, margin: "0 auto" },
-  h1: { fontSize: "1.6rem", margin: 0 },
-  sub: { color: "#777", marginTop: ".5rem", fontSize: ".9rem" },
-  err: {
-    background: "#fdecec",
-    color: "#a11",
-    padding: ".6rem .75rem",
-    borderRadius: 8,
-    fontSize: ".9rem",
-  },
-  ok: {
-    background: "#eafaef",
-    color: "#137a3a",
-    padding: ".6rem .75rem",
-    borderRadius: 8,
-    fontSize: ".9rem",
-  },
-  card: {
-    background: "#fff",
-    border: "1px solid #ececf1",
-    borderRadius: 12,
-    padding: "1.25rem",
-    marginTop: "1.25rem",
-  },
-  cardTitle: { fontWeight: 700, fontSize: "1rem" },
-  hint: { color: "#888", fontSize: ".85rem", margin: ".4rem 0 0" },
-  uploadForm: {
-    display: "flex",
-    gap: ".75rem",
-    alignItems: "center",
-    marginTop: "1rem",
-    flexWrap: "wrap",
-  },
-  file: { fontSize: ".9rem", flex: 1, minWidth: 0 },
-  primary: {
-    padding: ".6rem 1.1rem",
-    border: "none",
-    borderRadius: 8,
-    background: "#6C5CE7",
-    color: "#fff",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  listHead: { fontWeight: 700, margin: "2rem 0 .75rem" },
-  list: { listStyle: "none", padding: 0, margin: 0, display: "grid", gap: ".5rem" },
-  row: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: ".75rem",
-    background: "#fff",
-    border: "1px solid #ececf1",
-    borderRadius: 10,
-    padding: ".75rem 1rem",
-  },
-  rowTitle: {
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  meta: {
-    display: "flex",
-    gap: ".5rem",
-    alignItems: "center",
-    color: "#999",
-    fontSize: ".8rem",
-    marginTop: ".25rem",
-    flexWrap: "wrap",
-  },
-  tag: {
-    background: "#efeafe",
-    color: "#5a44d6",
-    fontWeight: 700,
-    padding: "1px 7px",
-    borderRadius: 5,
-  },
-  pub: { color: "#137a3a", fontWeight: 700 },
-  draft: { color: "#b8860b", fontWeight: 700 },
-  ghost: {
-    padding: ".5rem .9rem",
-    border: "1px solid #ddd",
-    borderRadius: 8,
-    background: "#fff",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
+  sub: { fontFamily: "var(--font-ui)", color: "var(--text-muted)", marginTop: 6, fontSize: "var(--text-sm)" },
+  err: { background: "var(--error-subtle)", color: "var(--error-text)", padding: "10px 12px", borderRadius: "var(--radius-md)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
+  ok: { background: "var(--success-subtle)", color: "var(--success-text)", padding: "10px 12px", borderRadius: "var(--radius-md)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
+  card: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: "20px", marginTop: 20 },
+  cardTitle: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-base)", color: "var(--text-primary)" },
+  hint: { fontFamily: "var(--font-ui)", color: "var(--text-muted)", fontSize: "var(--text-sm)", margin: "6px 0 0", lineHeight: 1.5 },
+  uploadForm: { display: "flex", gap: 12, alignItems: "center", marginTop: 16, flexWrap: "wrap" },
+  file: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", flex: 1, minWidth: 0, color: "var(--text-secondary)" },
+  listHead: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-base)", color: "var(--text-primary)", margin: "28px 0 12px" },
+  list: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 },
+  row: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 16px" },
+  rowTitle: { fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  meta: { display: "flex", gap: 8, alignItems: "center", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", marginTop: 6, flexWrap: "wrap" },
 };
