@@ -253,6 +253,57 @@ describe("captureListeningPart — leak-гигиена", () => {
   });
 });
 
+describe("captureListeningPart — reveal-marker fail-closed (B1)", () => {
+  it("чужой reveal-класс рядом с валидным gap → пустая панель + onLeak(токен)", () => {
+    const leaks: string[] = [];
+    const out = captureListeningPart(
+      part(
+        `<div class="form-row">Name: <input class="gap" data-q="1"></div>` +
+          `<div class="correct-answer">Correct answer: PIZZA</div>`,
+      ),
+      (t) => leaks.push(t),
+    );
+    expect(out).toBe("");
+    expect(leaks).toEqual(["correct-answer"]);
+  });
+
+  it("одиночный class-токен 'correct' тоже фейлит панель", () => {
+    const leaks: string[] = [];
+    const out = captureListeningPart(
+      part(`<input class="gap" data-q="1"><span class="correct">PIZZA</span>`),
+      (t) => leaks.push(t),
+    );
+    expect(out).toBe("");
+    expect(leaks).toEqual(["correct"]);
+  });
+
+  it("санкционированный [data-analysis] НЕ триггерит fail-closed (штатный стрип)", () => {
+    const leaks: string[] = [];
+    const out = captureListeningPart(
+      part(`<input class="gap" data-q="1"><div class="analysis" data-analysis="1">A</div>`),
+      (t) => leaks.push(t),
+    );
+    expect(out).not.toBe("");
+    expect(leaks).toEqual([]);
+    expect(out).not.toMatch(/analysis/i);
+  });
+
+  it("легитимные классы реального корпуса (cstat answered / map-answers / answer-input) НЕ триггерят", () => {
+    const leaks: string[] = [];
+    const out = captureListeningPart(
+      part(
+        `<div class="cstat answered">1</div><div class="cstat unanswered">2</div>` +
+          `<div class="map-answers">grid</div><span class="answer-input">x</span>` +
+          `<input class="gap" data-q="1">`,
+      ),
+      (t) => leaks.push(t),
+    );
+    expect(out).not.toBe("");
+    expect(leaks).toEqual([]);
+    expect(questionsHtmlCoversAll(out, [1])).toBe(true);
+  });
+});
+
 describe("captureListeningPart — fail-closed", () => {
   it("непреобразованный select → fail-closed", () => {
     const out = captureListeningPart(

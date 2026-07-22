@@ -75,8 +75,14 @@ export async function parseListening(html: string): Promise<ParsedTest> {
       audioPath: audioSrc,
       // Verbatim question-panel (real-IELTS render): interactive controls of the
       // listening template lowered to the canonical `.q-slot` structure. "" → null →
-      // atomized fallback. Per-part coverage is asserted below (mirrors reading).
-      questionsHtml: captureListeningPart($.html($sec)) || null,
+      // atomized fallback. Per-part coverage is asserted below (mirrors reading). A
+      // reveal-marker leak (B1) fails the capture closed and surfaces a review warning.
+      questionsHtml:
+        captureListeningPart($.html($sec), (token) =>
+          warnings.push(
+            `Part ${part}: suspected answer-reveal marker ".${token}" — verbatim panel disabled, atomized fallback.`,
+          ),
+        ) || null,
     });
 
     // Completion sub-type is set by the part's instruction (form / notes), or

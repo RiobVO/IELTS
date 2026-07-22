@@ -97,11 +97,18 @@ export async function parseTest(html: string): Promise<ParsedTest> {
   // Verbatim-HTML вопрос-панели (как реальный IELTS); "" → фоллбэк на атомизацию.
   // DnD: heading-цели лежат в теле пассажа (#passageContent), банки — в блоках вопросов.
   const questionsHtml =
-    captureQuestions($(".question").toArray().map((b) => $.html(b)), {
-      headingTargets: extractHeadingTargets($, $("#passageContent")),
-      headingBank: extractHeadingBank($),
-      endingBank: extractEndingBank($),
-    }) || null;
+    captureQuestions(
+      $(".question").toArray().map((b) => $.html(b)),
+      {
+        headingTargets: extractHeadingTargets($, $("#passageContent")),
+        headingBank: extractHeadingBank($),
+        endingBank: extractEndingBank($),
+      },
+      (token) =>
+        warnings.push(
+          `Passage 1: suspected answer-reveal marker ".${token}" — verbatim panel disabled, atomized fallback.`,
+        ),
+    ) || null;
   const passages = [
     { order: 1, title: h1 || null, bodyHtml, audioPath: null, questionsHtml },
   ];

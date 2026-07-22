@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { stripCapturedLeaks } from "./capture-sanitize";
+import { findLeakClassToken, stripCapturedLeaks } from "./capture-sanitize";
 import type { DropOption } from "./dnd-capture";
 
 /**
@@ -27,10 +27,14 @@ import type { DropOption } from "./dnd-capture";
  *
  * FAIL-CLOSED ("" → раннер рисует атомизированный список): любой интерактивный
  * элемент без валидного/уникального номера, дефект choose-TWO блока, пустой банк,
- * либо непреобразованный остаток (leftover `.dropzone`/`.place-chip`/`.map-dz`/
- * `input`/`select`). Частичная панель в practice/mock просочиться не должна.
+ * непреобразованный остаток (leftover `.dropzone`/`.place-chip`/`.map-dz`/`input`/
+ * `select`), либо reveal-маркер ответа под чужим классом (`onLeak` — см. B1). Частичная
+ * или содержащая ключ панель в practice/mock просочиться не должна.
  */
-export function captureListeningPart(html: string): string {
+export function captureListeningPart(
+  html: string,
+  onLeak?: (token: string) => void,
+): string {
   if (!html.trim()) return "";
   const $ = cheerio.load(`<div class="q-panel">${html}</div>`, null, false);
   const root = $(".q-panel");
@@ -212,6 +216,15 @@ export function captureListeningPart(html: string): string {
 
   // Карту-картинку и любой аудио/видео-плеер части убираем до гигиены.
   root.find(".map-stage, audio, video").remove();
+
+  // Fail-closed на reveal-маркер ответа под чужим классом (вне `[data-analysis]`, B1):
+  // тихий стрип мог бы убить легитимный контент и скрыть утечку — уводим часть в
+  // атомизацию и сигналим ревью-экрану через onLeak.
+  const leak = findLeakClassToken($, root);
+  if (leak) {
+    onLeak?.(leak);
+    return "";
+  }
 
   // Общая leak-гигиена (идентична reading-захвату).
   stripCapturedLeaks($, root);

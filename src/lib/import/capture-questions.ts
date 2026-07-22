@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
-import { stripCapturedLeaks } from "./capture-sanitize";
+import { findLeakClassToken, stripCapturedLeaks } from "./capture-sanitize";
 import type { CaptureDnd, DropOption } from "./dnd-capture";
 
 /**
@@ -26,11 +26,13 @@ import type { CaptureDnd, DropOption } from "./dnd-capture";
  *  - хоть один text/radio/checkbox не маппится на номер вопроса;
  *  - присутствует непроводимый drag-drop (.dropzone/.dd-drop/[data-dropzone]);
  *  - DnD-ветка не проходит fail-closed чеклист (см. ниже) — частичный захват в
- *    presence-only mock-путь (page.tsx) просачиваться НЕ должен.
+ *    presence-only mock-путь (page.tsx) просачиваться НЕ должен;
+ *  - reveal-маркер ответа под чужим классом вне `[data-analysis]` (`onLeak` — см. B1).
  */
 export function captureQuestions(
   blocks: string[],
   dnd?: CaptureDnd,
+  onLeak?: (token: string) => void,
 ): string {
   if (blocks.length === 0) return "";
   const $ = cheerio.load(`<div class="q-panel">${blocks.join("\n")}</div>`, null, false);
@@ -209,6 +211,15 @@ export function captureQuestions(
   root.find(".heading-token, .ending-token, .heading-slot, .ending-slot, [draggable]").each((_, el) => {
     $(el).removeAttr("draggable").removeAttr("tabindex").removeAttr("role");
   });
+
+  // Fail-closed на reveal-маркер ответа под чужим классом (вне `[data-analysis]`, B1):
+  // тихий стрип мог бы убить легитимный контент и скрыть утечку — уводим пассаж в
+  // атомизацию и сигналим ревью-экрану через onLeak.
+  const leak = findLeakClassToken($, root);
+  if (leak) {
+    onLeak?.(leak);
+    return "";
+  }
 
   // Общая leak-гигиена (шум номеров/флагов, .analysis-утечка ключа, активный контент,
   // on*/style/answer-атрибуты) — идентична listening-захвату (см. capture-sanitize.ts).

@@ -389,3 +389,49 @@ describe("captureQuestions — leak / edge fixes", () => {
     expect(out).toBe("");
   });
 });
+
+// B1 (адверсариальное ревью): denylist-стрип (stripCapturedLeaks) вычищал лишь
+// `.analysis`/`[data-analysis]`; альтернативный reveal-маркер под чужим классом
+// (`<div class="correct-answer">Correct answer: …</div>`) переживал гигиену и утекал в
+// practice. Детектор class-токенов уводит такой пассаж в атомизацию (fail-closed) + warning.
+describe("captureQuestions — reveal-marker fail-closed (B1)", () => {
+  it("чужой reveal-класс рядом с валидным инпутом → '' + onLeak(токен)", () => {
+    const leaks: string[] = [];
+    const block =
+      `<div class="question" id="question-1">` +
+      `<input type="text" name="q1">` +
+      `<div class="correct-answer">Correct answer: PIZZA</div>` +
+      `</div>`;
+    const out = captureQuestions([block], undefined, (t) => leaks.push(t));
+    expect(out).toBe("");
+    expect(leaks).toEqual(["correct-answer"]);
+  });
+
+  it("санкционированный [data-analysis] НЕ триггерит (штатный стрип, панель непуста)", () => {
+    const leaks: string[] = [];
+    const block =
+      `<div class="question" id="question-1">` +
+      `<input type="text" name="q1">` +
+      `<div class="analysis" data-analysis="1">The answer is A</div>` +
+      `</div>`;
+    const out = captureQuestions([block], undefined, (t) => leaks.push(t));
+    expect(out).not.toBe("");
+    expect(leaks).toEqual([]);
+    expect(out).not.toMatch(/analysis/i);
+  });
+
+  it("легитимные классы (cstat answered / map-answers / answer-input) НЕ триггерят", () => {
+    const leaks: string[] = [];
+    const block =
+      `<div class="question" id="question-1">` +
+      `<div class="cstat answered">x</div><div class="map-answers">g</div>` +
+      `<span class="answer-input">y</span>` +
+      `<input type="text" name="q1">` +
+      `</div>`;
+    const out = captureQuestions([block], undefined, (t) => leaks.push(t));
+    expect(out).not.toBe("");
+    expect(leaks).toEqual([]);
+    const $ = load(out, null, false);
+    expect($('.q-slot[data-q="1"]').length).toBe(1);
+  });
+});
