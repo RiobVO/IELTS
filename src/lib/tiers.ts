@@ -9,10 +9,12 @@ export type Tier = "basic" | "premium" | "ultra";
 const TIER_RANK: Record<Tier, number> = { basic: 0, premium: 1, ultra: 2 };
 
 /**
- * Basic-tier daily limit on submitted tests (BRIEF §4.8 placeholder `N` — tune at
- * launch). Premium/Ultra are unlimited.
+ * Basic-tier daily limit on submitted tests (BRIEF §4.8). Set high at launch (no
+ * monetization yet) so it's effectively unlimited for a real student, while still
+ * capping run-away abuse per account; tighten it as an upsell when paid tiers go
+ * live. Premium/Ultra are unlimited.
  */
-export const BASIC_DAILY_LIMIT = 3;
+export const BASIC_DAILY_LIMIT = 25;
 
 /**
  * The tier a profile is ACTUALLY entitled to right now. A premium/ultra profile
