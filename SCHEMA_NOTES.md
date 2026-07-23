@@ -364,4 +364,4 @@ the telemetry review).
   drops). Behavioral invariant proven on local docker by a throwaway script
   (2nd in_progress via ON CONFLICT inserts nothing; plain 2nd raises a unique
   violation; a fresh in_progress is allowed once the prior one is submitted),
-  then deleted. NOT yet applied to Supabase — see heads-up.
+  then deleted. Applied to Supabase (verified in `_migrations` + `attempt_one_in_progress_idx` present on the live DB).
