@@ -655,7 +655,7 @@ export default function Home() {
           <div className="fgrid">
             <a className="fcard rv" href="/auth">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Stopwatch/3D/stopwatch_3d.png" alt="Stopwatch" width={72} height={72} loading="lazy" decoding="async" />
+              <img src="/emoji/stopwatch_3d.png" alt="Stopwatch" width={72} height={72} loading="lazy" decoding="async" />
               <div>
                 <h3>Real exam mode</h3>
                 <p>Computer-delivered IELTS — timer, navigator, mark-for-review, highlight &amp; notes. Reading on calm paper; single-pass Listening, exactly like exam day.</p>
@@ -666,7 +666,7 @@ export default function Home() {
             </a>
             <a className="fcard rv" href="/auth">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Bar%20chart/3D/bar_chart_3d.png" alt="Bar chart" width={72} height={72} loading="lazy" decoding="async" />
+              <img src="/emoji/bar_chart_3d.png" alt="Bar chart" width={72} height={72} loading="lazy" decoding="async" />
               <div>
                 <h3>Per-type breakdown</h3>
                 <p>Not just a 6.5 — every question type ranked worst-first, so the one weakness dragging your band down is impossible to miss.</p>
@@ -677,7 +677,7 @@ export default function Home() {
             </a>
             <a className="fcard rv" href="/auth">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Memo/3D/memo_3d.png" alt="Memo" width={72} height={72} loading="lazy" decoding="async" />
+              <img src="/emoji/memo_3d.png" alt="Memo" width={72} height={72} loading="lazy" decoding="async" />
               <div>
                 <h3>Targeted drills</h3>
                 <p>Tap any weak type to practise only that — Matching Headings, TFNG, completion — until it stops costing you points.</p>
@@ -688,7 +688,7 @@ export default function Home() {
             </a>
             <a className="fcard rv" href="/auth">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Books/3D/books_3d.png" alt="Books" width={72} height={72} loading="lazy" decoding="async" />
+              <img src="/emoji/books_3d.png" alt="Books" width={72} height={72} loading="lazy" decoding="async" />
               <div>
                 <h3>Full mock tests</h3>
                 <p>Sit complete 40-question papers under real timing and get a projected band you can trust.</p>
