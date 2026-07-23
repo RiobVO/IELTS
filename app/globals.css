@@ -15,6 +15,19 @@
 .badge-unlock { animation: badge-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 @media (prefers-reduced-motion: reduce) { .badge-unlock { animation: none; } }
 
+/* Route-level loading skeletons (loading.tsx). Pulse can't be inlined (keyframes),
+   so the Skeleton primitive carries this class; sizes/radius stay inline tokens. */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+.skeleton {
+  background: var(--surface-inset);
+  border-radius: var(--radius-md);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
 /* Baseline keyboard focus for every app-surface interactive (WCAG 2.4.7).
    Many controls are inline-styled and rely on the UA outline, which a custom
    background or border-radius can hide; this guarantees a visible brand ring.
