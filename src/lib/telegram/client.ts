@@ -42,6 +42,48 @@ export async function sendMessage(chatId: number, text: string): Promise<void> {
   }
 }
 
+/**
+ * Сообщение об успешной загрузке + inline-кнопка «Опубликовать» (callback_data
+ * несёт content_item id). BEST-EFFORT — не бросает.
+ */
+export async function sendUploadResult(
+  chatId: number,
+  text: string,
+  contentItemId: string,
+): Promise<void> {
+  try {
+    await callApi("sendMessage", {
+      chat_id: chatId,
+      text,
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "📢 Опубликовать", callback_data: `publish:${contentItemId}` }],
+        ],
+      },
+    });
+  } catch (e) {
+    console.error("telegram sendUploadResult failed", e);
+  }
+}
+
+/**
+ * Ответ на нажатие inline-кнопки (убирает «часики» на кнопке + всплывающий тост).
+ * BEST-EFFORT — не бросает.
+ */
+export async function answerCallback(
+  callbackId: string,
+  text: string,
+): Promise<void> {
+  try {
+    await callApi("answerCallbackQuery", {
+      callback_query_id: callbackId,
+      text,
+    });
+  } catch (e) {
+    console.error("telegram answerCallback failed", e);
+  }
+}
+
 /** file_id -> file_path (Bot API getFile). Бросает при ошибке. */
 export async function getFilePath(fileId: string): Promise<string> {
   const result = await callApi<{ file_path: string }>("getFile", {
