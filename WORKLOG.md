@@ -36,11 +36,13 @@
 Инфраструктура: Vercel-функции и Supabase ОБА во Франкфурте (Vercel fra1 ↔ Supabase eu-central-1).
   Это закрыло главный лаг (запросы летали через Атлантику US↔EU). НЕ ТРОГАТЬ.
 Активная фаза: perf-доработка, 11 пунктов ниже. После них — фаза дизайна (раздел 4).
-Закрыто пунктов: 11 / 11. ✅ Вся perf+security фаза закрыта.
+Закрыто пунктов: 11 / 11. ✅ Perf+security фаза закрыта.
+E2E прогнан на проде (2026-06-17): реальный submit → grade 8/13 [6], applyPostSubmit rated Δ3 [2],
+  recompute → leaderboard rank=1 [2], rating 1000→1003/xp→18; каталог список+фильтры+счётчики [4];
+  region self-join Navoiy←Uzbekistan [7]. Все поведенческие дыры закрыты машинно.
 Сейчас в работе: — (следующая фаза — дизайн, раздел 4).
-⚠️ Боевая Supabase БД обнулена тестовым `db:down --all` (2026-06-17): public-данные стёрты
-   (content_item/attempt/profile/notification), seed (badge 12 / region 15) и auth.users (2) целы.
-   Тесты вернуть реимпортом HTML через /admin. (db:down = revert ALL — не гонять на проде.)
+Тестовая БД восстановлена после db:down-инцидента: 2 профиля (eleru340 = admin), 9 Reading + Full +
+  Listening published, eleru340 имеет демо-attempt. (db:down = revert ALL — НЕ гонять на проде.)
 </state>
 
 ---
