@@ -1,4 +1,5 @@
 import { AnalyticsIdentify } from "@/lib/analytics/identify";
+import { posthogConfig } from "@/env";
 import { getUser } from "@/lib/auth";
 
 /**
@@ -14,9 +15,12 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const user = await getUser();
+  // identify тянет posthog-js динамически — монтируем только при включённой
+  // аналитике (ключ задан), иначе chunk грузился бы зря без ключа.
+  const analyticsOn = posthogConfig() !== null;
   return (
     <>
-      {user ? <AnalyticsIdentify userId={user.id} /> : null}
+      {user && analyticsOn ? <AnalyticsIdentify userId={user.id} /> : null}
       {children}
     </>
   );
