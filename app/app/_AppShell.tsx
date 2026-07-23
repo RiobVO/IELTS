@@ -22,12 +22,16 @@ export async function AppShell({
   active: ActivePage;
   children: React.ReactNode;
 }) {
-  const profile = await getProfile();
+  // Профиль и счётчик непрочитанных независимы → один Promise.all вместо водопада.
   const supabase = await createClient();
-  const { count } = await supabase
-    .from("notification")
-    .select("id", { count: "exact", head: true })
-    .is("read_at", null);
+  const [profile, notif] = await Promise.all([
+    getProfile(),
+    supabase
+      .from("notification")
+      .select("id", { count: "exact", head: true })
+      .is("read_at", null),
+  ]);
+  const count = notif.count;
 
   const initials = computeInitials(
     (profile?.display_name ?? profile?.email ?? "") as string,

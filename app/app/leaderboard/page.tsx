@@ -1,5 +1,8 @@
+import { eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { getProfile, requireUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { db } from "@/db";
+import { region } from "@/db/schema";
 import { periodLabel } from "@/lib/labels";
 import {
   readLeaderboard,
@@ -46,24 +49,25 @@ export default async function Leaderboard({
     { value: "global", label: "Global" },
   ];
   if (profile?.region_id) {
-    const supabase = await createClient();
-    const { data: own } = await supabase
-      .from("region")
-      .select("id,name,parent_id")
-      .eq("id", profile.region_id)
-      .single();
-    if (own) {
-      if (own.parent_id) {
-        const { data: parent } = await supabase
-          .from("region")
-          .select("id,name")
-          .eq("id", own.parent_id)
-          .single();
-        if (parent) {
-          scopeOptions.push({ value: parent.id, label: parent.name });
-        }
+    // own + его parent одним self-join (parent зависит от own.parent_id — водопад
+    // сворачиваем в один запрос). Owner-path: region — публичные имена территорий.
+    const parentRegion = alias(region, "parent_region");
+    const [row] = await db
+      .select({
+        ownId: region.id,
+        ownName: region.name,
+        parentId: parentRegion.id,
+        parentName: parentRegion.name,
+      })
+      .from(region)
+      .leftJoin(parentRegion, eq(parentRegion.id, region.parentId))
+      .where(eq(region.id, profile.region_id))
+      .limit(1);
+    if (row) {
+      if (row.parentId && row.parentName) {
+        scopeOptions.push({ value: row.parentId, label: row.parentName });
       }
-      scopeOptions.push({ value: own.id, label: own.name });
+      scopeOptions.push({ value: row.ownId, label: row.ownName });
     }
   }
 
