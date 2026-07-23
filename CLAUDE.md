@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **⚠️ READ [WORKLOG.md](./WORKLOG.md) FIRST every session** — it is the live entry point
+> (where we are / what's closed / what's left) for the current perf+design work. Follow its
+> session contract before touching anything else.
+
 ## Source of truth
 
 **[BRIEF.md](./BRIEF.md)** is the single source of truth for product spec, stack,

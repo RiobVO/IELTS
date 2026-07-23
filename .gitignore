@@ -40,3 +40,6 @@ npm-debug.log*
 
 # bando design system handoff — reference only, recreated in src/ + app/, not shipped as-is
 /design-drop/
+
+# local tooling worktrees / cache — not project source
+/.claude/
