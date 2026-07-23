@@ -113,7 +113,12 @@ export function AppHeader({ active, streak, xp, initials, unread, signOut }: App
       <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "12px 34px", maxWidth: 1180, margin: "0 auto" }}>
         <Link href="/app" style={{ display: "flex", alignItems: "center", gap: 11, textDecoration: "none" }}>
           <span style={{ width: 34, height: 34, flex: "none", borderRadius: 10, display: "grid", placeItems: "center", background: "linear-gradient(165deg,#211B33,#0E0B17)", border: "1px solid #2C2640" }}>
-            <img src="/bando-mark.svg" width="19" height="19" alt="" />
+            {/* inline SVG (не <img>) — иначе currentColor рисует бары чёрными на тёмной плитке */}
+            <svg width="19" height="19" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+              <rect x="9" y="18" width="34" height="9" rx="4.5" fill="var(--brand)" />
+              <rect x="9" y="31" width="46" height="9" rx="4.5" fill="#fff" opacity="0.92" />
+              <rect x="9" y="44" width="22" height="9" rx="4.5" fill="#fff" opacity="0.5" />
+            </svg>
           </span>
           <span style={{ fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: 20, letterSpacing: "-0.02em", color: "var(--text-primary)" }}>
             band<span style={{ color: "var(--brand)" }}>o</span>
