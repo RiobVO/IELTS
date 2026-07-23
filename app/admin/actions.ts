@@ -1,7 +1,7 @@
 "use server";
 
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { contentItem } from "@/db/schema";
@@ -51,6 +51,8 @@ export async function uploadTest(formData: FormData) {
     fail("Не удалось обработать файл (парсинг или сохранение).");
   }
 
+  // A re-import can change a published test's data — invalidate the catalog cache.
+  revalidateTag("content_item");
   revalidatePath("/admin");
   redirect(
     `/admin?${new URLSearchParams({
@@ -74,6 +76,8 @@ export async function setStatus(formData: FormData) {
     .update(contentItem)
     .set({ status })
     .where(eq(contentItem.id, id));
+  // Catalog's published list is cached by tag — publish/unpublish invalidates it.
+  revalidateTag("content_item");
   revalidatePath("/admin");
   redirect("/admin");
 }

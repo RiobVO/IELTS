@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getProfile, requireUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { getPublishedTests } from "@/lib/content/published";
 import { effectiveTier, meetsTier, BASIC_DAILY_LIMIT, type Tier } from "@/lib/tiers";
 import { categoryLabel, qtypeLabel } from "@/lib/labels";
 import { AppShell } from "./_AppShell";
@@ -17,15 +17,6 @@ import { FilterChip } from "@/components/app/FilterChip";
  * filter chips are links, not client multi-select. The exam route is
  * content-generic, so every card links to /app/reading/[id] regardless of section.
  */
-
-interface TestRow {
-  id: string;
-  title: string;
-  category: string;
-  question_types: string[];
-  duration_seconds: number | null;
-  tier_required: Tier;
-}
 
 const TIER_LABEL: Record<Tier, string> = {
   basic: "Basic",
@@ -49,41 +40,32 @@ export async function CatalogView({
   sp: { category?: string; q_type?: string; limit?: string; throttled?: string };
 }) {
   await requireUser();
-  const supabase = await createClient();
 
   const profile = await getProfile();
   const userTier = profile
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
     : "basic";
 
-  let query = supabase
-    .from("content_item")
-    .select("id,title,category,question_types,duration_seconds,tier_required")
-    .eq("section", section)
-    .eq("status", "published")
-    .order("created_at", { ascending: false });
-  if (sp.category) query = query.eq("category", sp.category);
-  if (sp.q_type) query = query.contains("question_types", [sp.q_type]);
-  const { data } = await query;
-  const tests = (data ?? []) as TestRow[];
+  // Published-список секции кэширован (меняется только при admin publish — тег
+  // "content_item"); фильтр и счётчики считаем в памяти, поэтому повторный заход
+  // не делает запросов к content_item. Per-user tier-лок остаётся ниже (не кэш).
+  const all = await getPublishedTests(section);
+  const tests = all.filter(
+    (t) =>
+      (!sp.category || t.category === sp.category) &&
+      (!sp.q_type || t.question_types.includes(sp.q_type)),
+  );
 
-  // Полный список секции — для счётчиков по категориям/типам и доступных типов.
-  const { data: all } = await supabase
-    .from("content_item")
-    .select("category,question_types")
-    .eq("section", section)
-    .eq("status", "published");
   const catCounts: Record<string, number> = {};
   const typeCounts: Record<string, number> = {};
-  for (const r of all ?? []) {
-    const cat = r.category as string;
-    catCounts[cat] = (catCounts[cat] ?? 0) + 1;
-    for (const qt of (r.question_types as string[]) ?? []) {
+  for (const r of all) {
+    catCounts[r.category] = (catCounts[r.category] ?? 0) + 1;
+    for (const qt of r.question_types ?? []) {
       typeCounts[qt] = (typeCounts[qt] ?? 0) + 1;
     }
   }
   const availableTypes = Object.keys(typeCounts).sort();
-  const totalCount = (all ?? []).length;
+  const totalCount = all.length;
   const activeCount = (sp.category ? 1 : 0) + (sp.q_type ? 1 : 0);
 
   // URL-хелперы: переключают одно измерение, сохраняя другое.
