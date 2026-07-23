@@ -2,8 +2,7 @@
  * LIGHT-FIRST. :root is the light theme (the product ships light). Brand is a
  * confident violet; neutrals are cool graphite; the analytics spectrum
  * (green→gold→red) stays clear of violet; reading surface stays warm paper.
- * [data-theme="dark"] is the derived dark theme. Components reference the
- * semantic aliases only. */
+ * Components reference the semantic aliases only. */
 
 :root {
   /* ---- Brand: violet ---- */
@@ -110,62 +109,4 @@
   --reading-note:    color-mix(in oklab, var(--violet-500) 26%, white);
 
   color-scheme: light;
-}
-
-/* ===== Semantic aliases — DARK (derived) ===== */
-[data-theme="dark"] {
-  --bg-base:        oklch(0.175 0.014 280);
-  --bg-raised:      oklch(0.215 0.016 282);
-  --surface:        oklch(0.245 0.018 282);
-  --surface-raised: oklch(0.290 0.019 284);
-  --surface-hover:  oklch(0.335 0.022 286);
-  --surface-inset:  oklch(0.200 0.015 280);
-
-  --border-subtle:  oklch(0.305 0.018 282);
-  --border:         oklch(0.355 0.020 284);
-  --border-strong:  oklch(0.180 0.014 280);
-
-  --text-primary:   oklch(0.965 0.006 286);
-  --text-secondary: oklch(0.810 0.012 288);
-  --text-muted:     oklch(0.660 0.016 288);
-  --text-disabled:  oklch(0.500 0.016 286);
-  --text-on-brand:  oklch(0.16 0.02 286);
-
-  --brand:          var(--violet-400);
-  --brand-hover:    var(--violet-300);
-  --brand-active:   var(--violet-500);
-  --brand-edge:     var(--violet-600);
-  --brand-subtle:   color-mix(in oklab, var(--violet-400) 22%, transparent);
-  --brand-border:   color-mix(in oklab, var(--violet-400) 48%, transparent);
-  --text-link:      var(--violet-300);
-
-  --success:        var(--green-500);
-  --success-text:   oklch(0.820 0.150 156);
-  --success-subtle: color-mix(in oklab, var(--green-500) 22%, transparent);
-  --success-edge:   var(--green-600);
-  --warn:           var(--gold-500);
-  --warn-text:      oklch(0.860 0.130 88);
-  --warn-subtle:    color-mix(in oklab, var(--gold-500) 22%, transparent);
-  --error:          var(--red-500);
-  --error-text:     oklch(0.760 0.170 25);
-  --error-subtle:   color-mix(in oklab, var(--red-500) 24%, transparent);
-  --error-edge:     var(--red-600);
-  --neutral-edge:   oklch(0.165 0.013 280);
-
-  --streak:         var(--orange-500);
-  --streak-subtle:  color-mix(in oklab, var(--orange-500) 24%, transparent);
-  --xp:             var(--gold-500);
-  --info:           var(--sky-500);
-  --info-subtle:    color-mix(in oklab, var(--sky-500) 22%, transparent);
-
-  --focus-ring:     var(--violet-400);
-
-  --reading-surface: var(--paper-dark);
-  --reading-text:    oklch(0.905 0.020 80);
-  --reading-muted:   oklch(0.685 0.018 80);
-  --reading-rule:    oklch(0.330 0.016 80);
-  --reading-mark:    color-mix(in oklab, var(--gold-500) 34%, transparent);
-  --reading-note:    color-mix(in oklab, var(--violet-400) 30%, transparent);
-
-  color-scheme: dark;
 }

@@ -1,4 +1,4 @@
-/* bando design system — global entry point. Light-first; [data-theme="dark"] derived. */
+/* bando design system — global entry point. Light-only. */
 @import "./tokens/colors.css";
 @import "./tokens/typography.css";
 @import "./tokens/spacing.css";
