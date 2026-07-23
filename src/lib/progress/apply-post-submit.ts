@@ -20,7 +20,6 @@ import { attempt, contentItem, profile } from "@/db/schema";
 import { createNotifications } from "@/lib/notifications/create";
 import { ELO_FLOOR, ratingDeltas } from "@/lib/rating/elo";
 import { type AwardedBadge, evaluateBadges } from "./badges";
-import { recomputeLeaderboard } from "./leaderboard";
 import { maybeRewardReferral } from "./referral";
 
 export interface PostSubmitInput {
@@ -171,23 +170,14 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
       })
       .where(eq(profile.id, input.userId));
 
-    // 5) Leaderboard recompute — only when ratings/scores changed in a way that
-    // affects ranks. Isolated so a leaderboard failure can't undo the rest.
-    if (rated) {
-      try {
-        await recomputeLeaderboard();
-      } catch (e) {
-        console.error("applyPostSubmit: recomputeLeaderboard failed", e);
-      }
-    }
-
-    // Badge evaluation (BRIEF §4.7) — runs AFTER the streak/rating profile
-    // write and the leaderboard recompute, so streak, rating, and the
-    // global/all_time #1 (first_place) are all current. evaluateBadges is
-    // best-effort and never throws; it's also inside applyPostSubmit's own
-    // try/catch guard. Its return is the EXACT set of badges this submit
-    // unlocked (deduped via the insert's RETURNING) — carried back so the
-    // result page can celebrate them once, without timestamp inference.
+    // 5) Badge evaluation (BRIEF §4.7) — runs AFTER the streak/rating profile
+    // write, so streak and rating are current. The champion badge (first_place)
+    // is evaluated directly against profile ratings inside evaluateBadges, so it
+    // no longer depends on the leaderboard rebuild — which is now deferred to
+    // after the response (Next after() in submitAttempt). Best-effort and never
+    // throws; also inside applyPostSubmit's own try/catch. Its return is the EXACT
+    // set of badges this submit unlocked (deduped via the insert's RETURNING) —
+    // carried back so the result page can celebrate them once.
     const awardedBadges = await evaluateBadges(input.userId);
 
     // In-app уведомление о каждой разблокировке бейджа (BRIEF §11). Best-effort

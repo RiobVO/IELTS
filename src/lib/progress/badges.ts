@@ -8,8 +8,10 @@
  * `notification` rows on the user's behalf — none of which the anon (RLS) path
  * can do for the awarding flow. It never touches `answer_key`.
  *
- * Called from `applyPostSubmit` AFTER the streak/rating profile write and the
- * leaderboard recompute, so every stat (streak, rating, first_place) is current.
+ * Called from `applyPostSubmit` AFTER the streak/rating profile write, so streak
+ * and rating are current. first_place (champion) is computed directly from
+ * profile ratings here, so it does NOT depend on the leaderboard rebuild (which
+ * is deferred to after() in submitAttempt).
  *
  * BEST-EFFORT: the whole body is wrapped — on ANY error it logs and returns [];
  * a notification failure never loses an award. Only badges the user has NOT yet
@@ -19,12 +21,11 @@
  * The `badge.criteria` jsonb is a discriminated union on `type` shared verbatim
  * with the seed (Agent A) — see the SHARED CRITERIA CONTRACT in the task brief.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, lt, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   attempt,
   badge,
-  leaderboardEntry,
   notification,
   profile,
   userBadge,
@@ -109,6 +110,8 @@ async function computeStats(userId: string): Promise<UserStats> {
     .select({
       rating: profile.rating,
       currentStreak: profile.currentStreak,
+      ratedCount: profile.ratedCount,
+      hidden: profile.hiddenFromLeaderboard,
     })
     .from(profile)
     .where(eq(profile.id, userId))
@@ -153,19 +156,31 @@ async function computeStats(userId: string): Promise<UserStats> {
     }
   }
 
-  // first_place: a leaderboard_entry row for this user at global/all_time/rank 1.
-  const [fp] = await db
-    .select({ userId: leaderboardEntry.userId })
-    .from(leaderboardEntry)
-    .where(
-      and(
-        eq(leaderboardEntry.userId, userId),
-        eq(leaderboardEntry.scope, "global"),
-        eq(leaderboardEntry.period, "all_time"),
-        eq(leaderboardEntry.rank, 1),
-      ),
-    )
-    .limit(1);
+  // first_place (champion): am I rank 1 of the global all_time board? Computed
+  // directly from profile ratings — NOT from leaderboard_entry — so the badge
+  // stays correct now that the leaderboard rebuild is deferred to after() (see
+  // submitAttempt). Mirrors recomputeLeaderboard's all_time ranking exactly:
+  // eligible = visible (not hidden) AND ratedCount > 0; order = rating DESC, then
+  // id ASC. I'm #1 iff no eligible peer outranks me (higher rating, or equal
+  // rating with a smaller id).
+  let isFirstPlaceGlobalAllTime = false;
+  if (p && !p.hidden && p.ratedCount > 0) {
+    const [higher] = await db
+      .select({ id: profile.id })
+      .from(profile)
+      .where(
+        and(
+          eq(profile.hiddenFromLeaderboard, false),
+          gt(profile.ratedCount, 0),
+          or(
+            gt(profile.rating, p.rating),
+            and(eq(profile.rating, p.rating), lt(profile.id, userId)),
+          ),
+        ),
+      )
+      .limit(1);
+    isFirstPlaceGlobalAllTime = !higher;
+  }
 
   return {
     rating: p?.rating ?? 0,
@@ -173,7 +188,7 @@ async function computeStats(userId: string): Promise<UserStats> {
     volume: attempts.length,
     hasPerfect,
     perQtype,
-    isFirstPlaceGlobalAllTime: !!fp,
+    isFirstPlaceGlobalAllTime,
   };
 }
 
