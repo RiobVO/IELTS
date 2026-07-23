@@ -12,6 +12,7 @@ import { triggerL1Generation } from "@/lib/content/l1/store";
 import { RegradeRequiredError } from "@/lib/import/persist";
 import { importRunner } from "@/lib/import/runner/import-runner";
 import { publishReviewedContentItem } from "@/lib/content/publish";
+import { deleteDraftContentItem } from "@/lib/content/delete";
 
 function fail(message: string): never {
   redirect(`/admin?error=${encodeURIComponent(message)}`);
@@ -192,6 +193,32 @@ export async function markReviewed(formData: FormData) {
   revalidatePath("/admin");
   // #id — якорь на затронутую строку, чтобы редирект не сбрасывал скролл наверх.
   redirect(`/admin#${id}`);
+}
+
+/**
+ * Physically delete a draft content item (admin-only cleanup for bad/duplicate
+ * imports). Guard is authoritative in deleteDraftContentItem's WHERE — this
+ * action only translates the reason into an admin-facing message.
+ */
+export async function deleteContent(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect("/admin");
+
+  const res = await deleteDraftContentItem(id);
+  if (!res.ok) {
+    if (res.reason === "has_attempts") {
+      fail("Can't delete: this test already has student attempts — deleting would erase them. Unpublish instead if it's live.");
+    }
+    if (res.reason === "published") {
+      fail("Can't delete a published test — Unpublish it first.");
+    }
+    redirect("/admin"); // not_found
+  }
+
+  revalidatePath("/admin");
+  // Строки больше нет — якорь на неё не нужен, в отличие от setStatus/markReviewed.
+  redirect(`/admin?deleted=${encodeURIComponent(res.title)}`);
 }
 
 /**

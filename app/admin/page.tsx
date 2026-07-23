@@ -11,7 +11,7 @@ import { Badge, type BadgeTone } from "@/components/core/Badge";
 import { SubmitButton, ConfirmButton } from "@/components/admin/AdminSubmit";
 import { ContentTools } from "@/components/admin/ContentTools";
 import { UndoToast } from "@/components/admin/UndoToast";
-import { bulkSetStatus, markReviewed, regenerateL1, setStatus, uploadTest } from "./actions";
+import { bulkSetStatus, deleteContent, markReviewed, regenerateL1, setStatus, uploadTest } from "./actions";
 
 /** l1_status → Badge tone. */
 function l1Tone(status: string): BadgeTone {
@@ -36,6 +36,7 @@ export default async function AdminPage({
     bulk?: string;
     done?: string;
     did?: string;
+    deleted?: string;
   }>;
 }) {
   const profile = await requireAdmin();
@@ -60,6 +61,9 @@ export default async function AdminPage({
       // ${contentItem.id} в raw-sql как неквалифицированный "id", который внутри
       // подзапроса резолвится в question.id → самосравнение → всегда 0.
       questions: sql<number>`(SELECT count(*)::int FROM question q WHERE q.content_item_id = content_item.id)`,
+      // Delete-гейт в UI (удобство; авторитетность — в deleteDraftContentItem WHERE):
+      // тот же неквалифицированный-id подвох, что у questions выше — пишем content_item.id текстом.
+      attempts: sql<number>`(SELECT count(*)::int FROM attempt a WHERE a.content_item_id = content_item.id)`,
     })
     .from(contentItem)
     .orderBy(desc(contentItem.createdAt));
@@ -138,6 +142,7 @@ export default async function AdminPage({
 
         {sp.error && <p style={S.err}>{sp.error}</p>}
         {sp.bulk && <p style={S.ok}>{sp.bulk}</p>}
+        {sp.deleted && <p style={S.ok}>Deleted “{sp.deleted}”.</p>}
         {sp.uploaded && (
           <p style={S.ok}>
             Uploaded “{sp.uploaded}” — {sp.q} question(s)
@@ -358,6 +363,20 @@ export default async function AdminPage({
                       <form action={markReviewed}>
                         <input type="hidden" name="id" value={it.id} />
                         <SubmitButton size="sm">Approve</SubmitButton>
+                      </form>
+                    )}
+                    {/* Физическое удаление — только черновик без сдач (авторитетный
+                        гейт в deleteDraftContentItem WHERE, это лишь UI-удобство). */}
+                    {isDraft && it.attempts === 0 && (
+                      <form action={deleteContent}>
+                        <input type="hidden" name="id" value={it.id} />
+                        <ConfirmButton
+                          variant="danger"
+                          size="sm"
+                          message={`Delete “${it.title}” permanently? This cannot be undone.`}
+                        >
+                          Delete
+                        </ConfirmButton>
                       </form>
                     )}
                   </div>
