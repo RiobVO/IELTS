@@ -30,18 +30,21 @@ const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
 export default async function Dashboard() {
   await requireUser();
-  const profile = await getProfile();
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from("attempt")
-    .select(
-      "id,content_item_id,raw_score,band_score,per_type_breakdown,submitted_at,content_item:content_item_id(title,category)",
-    )
-    .eq("status", "submitted")
-    .order("submitted_at", { ascending: false })
-    .limit(20);
-  const attempts = (data ?? []) as unknown as AttemptRow[];
+  // Профиль и список попыток независимы → параллельно (2 round-trip'а → 1).
+  const [profile, attemptsRes] = await Promise.all([
+    getProfile(),
+    supabase
+      .from("attempt")
+      .select(
+        "id,content_item_id,raw_score,band_score,per_type_breakdown,submitted_at,content_item:content_item_id(title,category)",
+      )
+      .eq("status", "submitted")
+      .order("submitted_at", { ascending: false })
+      .limit(20),
+  ]);
+  const attempts = (attemptsRes.data ?? []) as unknown as AttemptRow[];
 
   // Профиль → band-кольцо + stat-строка.
   const streak = profile?.current_streak ?? 0;
