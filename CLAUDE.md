@@ -138,7 +138,7 @@ emulation + verify gate.
 - **Full Reading** — `parse-reading-full.ts` (3 passages, `acceptableVariants` key, `getBand` scale, matching/classification radio tables, MCQ-two checkboxes, question→passage mapping); band scoring for Full tests (40Q) wired into submit + result. Closes the §11 band gap for Listening + Full Reading.
 - **All single-passage question types** — single parser gained matching-headings (heading-drop + bank), matching-table rows, sentence-endings (`.ending-*`/`.dd-*`); **all 9 real Reading files now parse every question with a key** (was: Population 7/13, Tuatara 9/14, Happy 5/13, Animals 10/14).
 - **Shared catalog** (`_CatalogView`) for Reading + Listening; exam route is content-generic.
-- *Launch steps (NOT code — done at deploy):* load tests into the live DB via `/admin`; host audio in Supabase Storage (local `public/` for dev); apply `0007` to Supabase. Browser e2e (login + content) not yet eyeballed; every layer verified separately (parse probes on all files + persist on local docker + tsc + build).
+- *Launch steps (NOT code — done at deploy):* load tests into the live DB via `/admin`; host audio in Supabase Storage (local `public/` for dev). Browser e2e (login + content) not yet eyeballed; every layer verified separately (parse probes on all files + persist on local docker + tsc + build).
 
 ### ✅ Phase 2 — Engagement (on `main`, all applied to Supabase)
 - **2A — rating + leaderboard** (migration `0003`): Elo rating on first attempt +
@@ -185,10 +185,10 @@ emulation + verify gate.
   when the test already has attempts (`RegradeRequiredError`), so re-importing a sat
   test can't FK-cascade away attempt history. (Full Re-grade — version bump +
   recompute + "score adjusted" mark — still deferred; this just stops the data loss.)
-- 🟡 **One in_progress attempt per (user, test)** — migration `0007` partial unique
+- ✅ **One in_progress attempt per (user, test)** — migration `0007` partial unique
   index + `ensureAttempt` `ON CONFLICT DO NOTHING`, closing the concurrent first-start
-  race (two in_progress rows / doubled `test_start`). On local docker;
-  **NOT yet applied to Supabase.** ← вероятно «в процессе у Claude Code».
+  race (two in_progress rows / doubled `test_start`). **Applied to Supabase**
+  (verified in `_migrations` + `attempt_one_in_progress_idx` present on the live DB).
 
 ### ⛔ Blocked / pending (needs external input)
 - **Anti-bot on signup** — Turnstile/captcha + email-verify + signup velocity; needs
