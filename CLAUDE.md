@@ -226,7 +226,7 @@ grading, submit, RLS, tiers, рейтинг). На каждом экране: в
   `ExamTimer` (calm→warn→critical + прогресс-рейл), `QuestionNavigator` (+легенда),
   `QuestionFilter`, `AudioPlayer` (single-pass waveform — заменил нативный `<audio>`),
   `MapLabelling`. Timer/Navigator/Audio проведены в `ExamRunner` (раннер владеет `<audio>`).
-  Превью всех пяти — `/dev/exam-kit` (публичный dev-роут, **удалить перед запуском**).
+  Dev-превью-роут `/dev/exam-kit` снят перед запуском (компоненты живут в `ExamRunner`).
 - **✅ Quality pass:** a11y (видимый `:focus-visible`, exam radiogroup/`role=timer`, контраст
   muted/streak/warn/success/`--ink-3` → WCAG AA, посчитано), perf (rAF scroll, lazy hero-картинки,
   `memo` вопросов, **параллельные Supabase-запросы** на exam/dashboard, дедуп auth round-trip в
