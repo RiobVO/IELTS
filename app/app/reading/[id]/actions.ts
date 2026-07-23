@@ -15,7 +15,7 @@ import { getUser } from "@/lib/auth";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
 import { recomputeLeaderboard } from "@/lib/progress/leaderboard";
-import { BASIC_DAILY_LIMIT, effectiveTier, meetsTier } from "@/lib/tiers";
+import { BASIC_DAILY_LIMIT, effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 
 /**
  * Resolve the user's effective tier and the test's required tier via the owner
@@ -23,24 +23,55 @@ import { BASIC_DAILY_LIMIT, effectiveTier, meetsTier } from "@/lib/tiers";
  * the effective tier or redirects. Shared by exam-start and submit so a crafted
  * request can't slip past the page-level (UX) redirect.
  */
-async function gateAccess(userId: string, contentItemId: string): Promise<void> {
-  const [prof] = await db
-    .select({ tier: profile.tier, premiumUntil: profile.premiumUntil })
-    .from(profile)
-    .where(eq(profile.id, userId));
-  const [item] = await db
-    .select({ tierRequired: contentItem.tierRequired })
-    .from(contentItem)
-    .where(eq(contentItem.id, contentItemId));
-  if (!prof || !item) redirect(`/app/reading/${contentItemId}`);
+/**
+ * Read the access facts for (user, test) via the owner db: the user's effective
+ * tier, the test's required tier, and the band scale (the last is submit-only but
+ * read here so submit needs a SINGLE content_item round-trip, not two). Returns
+ * null if either row is missing. No redirects — separated from enforcement so the
+ * reads can be batched with submit's other independent queries.
+ */
+async function loadAccessData(
+  userId: string,
+  contentItemId: string,
+): Promise<{
+  userTier: Tier;
+  tierRequired: Tier;
+  bandScale: Record<string, number> | null;
+} | null> {
+  const [[prof], [item]] = await Promise.all([
+    db
+      .select({ tier: profile.tier, premiumUntil: profile.premiumUntil })
+      .from(profile)
+      .where(eq(profile.id, userId)),
+    db
+      .select({
+        tierRequired: contentItem.tierRequired,
+        bandScale: contentItem.bandScale,
+      })
+      .from(contentItem)
+      .where(eq(contentItem.id, contentItemId)),
+  ]);
+  if (!prof || !item) return null;
+  return {
+    userTier: effectiveTier({ tier: prof.tier, premium_until: prof.premiumUntil }),
+    tierRequired: item.tierRequired,
+    bandScale: (item.bandScale as Record<string, number> | null) ?? null,
+  };
+}
 
-  const userTier = effectiveTier({
-    tier: prof.tier,
-    premium_until: prof.premiumUntil,
-  });
-
+/**
+ * Enforce the §4.8 access gates (tier entitlement + Basic daily limit) for an
+ * already-resolved effective tier. Redirects on denial. The single source of
+ * truth for the gate logic, shared by exam-start and submit so a crafted submit
+ * can't slip past — only the reads that feed it are batched by the caller.
+ */
+async function enforceAccess(
+  userId: string,
+  userTier: Tier,
+  tierRequired: Tier,
+): Promise<void> {
   // (a) Tier gate — re-check entitlement against the test's required tier.
-  if (!meetsTier(userTier, item.tierRequired)) redirect("/app/upgrade");
+  if (!meetsTier(userTier, tierRequired)) redirect("/app/upgrade");
 
   // (b) Basic daily limit — count THIS user's submitted attempts in the current
   // UTC day. Premium/Ultra are unlimited, so only Basic pays the count query.
@@ -63,6 +94,16 @@ async function gateAccess(userId: string, contentItemId: string): Promise<void> 
       );
     if ((usage?.n ?? 0) >= BASIC_DAILY_LIMIT) redirect("/app/reading?limit=1");
   }
+}
+
+/**
+ * Resolve + enforce access in one call (exam-start path). Submit inlines the two
+ * steps so the load can be batched with its other queries.
+ */
+async function gateAccess(userId: string, contentItemId: string): Promise<void> {
+  const data = await loadAccessData(userId, contentItemId);
+  if (!data) redirect(`/app/reading/${contentItemId}`);
+  await enforceAccess(userId, data.userTier, data.tierRequired);
 }
 
 /**
@@ -224,35 +265,47 @@ export async function submitAttempt(
     redirect(`/app/reading/${contentItemId}/result?a=${attemptId}`);
   }
 
-  // Частотный анти-чит throttle (§4.6 — последний открытый зазор). Идемпотентный
-  // ре-сабмит отфильтрован выше (он безвреден и не должен упираться в лимит).
-  // Берём только последние MAX+1 сабмитов по индексу (user_id, submitted_at) и
-  // считаем попавшие в окно: превышение -> мягкий отказ. Попытка остаётся
-  // in_progress, ответы автосохранены — можно повторить через несколько секунд.
-  const recentSubmits = await db
-    .select({ submittedAt: attempt.submittedAt })
-    .from(attempt)
-    .where(and(eq(attempt.userId, user.id), eq(attempt.status, "submitted")))
-    .orderBy(desc(attempt.submittedAt))
-    .limit(SUBMIT_THROTTLE_MAX + 1);
+  // Independent read-only lookups for the submit gate + grading run in ONE batch
+  // (each depends only on user.id / contentItemId, already known): the throttle
+  // window, the access facts (effective tier + required tier + band scale, a
+  // single content_item round-trip), and the answer key. The redirect checks
+  // below keep their ORIGINAL order (throttle -> tier -> daily limit -> empty
+  // key), so behaviour is unchanged — only the round-trips are batched instead of
+  // sequential. Throttle uses the (user_id, submitted_at) index, capped at MAX+1.
+  const [recentSubmits, accessData, rows] = await Promise.all([
+    db
+      .select({ submittedAt: attempt.submittedAt })
+      .from(attempt)
+      .where(and(eq(attempt.userId, user.id), eq(attempt.status, "submitted")))
+      .orderBy(desc(attempt.submittedAt))
+      .limit(SUBMIT_THROTTLE_MAX + 1),
+    loadAccessData(user.id, contentItemId),
+    db
+      .select({
+        number: question.number,
+        qtype: question.qtype,
+        mode: answerKey.mode,
+        accept: answerKey.accept,
+      })
+      .from(question)
+      .innerJoin(answerKey, eq(answerKey.questionId, question.id))
+      .where(eq(question.contentItemId, contentItemId)),
+  ]);
+
+  // Частотный анти-чит throttle (§4.6) — проверка в исходном порядке (до гейта).
+  // Идемпотентный ре-сабмит отфильтрован выше; превышение -> мягкий отказ, попытка
+  // остаётся in_progress (ответы автосохранены, можно повторить через пару секунд).
   const inWindow = countSubmitsInWindow(
     recentSubmits.map((r) => r.submittedAt),
     new Date(),
   );
   if (exceedsSubmitRate(inWindow)) redirect("/app/reading?throttled=1");
 
-  await gateAccess(user.id, contentItemId);
+  // Access gate (§4.8, defense-in-depth) — same enforcement as exam-start, fed by
+  // the batched read so submit makes a single content_item round-trip.
+  if (!accessData) redirect(`/app/reading/${contentItemId}`);
+  await enforceAccess(user.id, accessData.userTier, accessData.tierRequired);
 
-  const rows = await db
-    .select({
-      number: question.number,
-      qtype: question.qtype,
-      mode: answerKey.mode,
-      accept: answerKey.accept,
-    })
-    .from(question)
-    .innerJoin(answerKey, eq(answerKey.questionId, question.id))
-    .where(eq(question.contentItemId, contentItemId));
   if (rows.length === 0) redirect(`/app/reading/${contentItemId}`);
 
   const keys: GradeKey[] = rows.map((r) => ({
@@ -263,13 +316,9 @@ export async function submitAttempt(
   }));
   const result = grade(keys, answers);
 
-  // Band only for Full tests (40Q): map raw score via the stored band_scale
-  // (§11). Single passage/part has no band_scale -> null (percent only).
-  const [ci] = await db
-    .select({ bandScale: contentItem.bandScale })
-    .from(contentItem)
-    .where(eq(contentItem.id, contentItemId));
-  const scale = (ci?.bandScale as Record<string, number> | null) ?? null;
+  // Band only for Full tests (40Q): map raw score via the stored band_scale (§11),
+  // already read above. Single passage/part has no band_scale -> null (percent only).
+  const scale = accessData.bandScale;
   const bandValue = scale ? (scale[String(result.rawScore)] ?? null) : null;
 
   const submittedAt = new Date();
