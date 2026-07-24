@@ -40,7 +40,7 @@ export interface AwardedBadge {
 }
 
 /** The `badge.criteria` jsonb shapes (discriminated union on `type`). */
-type Criteria =
+export type Criteria =
   | { type: "volume"; tests: number }
   | { type: "streak"; days: number }
   | { type: "rating"; min: number }
@@ -60,7 +60,7 @@ interface QtypeAgg {
 }
 
 /** Everything a criteria can be evaluated against, computed once per call. */
-interface UserStats {
+export interface UserStats {
   rating: number;
   currentStreak: number;
   volume: number;
@@ -104,8 +104,49 @@ function isMet(criteria: Criteria, stats: UserStats): boolean {
   }
 }
 
+/** Read-side progress of a not-yet-earned badge (for the badges page). */
+export interface BadgeProgress {
+  /** 0..1 ratio toward the unlock threshold (clamped). */
+  pct: number;
+  /** Human hint, e.g. "3 / 10 tests". */
+  hint: string;
+}
+
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+/**
+ * How close `stats` is to satisfying `criteria` — same thresholds as `isMet`,
+ * surfaced as a ratio + hint for the locked-badge rings. Two-condition criteria
+ * (accuracy: enough answered AND high enough %) track the visible "answered"
+ * gate; the % is enforced by `isMet` at award time.
+ */
+export function badgeProgress(criteria: Criteria, stats: UserStats): BadgeProgress {
+  switch (criteria.type) {
+    case "volume":
+      return { pct: clamp01(stats.volume / criteria.tests), hint: `${stats.volume} / ${criteria.tests} tests` };
+    case "streak":
+      return { pct: clamp01(stats.currentStreak / criteria.days), hint: `${stats.currentStreak} / ${criteria.days} days` };
+    case "rating":
+      return { pct: clamp01(stats.rating / criteria.min), hint: `${stats.rating} / ${criteria.min} rating` };
+    case "perfect":
+      return { pct: stats.hasPerfect ? 1 : 0, hint: stats.hasPerfect ? "Earned" : "Score 100% on a test" };
+    case "accuracy": {
+      const agg = stats.perQtype.get(criteria.qtype);
+      const answered = agg?.total ?? 0;
+      return { pct: clamp01(answered / criteria.minQuestions), hint: `${answered} / ${criteria.minQuestions} answered` };
+    }
+    case "first_place":
+      return {
+        pct: stats.isFirstPlaceGlobalAllTime ? 1 : 0,
+        hint: stats.isFirstPlaceGlobalAllTime ? "Earned" : "Reach #1 globally",
+      };
+    default:
+      return { pct: 0, hint: "" };
+  }
+}
+
 /** Compute every stat a criteria can need, once, from the owner DB path. */
-async function computeStats(userId: string): Promise<UserStats> {
+export async function computeStats(userId: string): Promise<UserStats> {
   const [p] = await db
     .select({
       rating: profile.rating,
