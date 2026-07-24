@@ -135,78 +135,82 @@ export default async function ResultPage({
           </div>
         )}
 
-        {fullReview ? (
-          <>
-            {/* THE HERO — per-type breakdown */}
-            <section style={S.section}>
-              <h2 style={S.h2}>Where you lose points</h2>
-              <p style={S.sub}>Worst type first.</p>
-              <div style={S.breakdownCard}>
-                {perType.map(([type, s], i) => {
-                  const pct = Math.round((s.correct / s.total) * 100);
-                  const tone =
-                    pct >= 70
-                      ? { bar: "var(--success)", text: "var(--success-text)" }
-                      : pct >= 40
-                        ? { bar: "var(--warn)", text: "var(--warn-text)" }
-                        : { bar: "var(--error)", text: "var(--error-text)" };
-                  return (
-                    <div key={type} style={S.brRow}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={S.brHead}>
-                          <span style={S.brName}>{qtypeLabel(type)}</span>
-                          {i === 0 && <span style={S.weakest}>WEAKEST</span>}
-                        </div>
-                        <div style={S.brTrack}>
-                          <div style={{ ...S.brFill, width: `${pct}%`, background: tone.bar }} />
-                        </div>
-                      </div>
-                      <span style={{ ...S.brScore, color: tone.text }}>
-                        {s.correct}/{s.total}
-                      </span>
+        {/* THE HERO — per-type breakdown. Shown to EVERYONE: it's the "aha" of
+            the whole offer, and §4.8 gives Basic the per-type analytics. Premium
+            adds depth (answers + why + evidence) below, not the breakdown itself. */}
+        <section style={S.section}>
+          <h2 style={S.h2}>Where you lose points</h2>
+          <p style={S.sub}>Worst type first.</p>
+          <div style={S.breakdownCard}>
+            {perType.map(([type, s], i) => {
+              const pct = Math.round((s.correct / s.total) * 100);
+              const tone =
+                pct >= 70
+                  ? { bar: "var(--success)", text: "var(--success-text)" }
+                  : pct >= 40
+                    ? { bar: "var(--warn)", text: "var(--warn-text)" }
+                    : { bar: "var(--error)", text: "var(--error-text)" };
+              return (
+                <div key={type} style={S.brRow}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={S.brHead}>
+                      <span style={S.brName}>{qtypeLabel(type)}</span>
+                      {i === 0 && <span style={S.weakest}>WEAKEST</span>}
                     </div>
-                  );
-                })}
-              </div>
-            </section>
+                    <div style={S.brTrack}>
+                      <div style={{ ...S.brFill, width: `${pct}%`, background: tone.bar }} />
+                    </div>
+                  </div>
+                  <span style={{ ...S.brScore, color: tone.text }}>
+                    {s.correct}/{s.total}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
-            {/* Per-question review */}
-            <section style={S.section}>
-              <div style={S.reviewHead}>
-                <h2 style={S.h2b}>Answer review</h2>
-                <Badge tone="brand">Premium</Badge>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {result.perQuestion.map((q) => {
-                  const m = meta.get(q.number)!;
-                  const given = Array.isArray(q.given) ? q.given.join(", ") : q.given;
-                  const correctAns = (m.accept as string[]).join(" / ");
-                  const ev = m.evidence as { para: string; snippet: string } | null;
-                  return (
-                    <ReviewCard
-                      key={q.number}
-                      number={q.number}
-                      qtype={q.qtype}
-                      correct={q.correct}
-                      given={given && given !== "" ? given : "—"}
-                      answer={correctAns}
-                      explanation={m.explanation}
-                      evidence={ev?.snippet ?? null}
-                    />
-                  );
-                })}
-              </div>
-            </section>
-          </>
-        ) : (
-          // Basic tier: score + percent only. The breakdown / explanations /
-          // evidence are intentionally NOT rendered (§4.8) — an upsell takes
-          // their place.
+        {/* Per-question review. Everyone sees right/wrong per question (the lesson
+            — turns the result into a return, not a paywall). The correct answer,
+            the explanation and the text evidence are revealed ONLY for Premium
+            (`fullReview`): when false those props are simply not rendered, so the
+            answer_key never reaches a Basic user's HTML. */}
+        <section style={S.section}>
+          <div style={S.reviewHead}>
+            <h2 style={S.h2b}>{fullReview ? "Answer review" : "What you missed"}</h2>
+            {!fullReview && <Badge tone="brand">Answers on Premium</Badge>}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {result.perQuestion.map((q) => {
+              const m = meta.get(q.number)!;
+              const given = Array.isArray(q.given) ? q.given.join(", ") : q.given;
+              const correctAns = (m.accept as string[]).join(" / ");
+              const ev = m.evidence as { para: string; snippet: string } | null;
+              return (
+                <ReviewCard
+                  key={q.number}
+                  number={q.number}
+                  qtype={q.qtype}
+                  correct={q.correct}
+                  given={given && given !== "" ? given : "—"}
+                  answer={correctAns}
+                  explanation={m.explanation}
+                  evidence={ev?.snippet ?? null}
+                  reveal={fullReview}
+                />
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Basic: weak types + right/wrong are shown above; Premium reveals the
+            correct answers, the why, and the text evidence. */}
+        {!fullReview && (
           <div style={S.upsell}>
-            <div style={S.upsellTitle}>Full review is on Premium</div>
+            <div style={S.upsellTitle}>See the answers and why</div>
             <p style={S.upsellText}>
-              The per-type breakdown, answer explanations and text evidence are available on the
-              Premium plan.
+              You can see your weakest types and which questions you missed. Premium reveals the
+              correct answers, the explanation behind each, and the exact text evidence.
             </p>
             <Button href="/app/upgrade" trailingIcon="arrow-right">
               Go Premium
@@ -235,6 +239,7 @@ function ReviewCard({
   answer,
   explanation,
   evidence,
+  reveal,
 }: {
   number: number;
   qtype: string;
@@ -243,6 +248,9 @@ function ReviewCard({
   answer: string;
   explanation: string | null;
   evidence: string | null;
+  /** Premium: reveal the correct answer, explanation and evidence. When false
+   *  they are NOT rendered, so the answer_key never reaches a Basic user. */
+  reveal: boolean;
 }) {
   return (
     <div style={S.rev}>
@@ -258,15 +266,15 @@ function ReviewCard({
           <span style={S.revLabel}>You </span>
           <b style={{ color: correct ? "var(--success-text)" : "var(--error-text)" }}>{given}</b>
         </div>
-        {!correct && (
+        {!correct && reveal && (
           <div>
             <span style={S.revLabel}>Answer </span>
             <b style={{ color: "var(--text-primary)" }}>{answer}</b>
           </div>
         )}
       </div>
-      {explanation && <div style={S.expl}>{explanation}</div>}
-      {evidence && (
+      {reveal && explanation && <div style={S.expl}>{explanation}</div>}
+      {reveal && evidence && (
         <div style={S.evidence}>
           <Icon name="book-open" size={15} style={{ color: "var(--reading-muted)", marginTop: 2, flex: "none" }} />
           <span>“{evidence}”</span>
