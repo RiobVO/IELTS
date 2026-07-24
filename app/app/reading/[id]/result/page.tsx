@@ -65,6 +65,12 @@ export default async function ResultPage({
     mode: r.mode,
     accept: (r.accept as string[]) ?? [],
   }));
+  // NB: разбор пересчитывается по ТЕКУЩЕМУ answer_key, а не по баллу, сохранённому
+  // в attempt на момент сдачи. Если ключ правят после сдачи, показанный здесь
+  // raw_score/percent может разойтись с att.raw_score (по которому начислены
+  // rating/XP). Полный re-grade (version bump + пересчёт затронутых attempt +
+  // пометка «балл уточнён») отложен — BRIEF §11 / CLAUDE.md. Деструктивный
+  // ре-импорт при наличии попыток уже заблокирован (RegradeRequiredError).
   const result = grade(keys, answers);
   const meta = new Map(rows.map((r) => [r.number, r]));
 
