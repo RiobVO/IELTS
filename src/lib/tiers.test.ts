@@ -1,7 +1,7 @@
 // Юнит-тесты гейтинга тарифов (BRIEF §4.8). effectiveTier зависит от времени →
 // фейк-таймеры (без реальных часов, иначе кейсы «будущее/прошлое» недетерминированы).
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { effectiveTier, meetsTier, hasFullReview } from "./tiers";
+import { effectiveTier, meetsTier, hasFullReview, REVIEW_OPEN } from "./tiers";
 
 describe("effectiveTier", () => {
   // Фиксированные даты строятся из ISO-строк (не зависят от реальных часов),
@@ -65,9 +65,24 @@ describe("meetsTier", () => {
 });
 
 describe("hasFullReview", () => {
-  it("полный разбор доступен premium и ultra, недоступен basic", () => {
-    expect(hasFullReview("premium")).toBe(true);
-    expect(hasFullReview("ultra")).toBe(true);
-    expect(hasFullReview("basic")).toBe(false);
+  // Гейт ЗАКРЫТ (open=false): прежнее поведение — разбор только premium/ultra.
+  it("closed: premium и ultra да, basic нет", () => {
+    expect(hasFullReview("premium", false)).toBe(true);
+    expect(hasFullReview("ultra", false)).toBe(true);
+    expect(hasFullReview("basic", false)).toBe(false);
+  });
+
+  // Гейт ОТКРЫТ (open=true): разбор бесплатен всем, включая basic.
+  it("open: разбор бесплатен всем, включая basic", () => {
+    expect(hasFullReview("basic", true)).toBe(true);
+    expect(hasFullReview("premium", true)).toBe(true);
+    expect(hasFullReview("ultra", true)).toBe(true);
+  });
+
+  // По умолчанию следует launch-флагу REVIEW_OPEN (сейчас открыт → free для всех).
+  it("по умолчанию следует REVIEW_OPEN", () => {
+    expect(hasFullReview("basic")).toBe(REVIEW_OPEN);
+    expect(REVIEW_OPEN).toBe(true);
+    expect(hasFullReview("basic")).toBe(true);
   });
 });
