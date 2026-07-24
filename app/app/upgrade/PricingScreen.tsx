@@ -80,9 +80,13 @@ const fmt = (tiyin: number) => new Intl.NumberFormat("en-US").format(Math.round(
 export default function PricingScreen({
   current,
   price,
+  ctaHref,
 }: {
   current: Tier;
   price: { premium: Price; ultra: Price };
+  /** Guest mode (public /pricing): every CTA links here instead of starting a
+   *  payment, and no plan is marked "current" — the visitor isn't logged in. */
+  ctaHref?: string;
 }) {
   const [annual, setAnnual] = useState(true);
 
@@ -117,7 +121,7 @@ export default function PricingScreen({
       {/* Plans */}
       <div style={S.plans}>
         {CARDS.map((card) => (
-          <PlanCard key={card.id} card={card} current={current} annual={annual} price={price} />
+          <PlanCard key={card.id} card={card} current={current} annual={annual} price={price} ctaHref={ctaHref} />
         ))}
       </div>
 
@@ -146,14 +150,17 @@ function PlanCard({
   current,
   annual,
   price,
+  ctaHref,
 }: {
   card: PlanCardMeta;
   current: Tier;
   annual: boolean;
   price: { premium: Price; ultra: Price };
+  ctaHref?: string;
 }) {
   const pop = !!card.popular;
-  const isCurrent = current === card.id;
+  const guest = !!ctaHref;
+  const isCurrent = !guest && current === card.id;
   const paid = card.id !== "basic";
   const p = paid ? price[card.id as "premium" | "ultra"] : null;
   const perMonth = p ? (annual ? Math.round(p.annual / 12) : p.monthly) : 0;
@@ -198,7 +205,12 @@ function PlanCard({
         )}
       </div>
 
-      {paid && !isCurrent ? (
+      {guest ? (
+        // Public /pricing: not logged in — send every CTA to sign-up, no payment.
+        <Button href={ctaHref} size="lg" fullWidth variant={pop ? "primary" : "secondary"} trailingIcon="arrow-right">
+          {card.id === "basic" ? "Start free" : card.cta}
+        </Button>
+      ) : paid && !isCurrent ? (
         <form action={initiatePayment}>
           <input type="hidden" name="tier" value={card.id} />
           <input type="hidden" name="months" value={annual ? 12 : 1} />
