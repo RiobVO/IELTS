@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getProfile, requireUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { getPublishedTests } from "@/lib/content/published";
 import { effectiveTier, meetsTier, BASIC_DAILY_LIMIT, type Tier } from "@/lib/tiers";
 import { categoryLabel, qtypeLabel } from "@/lib/labels";
@@ -17,6 +18,9 @@ import { FilterChip } from "@/components/app/FilterChip";
  * filter chips are links, not client multi-select. The exam route is
  * content-generic, so every card links to /app/reading/[id] regardless of section.
  */
+
+type Breakdown = Record<string, { correct: number; total: number }> | null;
+type Test = Awaited<ReturnType<typeof getPublishedTests>>[number];
 
 const TIER_LABEL: Record<Tier, string> = {
   basic: "Basic",
@@ -40,16 +44,18 @@ export async function CatalogView({
   sp: { category?: string; q_type?: string; limit?: string; throttled?: string };
 }) {
   await requireUser();
+  const supabase = await createClient();
 
-  const profile = await getProfile();
+  // Профиль / попытки (для рекомендации) / published-список — параллельно.
+  const [profile, attemptsRes, all] = await Promise.all([
+    getProfile(),
+    supabase.from("attempt").select("per_type_breakdown").eq("status", "submitted").limit(50),
+    getPublishedTests(section),
+  ]);
   const userTier = profile
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
     : "basic";
 
-  // Published-список секции кэширован (меняется только при admin publish — тег
-  // "content_item"); фильтр и счётчики считаем в памяти, поэтому повторный заход
-  // не делает запросов к content_item. Per-user tier-лок остаётся ниже (не кэш).
-  const all = await getPublishedTests(section);
   const tests = all.filter(
     (t) =>
       (!sp.category || t.category === sp.category) &&
@@ -67,6 +73,41 @@ export async function CatalogView({
   const availableTypes = Object.keys(typeCounts).sort();
   const totalCount = all.length;
   const activeCount = (sp.category ? 1 : 0) + (sp.q_type ? 1 : 0);
+
+  // Weakest question types из реального per_type_breakdown (как на дашборде).
+  const attempts = (attemptsRes.data ?? []) as unknown as { per_type_breakdown: Breakdown }[];
+  const agg: Record<string, { correct: number; total: number }> = {};
+  for (const a of attempts) {
+    const b = a.per_type_breakdown;
+    if (!b) continue;
+    for (const [type, v] of Object.entries(b)) {
+      const cur = agg[type] ?? { correct: 0, total: 0 };
+      cur.correct += v.correct;
+      cur.total += v.total;
+      agg[type] = cur;
+    }
+  }
+  const weakTypes = Object.entries(agg)
+    .filter(([, v]) => v.total > 0)
+    .sort(([, x], [, y]) => x.correct / x.total - y.correct / y.total)
+    .map(([type]) => type);
+
+  // «Recommended for you» — только без активного фильтра и при реальном слабом
+  // типе, для которого есть тест в этой секции. Иначе баннер не показываем
+  // (никаких выдуманных «your weakest types» без данных).
+  let recommended: Test | null = null;
+  if (activeCount === 0) {
+    for (const wt of weakTypes) {
+      const matches = all.filter((t) => t.question_types.includes(wt));
+      if (matches.length === 0) continue;
+      recommended = matches.find((t) => meetsTier(userTier, t.tier_required)) ?? matches[0];
+      break;
+    }
+  }
+  const recWeak = recommended
+    ? weakTypes.filter((wt) => recommended!.question_types.includes(wt)).slice(0, 2)
+    : [];
+  const gridTests = recommended ? tests.filter((t) => t.id !== recommended!.id) : tests;
 
   // URL-хелперы: переключают одно измерение, сохраняя другое.
   const catHref = (c?: string) => {
@@ -92,6 +133,11 @@ export async function CatalogView({
 
         {sp.limit === "1" && <CatalogNotice kind="limit" dismissHref={filterBase} />}
         {sp.throttled === "1" && <CatalogNotice kind="throttled" dismissHref={filterBase} />}
+
+        {/* Recommended for you — weak-spot pick */}
+        {recommended && (
+          <RecommendedBanner test={recommended} weak={recWeak} locked={!meetsTier(userTier, recommended.tier_required)} />
+        )}
 
         {/* Filter panel — URL-based, chips = links */}
         <div style={S.filter}>
@@ -134,53 +180,107 @@ export async function CatalogView({
           </div>
         </div>
 
-        {/* Cards */}
-        {tests.length === 0 ? (
-          <div style={S.empty}>No tests match this filter yet.</div>
+        {/* Cards — compact 2-up grid */}
+        {gridTests.length === 0 ? (
+          <div style={S.empty}>
+            {recommended ? "That's the catalog for now — more tests on the way." : "No tests match this filter yet."}
+          </div>
         ) : (
-          <div style={S.list}>
-            {tests.map((t) => {
-              const locked = !meetsTier(userTier, t.tier_required);
-              const isFull = t.category === "full_reading" || t.category === "full_listening";
-              return (
-                <Link key={t.id} href={locked ? "/app/upgrade" : `/app/reading/${t.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-                  <Card interactive padding="var(--space-4)" style={{ opacity: locked ? 0.92 : 1 }}>
-                    <div style={S.cardTop}>
-                      <Badge tone="brand">{categoryLabel(t.category)}</Badge>
-                      {isFull && <Badge>40 Q · band</Badge>}
-                      {t.duration_seconds ? (
-                        <span style={S.duration}>
-                          <Icon name="clock" size={13} /> {Math.round(t.duration_seconds / 60)}m
-                        </span>
-                      ) : null}
-                    </div>
-                    <div style={S.cardTitle}>{t.title}</div>
-                    <div style={S.types}>
-                      {t.question_types.map((qt) => (
-                        <span key={qt} style={S.typeChip}>
-                          {qtypeLabel(qt)}
-                        </span>
-                      ))}
-                    </div>
-                    <div style={S.cardFoot}>
-                      {locked ? (
-                        <span style={S.lockFoot}>
-                          <Icon name="lock" size={14} /> {TIER_LABEL[t.tier_required]}
-                        </span>
-                      ) : (
-                        <span style={S.startFoot}>
-                          Start <Icon name="arrow-right" size={14} />
-                        </span>
-                      )}
-                    </div>
-                  </Card>
-                </Link>
-              );
-            })}
+          <div style={S.grid}>
+            {gridTests.map((t) => (
+              <TestCard key={t.id} t={t} locked={!meetsTier(userTier, t.tier_required)} />
+            ))}
           </div>
         )}
       </div>
     </AppShell>
+  );
+}
+
+/* Compact catalog card — всегда: бейдж · Q-count · duration · тип-теги · Start/Lock. */
+function TestCard({ t, locked }: { t: Test; locked: boolean }) {
+  const isFull = t.category === "full_reading" || t.category === "full_listening";
+  const shownTypes = t.question_types.slice(0, 3);
+  const extra = t.question_types.length - shownTypes.length;
+  return (
+    <Link href={locked ? "/app/upgrade" : `/app/reading/${t.id}`} style={{ textDecoration: "none", color: "inherit", height: "100%" }}>
+      <Card interactive padding="17px 18px" style={{ display: "flex", flexDirection: "column", height: "100%", opacity: locked ? 0.92 : 1 }}>
+        <div style={S.cardTop}>
+          <Badge tone="brand">{categoryLabel(t.category)}</Badge>
+          {t.question_count > 0 && (
+            <Badge mono>
+              {t.question_count} Q{isFull ? " · band" : ""}
+            </Badge>
+          )}
+          {t.duration_seconds ? (
+            <span style={S.duration}>
+              <Icon name="clock" size={12} /> {Math.round(t.duration_seconds / 60)}m
+            </span>
+          ) : null}
+        </div>
+        <div style={S.cardTitle}>{t.title}</div>
+        <div style={S.types}>
+          {shownTypes.map((qt) => (
+            <span key={qt} style={S.typeChip}>
+              {qtypeLabel(qt)}
+            </span>
+          ))}
+          {extra > 0 && <span style={{ ...S.typeChip, color: "var(--text-disabled)" }}>+{extra}</span>}
+        </div>
+        <div style={S.cardFoot}>
+          {locked ? (
+            <span style={S.lockFoot}>
+              <Icon name="lock" size={14} /> {TIER_LABEL[t.tier_required]}
+            </span>
+          ) : (
+            <span style={S.startFoot}>
+              Start <Icon name="arrow-right" size={14} />
+            </span>
+          )}
+        </div>
+      </Card>
+    </Link>
+  );
+}
+
+/* Brand banner — рекомендованный тест под слабейшие типы пользователя. */
+function RecommendedBanner({ test, weak, locked }: { test: Test; weak: string[]; locked: boolean }) {
+  return (
+    <div style={S.banner}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={S.bannerEyebrow}>
+          <Icon name="target" size={14} strokeWidth={2.6} /> Recommended for you
+        </div>
+        <div style={S.bannerTitle}>{test.title}</div>
+        {weak.length > 0 && (
+          <div style={S.bannerText}>
+            Targets{" "}
+            {weak.map((wt, i) => (
+              <span key={wt}>
+                {i > 0 ? " & " : ""}
+                <b style={{ color: "#fff" }}>{qtypeLabel(wt)}</b>
+              </span>
+            ))}{" "}
+            — your weakest {weak.length === 1 ? "type" : "types"}.
+          </div>
+        )}
+      </div>
+      <div style={{ flex: "none", textAlign: "center" }}>
+        {test.question_count > 0 && (
+          <div style={S.bannerMeta}>
+            {test.question_count} Q{test.duration_seconds ? ` · ${Math.round(test.duration_seconds / 60)}m` : ""}
+          </div>
+        )}
+        <Button
+          variant="secondary"
+          trailingIcon="arrow-right"
+          href={locked ? "/app/upgrade" : `/app/reading/${test.id}`}
+          style={{ color: "var(--brand-active)", marginTop: 10 }}
+        >
+          {locked ? "Unlock" : "Start"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -245,6 +345,24 @@ const S: Record<string, React.CSSProperties> = {
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "0 0 4px", color: "var(--text-primary)" },
   sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "0 0 16px" },
 
+  banner: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: "var(--radius-xl)",
+    background: "linear-gradient(150deg, var(--brand), var(--brand-active))",
+    color: "#fff",
+    padding: "22px 24px",
+    margin: "0 0 18px",
+    display: "flex",
+    alignItems: "center",
+    gap: 22,
+    boxShadow: "var(--shadow-md)",
+  },
+  bannerEyebrow: { display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "rgba(255,255,255,0.82)", fontWeight: 600 },
+  bannerTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "9px 0 4px" },
+  bannerText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.86)" },
+  bannerMeta: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.8)" },
+
   filter: {
     background: "var(--surface)",
     border: "1px solid var(--border)",
@@ -265,14 +383,14 @@ const S: Record<string, React.CSSProperties> = {
   resultNum: { fontFamily: "var(--font-mono)", color: "var(--text-primary)" },
 
   empty: { padding: "var(--space-8)", textAlign: "center", color: "var(--text-muted)", border: "1px dashed var(--border)", borderRadius: "var(--radius-lg)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
-  list: { display: "flex", flexDirection: "column", gap: 12 },
+  grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch" },
 
-  cardTop: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 },
-  duration: { marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" },
-  cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "var(--tracking-snug)" },
-  types: { display: "flex", flexWrap: "wrap", gap: 6, margin: "12px 0 14px" },
+  cardTop: { display: "flex", alignItems: "center", gap: 7, marginBottom: 11 },
+  duration: { marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" },
+  cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-md)", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3, letterSpacing: "var(--tracking-snug)", minHeight: 42 },
+  types: { display: "flex", flexWrap: "wrap", gap: 6, margin: "12px 0 15px" },
   typeChip: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", background: "var(--surface-inset)", padding: "3px 9px", borderRadius: "var(--radius-full)" },
-  cardFoot: { display: "flex", alignItems: "center", justifyContent: "space-between" },
+  cardFoot: { marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between" },
   lockFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--warn-text)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600 },
   startFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600 },
 };

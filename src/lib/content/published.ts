@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { contentItem } from "@/db/schema";
+import { contentItem, question } from "@/db/schema";
 
 /**
  * Cached list of PUBLISHED tests for a section (BRIEF §4.1 catalog). The set only
@@ -16,8 +16,8 @@ import { contentItem } from "@/db/schema";
  * primary, immediate invalidation.
  */
 export const getPublishedTests = unstable_cache(
-  async (section: "reading" | "listening") =>
-    db
+  async (section: "reading" | "listening") => {
+    const items = await db
       .select({
         id: contentItem.id,
         title: contentItem.title,
@@ -30,7 +30,19 @@ export const getPublishedTests = unstable_cache(
       .where(
         and(eq(contentItem.section, section), eq(contentItem.status, "published")),
       )
-      .orderBy(desc(contentItem.createdAt)),
+      .orderBy(desc(contentItem.createdAt));
+    if (items.length === 0) return [];
+
+    // Кол-во вопросов на тест — одним grouped-count (для Q-count в карточке
+    // каталога); кэшируется вместе со списком, инвалидируется тем же тегом.
+    const counts = await db
+      .select({ cid: question.contentItemId, n: sql<number>`count(*)::int` })
+      .from(question)
+      .groupBy(question.contentItemId);
+    const byId = new Map(counts.map((c) => [c.cid, Number(c.n) || 0]));
+
+    return items.map((it) => ({ ...it, question_count: byId.get(it.id) ?? 0 }));
+  },
   ["published-tests"],
   { tags: ["content_item"], revalidate: 300 },
 );
