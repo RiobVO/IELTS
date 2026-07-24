@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { captureServer } from "@/lib/analytics/server";
+import { verifyTurnstile } from "@/lib/anti-bot/turnstile";
 import { createClient } from "@/lib/supabase/server";
 
 function fail(message: string): never {
@@ -26,6 +27,14 @@ export async function signUp(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const ref = String(formData.get("ref") ?? "").trim();
+
+  // Anti-bot gate (§11). No-op when Turnstile keys aren't configured (fail-open),
+  // so signup is unaffected until the keys are added. The token rides in the
+  // Cloudflare-injected hidden field.
+  const captcha = String(formData.get("cf-turnstile-response") ?? "") || null;
+  if (!(await verifyTurnstile(captcha))) {
+    fail("Could not verify you're human. Please try again.");
+  }
 
   const supabase = await createClient();
   // The inviter's referral_code rides in auth user metadata under "ref_code".

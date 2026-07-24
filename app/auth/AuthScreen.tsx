@@ -11,6 +11,9 @@ interface AuthScreenProps {
   message?: string;
   refCode?: string;
   next: string;
+  /** Cloudflare Turnstile site key — when set, the signup form renders the
+   *  anti-bot widget. Absent = gate off (the server seam is fail-open too). */
+  turnstileSiteKey?: string;
 }
 
 function GoogleG() {
@@ -24,7 +27,7 @@ function GoogleG() {
   );
 }
 
-export function AuthScreen({ error, message, refCode, next }: AuthScreenProps) {
+export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: AuthScreenProps) {
   const [mode, setMode] = useState<"signup" | "login">("signup");
   const [phase, setPhase] = useState<"idle" | "cover" | "reveal">("idle");
   const [reveal, setReveal] = useState(0);
@@ -35,6 +38,21 @@ export function AuthScreen({ error, message, refCode, next }: AuthScreenProps) {
     if (t1.current) clearTimeout(t1.current);
     if (t2.current) clearTimeout(t2.current);
   }, []);
+
+  // Load the Turnstile script once when the gate is enabled. The widget renders
+  // implicitly from the `.cf-turnstile` element below (signup is the initial
+  // mode, so it's in the DOM when the script scans) and injects its token into
+  // the surrounding form as the `cf-turnstile-response` field.
+  useEffect(() => {
+    if (!turnstileSiteKey) return;
+    const SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+    if (document.querySelector(`script[src="${SRC}"]`)) return;
+    const s = document.createElement("script");
+    s.src = SRC;
+    s.async = true;
+    s.defer = true;
+    document.head.appendChild(s);
+  }, [turnstileSiteKey]);
 
   const switchTo = (target: "signup" | "login") => {
     if (target === mode || phase !== "idle") return;
@@ -116,6 +134,13 @@ export function AuthScreen({ error, message, refCode, next }: AuthScreenProps) {
                     <Input icon="lock" name="password" type="password" placeholder="Password" required minLength={6} autoComplete="new-password" />
                   </div>
                 </div>
+                {turnstileSiteKey && (
+                  <div
+                    className="auth-rise cf-turnstile"
+                    data-sitekey={turnstileSiteKey}
+                    style={{ marginTop: 14, animationDelay: "270ms" }}
+                  />
+                )}
                 <div className="auth-rise" style={{ marginTop: 18, animationDelay: "300ms" }}>
                   <Button size="lg" fullWidth trailingIcon="arrow-right" type="submit">Create account</Button>
                 </div>

@@ -118,3 +118,18 @@ export function telegramConfig(): {
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || null;
   return { token, adminIds, webhookSecret };
 }
+
+/**
+ * Опциональная конфигурация Cloudflare Turnstile (анти-бот на signup, §11). Как и
+ * остальные seam-и — НЕ обязательна для старта: без пары ключей капча отключена
+ * (fail-open, signup работает без неё). Активируется только когда заданы ОБА:
+ * NEXT_PUBLIC_TURNSTILE_SITE_KEY (публичный, рендерит виджет в браузере) и
+ * TURNSTILE_SECRET_KEY (server-only, для siteverify). Один без другого = выкл,
+ * иначе был бы виджет без серверной проверки (или наоборот). SERVER-ONLY-чтение.
+ */
+export function turnstileConfig(): { siteKey: string; secretKey: string } | null {
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const secretKey = process.env.TURNSTILE_SECRET_KEY;
+  if (!siteKey?.trim() || !secretKey?.trim()) return null;
+  return { siteKey: siteKey.trim(), secretKey: secretKey.trim() };
+}
