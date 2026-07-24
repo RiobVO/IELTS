@@ -40,7 +40,7 @@
 E2E прогнан на проде (2026-06-17): реальный submit → grade 8/13 [6], applyPostSubmit rated Δ3 [2],
   recompute → leaderboard rank=1 [2], rating 1000→1003/xp→18; каталог список+фильтры+счётчики [4];
   region self-join Navoiy←Uzbekistan [7]. Все поведенческие дыры закрыты машинно.
-Сейчас в работе: тестовая инфра (Vitest, раздел 4b) — волна 1 закрыта. Затем — фаза дизайна (раздел 4).
+Сейчас в работе: тестовая инфра (Vitest, раздел 4b) — волны 1–2 закрыты (93 теста), осталась волна 3 (integration на local docker). Затем — фаза дизайна (раздел 4).
 Тестовая БД восстановлена после db:down-инцидента: 2 профиля (eleru340 = admin), 9 Reading + Full +
   Listening published, eleru340 имеет демо-attempt. (db:down = revert ALL — НЕ гонять на проде.)
 </state>
@@ -130,7 +130,13 @@ co-located `src/**/*.test.ts`). Запуск: `npm test` (= `vitest run`) / `npm
   округление percent, защита от деления на ноль), Elo `expectedScore`/`ratingDeltas`
   (0.5 / симметрия / zero-sum / знак / округление / масштаб K), tiers `effectiveTier`
   (фейк-таймеры) / `meetsTier` / `hasFullReview`, `canonQuestionType`, `findPlan`, `scrubEvent`.
-- `☐` Волна 2 — импорт-парсеры (fixture-driven из `samples/`).
+- `✅ 2026-06-17` **Волна 2 — импорт-парсеры** (+31 тест, всего 93; `tsc` 0).
+  `extract-js` (балансировка скобок со строками, vm-изоляция: глобалы Node не видны + функция
+  не пишет в реальный global, error→null), `parseTest`/`parseListening`/`parseFullReading` на
+  inline-фикстурах (диспетчер, мета, XSS-санитайз пассажа, маршрут ключа exact/text_accept/mcq_set,
+  инфер типов, band-шкала 0..40, question→passage). HTML-samples gitignored (§11) → НЕ коммитим;
+  поверх реальных файлов — блоки `describe.skipIf(нет файла)` (Tuatara 14Q / Banff MCQ 13Q /
+  listening 40Q·4 части / Full 40Q·3 пассажа): гоняются у владельца локально, скип в CI.
 - `☐` Волна 3 — integration на local docker (RLS / answer_key / изоляция attempt / идемпотентность submit).
 - `☐` Волна 4 (опц.) — e2e Playwright (login → exam → submit → result).
 
