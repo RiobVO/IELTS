@@ -86,7 +86,14 @@ identity/онбординг-гейт (W1-2), параллельные запро
 **Закрывает/полирует:** W1-4. · **Acceptance:** band-состояния и данные те же, пустых
 прочерков-заглушек нет; на проде вживую.
 
-### `☐` S2 · League → `app/app/leaderboard/page.tsx`
+### `✅` S2 · League → `app/app/leaderboard/page.tsx`
+**✅ 2026-06-18:** Option C (Regional leagues) — header «{scope} League», bando scope/period-табы
+(globe/map-pin иконки, server-side URL-фильтр сохранён), 2-кол: ранг-доска (you-row glow, медали
+топ-3, регион под именем) слева + Tiers-лестница (детерминированный rating→Bronze/Amethyst/Ruby/
+Diamond, «You're here») и Your-standing (реальный #rank of N, дистанция до следующего) справа.
+**Конфликт→честно:** промо/демоут-зоны + ▲/▼-дельты + таймер сброса выкинуты (нет недельного
+сброса/истории рангов в бэке); «путь наверх» отдан tier-лестнице над реальным Elo. +icons globe/
+map-pin. Elo/region self-join/readLeaderboard не тронуты. tsc+build+93 теста зелёные.
 **Источник:** `04-catalog (1).html`.
 **Меняем:** scope-табы Global→Uzbekistan→Tashkent→Yangiyo'l; tier-лестница
 (Bronze→Amethyst→Diamond); your-standing карточка; зоны promotion/holding/demotion с ▲/▼;
@@ -144,7 +151,7 @@ annotation-капсула (highlight / note / A−A+ / theme) по центру 
 | # | Экран | Файл-источник | Закрывает | Статус |
 |---|---|---|---|---|
 | S1 | Dashboard | `03-league (1).html` | W1-4 | ✅ |
-| S2 | League | `04-catalog (1).html` | W1-7 + §4.6 | ☐ |
+| S2 | League | `04-catalog (1).html` | W1-7 + §4.6 | ✅ |
 | S3 | Catalog | `05-results (1).html` | W2-4 | ☐ |
 | S4 | Badges | `HANDOFF (1).md` | W2-5 | ☐ |
 | S5 | Results | `06-badges (1).html` | W1-1/W1-3 (open-флаг) | ☐ |

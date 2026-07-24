@@ -23,6 +23,7 @@ function asPeriod(v: string | undefined): Period {
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
+const firstName = (n: string) => (n || "—").split(" ")[0];
 
 function initials(name: string): string {
   const parts = (name || "").trim().split(/\s+/).filter(Boolean);
@@ -31,6 +32,30 @@ function initials(name: string): string {
 
 function medalColor(rank: number): string | null {
   return rank === 1 ? "var(--gold-500)" : rank === 2 ? "var(--slate-300)" : rank === 3 ? "var(--orange-500)" : null;
+}
+
+/**
+ * League tiers — детерминированная классификация реального Elo-рейтинга в
+ * именованные лиги (НЕ выдуманная недельная промо-механика: чистая функция над
+ * существующим `profile.rating`). Старт 1000 → Amethyst (брендовая «домашняя»
+ * лига); путь наверх честно завязан на рост рейтинга.
+ */
+interface Tier {
+  key: string;
+  name: string;
+  color: string;
+  min: number;
+}
+const TIERS: Tier[] = [
+  { key: "bronze", name: "Bronze", color: "var(--streak)", min: 0 },
+  { key: "amethyst", name: "Amethyst", color: "var(--brand)", min: 950 },
+  { key: "ruby", name: "Ruby", color: "var(--error)", min: 1150 },
+  { key: "diamond", name: "Diamond", color: "var(--gold-500)", min: 1350 },
+];
+function tierIndex(rating: number): number {
+  let idx = 0;
+  for (let i = 0; i < TIERS.length; i++) if (rating >= TIERS[i].min) idx = i;
+  return idx;
 }
 
 export default async function Leaderboard({
@@ -77,11 +102,16 @@ export default async function Leaderboard({
   const { rows, viewerRow } = await readLeaderboard(period, scope, profile?.id);
 
   const showScore = period !== "all_time";
-  const viewerPinned = viewerRow && !rows.some((r) => r.userId === viewerRow.userId);
+  const viewerPinned = !!viewerRow && !rows.some((r) => r.userId === viewerRow.userId);
   const viewer = viewerRow ?? rows.find((r) => r.isViewer) ?? null;
   const nextUp = viewer ? rows.find((r) => r.rank === viewer.rank - 1) ?? null : null;
   const val = (r: LeaderRow) => (showScore ? r.score : r.rating);
-  const top3 = rows.slice(0, 3);
+  const total = rows.length + (viewerPinned ? 1 : 0);
+
+  const scopeLabel = scopeOptions.find((o) => o.value === scope)?.label ?? "Global";
+  const rating = profile?.rating ?? 1000;
+  const tIdx = tierIndex(rating);
+  const nextTier = TIERS[tIdx + 1] ?? null;
 
   return (
     <AppShell active="leaderboard">
@@ -90,11 +120,11 @@ export default async function Leaderboard({
           {/* Header */}
           <div style={S.head}>
             <span style={S.crown}>
-              <Icon name="crown" size={24} style={{ color: "var(--text-on-brand)" }} />
+              <Icon name="crown" size={22} style={{ color: "var(--text-on-brand)" }} />
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={S.h1}>Leaderboard</h1>
-              <div style={S.sub}>{showScore ? `XP · ${periodLabel(period)}` : "Global Elo rating"}</div>
+              <h1 style={S.h1}>{scopeLabel} League</h1>
+              <div style={S.sub}>{showScore ? `XP · ${periodLabel(period)}` : "Ranked by Elo rating"}</div>
             </div>
           </div>
 
@@ -104,47 +134,13 @@ export default async function Leaderboard({
             periodOptions={PERIODS.map((p) => ({ value: p, label: periodLabel(p) }))}
             scopeOptions={scopeOptions}
           />
+          <p style={S.scopeNote}>Compete locally first, then climb to your city, country, and global boards.</p>
 
           {rows.length === 0 ? (
-            <div style={S.empty}>No ranking yet — take a test to enter the league.</div>
+            <div style={S.empty}>No ranking yet — sit a rated test to enter the league.</div>
           ) : (
-            <>
-              {/* Podium (top 3) */}
-              {top3.length >= 3 && (
-                <div style={S.podium}>
-                  <PodiumCol row={top3[1]} place={0} showScore={showScore} />
-                  <PodiumCol row={top3[0]} place={1} showScore={showScore} />
-                  <PodiumCol row={top3[2]} place={2} showScore={showScore} />
-                </div>
-              )}
-
-              {/* YOU hero */}
-              {viewer && (
-                <div style={S.youHero}>
-                  <div style={{ flex: "none", textAlign: "center" }}>
-                    <div style={S.youLabel}>Your rank</div>
-                    <div style={S.youRank}>#{viewer.rank}</div>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {nextUp ? (
-                      <div style={S.youNext}>
-                        <b style={S.youNextNum}>
-                          {fmt(val(nextUp) - val(viewer))}
-                          {showScore ? " XP" : " pts"}
-                        </b>{" "}
-                        to overtake {nextUp.displayName.split(" ")[0]} → climb to #{nextUp.rank}
-                      </div>
-                    ) : (
-                      <div style={S.youNext}>You&apos;re at the top of the league 🏆</div>
-                    )}
-                  </div>
-                  <Button href="/app/reading" trailingIcon="arrow-right" style={{ flex: "none" }}>
-                    Practise
-                  </Button>
-                </div>
-              )}
-
-              {/* Ranked list */}
+            <div style={S.grid}>
+              {/* Ranked board */}
               <div style={S.list}>
                 {rows.map((r) => (
                   <RowItem key={r.userId} row={r} showScore={showScore} />
@@ -156,7 +152,19 @@ export default async function Leaderboard({
                   </>
                 ) : null}
               </div>
-            </>
+
+              {/* Side: tiers + standing */}
+              <div style={S.side}>
+                <TiersCard activeIdx={tIdx} rating={rating} nextTier={nextTier} />
+                <StandingCard
+                  viewer={viewer}
+                  nextUp={nextUp}
+                  total={total}
+                  showScore={showScore}
+                  val={val}
+                />
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -164,31 +172,107 @@ export default async function Leaderboard({
   );
 }
 
-function PodiumCol({ row, place, showScore }: { row: LeaderRow; place: 0 | 1 | 2; showScore: boolean }) {
-  const heights = [120, 168, 96];
-  const medal = place === 1 ? "var(--gold-500)" : place === 0 ? "var(--slate-300)" : "var(--orange-500)";
-  const av = place === 1 ? 78 : 60;
-  const value = showScore ? row.score : row.rating;
+/* Tier ladder — реальный рейтинг → именованная лига; «You're here» на текущей. */
+function TiersCard({
+  activeIdx,
+  rating,
+  nextTier,
+}: {
+  activeIdx: number;
+  rating: number;
+  nextTier: Tier | null;
+}) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-      {place === 1 && <Icon name="crown" size={30} style={{ color: "var(--gold-500)" }} />}
-      <div style={{ position: "relative" }}>
-        <div style={{ width: av, height: av, borderRadius: "50%", display: "grid", placeItems: "center", background: "var(--surface-hover)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: place === 1 ? 22 : 16, boxShadow: `0 0 0 3px ${medal}`, border: row.isViewer ? "2px solid var(--brand)" : "none" }}>
-          {initials(row.displayName)}
-        </div>
-        <span style={{ position: "absolute", bottom: -7, left: "50%", transform: "translateX(-50%)", width: 24, height: 24, borderRadius: "50%", background: medal, color: "#1a1525", display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, border: "2px solid var(--bg-base)" }}>{row.rank}</span>
+    <div style={S.card}>
+      <div style={S.eyebrow}>Tiers</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+        {[...TIERS]
+          .map((t, i) => ({ t, i }))
+          .reverse()
+          .map(({ t, i }) => {
+            const here = i === activeIdx;
+            return (
+              <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 11, opacity: here ? 1 : 0.55 }}>
+                <span style={{ width: 30, height: 30, flex: "none", borderRadius: 9, display: "grid", placeItems: "center", background: `color-mix(in oklab, ${t.color} 18%, var(--surface))`, color: t.color }}>
+                  <Icon name="trophy" size={16} strokeWidth={2.2} />
+                </span>
+                <span style={{ flex: 1, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: here ? 800 : 600, color: "var(--text-primary)" }}>
+                  {t.name}
+                </span>
+                {here && (
+                  <span style={S.herePill}>You&apos;re here</span>
+                )}
+              </div>
+            );
+          })}
       </div>
-      <div style={{ textAlign: "center", marginTop: 2 }}>
-        <div style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: row.isViewer ? "var(--text-link)" : "var(--text-primary)", whiteSpace: "nowrap", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis" }}>
-          {(row.displayName || "—").split(" ")[0]}
-        </div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 600, color: medal }}>
-          {fmt(value)}{showScore ? " XP" : ""}
-        </div>
+      <div style={S.tierFoot}>
+        <span>
+          Your rating <span style={{ fontFamily: "var(--font-mono)", color: "var(--brand)", fontWeight: 600 }}>{rating}</span>
+        </span>
+        {nextTier && (
+          <span>
+            <span style={{ fontFamily: "var(--font-mono)", color: "var(--brand-active)", fontWeight: 600 }}>{nextTier.min - rating}</span> to {nextTier.name}
+          </span>
+        )}
       </div>
-      <div style={{ position: "relative", width: "100%", height: heights[place], borderRadius: "14px 14px 0 0", background: place === 1 ? "linear-gradient(180deg, var(--brand), var(--brand-active))" : "linear-gradient(180deg, var(--surface-raised), var(--surface))", border: "2px solid", borderColor: place === 1 ? "var(--brand-border)" : "var(--border)", borderBottom: "none" }}>
-        <div style={{ position: "absolute", top: 12, left: 0, right: 0, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: place === 1 ? 30 : 22, fontWeight: 700, color: place === 1 ? "var(--text-on-brand)" : "var(--text-muted)" }}>{row.rank}</div>
+    </div>
+  );
+}
+
+/* Your standing — реальный ранг/из скольких + дистанция до следующего. */
+function StandingCard({
+  viewer,
+  nextUp,
+  total,
+  showScore,
+  val,
+}: {
+  viewer: LeaderRow | null;
+  nextUp: LeaderRow | null;
+  total: number;
+  showScore: boolean;
+  val: (r: LeaderRow) => number;
+}) {
+  if (!viewer) {
+    return (
+      <div style={S.standing}>
+        <div style={S.standingEyebrow}>Your standing</div>
+        <p style={S.standingEmpty}>You&apos;re not ranked yet — sit a rated test to claim your spot.</p>
+        <Button fullWidth trailingIcon="arrow-right" href="/app/reading" style={{ justifyContent: "center", marginTop: 14 }}>
+          Practise
+        </Button>
       </div>
+    );
+  }
+
+  const gap = nextUp ? val(nextUp) - val(viewer) : 0;
+  const pct = nextUp && val(nextUp) > 0 ? Math.min(100, Math.round((val(viewer) / val(nextUp)) * 100)) : 100;
+  return (
+    <div style={S.standing}>
+      <div style={S.standingEyebrow}>Your standing</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={S.standingRank}>#{viewer.rank}</span>
+        <span style={S.standingOf}>of {total}</span>
+      </div>
+      <div style={S.standingTrack}>
+        <div style={{ height: "100%", width: `${pct}%`, borderRadius: "var(--radius-full)", background: "var(--brand)" }} />
+      </div>
+      <div style={S.standingHint}>
+        {nextUp ? (
+          <>
+            <b style={{ fontFamily: "var(--font-mono)", color: "var(--brand-active)" }}>
+              {fmt(gap)} {showScore ? "XP" : "pts"}
+            </b>{" "}
+            to overtake {firstName(nextUp.displayName)} → #{nextUp.rank}
+          </>
+        ) : (
+          "Top of the league 🏆"
+        )}
+      </div>
+      <Button fullWidth trailingIcon="arrow-right" href="/app/reading" style={{ justifyContent: "center", marginTop: 14 }}>
+        Practise
+      </Button>
     </div>
   );
 }
@@ -196,19 +280,28 @@ function PodiumCol({ row, place, showScore }: { row: LeaderRow; place: 0 | 1 | 2
 function RowItem({ row, showScore }: { row: LeaderRow; showScore: boolean }) {
   const medal = medalColor(row.rank);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 13, padding: "11px 15px", background: row.isViewer ? "var(--brand-subtle)" : "var(--surface)", border: `1.5px solid ${row.isViewer ? "var(--brand)" : "var(--border)"}`, borderRadius: "var(--radius-md)" }}>
-      <div style={{ width: 24, flex: "none", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 700, color: medal || "var(--text-muted)" }}>{row.rank}</div>
-      <div style={{ width: 38, height: 38, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", background: medal ? `color-mix(in oklab, ${medal} 80%, white)` : "var(--surface-hover)", color: medal ? "#1a1525" : "var(--text-secondary)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, boxShadow: medal ? `0 0 0 2px ${medal}` : "inset 0 0 0 1px var(--border)" }}>{initials(row.displayName)}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: row.isViewer ? 800 : 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {row.displayName || "—"}
-          {row.isViewer && <span style={{ color: "var(--text-link)" }}> · you</span>}
-        </div>
-        {row.regionName && <div style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", marginTop: 1 }}>{row.regionName}</div>}
+    <div style={{ ...S.lrow, ...(row.isViewer ? S.lrowYou : null) }}>
+      <div style={{ ...S.rk, ...(medal ? { color: medal } : null) }}>{row.rank}</div>
+      <div
+        style={{
+          ...S.av,
+          ...(medal
+            ? { background: `color-mix(in oklab, ${medal} 80%, white)`, color: "#1a1525", boxShadow: `0 0 0 2px ${medal}` }
+            : null),
+        }}
+      >
+        {initials(row.displayName)}
       </div>
-      <div style={{ flex: "none", textAlign: "right", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "var(--text-base)", fontWeight: 600, color: row.isViewer ? "var(--text-link)" : "var(--text-primary)" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...S.nm, fontWeight: row.isViewer ? 800 : 600 }}>
+          {row.displayName || "—"}
+          {row.isViewer && <span style={{ color: "var(--brand-active)", fontWeight: 700 }}> · you</span>}
+        </div>
+        {row.regionName && <div style={S.region}>{row.regionName}</div>}
+      </div>
+      <div style={S.xp}>
         {fmt(showScore ? row.score : row.rating)}
-        {showScore && <span style={{ fontSize: "var(--text-2xs)", color: "var(--text-muted)" }}> XP</span>}
+        <span style={S.xpUnit}>{showScore ? " XP" : ""}</span>
       </div>
     </div>
   );
@@ -216,21 +309,39 @@ function RowItem({ row, showScore }: { row: LeaderRow; showScore: boolean }) {
 
 const S: Record<string, React.CSSProperties> = {
   arena: { minHeight: "100%", background: "radial-gradient(120% 80% at 50% -8%, color-mix(in oklab, var(--brand) 14%, white) 0%, var(--bg-base) 52%)" },
-  wrap: { maxWidth: 720, margin: "0 auto", padding: "26px 28px 44px" },
+  wrap: { maxWidth: 960, margin: "0 auto", padding: "26px 28px 44px" },
   head: { display: "flex", alignItems: "center", gap: 13, marginBottom: 16 },
-  crown: { width: 46, height: 46, flex: "none", borderRadius: 14, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", boxShadow: "0 0 28px -4px color-mix(in oklab, var(--brand) 80%, transparent)" },
+  crown: { width: 44, height: 44, flex: "none", borderRadius: 13, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", boxShadow: "0 0 26px -4px color-mix(in oklab, var(--brand) 80%, transparent)" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
   sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
+  scopeNote: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", margin: "0 2px 16px" },
 
-  podium: { display: "grid", gridTemplateColumns: "1fr 1.12fr 1fr", alignItems: "end", gap: 12, marginTop: 8, marginBottom: 4 },
-
-  youHero: { display: "flex", alignItems: "center", gap: 18, background: "linear-gradient(180deg, var(--brand-subtle), var(--surface))", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-xl)", padding: "18px 22px", margin: "18px 0 8px", boxShadow: "var(--shadow-lg)" },
-  youLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-link)" },
-  youRank: { fontFamily: "var(--font-ui)", fontSize: 52, fontWeight: 900, lineHeight: 1, letterSpacing: "-0.03em", color: "var(--brand)" },
-  youNext: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
-  youNextNum: { color: "var(--text-link)", fontFamily: "var(--font-mono)" },
-
-  list: { display: "flex", flexDirection: "column", gap: 7, marginTop: 10 },
+  grid: { display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20, alignItems: "start" },
+  list: { display: "flex", flexDirection: "column", gap: 7 },
   divider: { height: 1, background: "var(--border)", margin: "4px 0" },
+
+  lrow: { display: "flex", alignItems: "center", gap: 13, padding: "11px 15px", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-md)" },
+  lrowYou: { background: "var(--brand-subtle)", borderColor: "var(--brand)", boxShadow: "0 0 28px -8px color-mix(in oklab, var(--brand) 70%, transparent)" },
+  rk: { width: 24, flex: "none", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-muted)" },
+  av: { width: 38, height: 38, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, background: "var(--surface-hover)", color: "var(--text-secondary)", boxShadow: "inset 0 0 0 1px var(--border)" },
+  nm: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  region: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", marginTop: 1 },
+  xp: { flex: "none", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "var(--text-base)", fontWeight: 600, color: "var(--text-primary)" },
+  xpUnit: { fontSize: "var(--text-2xs)", color: "var(--text-muted)" },
+
+  side: { display: "flex", flexDirection: "column", gap: 14 },
+  card: { background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-sm)" },
+  eyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
+  herePill: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--brand-active)", background: "var(--brand-subtle)", borderRadius: "var(--radius-full)", padding: "3px 9px", whiteSpace: "nowrap" },
+  tierFoot: { display: "flex", flexDirection: "column", gap: 4, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border-subtle)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
+
+  standing: { background: "linear-gradient(180deg, var(--brand-subtle), var(--surface))", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-md)" },
+  standingEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand-active)", marginBottom: 8 },
+  standingRank: { fontFamily: "var(--font-ui)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.03em" },
+  standingOf: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
+  standingTrack: { height: 9, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden", margin: "12px 0 8px" },
+  standingHint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
+  standingEmpty: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.5, color: "var(--text-secondary)", margin: "0" },
+
   empty: { marginTop: 24, padding: "2rem", textAlign: "center", color: "var(--text-muted)", border: "1px dashed var(--border)", borderRadius: "var(--radius-lg)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
 };
