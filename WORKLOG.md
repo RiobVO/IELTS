@@ -40,7 +40,8 @@
 E2E прогнан на проде (2026-06-17): реальный submit → grade 8/13 [6], applyPostSubmit rated Δ3 [2],
   recompute → leaderboard rank=1 [2], rating 1000→1003/xp→18; каталог список+фильтры+счётчики [4];
   region self-join Navoiy←Uzbekistan [7]. Все поведенческие дыры закрыты машинно.
-Сейчас в работе: — (трек тестов на паузе: волны 1–2 закрыты, 93 теста на `main`; волны 3–4 опциональны — раздел 4b). Следующая активная фаза — дизайн (раздел 4).
+Сейчас в работе: SECURITY+CORRECTNESS трек (раздел 3c). P0 (RLS write-lockdown) закрыт ЛОКАЛЬНО
+  (verify зелёный); миграция 0010 ЕЩЁ НЕ применена к боевому Supabase — ждёт «делай». Дальше P1-3..P1-5.
 Тестовая БД восстановлена после db:down-инцидента: 2 профиля (eleru340 = admin), 9 Reading + Full +
   Listening published, eleru340 имеет демо-attempt. (db:down = revert ALL — НЕ гонять на проде.)
 </state>
@@ -108,6 +109,30 @@ E2E прогнан на проде (2026-06-17): реальный submit → gra
 
 - `✅ 2026-06-17` **[11] RLS на `public._migrations`** (миграция `0009`, `ENABLE RLS` без политик — owner-мигратор bypass'ит, anon без доступа; применено к Supabase, `db:status`/`migrate` работают; коммит `76ac660`). Supabase Advisor флагнул. Включить через миграцию.
   *Acceptance:* Advisor больше не показывает это; миграции продолжают применяться.
+
+---
+
+## 3c. SECURITY + CORRECTNESS findings (новый трек, порядок = приоритет)
+
+Подтверждённые по коду находки (file:line реальные). Порядок: security → лаг → корректность.
+Каждая группа = подтверждённый шаг (scope → «делай» → фикс → verify → коммит).
+
+- `✅ 2026-06-17` **[P0] RLS write-lockdown** (профиль-эскалация + подделка счёта). Миграция
+  `0010_profile_attempt_write_lockdown`: `REVOKE INSERT, UPDATE ON {profile,attempt} FROM
+  authenticated` (RLS строчный, не колоночный → клиент мог PATCH-ить свою `profile.role`/
+  `attempt.raw_score`). Легитимная запись идёт owner-путём (server actions), клиентских anon-
+  записей в эти таблицы нет → revoke безопасен. RLS-тест в `verify.ts` (authenticated denied на
+  role-patch и submitted-attempt-forge; owner-путь пишет). TDD: RED (тест ловил дыру) → GREEN.
+  verify exit 0, tsc 0, vitest 93/93. **⚠️ НЕ применено к Supabase — ждёт «делай» на `db:migrate`.**
+- `☐` **[P1-3] analytics блокирует клик** — `await captureServer` в test_start/test_submit
+  (`actions.ts:197,357`) ждёт flush PostHog до 2с → перевести в `after()`.
+- `☐` **[P1-4] mcq_multi нельзя ответить верно** — `ExamRunner` answers `Record<string,string>`
+  + radio для всех; нужен `string|string[]` + checkbox для mcq_multi.
+- `☐` **[P1-5] applyPostSubmit не атомарен** — read-modify-write xp/streak/rating → транзакция
+  + SQL-инкремент.
+- `☐ опц.` **[6] middleware getUser** — НЕ трогать без доказательства, что refresh токена не ломается.
+- `✅` **[7] result-пересчёт по текущему answer_key** — уже задокументирован (RegradeRequiredError,
+  full re-grade отложен); только сверка заметки, не фиксим.
 
 ---
 

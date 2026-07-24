@@ -162,6 +162,71 @@ async function profileAutoCreated(): Promise<boolean> {
   }
 }
 
+/**
+ * Asserts the 0010 write-lockdown (BRIEF §6.1 / §4.6). RLS in 0001 is ROW-level
+ * only, so the `authenticated` (anon-key) role could PATCH any column of its own
+ * row — escalating privileges via profile.role or forging a score via a
+ * straight-to-`submitted` attempt. After 0010 both must be denied at the GRANT
+ * layer (42501), while SELECT and the owner-path (server-action) write keep
+ * working. Inserts a throwaway auth user (trigger makes its profile); cleans up
+ * via the auth.users cascade.
+ */
+async function clientWriteLockdown(): Promise<{
+  profileUpdateDenied: boolean;
+  attemptInsertDenied: boolean;
+  ownerWriteWorks: boolean;
+}> {
+  const email = `verify-lock+${Date.now()}@example.com`;
+  const [{ id }] = await sql<{ id: string }[]>`
+    INSERT INTO auth.users (email, raw_app_meta_data)
+    VALUES (${email}, ${sql.json({ provider: "email" })})
+    RETURNING id`;
+
+  // Run one privileged write as the authenticated role (auth.uid() = this user)
+  // and report whether it was denied with 42501 (permission). set_config(...,true)
+  // is transaction-local and survives the SET LOCAL ROLE within the same tx.
+  const deniedAsAuthenticated = async (
+    write: (tx: postgres.TransactionSql) => Promise<unknown>,
+  ): Promise<boolean> => {
+    try {
+      await sql.begin(async (tx) => {
+        await tx`SELECT set_config('request.jwt.claim.sub', ${id}, true)`;
+        await tx.unsafe("SET LOCAL ROLE authenticated");
+        await write(tx);
+      });
+      return false; // write succeeded -> NOT locked down
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      return err?.code === "42501" || /permission denied/i.test(String(err?.message ?? e));
+    }
+  };
+
+  try {
+    // (a) privilege escalation: patch own profile.role -> admin gate (auth.ts:48).
+    const profileUpdateDenied = await deniedAsAuthenticated(
+      (tx) => tx`UPDATE profile SET role = 'admin' WHERE id = ${id}`,
+    );
+
+    // (b) score forgery: insert a graded attempt straight to `submitted`, bypassing
+    // server-side grading. Denied at the grant layer before any FK/row processing,
+    // so a random content_item_id is fine.
+    const attemptInsertDenied = await deniedAsAuthenticated(
+      (tx) => tx`
+        INSERT INTO attempt (user_id, content_item_id, mode, status, raw_score)
+        VALUES (${id}, gen_random_uuid(), 'practice', 'submitted', 40)`,
+    );
+
+    // (c) legit path: the server action writes via the Drizzle OWNER role (this
+    // connection) — a safe-field update must still succeed.
+    const owner = await sql`UPDATE profile SET display_name = 'verify' WHERE id = ${id}`;
+    const ownerWriteWorks = owner.count === 1;
+
+    return { profileUpdateDenied, attemptInsertDenied, ownerWriteWorks };
+  } finally {
+    await sql`DELETE FROM auth.users WHERE id = ${id}`;
+  }
+}
+
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer();
@@ -271,7 +336,21 @@ async function main() {
     ok("auth trigger — profile auto-created on signup");
   else fail("auth trigger — profile NOT auto-created");
 
-  // 6. health endpoint
+  // 6. write-lockdown (0010): authenticated can't escalate role or forge a score
+  const lockdown = await clientWriteLockdown();
+  if (
+    lockdown.profileUpdateDenied &&
+    lockdown.attemptInsertDenied &&
+    lockdown.ownerWriteWorks
+  )
+    ok("RLS — authenticated denied profile.role patch + submitted-attempt forge; owner write works");
+  else
+    fail(
+      `RLS — write-lockdown incomplete (profileUpdateDenied=${lockdown.profileUpdateDenied}, ` +
+        `attemptInsertDenied=${lockdown.attemptInsertDenied}, ownerWriteWorks=${lockdown.ownerWriteWorks})`,
+    );
+
+  // 7. health endpoint
   if (await checkHealth()) ok("/api/health — 200");
   else fail("/api/health — did not return 200");
 }
