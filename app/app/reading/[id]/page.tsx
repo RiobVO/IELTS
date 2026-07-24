@@ -1,6 +1,9 @@
+import { and, asc, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { db } from "@/db";
+import { annotation } from "@/db/schema";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { ensureAttempt } from "./actions";
 import ExamRunner from "./ExamRunner";
@@ -20,7 +23,7 @@ export default async function ReadingTestPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
   const supabase = await createClient();
 
@@ -74,9 +77,26 @@ export default async function ReadingTestPage({
   // access + daily-limit gate (§4.8) authoritatively before the exam loads.
   const { attemptId, answers: savedAnswers } = await ensureAttempt(id);
 
+  // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
+  // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
+  const annotations = await db
+    .select({
+      id: annotation.id,
+      passage_order: annotation.passageOrder,
+      kind: annotation.kind,
+      start_offset: annotation.startOffset,
+      end_offset: annotation.endOffset,
+      quote: annotation.quote,
+      note: annotation.note,
+    })
+    .from(annotation)
+    .where(and(eq(annotation.userId, user.id), eq(annotation.contentItemId, id)))
+    .orderBy(asc(annotation.createdAt));
+
   return (
     <ExamRunner
       attemptId={attemptId}
+      contentItemId={id}
       initialAnswers={savedAnswers}
       passages={(passages ?? []) as never}
       questions={(questionsData ?? []) as Question[]}
@@ -84,6 +104,7 @@ export default async function ReadingTestPage({
       audioSrc={audioSrc}
       title={test.title}
       category={test.category}
+      initialAnnotations={annotations as never}
     />
   );
 }

@@ -4,7 +4,7 @@ import { and, count, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
-import { answerKey, attempt, contentItem, profile, question } from "@/db/schema";
+import { annotation, answerKey, attempt, contentItem, profile, question } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
 import {
   countSubmitsInWindow,
@@ -402,4 +402,71 @@ export async function submitAttempt(
   const unlocked = post.awardedBadges.map((b) => b.code).join(",");
   const q = unlocked ? `&unlocked=${encodeURIComponent(unlocked)}` : "";
   redirect(`/app/reading/${contentItemId}/result?a=${attemptId}${q}`);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reader annotations (W2-1 / REDESIGN S6).                                    */
+/* Owner-path writes, owner-checked (mirrors saveProgress): the client cannot  */
+/* write the annotation table directly (no authenticated grant), so these are  */
+/* the only write path. Best-effort — a failed annotation never breaks the     */
+/* exam. They touch ONLY the user's own annotation rows; grading/submit/attempt */
+/* are not affected.                                                           */
+/* -------------------------------------------------------------------------- */
+
+export async function addAnnotation(input: {
+  contentItemId: string;
+  passageOrder: number;
+  kind: "highlight" | "note";
+  start: number;
+  end: number;
+  quote: string;
+  note?: string | null;
+}): Promise<{ id: string } | null> {
+  const user = await getUser();
+  if (!user) return null;
+  if (!(input.end > input.start)) return null;
+  try {
+    const [row] = await db
+      .insert(annotation)
+      .values({
+        userId: user.id,
+        contentItemId: input.contentItemId,
+        passageOrder: input.passageOrder,
+        kind: input.kind === "note" ? "note" : "highlight",
+        startOffset: input.start,
+        endOffset: input.end,
+        quote: input.quote.slice(0, 2000),
+        note: input.note ? input.note.slice(0, 4000) : null,
+      })
+      .returning({ id: annotation.id });
+    return row ? { id: row.id } : null;
+  } catch (e) {
+    console.error("addAnnotation failed", e);
+    return null;
+  }
+}
+
+export async function updateAnnotationNote(id: string, note: string): Promise<void> {
+  const user = await getUser();
+  if (!user) return;
+  try {
+    await db
+      .update(annotation)
+      .set({ note: note.slice(0, 4000) || null, kind: note.trim() ? "note" : "highlight" })
+      .where(and(eq(annotation.id, id), eq(annotation.userId, user.id)));
+  } catch (e) {
+    console.error("updateAnnotationNote failed", e);
+  }
+}
+
+export async function deleteAnnotation(id: string): Promise<void> {
+  const user = await getUser();
+  if (!user) return;
+  try {
+    await db
+      .delete(annotation)
+      .where(and(eq(annotation.id, id), eq(annotation.userId, user.id)));
+  } catch (e) {
+    console.error("deleteAnnotation failed", e);
+  }
 }
