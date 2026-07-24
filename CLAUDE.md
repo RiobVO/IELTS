@@ -108,10 +108,11 @@ first real files (BRIEF §10).
 
 ## Scripts gotcha
 
-Scripts run via `tsx` (ESM). The `@/` path alias works in Next-compiled code but
-**not** in tsx scripts — scripts use relative imports. Import the DB client via
-`await import()` **after** `dotenv` loads, since `src/env.ts` validates env at
-module load.
+Scripts run via `tsx` (ESM). `tsx` resolves the `@/` path alias from `tsconfig.json`
+(verified), so scripts may use `@/...` imports — though the existing scripts
+(`verify.ts`, `migrate.ts`) use relative imports by convention. Import the DB client
+via `await import()` **after** `dotenv` loads, since `src/env.ts` validates env at
+module load (a top-level `@/db` import would trigger that validation too early).
 
 ## Status
 
