@@ -138,7 +138,7 @@ export default async function ProfilePage() {
                 <span style={S.inviteTitle}>Invite friends</span>
               </div>
               <p style={S.inviteText}>
-                Every friend who finishes their first test gets you <b style={{ color: "#fff" }}>one week of Premium</b> — free.
+                Every friend who finishes their first test earns you <b style={{ color: "#fff" }}>+100 XP</b>, and gives them <b style={{ color: "#fff" }}>+50 XP</b> to start.
               </p>
               <Button href="/app/invite" trailingIcon="arrow-right">
                 Invite friends
