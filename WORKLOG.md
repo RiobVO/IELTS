@@ -40,8 +40,8 @@
 E2E прогнан на проде (2026-06-17): реальный submit → grade 8/13 [6], applyPostSubmit rated Δ3 [2],
   recompute → leaderboard rank=1 [2], rating 1000→1003/xp→18; каталог список+фильтры+счётчики [4];
   region self-join Navoiy←Uzbekistan [7]. Все поведенческие дыры закрыты машинно.
-Сейчас в работе: SECURITY+CORRECTNESS трек (раздел 3c). P0 закрыт (0010 применён к Supabase +
-  запушен, lockdown подтверждён live). P1-3 закрыт (commit локально). Дальше P1-4 (mcq_multi), P1-5.
+Сейчас в работе: SECURITY+CORRECTNESS трек (раздел 3c). P0 закрыт (0010 на Supabase + push, live).
+  P1-3 и P1-4 закрыты. Дальше P1-5 (атомарность applyPostSubmit), затем 6 (опц.) и 7 (заметка).
 Тестовая БД восстановлена после db:down-инцидента: 2 профиля (eleru340 = admin), 9 Reading + Full +
   Listening published, eleru340 имеет демо-attempt. (db:down = revert ALL — НЕ гонять на проде.)
 </state>
@@ -128,8 +128,11 @@ E2E прогнан на проде (2026-06-17): реальный submit → gra
   test_submit ждал flush PostHog до 2с на user-facing пути → перенесён в `after()` (как
   leaderboard); в ensureAttempt в after() ушёл и meta-запрос (нужен только для props события).
   distinctId=user.id сохранён, capture best-effort. tsc 0, build зелёный.
-- `☐` **[P1-4] mcq_multi нельзя ответить верно** — `ExamRunner` answers `Record<string,string>`
-  + radio для всех; нужен `string|string[]` + checkbox для mcq_multi.
+- `✅ 2026-06-17` **[P1-4] mcq_multi нельзя ответить верно** — `ExamRunner`: answers
+  `Record<string,string|string[]>`, `mcq_multi`→checkbox (toggle набора букв), single-choice→radio,
+  completion→input; счётчик/навигатор через `isAnswered` (массив=непустой). `ensureAttempt`
+  возврат расширен до `string|string[]` (resume). grade(mcq_set)/saveProgress/submit/result уже
+  принимали массивы — не трогал. tsc 0, build зелёный, vitest 93/93. **Браузер-проверку MCQ — на Vercel.**
 - `☐` **[P1-5] applyPostSubmit не атомарен** — read-modify-write xp/streak/rating → транзакция
   + SQL-инкремент.
 - `☐ опц.` **[6] middleware getUser** — НЕ трогать без доказательства, что refresh токена не ломается.

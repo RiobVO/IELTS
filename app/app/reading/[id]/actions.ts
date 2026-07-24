@@ -115,7 +115,7 @@ async function gateAccess(userId: string, contentItemId: string): Promise<void> 
  */
 export async function ensureAttempt(contentItemId: string): Promise<{
   attemptId: string;
-  answers: Record<string, string>;
+  answers: Record<string, string | string[]>;
 }> {
   const user = await getUser();
   if (!user) redirect("/auth");
@@ -136,7 +136,7 @@ export async function ensureAttempt(contentItemId: string): Promise<{
   if (existing) {
     return {
       attemptId: existing.id,
-      answers: (existing.answers as Record<string, string>) ?? {},
+      answers: (existing.answers as Record<string, string | string[]>) ?? {},
     };
   }
 
@@ -176,7 +176,7 @@ export async function ensureAttempt(contentItemId: string): Promise<{
     if (winner) {
       return {
         attemptId: winner.id,
-        answers: (winner.answers as Record<string, string>) ?? {},
+        answers: (winner.answers as Record<string, string | string[]>) ?? {},
       };
     }
     // Vanishingly rare: the winner's row was submitted between the conflict and
