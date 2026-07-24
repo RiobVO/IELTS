@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { categoryLabel, qtypeLabel } from "@/lib/labels";
@@ -44,6 +45,10 @@ export default async function Dashboard() {
       .order("submitted_at", { ascending: false })
       .limit(20),
   ]);
+  // One-time onboarding gate (W1-2): until the user captures their profile we
+  // can't show a band target or a named leaderboard entry. Send them there.
+  if (profile && !profile.onboarded_at) redirect("/app/onboarding");
+
   const attempts = (attemptsRes.data ?? []) as unknown as AttemptRow[];
 
   // Профиль → band-кольцо + stat-строка.
