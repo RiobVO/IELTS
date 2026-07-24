@@ -17,6 +17,6 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(
-    `${origin}/auth?error=${encodeURIComponent("Не удалось завершить вход.")}`,
+    `${origin}/auth?error=${encodeURIComponent("Could not complete sign-in.")}`,
   );
 }

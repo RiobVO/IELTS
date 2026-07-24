@@ -24,28 +24,28 @@ export const PLANS: Plan[] = [
     months: 1,
     amount: 4_900_000, // 49 000 UZS
     currency: "UZS",
-    label: "Premium · 1 месяц",
+    label: "Premium · 1 month",
   },
   {
     tier: "premium",
     months: 12,
     amount: 49_000_000, // 490 000 UZS (≈ 2 месяца в подарок)
     currency: "UZS",
-    label: "Premium · 12 месяцев",
+    label: "Premium · 12 months",
   },
   {
     tier: "ultra",
     months: 1,
     amount: 9_900_000, // 99 000 UZS
     currency: "UZS",
-    label: "Ultra · 1 месяц",
+    label: "Ultra · 1 month",
   },
   {
     tier: "ultra",
     months: 12,
     amount: 99_000_000, // 990 000 UZS (≈ 2 месяца в подарок)
     currency: "UZS",
-    label: "Ultra · 12 месяцев",
+    label: "Ultra · 12 months",
   },
 ];
 

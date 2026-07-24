@@ -23,7 +23,7 @@ export async function uploadTest(formData: FormData) {
   const profile = await requireAdmin();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    fail("Выберите HTML-файл теста.");
+    fail("Select an HTML test file.");
   }
   const html = await file.text();
 
@@ -43,12 +43,12 @@ export async function uploadTest(formData: FormData) {
     if (e instanceof RegradeRequiredError) {
       console.error("admin uploadTest refused — test has attempts", e);
       fail(
-        `У теста уже есть попытки (${e.attemptCount}) — повторный импорт удалил бы их. ` +
-          `Правка пройденного теста появится с Re-grade.`,
+        `This test already has attempts (${e.attemptCount}) — re-importing would delete them. ` +
+          `Editing a sat test will be available via Re-grade.`,
       );
     }
     console.error("admin uploadTest failed", e);
-    fail("Не удалось обработать файл (парсинг или сохранение).");
+    fail("Could not process the file (parsing or saving).");
   }
 
   // A re-import can change a published test's data — invalidate the catalog cache.

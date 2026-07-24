@@ -48,9 +48,9 @@ export const LISTENING_CATEGORIES = [
 ] as const;
 
 export const PERIOD_LABELS: Record<string, string> = {
-  weekly: "Эта неделя",
-  monthly: "Этот месяц",
-  all_time: "За всё время",
+  weekly: "This week",
+  monthly: "This month",
+  all_time: "All time",
 };
 
 export function qtypeLabel(v: string): string {

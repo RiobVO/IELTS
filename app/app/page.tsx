@@ -262,7 +262,7 @@ function TestRow({ a }: { a: AttemptRow }) {
   const t = total(a.per_type_breakdown);
   const band = a.band_score != null ? Number(a.band_score) : null;
   const score = a.raw_score != null && t ? `${a.raw_score} / ${t}` : a.raw_score != null ? String(a.raw_score) : "—";
-  const meta = `${a.content_item ? categoryLabel(a.content_item.category) : ""}${a.submitted_at ? ` · ${new Date(a.submitted_at).toLocaleDateString("ru-RU")}` : ""}`;
+  const meta = `${a.content_item ? categoryLabel(a.content_item.category) : ""}${a.submitted_at ? ` · ${new Date(a.submitted_at).toLocaleDateString("en-US")}` : ""}`;
   return (
     <Link href={`/app/reading/${a.content_item_id}/result?a=${a.id}`} style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 0", borderBottom: "1px solid var(--border-subtle)", textDecoration: "none", color: "inherit" }}>
       <span style={{ width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)" }}>
