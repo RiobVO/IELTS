@@ -40,7 +40,7 @@
 E2E прогнан на проде (2026-06-17): реальный submit → grade 8/13 [6], applyPostSubmit rated Δ3 [2],
   recompute → leaderboard rank=1 [2], rating 1000→1003/xp→18; каталог список+фильтры+счётчики [4];
   region self-join Navoiy←Uzbekistan [7]. Все поведенческие дыры закрыты машинно.
-Сейчас в работе: тестовая инфра (Vitest, раздел 4b) — волны 1–2 закрыты (93 теста), осталась волна 3 (integration на local docker). Затем — фаза дизайна (раздел 4).
+Сейчас в работе: — (трек тестов на паузе: волны 1–2 закрыты, 93 теста на `main`; волны 3–4 опциональны — раздел 4b). Следующая активная фаза — дизайн (раздел 4).
 Тестовая БД восстановлена после db:down-инцидента: 2 профиля (eleru340 = admin), 9 Reading + Full +
   Listening published, eleru340 имеет демо-attempt. (db:down = revert ALL — НЕ гонять на проде.)
 </state>
@@ -137,8 +137,12 @@ co-located `src/**/*.test.ts`). Запуск: `npm test` (= `vitest run`) / `npm
   инфер типов, band-шкала 0..40, question→passage). HTML-samples gitignored (§11) → НЕ коммитим;
   поверх реальных файлов — блоки `describe.skipIf(нет файла)` (Tuatara 14Q / Banff MCQ 13Q /
   listening 40Q·4 части / Full 40Q·3 пассажа): гоняются у владельца локально, скип в CI.
-- `☐` Волна 3 — integration на local docker (RLS / answer_key / изоляция attempt / идемпотентность submit).
-- `☐` Волна 4 (опц.) — e2e Playwright (login → exam → submit → result).
+> Трек на паузе после волны 2 (решение владельца): цель — доказать корректность ядра —
+> достигнута; RLS/триггер уже под гейтом `npm run verify` + E2E-прогон на проде (раздел 2).
+> Волны ниже — ОПЦИОНАЛЬНЫ, поднимать ТОЧЕЧНО при изменении security-поверхности
+> (новая RLS-политика / таблица / гейт).
+- `☐ опц.` Волна 3 — integration на local docker (RLS / answer_key / изоляция attempt / идемпотентность submit).
+- `☐ опц.` Волна 4 — e2e Playwright (login → exam → submit → result).
 
 ---
 
