@@ -133,8 +133,13 @@ E2E прогнан на проде (2026-06-17): реальный submit → gra
   completion→input; счётчик/навигатор через `isAnswered` (массив=непустой). `ensureAttempt`
   возврат расширен до `string|string[]` (resume). grade(mcq_set)/saveProgress/submit/result уже
   принимали массивы — не трогал. tsc 0, build зелёный, vitest 93/93. **Браузер-проверку MCQ — на Vercel.**
-- `☐` **[P1-5] applyPostSubmit не атомарен** — read-modify-write xp/streak/rating → транзакция
-  + SQL-инкремент.
+- `✅ 2026-06-17` **[P1-5] applyPostSubmit не атомарен** — критическая прогрессия (streak/XP/
+  rating + сложность теста) обёрнута в `db.transaction` с `SELECT … FOR UPDATE` row-lock на
+  профиле (и на content_item при rated, порядок profile→content_item — без дедлоков); XP —
+  атомарный SQL-инкремент. Семантика сохранена: XP/streak всегда, Elo только первая rated,
+  badges/referral/notifications best-effort ПОСЛЕ коммита (вне блокировки). TDD: throwaway
+  concurrency-скрипт против local docker (реальный applyPostSubmit, DATABASE_URL→docker) —
+  RED флакал (lost update xp/rated_count), GREEN 8/8 чисто. tsc 0, build, vitest 93/93.
 - `☐ опц.` **[6] middleware getUser** — НЕ трогать без доказательства, что refresh токена не ломается.
 - `✅` **[7] result-пересчёт по текущему answer_key** — уже задокументирован (RegradeRequiredError,
   full re-grade отложен); только сверка заметки, не фиксим.

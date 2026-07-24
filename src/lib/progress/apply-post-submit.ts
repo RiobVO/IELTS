@@ -14,7 +14,7 @@
  * (submit action) calls redirect() immediately after — a progression failure
  * must not break the submit, only skip the perk.
  */
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { attempt, contentItem, profile } from "@/db/schema";
 import { createNotifications } from "@/lib/notifications/create";
@@ -60,22 +60,122 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
   let currentRating = 1000;
 
   try {
-    // 1) Load the user's progression state.
-    const [p] = await db
-      .select({
-        rating: profile.rating,
-        peakRating: profile.peakRating,
-        ratedCount: profile.ratedCount,
-        xp: profile.xp,
-        currentStreak: profile.currentStreak,
-        longestStreak: profile.longestStreak,
-        lastActivityDate: profile.lastActivityDate,
-      })
-      .from(profile)
-      .where(eq(profile.id, input.userId))
-      .limit(1);
+    // КРИТИЧЕСКАЯ прогрессия (streak/XP/rating + сложность теста) — в ОДНОЙ
+    // транзакции с row-lock на профиле (SELECT ... FOR UPDATE). Без неё
+    // параллельные сабмиты одного юзера теряют друг друга: read-modify-write
+    // абсолютных xp/rating/streak — классический lost update. Блокировка
+    // сериализует конкурентные сабмиты; XP пишем атомарным SQL-инкрементом.
+    // Badges/referral/notifications — best-effort и идут ПОСЛЕ коммита (вне
+    // блокировки), чтобы не удлинять критическую секцию.
+    const progression = await db.transaction(async (tx) => {
+      // 1) Load + LOCK the user's progression row.
+      const [p] = await tx
+        .select({
+          rating: profile.rating,
+          peakRating: profile.peakRating,
+          ratedCount: profile.ratedCount,
+          currentStreak: profile.currentStreak,
+          longestStreak: profile.longestStreak,
+          lastActivityDate: profile.lastActivityDate,
+        })
+        .from(profile)
+        .where(eq(profile.id, input.userId))
+        .limit(1)
+        .for("update");
+      if (!p) return null;
+      currentRating = p.rating;
 
-    if (!p) {
+      // 2) STREAK — always, even for non-rated retakes.
+      const today = utcDay(input.submittedAt);
+      const last = asDayString(p.lastActivityDate);
+      let currentStreak: number;
+      if (last === today) {
+        currentStreak = p.currentStreak; // already active today
+      } else if (last === prevDay(today)) {
+        currentStreak = p.currentStreak + 1; // consecutive day
+      } else {
+        currentStreak = 1; // first ever, or streak broken
+      }
+      const longestStreak = Math.max(p.longestStreak, currentStreak);
+      const xpGain = 10 + input.rawScore;
+
+      // 3) RATED? Only the FIRST submitted attempt of this test counts (§4.6).
+      // The current attempt is already inserted as `submitted`, so a count of
+      // exactly 1 means this is that first attempt; retakes (count > 1) are
+      // practice-only.
+      const [c] = await tx
+        .select({ n: count() })
+        .from(attempt)
+        .where(
+          and(
+            eq(attempt.userId, input.userId),
+            eq(attempt.contentItemId, input.contentItemId),
+            eq(attempt.status, "submitted"),
+          ),
+        );
+      const rated = (c?.n ?? 0) === 1;
+
+      // Defaults carried into the profile write when not rated.
+      let newRating = p.rating;
+      let newPeak = p.peakRating;
+      let ratedCount = p.ratedCount;
+      let ratingDelta = 0;
+
+      if (rated) {
+        // Load + LOCK the test's difficulty row — also read-modify-write, racy
+        // across different users rating the same test. Lock order is always
+        // profile -> content_item, so concurrent submits can't form a deadlock.
+        const [ci] = await tx
+          .select({
+            difficultyRating: contentItem.difficultyRating,
+            difficultyCount: contentItem.difficultyCount,
+          })
+          .from(contentItem)
+          .where(eq(contentItem.id, input.contentItemId))
+          .limit(1)
+          .for("update");
+
+        const testRating = ci?.difficultyRating ?? 1000;
+        const testCount = ci?.difficultyCount ?? 0;
+        const performance = input.total > 0 ? input.rawScore / input.total : 0;
+
+        const d = ratingDeltas(p.rating, testRating, performance);
+        ratingDelta = d.userDelta;
+        newRating = Math.max(ELO_FLOOR, p.rating + d.userDelta);
+        newPeak = Math.max(p.peakRating, newRating);
+        ratedCount = p.ratedCount + 1;
+
+        const newDifficulty = Math.max(ELO_FLOOR, testRating + d.testDelta);
+
+        // Persist the test's new difficulty (separate row from the profile).
+        await tx
+          .update(contentItem)
+          .set({
+            difficultyRating: newDifficulty,
+            difficultyCount: testCount + 1,
+          })
+          .where(eq(contentItem.id, input.contentItemId));
+      }
+
+      // 4) Persist the profile — rating/streak absolute (safe under the lock),
+      // XP via atomic SQL increment, in a SINGLE write.
+      await tx
+        .update(profile)
+        .set({
+          rating: newRating,
+          peakRating: newPeak,
+          ratedCount,
+          xp: sql`${profile.xp} + ${xpGain}`,
+          currentStreak,
+          longestStreak,
+          lastActivityDate: today,
+        })
+        .where(eq(profile.id, input.userId));
+
+      return { rated, ratingDelta, newRating };
+    });
+
+    if (!progression) {
       console.error("applyPostSubmit: profile not found", input.userId);
       return {
         rated: false,
@@ -84,100 +184,16 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
         awardedBadges: [],
       };
     }
-    currentRating = p.rating;
 
-    // 2) STREAK + XP — always, even for non-rated retakes.
-    const today = utcDay(input.submittedAt);
-    const last = asDayString(p.lastActivityDate);
-    let currentStreak: number;
-    if (last === today) {
-      currentStreak = p.currentStreak; // already active today
-    } else if (last === prevDay(today)) {
-      currentStreak = p.currentStreak + 1; // consecutive day
-    } else {
-      currentStreak = 1; // first ever, or streak broken
-    }
-    const longestStreak = Math.max(p.longestStreak, currentStreak);
-    const xp = p.xp + 10 + input.rawScore;
-
-    // 3) RATED? Only the FIRST submitted attempt of this test counts (§4.6).
-    // The current attempt is already inserted as `submitted`, so a count of
-    // exactly 1 means this is that first attempt; retakes (count > 1) are
-    // practice-only.
-    const [c] = await db
-      .select({ n: count() })
-      .from(attempt)
-      .where(
-        and(
-          eq(attempt.userId, input.userId),
-          eq(attempt.contentItemId, input.contentItemId),
-          eq(attempt.status, "submitted"),
-        ),
-      );
-    const rated = (c?.n ?? 0) === 1;
-
-    // Defaults carried into the profile write when not rated.
-    let newRating = p.rating;
-    let newPeak = p.peakRating;
-    let ratedCount = p.ratedCount;
-    let ratingDelta = 0;
-
-    if (rated) {
-      // Load the test's difficulty Elo.
-      const [ci] = await db
-        .select({
-          difficultyRating: contentItem.difficultyRating,
-          difficultyCount: contentItem.difficultyCount,
-        })
-        .from(contentItem)
-        .where(eq(contentItem.id, input.contentItemId))
-        .limit(1);
-
-      const testRating = ci?.difficultyRating ?? 1000;
-      const testCount = ci?.difficultyCount ?? 0;
-      const performance = input.total > 0 ? input.rawScore / input.total : 0;
-
-      const d = ratingDeltas(p.rating, testRating, performance);
-      ratingDelta = d.userDelta;
-      newRating = Math.max(ELO_FLOOR, p.rating + d.userDelta);
-      newPeak = Math.max(p.peakRating, newRating);
-      ratedCount = p.ratedCount + 1;
-
-      const newDifficulty = Math.max(ELO_FLOOR, testRating + d.testDelta);
-
-      // Persist the test's new difficulty (separate row from the profile).
-      await db
-        .update(contentItem)
-        .set({
-          difficultyRating: newDifficulty,
-          difficultyCount: testCount + 1,
-        })
-        .where(eq(contentItem.id, input.contentItemId));
-    }
-
-    // 4) Persist the profile — streak/xp combined with the (possibly updated)
-    // rating fields in a SINGLE write.
-    await db
-      .update(profile)
-      .set({
-        rating: newRating,
-        peakRating: newPeak,
-        ratedCount,
-        xp,
-        currentStreak,
-        longestStreak,
-        lastActivityDate: today,
-      })
-      .where(eq(profile.id, input.userId));
-
-    // 5) Badge evaluation (BRIEF §4.7) — runs AFTER the streak/rating profile
-    // write, so streak and rating are current. The champion badge (first_place)
-    // is evaluated directly against profile ratings inside evaluateBadges, so it
-    // no longer depends on the leaderboard rebuild — which is now deferred to
-    // after the response (Next after() in submitAttempt). Best-effort and never
-    // throws; also inside applyPostSubmit's own try/catch. Its return is the EXACT
-    // set of badges this submit unlocked (deduped via the insert's RETURNING) —
-    // carried back so the result page can celebrate them once.
+    // 5) Badge evaluation (BRIEF §4.7) — runs AFTER the committed progression so
+    // streak and rating are current, and OUTSIDE the transaction so badge work
+    // never extends the row lock. The champion badge (first_place) is evaluated
+    // directly against profile ratings inside evaluateBadges, so it no longer
+    // depends on the leaderboard rebuild — deferred to after the response (Next
+    // after() in submitAttempt). Best-effort and never throws; also inside
+    // applyPostSubmit's own try/catch. Its return is the EXACT set of badges this
+    // submit unlocked (deduped via the insert's RETURNING) — carried back so the
+    // result page can celebrate them once.
     const awardedBadges = await evaluateBadges(input.userId);
 
     // In-app уведомление о каждой разблокировке бейджа (BRIEF §11). Best-effort
@@ -200,9 +216,9 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
     await maybeRewardReferral(input.userId);
 
     return {
-      rated,
-      ratingDelta: rated ? ratingDelta : 0,
-      newRating,
+      rated: progression.rated,
+      ratingDelta: progression.rated ? progression.ratingDelta : 0,
+      newRating: progression.newRating,
       awardedBadges,
     };
   } catch (e) {
