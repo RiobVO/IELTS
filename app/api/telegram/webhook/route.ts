@@ -1,36 +1,37 @@
 import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { contentItem } from "@/db/schema";
+import { contentItem, passage } from "@/db/schema";
 import { telegramConfig } from "@/env";
 import {
   answerCallback,
+  downloadFileBytes,
   downloadFileText,
   getFilePath,
   sendMessage,
   sendUploadResult,
 } from "@/lib/telegram/client";
+import { uploadAudio } from "@/lib/telegram/storage";
 import { parseTest } from "@/lib/import/parse-test";
 import { persistTest, RegradeRequiredError } from "@/lib/import/persist";
 
 /**
- * Telegram-бот импорта контента (admin-канал, аналог /admin). Админ кидает боту
- * HTML-файл теста — бот парсит тем же детерминированным pipeline
- * (parseTest -> persistTest) и сохраняет как draft, затем показывает inline-кнопку
- * «Опубликовать»; нажатие переводит тест в published (как /admin setStatus) — без
- * захода на сайт.
+ * Telegram-бот импорта контента (admin-канал, аналог /admin). Умеет:
+ *  - HTML-файл теста  -> parseTest -> persistTest (draft) + кнопка «Опубликовать»;
+ *  - mp3-файл         -> кладёт в Supabase Storage и привязывает к последнему
+ *    Listening-тесту (audio_path -> public URL), затем кнопка «Опубликовать»;
+ *  - нажатие кнопки   -> draft -> published (как /admin setStatus).
  *
- * Middleware исключает /api/telegram из auth-сессии: запрос идёт от Telegram, а не
- * от залогиненного юзера. Граница безопасности — secret-token (от Telegram) +
- * whitelist по user_id для message И callback_query: бот пишет owner-путём (в
- * обход RLS), поэтому принимаем действия ТОЛЬКО от доверенных id. Всегда отвечаем
- * 200 (кроме неверного secret), чтобы Telegram не ретраил апдейт (идемпотентность
- * импорта — по sourceFilePath в persistTest).
+ * Middleware исключает /api/telegram из auth: запрос от Telegram, не от юзера.
+ * Граница безопасности — secret-token + whitelist по user_id для message И
+ * callback_query: бот пишет owner-путём (в обход RLS), поэтому действия — только
+ * от доверенных id. Всегда 200 (кроме неверного secret), чтобы Telegram не
+ * ретраил (идемпотентность импорта — по sourceFilePath; аудио — upsert по тесту).
  */
 export const dynamic = "force-dynamic";
 
-interface TgDocument {
+interface TgFile {
   file_id: string;
   file_name?: string;
   mime_type?: string;
@@ -39,7 +40,8 @@ interface TgDocument {
 interface TgMessage {
   chat: { id: number };
   from?: { id: number };
-  document?: TgDocument;
+  document?: TgFile;
+  audio?: TgFile;
 }
 interface TgCallbackQuery {
   id: string;
@@ -70,10 +72,10 @@ export async function POST(request: Request) {
   try {
     update = (await request.json()) as TgUpdate;
   } catch {
-    return ok(); // мусорное тело — ack без ретраев
+    return ok();
   }
 
-  // Нажата inline-кнопка «Опубликовать» под загруженным тестом.
+  // Нажата inline-кнопка «Опубликовать».
   const cq = update.callback_query;
   if (cq) {
     if (!cfg.adminIds.includes(cq.from.id)) {
@@ -91,23 +93,40 @@ export async function POST(request: Request) {
   if (!cfg.adminIds.includes(msg.from.id)) return ok();
 
   const chatId = msg.chat.id;
-
   const doc = msg.document;
-  if (!doc) {
+  const audio = msg.audio;
+
+  if (doc) {
+    const name = doc.file_name ?? "file";
+    const lower = name.toLowerCase();
+    if (lower.endsWith(".html") || doc.mime_type === "text/html") {
+      await handleHtmlUpload(chatId, doc, name);
+    } else if (lower.endsWith(".mp3") || (doc.mime_type ?? "").startsWith("audio/")) {
+      await handleAudioUpload(chatId, doc);
+    } else {
+      await sendMessage(
+        chatId,
+        `Не понял файл (${name}). Жду .html (тест) или .mp3 (аудио для Listening).`,
+      );
+    }
+  } else if (audio) {
+    await handleAudioUpload(chatId, audio);
+  } else {
     await sendMessage(
       chatId,
-      "Пришли HTML-файл теста — распарсю и сохраню как draft.",
+      "Пришли HTML-файл теста или mp3 (аудио для Listening).",
     );
-    return ok();
-  }
-  const name = doc.file_name ?? "test.html";
-  const isHtml =
-    name.toLowerCase().endsWith(".html") || doc.mime_type === "text/html";
-  if (!isHtml) {
-    await sendMessage(chatId, `Это не HTML-файл (${name}). Жду .html с тестом.`);
-    return ok();
   }
 
+  return ok();
+}
+
+/** HTML-тест -> parse -> persist (draft) + кнопка публикации. */
+async function handleHtmlUpload(
+  chatId: number,
+  doc: TgFile,
+  name: string,
+): Promise<void> {
   try {
     const path = await getFilePath(doc.file_id);
     const html = await downloadFileText(path);
@@ -116,13 +135,16 @@ export async function POST(request: Request) {
     // content_item.createdBy nullable). sourceFilePath даёт идемпотентность.
     const id = await persistTest(parsed, { sourceFilePath: name });
     const warn = parsed.warnings.length
-      ? `\n⚠️ предупреждений: ${parsed.warnings.length} — проверь в /admin`
+      ? `\n⚠️ предупреждений: ${parsed.warnings.length}`
       : "";
-    // Кнопка «Опубликовать» прямо под результатом — публикация без /admin.
+    const audioHint =
+      parsed.section === "listening"
+        ? "\n🎧 Это Listening — пришли mp3 этого теста следующим файлом."
+        : "";
     await sendUploadResult(
       chatId,
       `✅ «${parsed.title}» сохранён как draft.\n` +
-        `${parsed.section} · вопросов: ${parsed.questions.length}${warn}`,
+        `${parsed.section} · вопросов: ${parsed.questions.length}${warn}${audioHint}`,
       id,
     );
   } catch (e) {
@@ -133,22 +155,65 @@ export async function POST(request: Request) {
           `удалил бы их. Правка пройденного теста — через Re-grade.`,
       );
     } else {
-      console.error("telegram import failed", e);
+      console.error("telegram html import failed", e);
       await sendMessage(
         chatId,
         "Не удалось обработать файл (парсинг или сохранение). Проверь, что это корректный HTML-тест.",
       );
     }
   }
-
-  return ok();
 }
 
 /**
- * Публикация теста по нажатию inline-кнопки (callback_data = "publish:<id>").
- * Зеркалит admin setStatus: owner-update статуса + revalidate тега каталога.
- * id приходит только от whitelisted-админа (проверено выше) и параметризуется
- * Drizzle, так что инъекции через callback_data нет.
+ * mp3 -> Supabase Storage -> привязка к последнему Listening-тесту. Аудио одно на
+ * тест; пишем его в passage order=1 (страница экзамена берёт первый passage с
+ * audio_path). Путь в bucket = `<contentItemId>.mp3` (upsert идемпотентен).
+ */
+async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
+  const [test] = await db
+    .select({ id: contentItem.id, title: contentItem.title })
+    .from(contentItem)
+    .where(eq(contentItem.section, "listening"))
+    .orderBy(desc(contentItem.createdAt))
+    .limit(1);
+  if (!test) {
+    await sendMessage(
+      chatId,
+      "Нет Listening-теста для привязки. Сначала пришли HTML Listening-теста, потом mp3.",
+    );
+    return;
+  }
+  try {
+    const path = await getFilePath(file.file_id);
+    const bytes = await downloadFileBytes(path);
+    const url = await uploadAudio(
+      `${test.id}.mp3`,
+      bytes,
+      file.mime_type ?? "audio/mpeg",
+    );
+    await db
+      .update(passage)
+      .set({ audioPath: url })
+      .where(and(eq(passage.contentItemId, test.id), eq(passage.order, 1)));
+    revalidateTag("content_item");
+    await sendUploadResult(
+      chatId,
+      `🎧 Аудио привязано к «${test.title}». Тест готов.`,
+      test.id,
+    );
+  } catch (e) {
+    console.error("telegram audio upload failed", e);
+    await sendMessage(
+      chatId,
+      "Не удалось загрузить аудио. Проверь файл и попробуй ещё раз.",
+    );
+  }
+}
+
+/**
+ * Публикация по нажатию inline-кнопки (callback_data = "publish:<id>"). Зеркалит
+ * admin setStatus: owner-update статуса + revalidate тега каталога. id приходит
+ * только от whitelisted-админа и параметризуется Drizzle — инъекции нет.
  */
 async function handlePublish(cq: TgCallbackQuery): Promise<void> {
   const data = cq.data ?? "";

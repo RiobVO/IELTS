@@ -103,3 +103,12 @@ export async function downloadFileText(filePath: string): Promise<string> {
   if (!res.ok) throw new Error(`telegram download failed: ${res.status}`);
   return res.text();
 }
+
+/** Скачать файл по file_path как байты (mp3-аудио). Бросает при ошибке HTTP. */
+export async function downloadFileBytes(filePath: string): Promise<ArrayBuffer> {
+  const cfg = telegramConfig();
+  if (!cfg) throw new Error("telegram: not configured");
+  const res = await fetch(`${API}/file/bot${cfg.token}/${filePath}`);
+  if (!res.ok) throw new Error(`telegram download failed: ${res.status}`);
+  return res.arrayBuffer();
+}
