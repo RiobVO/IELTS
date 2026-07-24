@@ -40,8 +40,8 @@
 E2E прогнан на проде (2026-06-17): реальный submit → grade 8/13 [6], applyPostSubmit rated Δ3 [2],
   recompute → leaderboard rank=1 [2], rating 1000→1003/xp→18; каталог список+фильтры+счётчики [4];
   region self-join Navoiy←Uzbekistan [7]. Все поведенческие дыры закрыты машинно.
-Сейчас в работе: SECURITY+CORRECTNESS трек (раздел 3c). P0 (RLS write-lockdown) закрыт ЛОКАЛЬНО
-  (verify зелёный); миграция 0010 ЕЩЁ НЕ применена к боевому Supabase — ждёт «делай». Дальше P1-3..P1-5.
+Сейчас в работе: SECURITY+CORRECTNESS трек (раздел 3c). P0 закрыт (0010 применён к Supabase +
+  запушен, lockdown подтверждён live). P1-3 закрыт (commit локально). Дальше P1-4 (mcq_multi), P1-5.
 Тестовая БД восстановлена после db:down-инцидента: 2 профиля (eleru340 = admin), 9 Reading + Full +
   Listening published, eleru340 имеет демо-attempt. (db:down = revert ALL — НЕ гонять на проде.)
 </state>
@@ -124,8 +124,10 @@ E2E прогнан на проде (2026-06-17): реальный submit → gra
   записей в эти таблицы нет → revoke безопасен. RLS-тест в `verify.ts` (authenticated denied на
   role-patch и submitted-attempt-forge; owner-путь пишет). TDD: RED (тест ловил дыру) → GREEN.
   verify exit 0, tsc 0, vitest 93/93. **⚠️ НЕ применено к Supabase — ждёт «делай» на `db:migrate`.**
-- `☐` **[P1-3] analytics блокирует клик** — `await captureServer` в test_start/test_submit
-  (`actions.ts:197,357`) ждёт flush PostHog до 2с → перевести в `after()`.
+- `✅ 2026-06-17` **[P1-3] analytics блокирует клик** — `await captureServer` в test_start/
+  test_submit ждал flush PostHog до 2с на user-facing пути → перенесён в `after()` (как
+  leaderboard); в ensureAttempt в after() ушёл и meta-запрос (нужен только для props события).
+  distinctId=user.id сохранён, capture best-effort. tsc 0, build зелёный.
 - `☐` **[P1-4] mcq_multi нельзя ответить верно** — `ExamRunner` answers `Record<string,string>`
   + radio для всех; нужен `string|string[]` + checkbox для mcq_multi.
 - `☐` **[P1-5] applyPostSubmit не атомарен** — read-modify-write xp/streak/rating → транзакция
