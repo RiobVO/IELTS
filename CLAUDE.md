@@ -189,6 +189,18 @@ emulation + verify gate.
   index + `ensureAttempt` `ON CONFLICT DO NOTHING`, closing the concurrent first-start
   race (two in_progress rows / doubled `test_start`). **Applied to Supabase**
   (verified in `_migrations` + `attempt_one_in_progress_idx` present on the live DB).
+- ✅ **Telegram content-import bot** (`app/api/telegram/webhook/route.ts`,
+  `src/lib/telegram/`) — admin-канал загрузки контента, дополняет `/admin` (тот же
+  детерминированный pipeline `parseTest`→`persistTest`, без дублирования). HTML-тест →
+  `draft`; для Listening mp3 → Supabase Storage (PUBLIC bucket `audio`, service-role),
+  `passage.audio_path` → public URL; inline-кнопка «Опубликовать» → `published`
+  (callback_query, зеркалит admin `setStatus` + `revalidateTag('content_item')`).
+  Безопасность: secret-token + whitelist по Telegram user_id (`TELEGRAM_BOT_TOKEN` /
+  `TELEGRAM_ADMIN_IDS` / `TELEGRAM_WEBHOOK_SECRET`), `/api/telegram` исключён из
+  auth-middleware (пишет owner-путём в обход RLS). Ноль новых зависимостей (нативный
+  fetch + уже стоящий `@supabase/supabase-js`); выключен без `TELEGRAM_BOT_TOKEN`
+  (webhook no-op). Webhook на prod, все 3 этапа E2E проверены. Закрывает launch-аудио
+  (теперь в Storage, не локальный `public/`).
 
 ### ⛔ Blocked / pending (needs external input)
 - **Anti-bot on signup** — Turnstile/captcha + email-verify + signup velocity; needs
@@ -231,7 +243,8 @@ grading, submit, RLS, tiers, рейтинг). На каждом экране: в
   muted/streak/warn/success/`--ink-3` → WCAG AA, посчитано), perf (rAF scroll, lazy hero-картинки,
   `memo` вопросов, **параллельные Supabase-запросы** на exam/dashboard, дедуп auth round-trip в
   `getProfile`), catalog `?limit=1`/`?throttled=1`-нотисы (вместо молчаливого отскока), фикс значка
-  шапки (inline-SVG вместо `<img>` с `currentColor`), Google OAuth (нужны ключи в Supabase).
+  шапки (inline-SVG вместо `<img>` с `currentColor`), Google OAuth (✅ настроен: OAuth-client
+  в Google Cloud + provider/URL-config в Supabase, вход работает на проде).
 - **⏸ Mobile/responsive — НЕ сделано** (отложено пользователем). Весь `/app` **desktop-only**:
   inline-стили без медиа-запросов, дизайн-дроп был только под desktop. Шапка без коллапса,
   auth-карточка 940×580 и часть гридов не стекаются. Лендинг адаптивен (свой `landing.css`).
