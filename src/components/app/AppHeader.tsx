@@ -200,6 +200,11 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
         zIndex: 30,
         background: "color-mix(in oklab, var(--bg-base) 85%, transparent)",
         backdropFilter: "blur(12px)",
+        // Промоутим шапку в свой compositor-слой: фрост-blur рекомпозитится на GPU, а
+        // собственные пиксели (тинт/бордер/лого/нав) не перерисовываются на каждом кадре
+        // скролла. translateZ(0) не ломает backdrop-filter — transform на самом элементе
+        // не создаёт backdrop-root (в отличие от filter/will-change на предке).
+        transform: "translateZ(0)",
         borderBottom: "1px solid var(--border-subtle)",
       }}
     >
