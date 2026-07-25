@@ -319,6 +319,7 @@ export default function Home() {
         b.addEventListener("click", () => {
           btns.forEach(x => x.classList.remove("on")); b.classList.add("on");
           const f = b.dataset.f ?? "all";
+          let vis = 0;
           items.forEach(t => {
             const c = t.dataset.cat;
             let show: boolean;
@@ -326,6 +327,15 @@ export default function Home() {
             else if (f === "hot") show = t.dataset.hot === "1";
             else show = (c === f) || (c === "both");
             t.style.display = show ? "" : "none";
+            // Каскадное появление видимых строк по индексу видимости; при
+            // reduced-motion — без анимации (только show/hide).
+            if (show && !reduce) {
+              t.style.setProperty("--i", String(vis++));
+              t.style.animation = "none";        // сброс…
+              void t.offsetWidth;                // …reflow ретриггерит rise
+              t.style.animation = "rise .35s ease both";
+              t.style.animationDelay = "calc(var(--i) * 40ms)";
+            }
           });
         });
       });
