@@ -28,8 +28,20 @@ export function AppShellSkeleton({
 }) {
   return (
     <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", background: "var(--bg-base)" }}>
+      <style>{`
+        .ahs-inner{padding:11px 16px;gap:10px}
+        .ahs-nav,.ahs-upgrade,.ahs-xp{display:none}
+        .ahs-burger{display:grid}
+        @media (min-width:1024px){
+          .ahs-inner{padding:12px 34px;gap:18px}
+          .ahs-nav{display:flex}
+          .ahs-upgrade{display:inline-flex}
+          .ahs-xp{display:flex}
+          .ahs-burger{display:none}
+        }
+      `}</style>
       <div style={H.bar}>
-        <div style={H.inner}>
+        <div className="ahs-inner" style={H.inner}>
           <span style={{ display: "flex", alignItems: "center", gap: 11 }}>
             <span style={H.logoMark}>
               <svg width="19" height="19" viewBox="0 0 64 64" fill="none" aria-hidden="true">
@@ -43,7 +55,7 @@ export function AppShellSkeleton({
             </span>
           </span>
 
-          <nav style={{ marginLeft: 22, display: "flex", gap: 4 }}>
+          <nav className="ahs-nav" style={{ marginLeft: 22, gap: 4 }}>
             {NAV.map((l) => {
               const on = active === l.id;
               return (
@@ -61,16 +73,21 @@ export function AppShellSkeleton({
             })}
           </nav>
 
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={H.upgrade}>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="ahs-upgrade" style={H.upgrade}>
               <Icon name="bar-chart" size={15} strokeWidth={2.4} /> Upgrade
             </span>
             <span style={H.iconBtn}>
               <Icon name="bell" size={19} strokeWidth={2.2} />
             </span>
-            <Skeleton w={42} h={16} r="var(--radius-full)" />
-            <Skeleton w={52} h={16} r="var(--radius-full)" />
+            <span className="ahs-xp" style={{ alignItems: "center", gap: 16 }}>
+              <Skeleton w={42} h={16} r="var(--radius-full)" />
+              <Skeleton w={52} h={16} r="var(--radius-full)" />
+            </span>
             <Skeleton w={36} h={36} r="50%" />
+            <span className="ahs-burger" style={H.iconBtn}>
+              <Icon name="menu" size={22} strokeWidth={2.3} />
+            </span>
           </div>
         </div>
       </div>
@@ -125,7 +142,7 @@ const H: Record<string, React.CSSProperties> = {
     backdropFilter: "blur(12px)",
     borderBottom: "1px solid var(--border-subtle)",
   },
-  inner: { display: "flex", alignItems: "center", gap: 18, padding: "12px 34px", maxWidth: 1180, margin: "0 auto" },
+  inner: { display: "flex", alignItems: "center", maxWidth: 1180, margin: "0 auto" },
   logoMark: {
     width: 34,
     height: 34,
@@ -139,7 +156,6 @@ const H: Record<string, React.CSSProperties> = {
   logoText: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: 20, letterSpacing: "-0.02em", color: "var(--text-primary)" },
   nav: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, padding: "8px 14px", borderRadius: "var(--radius-md)" },
   upgrade: {
-    display: "inline-flex",
     alignItems: "center",
     gap: 6,
     height: 38,
