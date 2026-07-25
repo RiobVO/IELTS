@@ -136,7 +136,13 @@ export function PassagePane({
     );
     let firstParaDone = false;
     for (const c of containers) {
-      const paras = c.querySelectorAll<HTMLElement>(":scope > p");
+      // Тесты с готовыми метками абзацев (.para-label / .para-letter) уже несут
+      // буквы — НЕ генерируем поверх (иначе дубли); их кружки рисует CSS ниже.
+      // Генерируем только для «голых» <p> (single-passage без меток).
+      if (c.querySelector(".para-label, .para-letter")) continue;
+      const paras = Array.from(c.querySelectorAll<HTMLElement>(":scope > p")).filter(
+        (p) => !p.classList.contains("subtitle"),
+      );
       paras.forEach((p, i) => {
         p.dataset.letter = String.fromCharCode(65 + (i % 26));
         if (!firstParaDone && i === 0) {
@@ -255,6 +261,24 @@ export function PassagePane({
     await deleteAnnotation(id);
   }, [editor, annotations, passageEl]);
 
+  // Убираем ведущий <h1>/<h2> ТОЛЬКО если это дубль заголовка masthead
+  // (single-passage тест). У full-reading <h2> = НАЗВАНИЕ пассажа (не дубль) —
+  // его оставляем.
+  const cleaned = useMemo(
+    () =>
+      passages.map((p) => ({
+        order: p.order,
+        html: p.body_html.replace(
+          /^\s*<h[12]\b[^>]*>([\s\S]*?)<\/h[12]>\s*/i,
+          (m: string, inner: string) =>
+            inner.replace(/<[^>]+>/g, "").trim().toLowerCase() === title.trim().toLowerCase()
+              ? ""
+              : m,
+        ),
+      })),
+    [passages, title],
+  );
+
   const wordCount = useMemo(() => {
     const text = passages.map((p) => p.body_html).join(" ").replace(/<[^>]+>/g, " ");
     const words = text.trim().split(/\s+/).filter(Boolean).length;
@@ -297,12 +321,12 @@ export function PassagePane({
         <article
           ref={articleRef}
           className="bando-reading editorial"
-          style={{ padding: "24px 44px 80px", maxWidth: "64ch", margin: "0 auto", fontSize: fontPx }}
+          style={{ padding: "24px 48px 80px", maxWidth: 820, margin: "0 auto", fontSize: fontPx }}
           onMouseUp={onMouseUp}
           onClick={onClick}
         >
-          {passages.map((p) => (
-            <div key={p.order} data-order={p.order} dangerouslySetInnerHTML={{ __html: p.body_html }} />
+          {cleaned.map((p) => (
+            <div key={p.order} data-order={p.order} dangerouslySetInnerHTML={{ __html: p.html }} />
           ))}
         </article>
       </div>
@@ -364,11 +388,22 @@ const PASSAGE_CSS = `
 .bando-reading.editorial{font-family:var(--font-reading);color:var(--reading-text);line-height:1.75}
 .bando-reading.editorial p{margin:0 0 1.15em;position:relative}
 .bando-reading.editorial em{font-style:italic}
-.bando-reading.editorial p[data-letter]::before{
-  content:attr(data-letter);position:absolute;left:-44px;top:.15em;width:26px;height:26px;
+/* Висячая буква-кружок слева. Три источника: сгенерированный data-letter (голые
+   <p>), встроенный span.para-label (внутри <p>) и div.para-letter (внутри
+   .para-block). Лейн — padding-left у абзаца/блока; буква на left:0 (без
+   отрицательного офсета, который раньше клипал скролл-контейнер). */
+.bando-reading.editorial p[data-letter],
+.bando-reading.editorial p:has(> .para-label){padding-left:46px}
+.bando-reading.editorial .para-block{padding-left:46px;position:relative;margin:0 0 1.15em}
+.bando-reading.editorial .para-block > p{margin:0}
+.bando-reading.editorial p[data-letter]::before{content:attr(data-letter)}
+.bando-reading.editorial p[data-letter]::before,
+.bando-reading.editorial .para-label,
+.bando-reading.editorial .para-letter{
+  position:absolute;left:0;top:.12em;width:28px;height:28px;
   border:1px solid var(--reading-rule);border-radius:50%;display:grid;place-items:center;
-  font-family:var(--font-reading);font-size:13px;font-weight:600;color:var(--reading-muted);line-height:1;
-  background:color-mix(in oklab,var(--reading-surface) 60%,white);
+  font-family:var(--font-ui);font-size:12.5px;font-weight:600;color:var(--reading-muted);line-height:1;
+  background:#fff;
 }
 .bando-reading.editorial p.dropcap::first-letter{
   float:left;font-family:var(--font-reading);font-size:3.4em;line-height:.82;font-weight:600;
@@ -384,7 +419,7 @@ const PASSAGE_CSS = `
 const S = {
   pane: { flex: "1.15", minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)", position: "relative" } as React.CSSProperties,
   progressTop: { height: 3, background: "color-mix(in oklab, var(--reading-rule) 70%, transparent)", flex: "none" } as React.CSSProperties,
-  masthead: { padding: "30px 44px 0", maxWidth: "64ch", margin: "0 auto" } as React.CSSProperties,
+  masthead: { padding: "30px 48px 0", maxWidth: 820, margin: "0 auto" } as React.CSSProperties,
   overline: { fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--reading-muted)", fontWeight: 600 } as React.CSSProperties,
   ptitle: { fontFamily: "var(--font-reading)", fontWeight: 600, fontSize: 34, color: "var(--reading-text)", lineHeight: 1.18, letterSpacing: "-0.01em", margin: "12px 0 0" } as React.CSSProperties,
   pmeta: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 14, marginTop: 14, color: "var(--reading-muted)", fontSize: 12.5, fontFamily: "var(--font-ui)" } as React.CSSProperties,
