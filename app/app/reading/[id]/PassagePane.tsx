@@ -90,12 +90,15 @@ export function PassagePane({
   category,
   passages,
   initialAnnotations,
+  className,
 }: {
   contentItemId: string;
   title: string;
   category: string;
   passages: Passage[];
   initialAnnotations: AnnotationRow[];
+  /** Раннер задаёт раскладку панели (display/flex) классом — адаптив за ним. */
+  className?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLElement>(null);
@@ -252,7 +255,7 @@ export function PassagePane({
   const surface = theme === "sepia" ? "color-mix(in oklab, var(--gold-500) 13%, var(--paper-light))" : "var(--reading-surface)";
 
   return (
-    <div style={{ ...S.pane, background: surface }}>
+    <div className={className} style={{ ...S.pane, background: surface }}>
       <style>{PASSAGE_CSS}</style>
 
       {/* reading progress */}
@@ -373,7 +376,7 @@ const PASSAGE_CSS = `
 `;
 
 const S = {
-  pane: { flex: "1.15", minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)", position: "relative" } as React.CSSProperties,
+  pane: { minWidth: 0, flexDirection: "column", borderRight: "1px solid var(--border)", position: "relative" } as React.CSSProperties,
   progressTop: { height: 3, background: "color-mix(in oklab, var(--reading-rule) 70%, transparent)", flex: "none" } as React.CSSProperties,
   masthead: { padding: "30px 48px 0", maxWidth: 900, margin: "0 auto" } as React.CSSProperties,
   overline: { fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--reading-muted)", fontWeight: 600 } as React.CSSProperties,
