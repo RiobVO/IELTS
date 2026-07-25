@@ -1,6 +1,8 @@
 import { getProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader, type ActivePage } from "@/components/app/AppHeader";
+import type { NotifItem } from "@/components/app/NotificationsBell";
+import { markAllRead } from "@/lib/notifications/actions";
 import { signOut } from "../auth/actions";
 
 function computeInitials(name: string, email?: string | null): string {
@@ -22,16 +24,24 @@ export async function AppShell({
   active: ActivePage;
   children: React.ReactNode;
 }) {
-  // Профиль и счётчик непрочитанных независимы → один Promise.all вместо водопада.
+  // Профиль, счётчик непрочитанных и последние уведомления независимы → один
+  // Promise.all вместо водопада. recent кормит dropdown-окошко в шапке; count —
+  // точное число непрочитанных (не только из показанных recent).
   const supabase = await createClient();
-  const [profile, notif] = await Promise.all([
+  const [profile, notif, recent] = await Promise.all([
     getProfile(),
     supabase
       .from("notification")
       .select("id", { count: "exact", head: true })
       .is("read_at", null),
+    supabase
+      .from("notification")
+      .select("id,type,title,body,read_at,created_at")
+      .order("created_at", { ascending: false })
+      .limit(8),
   ]);
   const count = notif.count;
+  const recentItems = (recent.data ?? []) as NotifItem[];
 
   const initials = computeInitials(
     (profile?.display_name ?? profile?.email ?? "") as string,
@@ -46,6 +56,8 @@ export async function AppShell({
         xp={profile?.xp ?? 0}
         initials={initials}
         unread={count ?? 0}
+        recent={recentItems}
+        markAllRead={markAllRead}
         signOut={signOut}
       />
       <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
