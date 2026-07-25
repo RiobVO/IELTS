@@ -241,24 +241,6 @@ export function PassagePane({
     await deleteAnnotation(id);
   }, [editor, annotations, passageEl]);
 
-  // Убираем ведущий <h1>/<h2> ТОЛЬКО если это дубль заголовка masthead
-  // (single-passage тест). У full-reading <h2> = НАЗВАНИЕ пассажа (не дубль) —
-  // его оставляем.
-  const cleaned = useMemo(
-    () =>
-      passages.map((p) => ({
-        order: p.order,
-        html: p.body_html.replace(
-          /^\s*<h[12]\b[^>]*>([\s\S]*?)<\/h[12]>\s*/i,
-          (m: string, inner: string) =>
-            inner.replace(/<[^>]+>/g, "").trim().toLowerCase() === title.trim().toLowerCase()
-              ? ""
-              : m,
-        ),
-      })),
-    [passages, title],
-  );
-
   const wordCount = useMemo(() => {
     const text = passages.map((p) => p.body_html).join(" ").replace(/<[^>]+>/g, " ");
     const words = text.trim().split(/\s+/).filter(Boolean).length;
@@ -305,8 +287,8 @@ export function PassagePane({
           onMouseUp={onMouseUp}
           onClick={onClick}
         >
-          {cleaned.map((p) => (
-            <div key={p.order} data-order={p.order} dangerouslySetInnerHTML={{ __html: p.html }} />
+          {passages.map((p) => (
+            <div key={p.order} data-order={p.order} dangerouslySetInnerHTML={{ __html: p.body_html }} />
           ))}
         </article>
       </div>
@@ -368,26 +350,18 @@ const PASSAGE_CSS = `
 .bando-reading.editorial{font-family:var(--font-reading);color:var(--reading-text);line-height:1.75}
 .bando-reading.editorial p{margin:0 0 1.15em;position:relative}
 .bando-reading.editorial em{font-style:italic}
-/* Буквы абзацев — кружок в левом поле. ВСЁ на чистом CSS (клиентский JS для них
-   в проде не отрабатывал). Plain-пассаж = [data-order] без встроенных меток и без
-   question-UI (.para-label / .para-letter / .heading-drop / .paragraph-block):
-   нумеруем CSS-счётчиком A/B/C. Пассажи со своими метками используют их как есть.
-   Лейн — padding-left у абзаца/блока; кружок на left:0. */
-.bando-reading.editorial [data-order]:not(:has(.para-label, .para-letter, .heading-drop, .paragraph-block)){counter-reset:para}
-.bando-reading.editorial [data-order]:not(:has(.para-label, .para-letter, .heading-drop, .paragraph-block)) > p:not(.subtitle){counter-increment:para;padding-left:46px}
-.bando-reading.editorial [data-order]:not(:has(.para-label, .para-letter, .heading-drop, .paragraph-block)) > p:not(.subtitle)::before{content:counter(para,upper-alpha)}
-.bando-reading.editorial p:has(> .para-label){padding-left:46px}
-.bando-reading.editorial .para-block{padding-left:46px;position:relative;margin:0 0 1.15em}
-.bando-reading.editorial .para-block > p{margin:0}
-.bando-reading.editorial [data-order]:not(:has(.para-label, .para-letter, .heading-drop, .paragraph-block)) > p:not(.subtitle)::before,
-.bando-reading.editorial .para-label,
-.bando-reading.editorial .para-letter{
-  position:absolute;left:0;top:.12em;width:28px;height:28px;
+/* Буквы абзацев — ЕДИНЫЙ контракт после read-time нормализации
+   (normalize-passage.ts): каждый абзац-блок = <p class="rp" data-letter="X">,
+   первый помечен [data-first] для drop-cap. Один CSS-путь, без угадывания
+   структуры. Лейн — padding-left; кружок на left:0 (p уже position:relative). */
+.bando-reading.editorial p.rp{padding-left:46px}
+.bando-reading.editorial p.rp::before{
+  content:attr(data-letter);position:absolute;left:0;top:.12em;width:28px;height:28px;
   border:1px solid var(--reading-rule);border-radius:50%;display:grid;place-items:center;
   font-family:var(--font-ui);font-size:12.5px;font-weight:600;color:var(--reading-muted);line-height:1;
   background:#fff;
 }
-.bando-reading.editorial [data-order]:not(:has(.para-label, .para-letter, .heading-drop, .paragraph-block)) > p:not(.subtitle):first-of-type::first-letter{
+.bando-reading.editorial p.rp[data-first]::first-letter{
   float:left;font-family:var(--font-reading);font-size:3.4em;line-height:.82;font-weight:600;
   padding:.06em .12em 0 0;color:var(--brand);
 }
