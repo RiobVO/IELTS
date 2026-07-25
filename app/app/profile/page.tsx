@@ -382,7 +382,7 @@ const S: Record<string, React.CSSProperties> = {
 
   hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "radial-gradient(520px 280px at 88% -40%, color-mix(in oklab, var(--violet-400) 55%, transparent), transparent 70%), linear-gradient(155deg, var(--brand), var(--brand-active) 70%, var(--violet-700))", color: "#fff", padding: "26px 30px", display: "flex", alignItems: "center", gap: 30, marginBottom: 14 },
   ringBox: { position: "relative", width: 128, height: 128, flex: "none" },
-  ringCenter: { position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center" },
+  ringCenter: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" },
   ringNum: { fontFamily: "var(--font-mono)", fontSize: 40, fontWeight: 600, lineHeight: 1, letterSpacing: "-0.02em" },
   ringCap: { fontSize: 10.5, color: "rgba(255,255,255,.8)", marginTop: 3 },
   heroEyebrow: { fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(255,255,255,.72)", fontWeight: 600 },
