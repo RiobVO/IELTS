@@ -2,17 +2,30 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "./supabase/server";
 
+/** Минимум, который реально используется из auth-юзера по коду (`.id` / `.email`). */
+export interface AuthUser {
+  id: string;
+  email?: string;
+}
+
 /**
  * The current authenticated user (or null). Request-memoized via React `cache()`:
- * layout + page (e.g. the /app layout's analytics identify and the page's own
- * requireUser) share ONE auth round-trip per request instead of refetching.
+ * layout + page (analytics identify + page's requireUser/getProfile) share ONE
+ * resolve per request.
+ *
+ * Uses `getClaims()`, not `getUser()`: при асимметричных JWT signing-ключах токен
+ * верифицируется ЛОКАЛЬНО (WebCrypto, без round-trip к Auth-серверу Frankfurt) —
+ * срезает auth-RTT с КАЖДОЙ /app-страницы. При legacy HS256 `getClaims` сам падает
+ * обратно на сетевой `getUser()` (auth-js), т.е. поведение идентично, без регрессии.
+ * Отзыв токена проверяет middleware (там остаётся `getUser()` + refresh сессии) —
+ * рендеру достаточно верифицированных claims.
  */
-export const getUser = cache(async () => {
+export const getUser = cache(async (): Promise<AuthUser | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (error || !claims?.sub) return null;
+  return { id: claims.sub, email: typeof claims.email === "string" ? claims.email : undefined };
 });
 
 /**
