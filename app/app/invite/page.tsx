@@ -31,11 +31,12 @@ export default async function InvitePage() {
 
   return (
     <AppShell active="profile">
-      <div style={S.wrap}>
+      <style>{`.inv-wrap{padding:22px 16px 40px}.inv-card{padding:20px}@media(min-width:560px){.inv-wrap{padding:30px 28px 48px}.inv-card{padding:28px}}`}</style>
+      <div className="inv-wrap" style={S.wrap}>
         <h1 style={S.h1}>Invite a friend</h1>
         <p style={S.lead}>Once a friend finishes their first test, you both earn XP.</p>
 
-        <div style={S.invite}>
+        <div className="inv-card" style={S.invite}>
           <div aria-hidden="true" style={S.glow} />
           <div style={{ position: "relative" }}>
             <div style={S.titleRow}>
@@ -57,10 +58,10 @@ export default async function InvitePage() {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 720, margin: "0 auto", padding: "30px 28px 48px" },
+  wrap: { maxWidth: 720, margin: "0 auto" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 4px" },
   lead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "0 0 20px" },
-  invite: { position: "relative", overflow: "hidden", background: "linear-gradient(160deg, #2A2342, #14101F)", borderRadius: "var(--radius-xl)", padding: 28, color: "#fff" },
+  invite: { position: "relative", overflow: "hidden", background: "linear-gradient(160deg, #2A2342, #14101F)", borderRadius: "var(--radius-xl)", color: "#fff" },
   glow: { position: "absolute", top: -90, right: -70, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--brand) 50%, transparent), transparent 64%)" },
   titleRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8 },
   title: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-lg)" },

@@ -91,7 +91,8 @@ export default function PricingScreen({
   const [annual, setAnnual] = useState(true);
 
   return (
-    <div style={S.wrap}>
+    <div className="pricing-wrap" style={S.wrap}>
+      <style>{`.pricing-wrap{padding:28px 16px 48px}@media(min-width:768px){.pricing-wrap{padding:38px 28px 56px}}`}</style>
       {/* Header */}
       <div style={{ textAlign: "center", marginBottom: 8 }}>
         <span style={S.eyebrow}>
@@ -253,7 +254,7 @@ function FaqRow({ q, a }: { q: string; a: string }) {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  wrap: { padding: "38px 28px 56px" },
+  wrap: {},
   eyebrow: { display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-link)", background: "var(--brand-subtle)", padding: "5px 14px", borderRadius: "var(--radius-full)", marginBottom: 14 },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-3xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 8px" },
   lead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", color: "var(--text-muted)", margin: 0 },

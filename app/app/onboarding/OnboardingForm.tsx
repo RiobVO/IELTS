@@ -58,7 +58,8 @@ export default function OnboardingForm({
 
   return (
     <div style={S.screen}>
-      <div style={{ ...S.card, maxWidth: step === "diagnostic" ? 620 : 460 }}>
+      <style>{`.ob-card{padding:24px 20px 28px}@media(min-width:480px){.ob-card{padding:34px 32px 36px}}`}</style>
+      <div className="ob-card" style={{ ...S.card, maxWidth: step === "diagnostic" ? 620 : 460 }}>
         <div style={S.eyebrow}>{heading.eyebrow}</div>
         <h1 style={S.h1}>{heading.title}</h1>
         {heading.lead && <p style={S.lead}>{heading.lead}</p>}
@@ -187,7 +188,7 @@ export default function OnboardingForm({
 
 const S: Record<string, React.CSSProperties> = {
   screen: { minHeight: "100dvh", background: "var(--bg-base)", display: "grid", placeItems: "center", padding: "32px 18px" },
-  card: { width: "100%", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-lg)", padding: "34px 32px 36px" },
+  card: { width: "100%", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-lg)" },
   eyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand)" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-3xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "8px 0 6px" },
   lead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", color: "var(--text-muted)", margin: "0 0 24px", lineHeight: 1.5 },
