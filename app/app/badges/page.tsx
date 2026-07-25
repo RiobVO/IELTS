@@ -82,7 +82,8 @@ export default async function BadgesPage() {
 
   return (
     <AppShell active="badges">
-      <div style={S.wrap}>
+      <style>{BDG_CSS}</style>
+      <div className="bdg-wrap" style={S.wrap}>
         <div style={S.head}>
           <div style={{ flex: 1 }}>
             <h1 style={S.h1}>Badges</h1>
@@ -99,7 +100,7 @@ export default async function BadgesPage() {
 
         {/* Next-up spotlight — closest locked badge */}
         {next && next.progress && (
-          <div style={S.hero}>
+          <div className="bdg-hero" style={S.hero}>
             <div style={{ position: "relative", width: 88, height: 88, flex: "none" }}>
               <Ring pct={next.progress.pct} size={88} color="var(--violet-300)" track="rgba(255,255,255,0.18)" />
               <div style={S.heroMedal}>
@@ -130,7 +131,7 @@ export default async function BadgesPage() {
             <div style={S.sech}>
               Earned <span style={S.sechCt}>{earned.length}</span>
             </div>
-            <div style={{ ...S.grid, marginBottom: 26 }}>
+            <div className="bdg-grid" style={{ marginBottom: 26 }}>
               {earned.map((b) => (
                 <Tile key={b.id} b={b} />
               ))}
@@ -143,7 +144,7 @@ export default async function BadgesPage() {
             <div style={S.sech}>
               Locked <span style={S.sechCt}>{locked.length}</span>
             </div>
-            <div style={S.grid}>
+            <div className="bdg-grid">
               {locked.map((b) => (
                 <Tile key={b.id} b={b} />
               ))}
@@ -234,8 +235,22 @@ function Tile({ b }: { b: ViewBadge }) {
   );
 }
 
+// Адаптив бейджей. База = мобильный (сетка 2-кол, hero переносит кнопку);
+// 3-кол ≥560px, 4-кол ≥820px. Сетка/паддинги/wrap — в классах.
+const BDG_CSS = `
+.bdg-wrap{padding:22px 16px 44px}
+.bdg-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.bdg-hero{flex-wrap:wrap;padding:20px}
+@media (min-width:560px){ .bdg-grid{grid-template-columns:repeat(3,1fr)} }
+@media (min-width:820px){
+  .bdg-wrap{padding:30px 28px 48px}
+  .bdg-grid{grid-template-columns:repeat(4,1fr);gap:14px}
+  .bdg-hero{flex-wrap:nowrap;padding:24px 26px}
+}
+`;
+
 const S: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 1000, margin: "0 auto", padding: "30px 28px 48px" },
+  wrap: { maxWidth: 1000, margin: "0 auto" },
   head: { display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 22 },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 4px" },
   sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: 0 },
@@ -248,7 +263,6 @@ const S: Record<string, React.CSSProperties> = {
     borderRadius: "var(--radius-xl)",
     background: "linear-gradient(150deg, var(--slate-900), var(--slate-950))",
     color: "#fff",
-    padding: "24px 26px",
     display: "flex",
     alignItems: "center",
     gap: 22,
@@ -262,7 +276,6 @@ const S: Record<string, React.CSSProperties> = {
 
   sech: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)", margin: "0 0 12px", display: "flex", alignItems: "center", gap: 9 },
   sechCt: { fontFamily: "var(--font-mono)", color: "var(--text-disabled)" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 },
 
   name: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", marginBottom: 4 },
   desc: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", lineHeight: 1.45, minHeight: 32 },

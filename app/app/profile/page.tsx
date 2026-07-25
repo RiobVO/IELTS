@@ -177,7 +177,8 @@ export default async function ProfilePage() {
 
   return (
     <AppShell active="profile">
-      <div style={S.wrap}>
+      <style>{PF_CSS}</style>
+      <div className="pf-wrap" style={S.wrap}>
         {/* Identity */}
         <div style={S.idRow}>
           <div style={S.avatar}>{initials((profile?.display_name ?? "") as string, profile?.email ?? user.email)}</div>
@@ -191,7 +192,7 @@ export default async function ProfilePage() {
         </div>
 
         {/* GOAL HERO — road to your band */}
-        <div style={S.hero}>
+        <div className="pf-hero" style={S.hero}>
           <div style={S.ringBox}>
             <svg width={128} height={128} viewBox="0 0 128 128">
               <circle cx={CX} cy={CY} r={R} fill="none" stroke="rgba(255,255,255,.2)" strokeWidth={11} />
@@ -234,7 +235,7 @@ export default async function ProfilePage() {
         </div>
 
         {/* NEXT MOVE + momentum */}
-        <div style={S.duo}>
+        <div className="pf-duo" style={S.duo}>
           <a href="/app/reading" style={S.nextCard}>
             <span style={S.nextIcon}><Icon name="target" size={24} strokeWidth={2.3} /></span>
             <div style={{ flex: 1 }}>
@@ -263,15 +264,15 @@ export default async function ProfilePage() {
         </div>
 
         {/* Numbers strip — no dead tiles */}
-        <div style={S.strip}>
-          <StripStat icon="book-open" tone="var(--brand)" value={testsTaken ?? 0} label="Tests taken" divide />
-          <StripStat icon="flame" tone="var(--streak)" value={streak} label="Day streak" divide />
-          <StripStat icon="trophy" tone="var(--brand)" value={rating} label="Rating" divide />
+        <div className="pf-strip" style={S.strip}>
+          <StripStat icon="book-open" tone="var(--brand)" value={testsTaken ?? 0} label="Tests taken" />
+          <StripStat icon="flame" tone="var(--streak)" value={streak} label="Day streak" />
+          <StripStat icon="trophy" tone="var(--brand)" value={rating} label="Rating" />
           <StripStat icon="medal" tone="var(--warn-text)" value={globalRank != null ? `#${globalRank}` : "—"} label="League rank" />
         </div>
 
         {/* Achievements + invite */}
-        <div style={S.duo2}>
+        <div className="pf-duo2" style={S.duo2}>
           <div style={S.achCard}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
               <span style={S.sub}>Achievements</span>
@@ -347,9 +348,10 @@ export default async function ProfilePage() {
   );
 }
 
-function StripStat({ icon, tone, value, label, divide }: { icon: IconName; tone: string; value: string | number; label: string; divide?: boolean }) {
+function StripStat({ icon, tone, value, label }: { icon: IconName; tone: string; value: string | number; label: string }) {
+  // Делители рисует CSS (.pf-stat) — на десктопе вертикальные, на мобильном 2×2.
   return (
-    <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "16px 18px", borderRight: divide ? "1px solid var(--border-subtle)" : "none" }}>
+    <div className="pf-stat" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 18px" }}>
       <span style={{ width: 38, height: 38, flex: "none", borderRadius: 11, display: "grid", placeItems: "center", background: `color-mix(in oklab, ${tone} 14%, var(--surface))`, color: tone }}>
         <Icon name={icon} size={19} strokeWidth={2.3} />
       </span>
@@ -373,14 +375,36 @@ function QuietRow({ icon, label, value, last }: { icon: IconName; label: string;
   );
 }
 
+// Адаптив профиля. База = мобильный (hero/duo/duo2 в стек, strip 2×2);
+// ≥640px = десктоп. Делители strip и переключаемые grid/flex — в классах.
+const PF_CSS = `
+.pf-wrap{padding:22px 16px 44px}
+.pf-hero{display:flex;flex-direction:column;align-items:flex-start;gap:18px;padding:22px 20px}
+.pf-duo,.pf-duo2{display:grid;grid-template-columns:1fr;gap:12px}
+.pf-strip{display:grid;grid-template-columns:1fr 1fr}
+.pf-stat{border-bottom:1px solid var(--border-subtle);border-right:1px solid var(--border-subtle)}
+.pf-stat:nth-child(2n){border-right:none}
+.pf-stat:nth-child(n+3){border-bottom:none}
+@media (min-width:640px){
+  .pf-wrap{padding:28px 28px 48px}
+  .pf-hero{flex-direction:row;align-items:center;gap:30px;padding:26px 30px}
+  .pf-duo{grid-template-columns:1.15fr .85fr;gap:14px}
+  .pf-duo2{grid-template-columns:1.1fr .9fr;gap:14px}
+  .pf-strip{display:flex}
+  .pf-stat{flex:1;border-bottom:none}
+  .pf-stat:nth-child(2n){border-right:1px solid var(--border-subtle)}
+  .pf-stat:last-child{border-right:none}
+}
+`;
+
 const S: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 840, margin: "0 auto", padding: "28px 28px 48px" },
+  wrap: { maxWidth: 840, margin: "0 auto" },
   idRow: { display: "flex", alignItems: "center", gap: 18, marginBottom: 18 },
   avatar: { width: 60, height: 60, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", color: "#fff", fontFamily: "var(--font-ui)", fontSize: 23, fontWeight: 800, boxShadow: "var(--shadow-md)" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
   subLine: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 2 },
 
-  hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "radial-gradient(520px 280px at 88% -40%, color-mix(in oklab, var(--violet-400) 55%, transparent), transparent 70%), linear-gradient(155deg, var(--brand), var(--brand-active) 70%, var(--violet-700))", color: "#fff", padding: "26px 30px", display: "flex", alignItems: "center", gap: 30, marginBottom: 14 },
+  hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "radial-gradient(520px 280px at 88% -40%, color-mix(in oklab, var(--violet-400) 55%, transparent), transparent 70%), linear-gradient(155deg, var(--brand), var(--brand-active) 70%, var(--violet-700))", color: "#fff", marginBottom: 14 },
   ringBox: { position: "relative", width: 128, height: 128, flex: "none" },
   ringCenter: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" },
   ringNum: { fontFamily: "var(--font-mono)", fontSize: 40, fontWeight: 600, lineHeight: 1, letterSpacing: "-0.02em" },
@@ -390,7 +414,7 @@ const S: Record<string, React.CSSProperties> = {
   heroMono: { fontFamily: "var(--font-mono)", fontWeight: 600 },
   heroText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,.82)", margin: "8px 0 0", maxWidth: 380, lineHeight: 1.5 },
 
-  duo: { display: "grid", gridTemplateColumns: "1.15fr .85fr", gap: 14, marginBottom: 14, alignItems: "stretch" },
+  duo: { marginBottom: 14, alignItems: "stretch" },
   nextCard: { display: "flex", alignItems: "center", gap: 16, padding: "20px 22px", background: "var(--surface)", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-solid)", textDecoration: "none", color: "inherit" },
   nextIcon: { flex: "none", width: 48, height: 48, borderRadius: 14, background: "linear-gradient(160deg, var(--brand), var(--brand-active))", color: "#fff", display: "grid", placeItems: "center", boxShadow: "0 0 22px -6px var(--brand)" },
   nextEyebrow: { fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--brand-active)" },
@@ -401,9 +425,9 @@ const S: Record<string, React.CSSProperties> = {
   weekDot: { height: 30, borderRadius: 9, display: "grid", placeItems: "center" },
   weekLab: { fontSize: 9.5, color: "var(--text-muted)", marginTop: 4, fontWeight: 600 },
 
-  strip: { display: "flex", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", marginBottom: 14 },
+  strip: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", marginBottom: 14, overflow: "hidden" },
 
-  duo2: { display: "grid", gridTemplateColumns: "1.1fr .9fr", gap: 14, marginBottom: 14, alignItems: "stretch" },
+  duo2: { marginBottom: 14, alignItems: "stretch" },
   achCard: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", padding: "18px 20px" },
   achLink: { marginLeft: "auto", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-link)", textDecoration: "none" },
   achCell: { flex: 1, aspectRatio: "1", borderRadius: 13, display: "grid", placeItems: "center" },

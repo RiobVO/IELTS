@@ -115,8 +115,9 @@ export default async function Leaderboard({
 
   return (
     <AppShell active="leaderboard">
+      <style>{LB_CSS}</style>
       <div style={S.arena}>
-        <div style={S.wrap}>
+        <div className="lb-wrap" style={S.wrap}>
           {/* Header */}
           <div style={S.head}>
             <span style={S.crown}>
@@ -139,7 +140,7 @@ export default async function Leaderboard({
           {rows.length === 0 ? (
             <div style={S.empty}>No ranking yet — sit a rated test to enter the league.</div>
           ) : (
-            <div style={S.grid}>
+            <div className="lb-grid" style={S.grid}>
               {/* Ranked board */}
               <div style={S.list}>
                 {rows.map((r) => (
@@ -307,16 +308,26 @@ function RowItem({ row, showScore }: { row: LeaderRow; showScore: boolean }) {
   );
 }
 
+// Адаптив лидерборда. База = мобильный (доска и сайдбар в стек); ≥768px = десктоп.
+const LB_CSS = `
+.lb-wrap{padding:22px 16px 40px}
+.lb-grid{display:grid;grid-template-columns:1fr;gap:16px}
+@media (min-width:768px){
+  .lb-wrap{padding:26px 28px 44px}
+  .lb-grid{grid-template-columns:1.5fr 1fr;gap:20px}
+}
+`;
+
 const S: Record<string, React.CSSProperties> = {
   arena: { minHeight: "100%", background: "radial-gradient(120% 80% at 50% -8%, color-mix(in oklab, var(--brand) 14%, white) 0%, var(--bg-base) 52%)" },
-  wrap: { maxWidth: 960, margin: "0 auto", padding: "26px 28px 44px" },
+  wrap: { maxWidth: 960, margin: "0 auto" },
   head: { display: "flex", alignItems: "center", gap: 13, marginBottom: 16 },
   crown: { width: 44, height: 44, flex: "none", borderRadius: 13, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", boxShadow: "0 0 26px -4px color-mix(in oklab, var(--brand) 80%, transparent)" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
   sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
   scopeNote: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", margin: "0 2px 16px" },
 
-  grid: { display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20, alignItems: "start" },
+  grid: { alignItems: "start" },
   list: { display: "flex", flexDirection: "column", gap: 7 },
   divider: { height: 1, background: "var(--border)", margin: "4px 0" },
 
