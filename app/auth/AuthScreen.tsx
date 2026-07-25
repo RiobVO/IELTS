@@ -94,12 +94,20 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
         @keyframes seal-spin{to{transform:rotate(360deg)}}
         @keyframes mark-pop{0%{transform:scale(.4);opacity:0}55%{transform:scale(1.12);opacity:1}100%{transform:scale(1);opacity:1}}
         @media (prefers-reduced-motion:reduce){.auth-rise,.auth-seal,.auth-mark{animation:none!important}}
+        /* Мобильный (<760px): раздвижная карта — desktop-метафора. Прячем violet-панель,
+           активная форма занимает всю ширину карты, переключение — текстовым тогглом. */
+        .auth-toggle{display:none}
+        @media (max-width:759px){
+          .auth-panel{display:none}
+          .auth-form{width:100%!important;padding:30px 20px!important}
+          .auth-toggle{display:block}
+        }
       `}</style>
 
       <div style={{ position: "relative", width: 940, maxWidth: "100%", height: 580, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-xl)", overflow: "hidden" }}>
 
         {/* Signup form — LEFT half */}
-        <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: (100 - PANEL) + "%", display: "grid", placeItems: "center", padding: "40px 36px", opacity: signup && phase !== "cover" ? 1 : 0, pointerEvents: signup && phase === "idle" ? "auto" : "none", transition: "opacity .3s var(--ease-out)" }}>
+        <div className="auth-form" style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: (100 - PANEL) + "%", display: "grid", placeItems: "center", padding: "40px 36px", opacity: signup && phase !== "cover" ? 1 : 0, pointerEvents: signup && phase === "idle" ? "auto" : "none", transition: "opacity .3s var(--ease-out)" }}>
           {signup && (
             <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
               <div className="auth-rise" style={{ animationDelay: "40ms" }}>
@@ -156,12 +164,17 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
                   <GoogleG /> Continue with Google
                 </button>
               </div>
+
+              <div className="auth-toggle" style={{ textAlign: "center", marginTop: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>
+                Already have an account?{" "}
+                <button type="button" onClick={() => setMode("login")} style={{ border: "none", background: "none", padding: 0, color: "var(--text-link)", fontWeight: 700, fontFamily: "inherit", fontSize: "inherit", cursor: "pointer" }}>Log in</button>
+              </div>
             </div>
           )}
         </div>
 
         {/* Login form — RIGHT half */}
-        <div style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: (100 - PANEL) + "%", display: "grid", placeItems: "center", padding: "40px 36px", opacity: !signup && phase !== "cover" ? 1 : 0, pointerEvents: !signup && phase === "idle" ? "auto" : "none", transition: "opacity .3s var(--ease-out)" }}>
+        <div className="auth-form" style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: (100 - PANEL) + "%", display: "grid", placeItems: "center", padding: "40px 36px", opacity: !signup && phase !== "cover" ? 1 : 0, pointerEvents: !signup && phase === "idle" ? "auto" : "none", transition: "opacity .3s var(--ease-out)" }}>
           {!signup && (
             <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
               <div className="auth-rise" style={{ animationDelay: "40ms" }}>
@@ -211,12 +224,17 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
                   <GoogleG /> Continue with Google
                 </button>
               </div>
+
+              <div className="auth-toggle" style={{ textAlign: "center", marginTop: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>
+                New to bando?{" "}
+                <button type="button" onClick={() => setMode("signup")} style={{ border: "none", background: "none", padding: 0, color: "var(--text-link)", fontWeight: 700, fontFamily: "inherit", fontSize: "inherit", cursor: "pointer" }}>Create account</button>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Sliding violet panel */}
-        <div style={{ position: "absolute", top: 0, bottom: 0, left: pLeft + "%", width: pW + "%", padding: covering ? 0 : 10, zIndex: 5, transition: "left .62s var(--ease-in-out), width .62s var(--ease-in-out), padding .62s var(--ease-in-out)" }}>
+        {/* Sliding violet panel — desktop only (.auth-panel hidden <760px) */}
+        <div className="auth-panel" style={{ position: "absolute", top: 0, bottom: 0, left: pLeft + "%", width: pW + "%", padding: covering ? 0 : 10, zIndex: 5, transition: "left .62s var(--ease-in-out), width .62s var(--ease-in-out), padding .62s var(--ease-in-out)" }}>
           <div style={{ position: "relative", overflow: "hidden", height: "100%", background: "linear-gradient(165deg, #2A2342, #14101F)", borderRadius: covering ? "var(--radius-2xl)" : "var(--radius-xl)", display: "flex", flexDirection: "column", justifyContent: "center", padding: "44px 40px", color: "#fff", transition: "border-radius .5s var(--ease-in-out)" }}>
             <div aria-hidden="true" style={{ position: "absolute", top: -120, right: -90, width: 340, height: 340, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--brand) 55%, transparent), transparent 65%)", filter: "blur(36px)", opacity: 0.5 }} />
             <div aria-hidden="true" style={{ position: "absolute", bottom: -110, left: -70, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--info) 45%, transparent), transparent 65%)", filter: "blur(40px)", opacity: 0.4 }} />
