@@ -60,5 +60,5 @@ const S: Record<string, React.CSSProperties> = {
   statsBar: { display: "flex", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", marginBottom: 16 },
   cols: { display: "grid", gridTemplateColumns: "1fr 1.1fr", gap: 16, alignItems: "start" },
   card: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: "20px" },
-  invite: { background: "linear-gradient(160deg, #2A2342, #14101F)", borderRadius: "var(--radius-xl)", padding: 24 },
+  invite: { background: "linear-gradient(160deg, var(--surface-premium), var(--surface-premium-deep))", borderRadius: "var(--radius-xl)", padding: 24 },
 };

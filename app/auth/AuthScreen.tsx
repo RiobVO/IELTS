@@ -235,7 +235,7 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
 
         {/* Sliding violet panel — desktop only (.auth-panel hidden <760px) */}
         <div className="auth-panel" style={{ position: "absolute", top: 0, bottom: 0, left: pLeft + "%", width: pW + "%", padding: covering ? 0 : 10, zIndex: 5, transition: "left .62s var(--ease-in-out), width .62s var(--ease-in-out), padding .62s var(--ease-in-out)" }}>
-          <div style={{ position: "relative", overflow: "hidden", height: "100%", background: "linear-gradient(165deg, #2A2342, #14101F)", borderRadius: covering ? "var(--radius-2xl)" : "var(--radius-xl)", display: "flex", flexDirection: "column", justifyContent: "center", padding: "44px 40px", color: "#fff", transition: "border-radius .5s var(--ease-in-out)" }}>
+          <div style={{ position: "relative", overflow: "hidden", height: "100%", background: "linear-gradient(165deg, var(--surface-premium), var(--surface-premium-deep))", borderRadius: covering ? "var(--radius-2xl)" : "var(--radius-xl)", display: "flex", flexDirection: "column", justifyContent: "center", padding: "44px 40px", color: "var(--surface-premium-ink)", transition: "border-radius .5s var(--ease-in-out)" }}>
             <div aria-hidden="true" style={{ position: "absolute", top: -120, right: -90, width: 340, height: 340, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--brand) 55%, transparent), transparent 65%)", filter: "blur(36px)", opacity: 0.5 }} />
             <div aria-hidden="true" style={{ position: "absolute", bottom: -110, left: -70, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--info) 45%, transparent), transparent 65%)", filter: "blur(40px)", opacity: 0.4 }} />
 
@@ -255,11 +255,11 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
                 <span style={{ width: 36, height: 36, borderRadius: 11, display: "grid", placeItems: "center", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.16)" }}>
                   <img src="/bando-mark.svg" width="20" height="20" alt="" />
                 </span>
-                <span style={{ fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: 21, color: "#fff" }}>band<span style={{ color: "var(--violet-300)" }}>o</span></span>
+                <span style={{ fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: 21, color: "var(--surface-premium-ink)" }}>band<span style={{ color: "var(--violet-300)" }}>o</span></span>
               </div>
               <h2 style={{ fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: 26, lineHeight: 1.15, letterSpacing: "-.02em", margin: "0 0 10px", maxWidth: 280 }}>{signup ? "Already with us?" : "New to bando?"}</h2>
               <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,.66)", lineHeight: 1.55, margin: "0 0 22px", maxWidth: 270 }}>{signup ? "Log in and keep your streak, league rank and progress moving." : "Take a free test and see exactly which question types cost you points."}</p>
-              <button onClick={() => switchTo(signup ? "login" : "signup")} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 46, padding: "0 22px", borderRadius: "var(--radius-md)", border: "2px solid rgba(255,255,255,.5)", background: "transparent", color: "#fff", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer" }}>
+              <button onClick={() => switchTo(signup ? "login" : "signup")} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 46, padding: "0 22px", borderRadius: "var(--radius-md)", border: "2px solid rgba(255,255,255,.5)", background: "transparent", color: "var(--surface-premium-ink)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer" }}>
                 {signup ? "Log in" : "Create account"} <span aria-hidden="true">→</span>
               </button>
             </div>

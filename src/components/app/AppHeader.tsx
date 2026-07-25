@@ -207,7 +207,7 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
 
       <div className="ah-bar" style={{ display: "flex", alignItems: "center", maxWidth: 1180, margin: "0 auto" }}>
         <Link href="/app" style={{ display: "flex", alignItems: "center", gap: 11, textDecoration: "none" }}>
-          <span style={{ width: 34, height: 34, flex: "none", borderRadius: 10, display: "grid", placeItems: "center", background: "linear-gradient(165deg,#211B33,#0E0B17)", border: "1px solid #2C2640" }}>
+          <span style={{ width: 34, height: 34, flex: "none", borderRadius: 10, display: "grid", placeItems: "center", background: "linear-gradient(165deg,var(--surface-logo),var(--surface-logo-deep))", border: "1px solid var(--surface-logo-border)" }}>
             {/* inline SVG (не <img>) — иначе currentColor рисует бары чёрными на тёмной плитке */}
             <svg width="19" height="19" viewBox="0 0 64 64" fill="none" aria-hidden="true">
               <rect x="9" y="18" width="34" height="9" rx="4.5" fill="var(--brand)" />

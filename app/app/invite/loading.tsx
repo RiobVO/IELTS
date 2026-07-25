@@ -21,5 +21,5 @@ export default function Loading() {
 
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 720, margin: "0 auto", padding: "30px 28px 48px" },
-  invite: { background: "linear-gradient(160deg, #2A2342, #14101F)", borderRadius: "var(--radius-xl)", padding: 28 },
+  invite: { background: "linear-gradient(160deg, var(--surface-premium), var(--surface-premium-deep))", borderRadius: "var(--radius-xl)", padding: 28 },
 };

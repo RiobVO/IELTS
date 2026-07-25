@@ -108,5 +108,16 @@
   --reading-mark:    color-mix(in oklab, var(--gold-500) 42%, white);
   --reading-note:    color-mix(in oklab, var(--violet-500) 26%, white);
 
+  /* ---- Dark brand surfaces (intentionally fixed dark in a light app):
+     premium upsell / invite cards + auth side panel (--surface-premium*), and
+     the header logo tile (--surface-logo*). Stored as the exact handoff hex so
+     appearance is preserved; ink on these surfaces is white. ---- */
+  --surface-premium:        #2A2342;
+  --surface-premium-deep:   #14101F;
+  --surface-premium-ink:    #fff;
+  --surface-logo:           #211B33;
+  --surface-logo-deep:      #0E0B17;
+  --surface-logo-border:    #2C2640;
+
   color-scheme: light;
 }

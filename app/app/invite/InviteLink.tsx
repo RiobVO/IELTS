@@ -23,7 +23,7 @@ export default function InviteLink({ url }: { url: string }) {
         value={url}
         readOnly
         onFocus={(e) => e.target.select()}
-        style={{ flex: 1, minWidth: 0, height: 50, padding: "0 14px", borderRadius: "var(--radius-md)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.16)", color: "#fff", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)" }}
+        style={{ flex: 1, minWidth: 0, height: 50, padding: "0 14px", borderRadius: "var(--radius-md)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.16)", color: "var(--surface-premium-ink)", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)" }}
       />
       <Button variant={copied ? "success" : "primary"} icon={copied ? "check" : "arrow-right"} onClick={copy}>
         {copied ? "Copied" : "Copy link"}
