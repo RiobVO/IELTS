@@ -27,6 +27,18 @@ const TYPE: Record<string, TypeStyle> = {
 };
 const FALLBACK: TypeStyle = { icon: "bell", color: "var(--text-muted)", sub: "var(--surface-inset)" };
 
+/* Адаптив. Колокольчик: 40px (44 на touch). Dropdown: на десктопе якорится к
+   кнопке (absolute), на мобильном — fixed почти на всю ширину под шапкой, иначе
+   панель 360px уезжает за левый край. display/позицию задаём классом, не inline. */
+const NB_CSS = `
+.nb-bell{width:40px;height:40px}
+@media (pointer:coarse){ .nb-bell{width:44px;height:44px} }
+.nb-panel{position:absolute;top:46px;right:0;width:360px}
+@media (max-width:1023px){
+  .nb-panel{position:fixed;top:58px;left:12px;right:12px;width:auto;max-width:380px;margin-left:auto}
+}
+`;
+
 function relTime(iso: string): string {
   const then = new Date(iso);
   const days = Math.floor((Date.now() - then.getTime()) / 86_400_000);
@@ -82,8 +94,10 @@ export function NotificationsBell({
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
+      <style>{NB_CSS}</style>
       <button
         type="button"
+        className="nb-bell"
         aria-label="Notifications"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -91,8 +105,6 @@ export function NotificationsBell({
         {...bell.handlers}
         style={{
           position: "relative",
-          width: 38,
-          height: 38,
           borderRadius: "var(--radius-md)",
           display: "grid",
           placeItems: "center",
@@ -132,11 +144,8 @@ export function NotificationsBell({
       {open && (
         <div
           role="menu"
+          className="nb-panel"
           style={{
-            position: "absolute",
-            top: 46,
-            right: 0,
-            width: 360,
             background: "var(--surface)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-xl)",
