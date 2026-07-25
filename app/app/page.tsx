@@ -151,18 +151,19 @@ export default async function Dashboard() {
 
   return (
     <AppShell active="dashboard">
-      <div style={S.wrap}>
+      <style>{DASH_CSS}</style>
+      <div className="dash-wrap" style={S.wrap}>
         {/* Greeting */}
         <div style={S.greet}>
           <div>
             <div style={S.eyebrow}>Welcome back</div>
-            <h1 style={S.hi}>Hi, {name}</h1>
+            <h1 className="dash-hi" style={S.hi}>Hi, {name}</h1>
           </div>
           <div style={S.date}>{today}</div>
         </div>
 
         {/* Hero — focus + this-week momentum */}
-        <div style={S.hero}>
+        <div className="dash-hero" style={S.hero}>
           <FocusCard weakest={weakest} />
           <WeekCard streak={streak} xp={xp} rating={rating} rank={globalRank} week={week} />
         </div>
@@ -172,7 +173,7 @@ export default async function Dashboard() {
 
         {/* Where you lose points */}
         {weak.length > 0 && (
-          <div style={{ ...S.card, padding: "28px 30px" }}>
+          <div className="dash-sect" style={S.card}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
               <h2 style={S.sectionTitle}>Where you lose points</h2>
               <Badge tone="error">Worst first</Badge>
@@ -198,7 +199,7 @@ export default async function Dashboard() {
         )}
 
         {/* Recent tests */}
-        <div style={{ ...S.card, padding: "22px 30px 12px" }}>
+        <div className="dash-sect-tight" style={S.card}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
             <h2 style={{ ...S.sectionTitle, fontSize: "var(--text-lg)" }}>Recent tests</h2>
             <Link href="/app/reading" style={S.viewAll}>
@@ -223,7 +224,7 @@ export default async function Dashboard() {
 function FocusCard({ weakest }: { weakest: Weak | null }) {
   const pct = weakest ? Math.round((weakest.correct / weakest.total) * 100) : 0;
   return (
-    <div style={S.focus}>
+    <div className="dash-focus" style={S.focus}>
       <img src="/bando-mark.svg" alt="" aria-hidden="true" style={S.focusMark} />
       <div style={S.focusInner}>
         <div style={S.focusEyebrow}>
@@ -348,7 +349,7 @@ function BandReadout({
   // Нет band → не рисуем фейковую шкалу: честный CTA в зависимости от истории.
   if (band == null) {
     return (
-      <div style={{ ...S.card, ...S.bandCard }}>
+      <div className="dash-band" style={{ ...S.card, ...S.bandCard }}>
         <div style={{ flex: "none" }}>
           <div style={S.eyebrow}>Your band</div>
           <div style={S.bandEmptyNum}>—</div>
@@ -461,8 +462,29 @@ function TestRow({ a }: { a: AttemptRow }) {
   );
 }
 
+// Адаптив дашборда. Переключаемые grid/flex/padding/размеры — здесь, не inline
+// (иначе media-query проигрывает inline-стилю). База = мобильный, ≥768px = десктоп.
+const DASH_CSS = `
+.dash-wrap{padding:20px 16px 48px}
+.dash-hi{font-size:24px;white-space:normal}
+.dash-hero{display:grid;grid-template-columns:1fr;gap:14px}
+.dash-band{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
+.dash-focus{padding:24px}
+.dash-sect{padding:20px 16px}
+.dash-sect-tight{padding:18px 16px 8px}
+@media (min-width:768px){
+  .dash-wrap{padding:32px 28px 56px}
+  .dash-hi{font-size:30px;white-space:nowrap}
+  .dash-hero{grid-template-columns:1.45fr 1fr;gap:18px}
+  .dash-band{flex-direction:row;align-items:center;gap:32px}
+  .dash-focus{padding:34px}
+  .dash-sect{padding:28px 30px}
+  .dash-sect-tight{padding:22px 30px 12px}
+}
+`;
+
 const S: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 1180, margin: "0 auto", padding: "32px 28px 56px", display: "flex", flexDirection: "column", gap: 18 },
+  wrap: { maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 },
   card: {
     background: "var(--surface)",
     border: "1px solid var(--border)",
@@ -479,10 +501,10 @@ const S: Record<string, React.CSSProperties> = {
     textTransform: "uppercase",
     color: "var(--brand)",
   },
-  hi: { fontFamily: "var(--font-ui)", fontSize: 30, fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "8px 0 0", whiteSpace: "nowrap" },
+  hi: { fontFamily: "var(--font-ui)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "8px 0 0" },
   date: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", paddingBottom: 4 },
 
-  hero: { display: "grid", gridTemplateColumns: "1.45fr 1fr", gap: 18, alignItems: "stretch" },
+  hero: { alignItems: "stretch" },
 
   /* Focus hero */
   focus: {
@@ -491,7 +513,6 @@ const S: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     background: "linear-gradient(150deg, var(--brand) 0%, var(--brand-active) 100%)",
     boxShadow: "var(--shadow-md)",
-    padding: 34,
     display: "flex",
     flexDirection: "column",
   },
@@ -538,7 +559,7 @@ const S: Record<string, React.CSSProperties> = {
   leagueHint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--brand-active)" },
 
   /* Band readout */
-  bandCard: { padding: "24px 28px", display: "flex", alignItems: "center", gap: 32 },
+  bandCard: { padding: "24px 28px" },
   bandNum: { fontFamily: "var(--font-mono)", fontSize: 56, lineHeight: 1, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em" },
   bandTarget: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-muted)" },
   bandEmptyNum: { fontFamily: "var(--font-mono)", fontSize: 56, lineHeight: 1, fontWeight: 600, color: "var(--text-disabled)", letterSpacing: "-0.02em", marginTop: 8 },
