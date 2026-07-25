@@ -28,17 +28,15 @@ export default async function ReadingTestPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: test } = await supabase
-    .from("content_item")
-    .select("id,title,category,duration_seconds,tier_required")
-    .eq("id", id)
-    .single();
-  if (!test) notFound();
-
-  // Профиль и контент теста (пассажи + вопросы) независимы → тянем параллельно
-  // одним round-trip-ом вместо трёх последовательных. answer_key намеренно НЕ
-  // выбирается (RLS-locked; не утекает до submit).
-  const [profile, passagesRes, questionsRes] = await Promise.all([
+  // content_item, профиль, пассажи и вопросы независимы → один параллельный слой
+  // вместо «single, потом Promise.all» (content_item был отдельным RT перед батчем).
+  // answer_key намеренно НЕ выбирается (RLS-locked; не утекает до submit).
+  const [testRes, profile, passagesRes, questionsRes] = await Promise.all([
+    supabase
+      .from("content_item")
+      .select("id,title,category,duration_seconds,tier_required")
+      .eq("id", id)
+      .single(),
     getProfile(),
     supabase
       .from("passage")
@@ -51,6 +49,8 @@ export default async function ReadingTestPage({
       .eq("content_item_id", id)
       .order("number"),
   ]);
+  const test = testRes.data;
+  if (!test) notFound();
   // Нормализуем разметку абзацев каждого пассажа к единому контракту (.rp +
   // data-letter) на read-time — вся разнородность форматов в одной тестируемой
   // функции, PassagePane рисует один CSS-путь. audio_path/order/title сохраняются.
@@ -80,25 +80,27 @@ export default async function ReadingTestPage({
       : `/${rawAudio.replace(/^\/+/, "")}`
     : null;
 
-  // Open (or resume) the server-stamped in_progress attempt — also re-runs the
-  // access + daily-limit gate (§4.8) authoritatively before the exam loads.
-  const { attemptId, answers: savedAnswers } = await ensureAttempt(id);
-
-  // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
-  // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
-  const annotations = await db
-    .select({
-      id: annotation.id,
-      passage_order: annotation.passageOrder,
-      kind: annotation.kind,
-      start_offset: annotation.startOffset,
-      end_offset: annotation.endOffset,
-      quote: annotation.quote,
-      note: annotation.note,
-    })
-    .from(annotation)
-    .where(and(eq(annotation.userId, user.id), eq(annotation.contentItemId, id)))
-    .orderBy(asc(annotation.createdAt));
+  // Открытие/resume attempt (серверный гейт §4.8) и чтение аннотаций пользователя
+  // независимы → параллелим (annotations был отдельным RT-слоем ПОСЛЕ ensureAttempt).
+  // Оба после tier-гейта: annotations read-only/user-scoped, attempt re-проверяет доступ.
+  const [{ attemptId, answers: savedAnswers }, annotations] = await Promise.all([
+    ensureAttempt(id),
+    // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
+    // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
+    db
+      .select({
+        id: annotation.id,
+        passage_order: annotation.passageOrder,
+        kind: annotation.kind,
+        start_offset: annotation.startOffset,
+        end_offset: annotation.endOffset,
+        quote: annotation.quote,
+        note: annotation.note,
+      })
+      .from(annotation)
+      .where(and(eq(annotation.userId, user.id), eq(annotation.contentItemId, id)))
+      .orderBy(asc(annotation.createdAt)),
+  ]);
 
   return (
     <ExamRunner
