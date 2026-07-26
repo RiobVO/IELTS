@@ -3,7 +3,17 @@ import { revalidateTag } from "next/cache";
 import { db } from "@/db";
 import { answerKey, contentItem, passage, question } from "@/db/schema";
 import { contentTag } from "@/lib/content/exam-content";
+import { probeAudioDuration } from "@/lib/import/audio-duration";
 import { isUnresolvedQuestionTypeWarning } from "@/lib/import/question-types";
+
+/** Доля заявленной длительности теста, которую обязана покрывать дорожка. */
+const MIN_AUDIO_COVERAGE = 0.8;
+
+function fmtDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 export type PublishResult =
   | { ok: true; title: string }
@@ -17,6 +27,8 @@ export type PublishResult =
         | "answer_key_count_mismatch"
         | "empty_answer_key"
         | "missing_listening_audio"
+        | "listening_audio_too_short"
+        | "listening_audio_unverified"
         | "full_missing_band_scale"
         | "full_wrong_question_count";
       /** F14-мин: конкретика отказа (номера/диапазон/факт. число) — из данных,
@@ -78,6 +90,7 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
       section: contentItem.section,
       category: contentItem.category,
       bandScale: contentItem.bandScale,
+      durationSeconds: contentItem.durationSeconds,
     })
     .from(contentItem)
     .where(eq(contentItem.id, id))
@@ -167,8 +180,38 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
       .select({ audioPath: passage.audioPath })
       .from(passage)
       .where(eq(passage.contentItemId, id));
-    if (!ps.some((p) => (p.audioPath ?? "").trim() !== "")) {
+    const track = ps.map((p) => (p.audioPath ?? "").trim()).find((p) => p !== "");
+    if (!track) {
       return { ok: false, reason: "missing_listening_audio" };
+    }
+
+    // (е) Machine hard-gate (2026-07-26): дорожка должна покрывать ВЕСЬ тест. Клиент
+    // присылает аудио частями (P1–P4), а тест держит одну дорожку — на проде так уехали
+    // 4 теста, где к 40 вопросам приложены 6–16 минут звука вместо 30, и части 2–4 были
+    // непроходимы. Наличия audio_path (проверка выше) для этого мало.
+    //
+    // Порог мягкий: у корректной записи хвост тишины/инструкций может отличаться от
+    // заявленной длительности на минуты, а CBR-оценка длительности сама по себе
+    // приблизительна — режем только явные обрезки. Относительные пути (легаси public/)
+    // не проверяем: probe умеет только http(s).
+    if (/^https?:\/\//.test(track) && row.durationSeconds != null) {
+      const probed = await probeAudioDuration(track).catch(() => null);
+      if (!probed) {
+        // Fail-closed: непроверяемая дорожка — это ровно тот случай, который гейт и ловит.
+        return {
+          ok: false,
+          reason: "listening_audio_unverified",
+          detail: "не удалось прочитать длительность файла",
+        };
+      }
+      const minSeconds = row.durationSeconds * MIN_AUDIO_COVERAGE;
+      if (probed.seconds < minSeconds) {
+        return {
+          ok: false,
+          reason: "listening_audio_too_short",
+          detail: `аудио ${fmtDuration(probed.seconds)} при тесте на ${fmtDuration(row.durationSeconds)} — похоже, залита только часть записи`,
+        };
+      }
     }
   }
 
