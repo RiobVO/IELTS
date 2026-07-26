@@ -71,6 +71,13 @@ export const PracticeAffordances = memo(function PracticeAffordances({
   /** verbatim-путь: показать заголовок «Question N» + повесить якорь id="q-N". */
   showNumber?: boolean;
 }) {
+  // Со снятой «Strategy» у неотвеченного вопроса без локатора внутри не остаётся
+  // ничего — рисовалась пустая серая плашка с одним заголовком «Question N».
+  // FormatHint сюда не входит: он срабатывает только по введённому ответу.
+  const answered = isAnswered(value);
+  const canShowWhereToLook = !!onWhereToLook && canLocate && !reveal;
+  if (!answered && !canShowWhereToLook) return null;
+
   const inner = (
     <>
       {/* P1 — мягкая проверка формата (лимит слов / число выборов). */}
@@ -78,7 +85,7 @@ export const PracticeAffordances = memo(function PracticeAffordances({
       {/* P2b-2 — локатор ДО reveal: reading (onWhereToLook задан), вопрос locatable,
           ещё не раскрыт. После reveal кнопка «Show in passage» живёт внутри
           PracticeCheck (P2b-1) → гейтим !reveal, чтобы не дублировать. */}
-      {onWhereToLook && canLocate && !reveal && (
+      {canShowWhereToLook && onWhereToLook && (
         <WhereToLook number={q.number} onWhereToLook={onWhereToLook} />
       )}
       {/* P6/P7/P14 — проверка ответа + вторая попытка + раскрытие ключа. */}
