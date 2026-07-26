@@ -39,8 +39,6 @@ function total(b: Breakdown): number {
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
-const lossColor = (p: number) =>
-  p < 45 ? "var(--error)" : p < 65 ? "var(--warn)" : "var(--success)";
 
 /** Календарный ключ дня по UTC — для дедупа активности и сравнения дней недели. */
 const dayKey = (d: Date) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
@@ -283,7 +281,7 @@ function FocusCard({ weakest }: { weakest: Weak | null }) {
               . Closing it is the single fastest move toward your band.
             </p>
             <div style={{ marginTop: 20 }}>
-              <div style={S.focusTrack}>
+              <div aria-hidden="true" style={S.focusTrack}>
                 <div style={{ ...S.focusFill, width: `${pct}%` }} />
               </div>
             </div>
@@ -440,8 +438,9 @@ function BandReadout({
               / target <span style={{ fontFamily: "var(--font-mono)", color: "var(--brand)" }}>{target}</span>
             </span>
           ) : (
-            // Якорь шкалы 0–9 для не-носителя, когда target ещё не задан (mobile-видимо).
-            <span style={S.bandTarget}>/ 9</span>
+            // Якорь шкалы для не-носителя, когда target ещё не задан. «out of 9»
+            // (а не «/ 9») — чтобы не путать со слэш-грамматикой «/ target N».
+            <span style={S.bandTarget}>out of 9</span>
           )}
         </div>
       </div>
@@ -473,10 +472,10 @@ function LossRow({ item, idx }: { item: Weak; idx: number }) {
       <span style={{ ...S.lossRank, ...(worst ? S.lossRankWorst : null) }}>{idx + 1}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={S.lossName}>{item.label}</div>
-        {/* Бар декоративный: серьёзность несут ранг + счёт «{correct}/{total}» +
-            «N missed», поэтому смысл не завязан на цвет (colorblind-safe). */}
+        {/* Бар декоративный (aria-hidden): серьёзность несут ранг + счёт + «N missed».
+            Заливка — спокойный brand-hue, единственный красный в спайне = ранг худшей. */}
         <div aria-hidden="true" style={S.lossTrack}>
-          <div style={{ height: "100%", width: `${pct}%`, borderRadius: "var(--radius-full)", background: lossColor(pct) }} />
+          <div style={{ height: "100%", width: `${pct}%`, borderRadius: "var(--radius-full)", background: "var(--brand-border)" }} />
         </div>
       </div>
       <span style={S.lossScore}>
@@ -552,8 +551,8 @@ const DASH_CSS = `
   .dash-sect{padding:28px 30px}
   .dash-sect-tight{padding:22px 30px 12px}
   .dash-week{padding:14px 22px}
-  .dash-week-row{flex-direction:row;align-items:center;gap:22px}
-  .dash-week-dots{flex:1;width:auto;max-width:300px}
+  .dash-week-row{flex-direction:row;align-items:center;gap:18px 22px;flex-wrap:wrap}
+  .dash-week-dots{flex:1;width:auto;min-width:170px;max-width:300px}
   .dash-week-cta{width:auto;margin-left:auto}
 }
 `;
