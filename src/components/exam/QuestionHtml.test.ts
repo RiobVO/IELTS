@@ -235,22 +235,51 @@ describe("QuestionHtml — размещение аффордансов", () => {
     expect(container.querySelector("label.opt .aff")).toBeNull();
   });
 
-  // Вставлять <div> внутрь <tr>/<ul> нельзя — такие вопросы остаются в общем кластере.
-  it("вопросы в таблице по-прежнему собираются в кластер после блока", () => {
-    const table =
-      `<div class="question"><table><tbody>` +
-      `<tr><td>14</td><td><span class="q-slot" data-q="14" data-qtype="radio" data-value="A"></span></td></tr>` +
-      `<tr><td>15</td><td><span class="q-slot" data-q="15" data-qtype="radio" data-value="A"></span></td></tr>` +
-      `</tbody></table></div>`;
-    const container = mountWith(table, { renderAffordances: aff([]) });
-    const cluster = container.querySelector(".qa-cluster");
-    expect(cluster).toBeTruthy();
-    expect(cluster?.textContent).toContain("AFF-14");
-    expect(cluster?.textContent).toContain("AFF-15");
-    expect(container.querySelector("tr .aff")).toBeNull();
+  // Внутрь <tr> блок не положить — карточка идёт СЛЕДУЮЩЕЙ строкой во всю ширину
+  // (matching-таблица: строка = вопрос). Раньше такие карточки сваливались кучей под
+  // таблицу — именно это было видно на «How to be Happy» (вопросы 14–17).
+  const matchingTable =
+    `<div class="question"><table class="matching-table"><thead>` +
+    `<tr><th>Statement</th><th>A</th><th>B</th></tr></thead><tbody>` +
+    `<tr><td>14 first</td><td><span class="q-slot" data-q="14" data-qtype="radio" data-value="A"></span></td>` +
+    `<td><span class="q-slot" data-q="14" data-qtype="radio" data-value="B"></span></td></tr>` +
+    `<tr><td>15 second</td><td><span class="q-slot" data-q="15" data-qtype="radio" data-value="A"></span></td>` +
+    `<td><span class="q-slot" data-q="15" data-qtype="radio" data-value="B"></span></td></tr>` +
+    `</tbody></table></div>`;
+
+  it("строка таблицы: аффорданс идёт отдельной строкой сразу под своим вопросом", () => {
+    const container = mountWith(matchingTable, { renderAffordances: aff([]) });
+    const rows = Array.from(container.querySelectorAll("tbody tr"));
+    // порядок: вопрос 14 → его карточка → вопрос 15 → его карточка
+    expect(rows).toHaveLength(4);
+    expect(rows[0].textContent).toContain("14 first");
+    expect(rows[1].className).toBe("qa-row");
+    expect(rows[1].textContent).toBe("AFF-14");
+    expect(rows[2].textContent).toContain("15 second");
+    expect(rows[3].textContent).toBe("AFF-15");
+    expect(container.querySelector(".qa-cluster")).toBeNull(); // кучи больше нет
   });
 
-  it("смешанный блок: свой контейнер — инлайн, ячейка таблицы — в кластер (без дублей)", () => {
+  it("служебная строка растянута на все колонки таблицы", () => {
+    const container = mountWith(matchingTable, { renderAffordances: aff([]) });
+    const cell = container.querySelector(".qa-row > td") as HTMLTableCellElement;
+    expect(cell.colSpan).toBe(3); // Statement + A + B
+  });
+
+  it("заголовок таблицы (thead) карточку не получает", () => {
+    const container = mountWith(matchingTable, { renderAffordances: aff([]) });
+    expect(container.querySelector("thead .aff")).toBeNull();
+    expect(container.querySelectorAll(".aff")).toHaveLength(2);
+  });
+
+  it("ячейка не становится якорем — карточка не лезет внутрь узкой колонки", () => {
+    const container = mountWith(matchingTable, { renderAffordances: aff([]) });
+    for (const el of Array.from(container.querySelectorAll(".aff"))) {
+      expect(el.closest("tr")?.className).toBe("qa-row");
+    }
+  });
+
+  it("смешанный блок: свой контейнер — инлайн, строка таблицы — своей строкой (без дублей)", () => {
     const mixed =
       `<div class="question">` +
       `<div class="tfng-question" id="question-1"><span class="q-slot" data-q="1" data-qtype="radio" data-value="TRUE"></span></div>` +
@@ -258,9 +287,35 @@ describe("QuestionHtml — размещение аффордансов", () => {
       `</div>`;
     const container = mountWith(mixed, { renderAffordances: aff([]) });
     expect(container.querySelector("#question-1 .aff")?.textContent).toBe("AFF-1");
-    const cluster = container.querySelector(".qa-cluster");
-    expect(cluster?.textContent).toBe("AFF-2"); // только вопрос из таблицы
+    expect(container.querySelector(".qa-row")?.textContent).toBe("AFF-2");
+    expect(container.querySelector(".qa-cluster")).toBeNull();
     expect(container.querySelectorAll(".aff")).toHaveLength(2); // ни одного дубля
+  });
+
+  it("строка без вопроса служебной строки не порождает", () => {
+    // Два вопроса в таблице (иначе весь блок — «один вопрос» и якорь сядет на него),
+    // плюс строка-подпись без слотов: она карточку получить не должна.
+    const withCaption =
+      `<div class="question"><table><tbody>` +
+      `<tr><td colspan="2">Section caption</td></tr>` +
+      `<tr><td>9</td><td><span class="q-slot" data-q="9" data-qtype="text"></span></td></tr>` +
+      `<tr><td>10</td><td><span class="q-slot" data-q="10" data-qtype="text"></span></td></tr>` +
+      `</tbody></table></div>`;
+    const container = mountWith(withCaption, { renderAffordances: aff([]) });
+    expect(container.querySelectorAll(".qa-row")).toHaveLength(2); // по одной на вопрос
+    const rows = Array.from(container.querySelectorAll("tbody tr"));
+    expect(rows[0].className).not.toBe("qa-row"); // подпись осталась без карточки
+    expect(rows[0].textContent).toContain("Section caption");
+  });
+
+  it("одинокий вопрос в блоке: якорь садится на блок, лишней строки в таблице нет", () => {
+    const single =
+      `<div class="question"><table><tbody>` +
+      `<tr><td><span class="q-slot" data-q="9" data-qtype="text"></span></td></tr>` +
+      `</tbody></table></div>`;
+    const container = mountWith(single, { renderAffordances: aff([]) });
+    expect(container.querySelectorAll(".aff")).toHaveLength(1);
+    expect(container.querySelector(".qa-cluster")).toBeNull();
   });
 
   it("mock (без renderAffordances): разметка без аффордансов и без пустых узлов", () => {
