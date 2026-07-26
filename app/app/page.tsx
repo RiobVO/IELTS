@@ -5,7 +5,7 @@ import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { leaderboardEntry } from "@/db/schema";
-import { categoryLabel, qtypeLabel } from "@/lib/labels";
+import { categoryLabel, qtypeLabel, LISTENING_CATEGORIES } from "@/lib/labels";
 import { AppShell } from "./_AppShell";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
@@ -30,6 +30,7 @@ interface Weak {
   label: string;
   correct: number;
   total: number;
+  section: "reading" | "listening";
 }
 
 function total(b: Breakdown): number {
@@ -131,20 +132,35 @@ export default async function Dashboard() {
   });
 
   // Weak areas — агрегируем per_type_breakdown по всем попыткам (без доп. запроса).
-  const agg: Record<string, { correct: number; total: number }> = {};
+  // Слабые типы агрегируем по всем попыткам, НО запоминаем, в какой секции
+  // (reading/listening) теряются очки — чтобы deep-link «Fix this weakness» вёл
+  // в правильный каталог (listening-only типы вроде map_labelling в reading пусты).
+  const listeningCats = new Set<string>(LISTENING_CATEGORIES);
+  const agg: Record<string, { correct: number; total: number; rLost: number; lLost: number }> = {};
   for (const a of attempts) {
     const b = a.per_type_breakdown;
     if (!b) continue;
+    const listening = listeningCats.has(a.content_item?.category ?? "");
     for (const [type, v] of Object.entries(b)) {
-      const cur = agg[type] ?? { correct: 0, total: 0 };
+      const cur = agg[type] ?? { correct: 0, total: 0, rLost: 0, lLost: 0 };
       cur.correct += v.correct;
       cur.total += v.total;
+      const lost = v.total - v.correct;
+      if (listening) cur.lLost += lost;
+      else cur.rLost += lost;
       agg[type] = cur;
     }
   }
   const weak: Weak[] = Object.entries(agg)
     .filter(([, v]) => v.total > 0)
-    .map(([type, v]) => ({ type, label: qtypeLabel(type), correct: v.correct, total: v.total }))
+    .map(([type, v]) => ({
+      type,
+      label: qtypeLabel(type),
+      correct: v.correct,
+      total: v.total,
+      // Туда, где реально теряются очки; ничья → reading (больший каталог).
+      section: (v.lLost > v.rLost ? "listening" : "reading") as "reading" | "listening",
+    }))
     .sort((x, y) => x.correct / x.total - y.correct / y.total)
     .slice(0, 5);
   const weakest = weak[0] ?? null;
@@ -272,7 +288,7 @@ function FocusCard({ weakest }: { weakest: Weak | null }) {
               </div>
             </div>
             <div style={S.focusCta}>
-              <Button variant="secondary" trailingIcon="arrow-right" href={`/app/reading?q_type=${encodeURIComponent(weakest.type)}`} style={{ color: "var(--brand-active)" }}>
+              <Button variant="secondary" trailingIcon="arrow-right" href={`/app/${weakest.section}?q_type=${encodeURIComponent(weakest.type)}`} style={{ color: "var(--brand-active)" }}>
                 Fix this weakness
               </Button>
             </div>
@@ -451,8 +467,9 @@ function LossRow({ item, idx }: { item: Weak; idx: number }) {
   const lost = item.total - item.correct;
   const worst = idx === 0;
   return (
-    // Deep-link прямо в дрилл этого типа — каталог фильтрует по ?q_type (_CatalogView).
-    <Link href={`/app/reading?q_type=${encodeURIComponent(item.type)}`} style={S.loss}>
+    // Deep-link в дрилл этого типа В ЕГО СЕКЦИИ — listening-слабость не уводим в
+    // reading-каталог (там её типа нет). Каталог фильтрует по ?q_type (_CatalogView).
+    <Link href={`/app/${item.section}?q_type=${encodeURIComponent(item.type)}`} style={S.loss}>
       <span style={{ ...S.lossRank, ...(worst ? S.lossRankWorst : null) }}>{idx + 1}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={S.lossName}>{item.label}</div>
