@@ -266,6 +266,7 @@ export default function ExamRunner({
   // F11 — виден, только пока последний submitAttempt реально провалился (не redirect).
   const [submitError, setSubmitError] = useState(false);
   const qScrollRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
 
   const isListening = !!audioSrc;
   // Practice/Mock (P0) — серверная сущность: mode приходит пропом из attempt.mode
@@ -406,6 +407,9 @@ export default function ExamRunner({
   // конкретного вопроса. В mock эти карты ВСЕГДА пусты (Check/Show не рендерятся), поэтому
   // mock-ветка QuestionBlock не затрагивается ни на байт.
   const isPractice = mode === "practice";
+  // Страничная прокрутка — только practice-чтение. У listening (даже практис-атомизации)
+  // раннер завязан на аудио-док и таймер: панель обязана оставаться в экране.
+  const pageFlow = isPractice && !isListening;
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [revealed, setRevealed] = useState<Record<string, RevealResult>>({});
   const [checkBusy, setCheckBusy] = useState<Record<string, boolean>>({});
@@ -732,6 +736,24 @@ export default function ExamRunner({
     let rafId = 0;
     const attempt = () => {
       const el = document.getElementById(`q-${n}`);
+      // Страничная раскладка: у панели вопросов нет своего скролла — двигаем окно,
+      // с поправкой на липкую шапку (её высота живёт в --exam-top-h).
+      if (pageFlow) {
+        if (!el || el.getBoundingClientRect().height === 0) {
+          if (tries++ < 60) rafId = requestAnimationFrame(attempt);
+          return;
+        }
+        const topH = Number.parseInt(
+          getComputedStyle(shellRef.current ?? document.body).getPropertyValue("--exam-top-h"),
+          10,
+        );
+        const offset = Number.isFinite(topH) ? topH : 64;
+        window.scrollTo({
+          top: window.scrollY + el.getBoundingClientRect().top - offset - 14,
+          behavior: smooth ? "smooth" : "auto",
+        });
+        return;
+      }
       const wrap = qScrollRef.current;
       if (el && wrap && wrap.clientHeight > 0) {
         const top = wrap.scrollTop + el.getBoundingClientRect().top - wrap.getBoundingClientRect().top - 14;
@@ -742,13 +764,32 @@ export default function ExamRunner({
     };
     rafId = requestAnimationFrame(attempt);
     return () => cancelAnimationFrame(rafId);
-  }, []);
+  }, [pageFlow]);
 
   const jump = useCallback((n: number) => {
     setCurrent(n);
     setPane("questions"); // на мобильном гарантируем, что таб вопросов активен
     return scrollToQuestion(n, true);
   }, [scrollToQuestion]);
+
+  // Страничная раскладка: реальные высоты липких полос → CSS-переменные. Захардкодить
+  // нельзя — шапка practice переносится на два ряда при нехватке ширины, и пассаж
+  // (sticky под шапкой) уехал бы под неё или оставил пустую щель.
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!pageFlow || !shell) return;
+    const top = shell.querySelector<HTMLElement>(".exam-top");
+    const nav = shell.querySelector<HTMLElement>(".exam-navbar");
+    const sync = () => {
+      if (top) shell.style.setProperty("--exam-top-h", `${Math.round(top.getBoundingClientRect().height)}px`);
+      if (nav) shell.style.setProperty("--exam-nav-h", `${Math.round(nav.getBoundingClientRect().height)}px`);
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    if (top) ro.observe(top);
+    if (nav) ro.observe(nav);
+    return () => ro.disconnect();
+  }, [pageFlow]);
 
   // P15 — deep-link фокус: один раз на маунте проскроллить к вопросу (из mistakes/result).
   // Переиспользуем jump (setCurrent + на мобильном открывает панель вопросов + скролл в
@@ -1221,7 +1262,16 @@ export default function ExamRunner({
   );
 
   return (
-    <div className="exam-cambridge" style={S.shell}>
+    // data-flow="page" (practice) — вся страница прокручивается как обычный сайт вместо
+    // двух зажатых колонок со своими скроллами: панель вопросов растёт свободно, пассаж
+    // липнет под шапкой. Mock/listening остаются на панельной раскладке (data-flow="panes"):
+    // там раннер обязан помещаться в экран целиком, как на реальном экзамене.
+    <div
+      ref={shellRef}
+      className="exam-cambridge"
+      data-flow={pageFlow ? "page" : "panes"}
+      style={pageFlow ? S.shellPage : S.shell}
+    >
       <style>{READING_CSS}</style>
 
       {/* F11 — submitAttempt провалился (не redirect): панель с Retry поверх раннера.
@@ -1393,7 +1443,13 @@ export default function ExamRunner({
             </button>
           </div>
 
-          <div className="exam-split" data-pane={pane} style={{ flex: 1, minHeight: 0, width: "100%", maxWidth: 1400, margin: "0 auto" }}>
+          <div
+            className="exam-split"
+            data-pane={pane}
+            // Страничная раскладка шире: панель вопросов выросла до 600px, и на прежних
+            // 1400 пассаж терял читаемую ширину.
+            style={{ flex: 1, minHeight: 0, width: "100%", maxWidth: pageFlow ? 1680 : 1400, margin: "0 auto" }}
+          >
             {/* Passage pane — editorial layout + reader annotations (S6 / W2-1) */}
             <PassagePane
               className="exam-pane exam-pane-p"
@@ -2142,15 +2198,6 @@ const READING_CSS = `
 
 /* P2b Strategy — сворачиваемая подсказка по типу вопроса (practice-only). Единый стиль
    с check/format-hint; отступ 39px = qNum(28)+gap(11). Тап-таргеты/reduced-motion в классах. */
-.exam-strategy{margin-top:10px;padding-left:39px}
-.exam-strategy-toggle{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:4px 2px 4px 0;border:none;background:none;color:var(--text-muted);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
-.exam-strategy-toggle:hover{color:var(--text-secondary)}
-.exam-strategy-chevron{transition:transform .18s ease}
-.exam-strategy-chevron[data-open]{transform:rotate(180deg)}
-.exam-strategy-list{list-style:disc;margin:8px 0 0;padding:0 0 0 57px;display:flex;flex-direction:column;gap:6px}
-.exam-strategy-list li{font-family:var(--font-ui);font-size:var(--text-sm);line-height:1.55;color:var(--text-secondary)}
-@media (prefers-reduced-motion:reduce){.exam-strategy-chevron{transition:none}}
-@media (pointer:coarse){.exam-strategy-toggle{min-height:44px}}
 
 /* P2b-1 locate — кнопка «Show in passage» внутри reveal (reading-practice only). */
 .exam-locate-btn{display:inline-flex;align-items:center;gap:6px;margin-top:9px;height:32px;padding:0 12px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--brand);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
@@ -2286,8 +2333,7 @@ const READING_CSS = `
   .exam-top>div:first-of-type{flex:1 1 auto;min-width:0}
   .exam-top-right{flex-basis:100%;flex-wrap:nowrap;justify-content:space-between}
   /* Мобильный: контент вопроса на всю ширину карточки (39px-отступ под номер убираем). */
-  .exam-q-body,.exam-check,.exam-fmt-hint,.exam-strategy,.exam-wtl{padding-left:0}
-  .exam-strategy-list{padding-left:22px}
+  .exam-q-body,.exam-check,.exam-fmt-hint,.exam-wtl{padding-left:0}
   /* Вторичные practice-контролы (Aa/badge/pace/goal/pause/restart) собираем в один
      контейнер-тулбар с фоном/рамкой — вместо разрозненных элементов, «плавающих»
      рядом с clock+Submit. Скроллится внутри себя, clock+Submit фиксированы справа. */
@@ -2306,7 +2352,29 @@ const READING_CSS = `
   .exam-pane-q{flex:none;width:460px}
   .exam-split[data-pane="passage"] .exam-pane-q,
   .exam-split[data-pane="questions"] .exam-pane-p{display:flex}
+  /* Practice-чтение: панель вопросов заметно шире — в ней живут таблицы matching на
+     6-9 колонок и карточки проверки, на 460px они сжимались в нечитаемый столбик. */
+  .exam-cambridge[data-flow="page"] .exam-pane-q{width:600px}
 }
+
+/* --- Страничная прокрутка practice-чтения (решение владельца 2026-07-26): вместо двух
+   колонок со своими скроллами едет вся страница. Пассаж липнет под шапкой, чтобы текст
+   оставался перед глазами, панель вопросов растёт свободно. Шапка и навигатор липкие —
+   таймер, Submit и переход к вопросу должны быть под рукой на любой прокрутке.
+   Всё гейтится [data-flow="page"] (только practice-reading) → mock и listening
+   остаются на прежней панельной раскладке байт-в-байт. --- */
+@media (min-width:1024px){
+  .exam-cambridge[data-flow="page"] .exam-top{position:sticky;top:0;z-index:30}
+  .exam-cambridge[data-flow="page"] .exam-split{align-items:flex-start}
+  .exam-cambridge[data-flow="page"] .exam-pane-p{
+    position:sticky;top:var(--exam-top-h,64px);
+    max-height:calc(100dvh - var(--exam-top-h,64px) - var(--exam-nav-h,56px));
+  }
+  .exam-cambridge[data-flow="page"] .exam-navbar{position:sticky;bottom:0;z-index:30}
+}
+/* Внутренние скроллы снимаем на любой ширине: на телефоне панели переключаются табами,
+   и вложенный скролл там мешает так же. */
+.exam-cambridge[data-flow="page"] .exam-qscroll{overflow:visible}
 
 /* Тап-таргеты ≥44px — на факте touch-ввода, не только на узких телефонах:
    иначе планшеты/landscape-телефоны (431-1023px) остаются с мелкими целями. */
@@ -2371,6 +2439,8 @@ const READING_CSS = `
 
 const S: Record<string, React.CSSProperties> = {
   shell: { height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-base)" },
+  // Practice-чтение: высота не заперта вьюпортом — прокручивается сама страница.
+  shellPage: { minHeight: "100dvh", display: "flex", flexDirection: "column", background: "var(--bg-base)" },
 
   // padding/gap → .exam-top (адаптив)
   top: { display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)", background: "var(--bg-raised)", flex: "none" },

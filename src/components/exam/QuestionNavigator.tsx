@@ -79,7 +79,9 @@ function NavCell({ q, active, onJump }: { q: NavQuestion; active: boolean; onJum
 export const QuestionNavigator = memo(function QuestionNavigator({ parts, current, answered, total, onJump }: QuestionNavigatorProps) {
   const multi = parts.length > 1;
   return (
-    <nav aria-label="Question navigator" style={S.bar}>
+    // Класс — якорь для страничной раскладки practice (ExamRunner data-flow="page"):
+    // там полоса липнет к низу окна, иначе уехала бы вниз вместе со страницей.
+    <nav aria-label="Question navigator" className="exam-navbar" style={S.bar}>
       <style>{NAV_CSS}</style>
       <div style={S.scroller}>
         {parts.map((p, i) => (
