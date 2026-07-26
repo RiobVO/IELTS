@@ -20,6 +20,7 @@ import { db } from "@/db";
 import {
   attempt,
   leaderboardEntry,
+  leaderboardSnapshot,
   profile,
   region,
 } from "@/db/schema";
@@ -35,6 +36,9 @@ export interface LeaderRow {
   rating: number;
   score: number;
   isViewer: boolean;
+  /** Rank change since the last snapshot (positive = moved up); null if no
+   *  snapshot baseline yet (new entry, or the cron hasn't run / been applied). */
+  delta: number | null;
 }
 
 const PERIODS: Period[] = ["weekly", "monthly", "all_time"];
@@ -237,6 +241,34 @@ export async function recomputeLeaderboard(): Promise<void> {
 }
 
 /**
+ * Previous-snapshot rank per user for a (period, scope), used for movement
+ * deltas. DEFENSIVE: the snapshot table may not exist yet on a given DB
+ * (pre-migration), so any failure degrades to "no movement" — deltas come back
+ * null — rather than 500-ing the league page. This decouples shipping the code
+ * from applying the migration (no broken deploy window).
+ */
+async function getSnapshotRanks(
+  period: Period,
+  scope: string,
+): Promise<Map<string, number>> {
+  try {
+    const rows = await db
+      .select({ userId: leaderboardSnapshot.userId, rank: leaderboardSnapshot.rank })
+      .from(leaderboardSnapshot)
+      .where(
+        and(
+          eq(leaderboardSnapshot.period, period),
+          eq(leaderboardSnapshot.scope, scope),
+        ),
+      );
+    return new Map(rows.map((r) => [r.userId, r.rank]));
+  } catch (e) {
+    console.error("getSnapshotRanks: snapshot read failed (pre-migration?)", e);
+    return new Map();
+  }
+}
+
+/**
  * Read the precomputed top-100 for a (period, scope), ordered by rank ascending
  * (best ranks first), plus the viewer's own row when present and OUTSIDE the top
  * 100 (so the UI can pin
@@ -281,6 +313,9 @@ export async function readLeaderboard(
     .orderBy(leaderboardEntry.rank)
     .limit(100);
 
+  // Movement baseline (defensive — empty if the snapshot table isn't there yet).
+  const snapRanks = await getSnapshotRanks(period, scope);
+
   const toRow = (e: {
     rank: number | null;
     userId: string;
@@ -288,16 +323,21 @@ export async function readLeaderboard(
     score: number | null;
     displayName: string | null;
     avatarUrl: string | null;
-  }): LeaderRow => ({
-    rank: e.rank ?? 0,
-    userId: e.userId,
-    displayName: e.displayName ?? "Anonymous",
-    avatarUrl: e.avatarUrl,
-    regionName,
-    rating: e.rating ?? 0,
-    score: e.score ?? 0,
-    isViewer: !!viewerId && e.userId === viewerId,
-  });
+  }): LeaderRow => {
+    const rank = e.rank ?? 0;
+    const prev = snapRanks.get(e.userId);
+    return {
+      rank,
+      userId: e.userId,
+      displayName: e.displayName ?? "Anonymous",
+      avatarUrl: e.avatarUrl,
+      regionName,
+      rating: e.rating ?? 0,
+      score: e.score ?? 0,
+      isViewer: !!viewerId && e.userId === viewerId,
+      delta: prev != null && rank > 0 ? prev - rank : null,
+    };
+  };
 
   const rows = top.map(toRow);
 
