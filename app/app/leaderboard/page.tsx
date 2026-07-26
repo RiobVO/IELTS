@@ -149,7 +149,7 @@ export default async function Leaderboard({
 
               <div className="lb-grid" style={S.grid}>
                 {/* Ranked board */}
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <ol style={S.list}>
                     {listRows.map((r) => (
                       <RowItem key={r.userId} row={r} showScore={showScore} />
@@ -378,8 +378,8 @@ const LB_CSS = `
 `;
 
 const S: Record<string, React.CSSProperties> = {
-  arena: { minHeight: "100%", background: "radial-gradient(120% 80% at 50% -8%, color-mix(in oklab, var(--brand) 14%, white) 0%, var(--bg-base) 52%)" },
-  wrap: { maxWidth: 960, margin: "0 auto" },
+  arena: { minHeight: "100%", overflowX: "hidden", background: "radial-gradient(120% 80% at 50% -8%, color-mix(in oklab, var(--brand) 14%, white) 0%, var(--bg-base) 52%)" },
+  wrap: { maxWidth: 960, margin: "0 auto", width: "100%" },
   head: { display: "flex", alignItems: "center", gap: 13, marginBottom: 16 },
   crown: { width: 44, height: 44, flex: "none", borderRadius: 13, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", boxShadow: "0 0 26px -4px color-mix(in oklab, var(--brand) 80%, transparent)" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
@@ -412,7 +412,7 @@ const S: Record<string, React.CSSProperties> = {
   xp: { flex: "none", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "var(--text-base)", fontWeight: 600, color: "var(--text-primary)" },
   xpUnit: { fontSize: "var(--text-2xs)", color: "var(--text-muted)" },
 
-  side: { display: "flex", flexDirection: "column", gap: 14 },
+  side: { display: "flex", flexDirection: "column", gap: 14, minWidth: 0 },
   card: { background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-sm)" },
   eyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
   herePill: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--brand-active)", background: "var(--brand-subtle)", borderRadius: "var(--radius-full)", padding: "3px 9px", whiteSpace: "nowrap" },
