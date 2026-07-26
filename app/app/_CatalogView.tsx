@@ -108,6 +108,9 @@ export async function CatalogView({
     ? weakTypes.filter((wt) => recommended!.question_types.includes(wt)).slice(0, 2)
     : [];
   const gridTests = recommended ? tests.filter((t) => t.id !== recommended!.id) : tests;
+  // Топ слабых типов — каталог подсвечивает их прямо на карточках (принцип #1
+  // «назови слабое место»). Пуст у новичка без попыток → чипы остаются нейтральными.
+  const weakSet = new Set(weakTypes.slice(0, 4));
 
   // URL-хелперы: переключают одно измерение, сохраняя другое.
   const catHref = (c?: string) => {
@@ -129,8 +132,21 @@ export async function CatalogView({
     <AppShell active={section}>
       <style>{CATALOG_CSS}</style>
       <div className="cat-wrap" style={S.wrap}>
-        <h1 style={S.h1}>{title}</h1>
-        <p style={S.sub}>{sub}</p>
+        <header style={S.head}>
+          <h1 className="cat-h1" style={S.h1}>{title}</h1>
+          <p style={S.sub}>{sub}</p>
+          {totalCount > 0 && (
+            <div style={S.headMeta}>
+              <span style={S.metaPageNum}>{totalCount}</span> {totalCount === 1 ? "test" : "tests"}
+              {availableTypes.length > 0 && (
+                <>
+                  <span style={S.headMetaDot}>·</span>
+                  <span style={S.metaPageNum}>{availableTypes.length}</span> question types
+                </>
+              )}
+            </div>
+          )}
+        </header>
 
         {sp.limit === "1" && <CatalogNotice kind="limit" dismissHref={filterBase} />}
         {sp.throttled === "1" && <CatalogNotice kind="throttled" dismissHref={filterBase} />}
@@ -181,7 +197,7 @@ export async function CatalogView({
           </div>
         </div>
 
-        {/* Cards — compact 2-up grid */}
+        {/* Cards — 2-up grid; title-led with weak-type accent */}
         {gridTests.length === 0 ? (
           <div style={S.empty}>
             {recommended ? "That's the catalog for now — more tests on the way." : "No tests match this filter yet."}
@@ -189,7 +205,7 @@ export async function CatalogView({
         ) : (
           <div className="cat-grid" style={S.grid}>
             {gridTests.map((t) => (
-              <TestCard key={t.id} t={t} locked={!meetsTier(userTier, t.tier_required)} />
+              <TestCard key={t.id} t={t} locked={!meetsTier(userTier, t.tier_required)} weakSet={weakSet} />
             ))}
           </div>
         )}
@@ -198,44 +214,64 @@ export async function CatalogView({
   );
 }
 
-/* Compact catalog card — всегда: бейдж · Q-count · duration · тип-теги · Start/Lock. */
-function TestCard({ t, locked }: { t: Test; locked: boolean }) {
+/* Catalog card — заголовок ведёт (вес+масштаб), слабые типы пользователя выходят
+   вперёд острым violet-акцентом, mono Q-якорь, решительный Start/Lock. */
+function TestCard({ t, locked, weakSet }: { t: Test; locked: boolean; weakSet: Set<string> }) {
   const isFull = t.category === "full_reading" || t.category === "full_listening";
-  const shownTypes = t.question_types.slice(0, 3);
+  // Слабые типы — первыми: каталог называет слабое место прямо на карточке.
+  const ordered = [...t.question_types].sort(
+    (a, b) => (weakSet.has(b) ? 1 : 0) - (weakSet.has(a) ? 1 : 0),
+  );
+  const shownTypes = ordered.slice(0, 3);
   const extra = t.question_types.length - shownTypes.length;
+  const mins = t.duration_seconds ? Math.round(t.duration_seconds / 60) : null;
   return (
     <Link href={locked ? "/app/upgrade" : `/app/reading/${t.id}`} style={{ textDecoration: "none", color: "inherit", height: "100%" }}>
-      <Card interactive padding="17px 18px" style={{ display: "flex", flexDirection: "column", height: "100%", opacity: locked ? 0.92 : 1 }}>
+      <Card interactive padding="18px 20px" style={{ display: "flex", flexDirection: "column", height: "100%", opacity: locked ? 0.94 : 1 }}>
         <div style={S.cardTop}>
           <Badge tone="brand">{categoryLabel(t.category)}</Badge>
-          {t.question_count > 0 && (
-            <Badge mono>
-              {t.question_count} Q{isFull ? " · band" : ""}
-            </Badge>
-          )}
-          {t.duration_seconds ? (
+          {mins != null && (
             <span style={S.duration}>
-              <Icon name="clock" size={12} /> {Math.round(t.duration_seconds / 60)}m
+              <Icon name="clock" size={12} /> {mins}m
             </span>
-          ) : null}
+          )}
         </div>
+
         <div style={S.cardTitle}>{t.title}</div>
+
+        {(t.question_count > 0 || isFull) && (
+          <div style={S.cardMeta}>
+            {t.question_count > 0 && (
+              <>
+                <span style={S.metaNum}>{t.question_count}</span>{" "}
+                {t.question_count === 1 ? "question" : "questions"}
+              </>
+            )}
+            {isFull && <span style={S.metaBand}>band score</span>}
+          </div>
+        )}
+
         <div style={S.types}>
-          {shownTypes.map((qt) => (
-            <span key={qt} style={S.typeChip}>
-              {qtypeLabel(qt)}
-            </span>
-          ))}
+          {shownTypes.map((qt) => {
+            const weak = weakSet.has(qt);
+            return (
+              <span key={qt} style={weak ? S.typeChipWeak : S.typeChip}>
+                {weak && <Icon name="target" size={11} strokeWidth={2.6} />}
+                {qtypeLabel(qt)}
+              </span>
+            );
+          })}
           {extra > 0 && <span style={{ ...S.typeChip, color: "var(--text-disabled)" }}>+{extra}</span>}
         </div>
+
         <div style={S.cardFoot}>
           {locked ? (
             <span style={S.lockFoot}>
-              <Icon name="lock" size={14} /> {TIER_LABEL[t.tier_required]}
+              <Icon name="lock" size={15} /> {TIER_LABEL[t.tier_required]}
             </span>
           ) : (
             <span style={S.startFoot}>
-              Start <Icon name="arrow-right" size={14} />
+              Start <Icon name="arrow-right" size={16} strokeWidth={2.6} />
             </span>
           )}
         </div>
@@ -255,18 +291,17 @@ function RecommendedBanner({ test, weak, locked }: { test: Test; weak: string[];
         <div style={S.bannerTitle}>{test.title}</div>
         {weak.length > 0 && (
           <div style={S.bannerText}>
-            Targets{" "}
+            Targets your weakest {weak.length === 1 ? "type" : "types"}:{" "}
             {weak.map((wt, i) => (
               <span key={wt}>
-                {i > 0 ? " & " : ""}
-                <b style={{ color: "#fff" }}>{qtypeLabel(wt)}</b>
+                {i > 0 ? <span style={S.bannerAmp}> &amp; </span> : ""}
+                <span style={S.bannerWeak}>{qtypeLabel(wt)}</span>
               </span>
-            ))}{" "}
-            — your weakest {weak.length === 1 ? "type" : "types"}.
+            ))}
           </div>
         )}
       </div>
-      <div style={{ flex: "none", textAlign: "center" }}>
+      <div style={S.bannerSide}>
         {test.question_count > 0 && (
           <div style={S.bannerMeta}>
             {test.question_count} Q{test.duration_seconds ? ` · ${Math.round(test.duration_seconds / 60)}m` : ""}
@@ -345,34 +380,47 @@ function CatalogNotice({ kind, dismissHref }: { kind: "limit" | "throttled"; dis
 // (2-up grid, баннер в ряд). Переключаемое — в классах, не inline.
 const CATALOG_CSS = `
 .cat-wrap{padding:24px 16px 44px}
-.cat-grid{display:grid;grid-template-columns:1fr;gap:14px}
+.cat-h1{font-size:34px}
+.cat-grid{display:grid;grid-template-columns:1fr;gap:16px}
 .cat-banner{display:flex;flex-direction:column;align-items:flex-start;gap:16px}
 @media (min-width:640px){
   .cat-wrap{padding:var(--space-8) var(--space-6) var(--space-12)}
+  .cat-h1{font-size:46px}
   .cat-grid{grid-template-columns:1fr 1fr}
-  .cat-banner{flex-direction:row;align-items:center;gap:22px}
+  .cat-banner{flex-direction:row;align-items:center;gap:26px}
 }
 `;
 
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 980, margin: "0 auto" },
-  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "0 0 4px", color: "var(--text-primary)" },
-  sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "0 0 16px" },
+  head: { marginBottom: 22 },
+  // fontSize → .cat-h1 (адаптив 34→46px). Display-масштаб задаёт ритм всей странице.
+  h1: { fontFamily: "var(--font-ui)", fontWeight: 800, lineHeight: 1.04, letterSpacing: "-0.03em", margin: "0 0 8px", color: "var(--text-primary)", textWrap: "balance" },
+  sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", color: "var(--text-secondary)", margin: 0, maxWidth: "52ch", lineHeight: 1.5 },
+  headMeta: { display: "flex", alignItems: "center", gap: 7, marginTop: 14, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
+  metaPageNum: { fontFamily: "var(--font-mono)", fontSize: "var(--text-base)", fontWeight: 600, color: "var(--text-primary)" },
+  headMetaDot: { color: "var(--text-disabled)", margin: "0 2px" },
 
+  // Иерархия баннера держится на ВЕСЕ и РАЗМЕРЕ, а не на opacity: весь ink — solid
+  // (--surface-premium-ink = #fff), поэтому каждый размер текста проходит WCAG AA
+  // на violet-градиенте (белый на violet-600 = 4.50, на violet-700 = 5.25).
   banner: {
     position: "relative",
     overflow: "hidden",
     borderRadius: "var(--radius-xl)",
     background: "linear-gradient(150deg, var(--brand), var(--brand-active))",
-    color: "#fff",
-    padding: "22px 24px",
+    color: "var(--surface-premium-ink)",
+    padding: "26px 28px",
     margin: "0 0 18px",
     boxShadow: "var(--shadow-md)",
   },
-  bannerEyebrow: { display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "rgba(255,255,255,0.82)", fontWeight: 700 },
-  bannerTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "9px 0 4px" },
-  bannerText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.86)" },
-  bannerMeta: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.8)" },
+  bannerEyebrow: { display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--surface-premium-ink)", fontWeight: 800, letterSpacing: "var(--tracking-wide)" },
+  bannerTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "10px 0 6px", color: "var(--surface-premium-ink)" },
+  bannerText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 600, lineHeight: 1.45, color: "var(--surface-premium-ink)" },
+  bannerWeak: { fontSize: "var(--text-lg)", fontWeight: 800, letterSpacing: "var(--tracking-snug)" },
+  bannerAmp: { fontWeight: 600 },
+  bannerSide: { flex: "none", textAlign: "center" },
+  bannerMeta: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--surface-premium-ink)" },
 
   filter: {
     background: "var(--surface)",
@@ -396,12 +444,30 @@ const S: Record<string, React.CSSProperties> = {
   empty: { padding: "var(--space-8)", textAlign: "center", color: "var(--text-muted)", border: "1px dashed var(--border)", borderRadius: "var(--radius-lg)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
   grid: { alignItems: "stretch" },
 
-  cardTop: { display: "flex", alignItems: "center", gap: 7, marginBottom: 11 },
+  cardTop: { display: "flex", alignItems: "center", gap: 8, marginBottom: 13 },
   duration: { marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" },
-  cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-md)", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3, letterSpacing: "var(--tracking-snug)", minHeight: 42 },
-  types: { display: "flex", flexWrap: "wrap", gap: 6, margin: "12px 0 15px" },
-  typeChip: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", background: "var(--surface-inset)", padding: "3px 9px", borderRadius: "var(--radius-full)" },
-  cardFoot: { marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between" },
-  lockFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--warn-text)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600 },
-  startFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600 },
+  // Заголовок ведёт: вес 800 + крупнее, 2 строки с клампом (minHeight держит сетку).
+  cardTitle: {
+    fontFamily: "var(--font-ui)",
+    fontSize: "var(--text-lg)",
+    fontWeight: 800,
+    color: "var(--text-primary)",
+    lineHeight: 1.25,
+    letterSpacing: "var(--tracking-snug)",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+    minHeight: "2.5em",
+  },
+  cardMeta: { display: "flex", alignItems: "baseline", gap: 9, marginTop: 9, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
+  metaNum: { fontFamily: "var(--font-mono)", fontSize: "var(--text-lg)", fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.01em" },
+  metaBand: { alignSelf: "center", fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--text-link)", background: "var(--brand-subtle)", borderRadius: "var(--radius-full)", padding: "2px 8px" },
+  types: { display: "flex", flexWrap: "wrap", gap: 6, margin: "14px 0 16px" },
+  typeChip: { display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--text-secondary)", background: "var(--surface-inset)", padding: "4px 10px", borderRadius: "var(--radius-full)" },
+  // Один острый акцент: слабый тип пользователя — violet-чип с мишенью.
+  typeChipWeak: { display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, color: "var(--text-link)", background: "var(--brand-subtle)", border: "1px solid var(--brand-border)", padding: "3px 10px", borderRadius: "var(--radius-full)" },
+  cardFoot: { marginTop: "auto", paddingTop: 14, borderTop: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "space-between" },
+  lockFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--warn-text)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700 },
+  startFoot: { display: "inline-flex", alignItems: "center", gap: 7, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, letterSpacing: "var(--tracking-snug)" },
 };
