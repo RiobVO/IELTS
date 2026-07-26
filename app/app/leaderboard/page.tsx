@@ -113,9 +113,11 @@ export default async function Leaderboard({
   const tIdx = tierIndex(rating);
   const nextTier = TIERS[tIdx + 1] ?? null;
 
-  // Podium for the top 3 (only when the board is deep enough); the rest list out.
-  const podium = rows.length >= 3 ? rows.slice(0, 3) : [];
-  const listRows = podium.length ? rows.slice(3) : rows;
+  // Podium for the top finishers (adaptive: 2 or 3 — same render at every scope,
+  // so a regional board lights up the moment it has ≥2 ranked players); the rest
+  // list out below.
+  const podium = rows.length >= 2 ? rows.slice(0, Math.min(3, rows.length)) : [];
+  const listRows = podium.length ? rows.slice(podium.length) : rows;
 
   return (
     <AppShell active="leaderboard">
@@ -183,10 +185,21 @@ export default async function Leaderboard({
 /* Top-3 podium — pedestals rise on load; crown on #1, medal-tinted avatars. */
 function Podium({ top, showScore }: { top: LeaderRow[]; showScore: boolean }) {
   const byRank = new Map(top.map((r) => [r.rank, r]));
-  const order = [byRank.get(2), byRank.get(1), byRank.get(3)].filter(Boolean) as LeaderRow[];
+  const three = top.length >= 3;
+  // 3 finishers → classic 2·1·3; 2 finishers → 1·2 (winner on the left, taller).
+  const order = (three
+    ? [byRank.get(2), byRank.get(1), byRank.get(3)]
+    : [byRank.get(1), byRank.get(2)]
+  ).filter(Boolean) as LeaderRow[];
   const HEIGHT: Record<number, number> = { 1: 120, 2: 92, 3: 70 };
   return (
-    <div style={S.podium}>
+    <div
+      style={{
+        ...S.podium,
+        gridTemplateColumns: three ? "1fr 1.15fr 1fr" : "1fr 1fr",
+        ...(three ? null : { maxWidth: 520, marginLeft: "auto", marginRight: "auto" }),
+      }}
+    >
       {order.map((r) => {
         const medal = medalColor(r.rank)!;
         return (
