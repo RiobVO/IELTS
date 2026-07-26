@@ -222,7 +222,7 @@ export default async function BadgesPage() {
                 </div>
                 <div style={S.rail}>
                   <div style={S.railBg} />
-                  <div data-grow style={{ ...S.railFill, width: `${t.fill * 100}%` }} />
+                  <div data-grow style={{ ...S.railFill, width: `${(t.fill * 66.667).toFixed(3)}%` }} />
                   {t.nodes.map((n) => (
                     <Node key={n.code} n={n} current={n.code === t.currentCode} />
                   ))}
@@ -449,10 +449,12 @@ const S: Record<string, React.CSSProperties> = {
   trackName: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-base)", color: "var(--text-primary)" },
   trackMeta: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-secondary)" },
 
-  rail: { position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "0 6px" },
-  railBg: { position: "absolute", left: 38, right: 38, top: 31, height: 4, borderRadius: "var(--radius-full)", background: "var(--surface-inset)" },
-  railFill: { position: "absolute", left: 38, top: 31, height: 4, borderRadius: "var(--radius-full)", background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", transformOrigin: "left", boxShadow: "0 0 12px -2px color-mix(in oklab, var(--brand) 80%, transparent)", maxWidth: "calc(100% - 76px)" },
-  node: { position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: "33%", minWidth: 0, textAlign: "center" },
+  // Рельс соединяет ЦЕНТРЫ медалей: 3 ноды по 33.333% → центры на 1/6 и 5/6.
+  // Концы в % (не фикс-px), иначе линия торчит за крайними кругами на любой ширине.
+  rail: { position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: 0 },
+  railBg: { position: "absolute", left: "16.667%", right: "16.667%", top: 31, height: 4, borderRadius: "var(--radius-full)", background: "var(--surface-inset)" },
+  railFill: { position: "absolute", left: "16.667%", top: 31, height: 4, borderRadius: "var(--radius-full)", background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", transformOrigin: "left", boxShadow: "0 0 12px -2px color-mix(in oklab, var(--brand) 80%, transparent)", maxWidth: "66.667%" },
+  node: { position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: "33.333%", minWidth: 0, textAlign: "center" },
   medal: { width: 62, height: 62, borderRadius: "50%", display: "grid", placeItems: "center", position: "relative" },
   medalEarned: { background: "linear-gradient(165deg, var(--brand), var(--brand-active))", color: "var(--text-on-brand)", boxShadow: "var(--glow-brand)" },
   medalCurrent: { background: "var(--surface)", color: "var(--brand)" },
