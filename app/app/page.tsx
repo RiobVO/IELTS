@@ -178,7 +178,7 @@ export default async function Dashboard() {
               <h2 style={S.sectionTitle}>Where you lose points</h2>
               <Badge tone="error">Worst first</Badge>
               <Link href="/app/reading" style={S.drillAny}>
-                Drill any →
+                Browse all →
               </Link>
             </div>
             <p style={S.lossLead}>
@@ -428,14 +428,16 @@ function LossRow({ item, idx }: { item: Weak; idx: number }) {
       <span style={{ ...S.lossRank, ...(worst ? S.lossRankWorst : null) }}>{idx + 1}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={S.lossName}>{item.label}</div>
-        <div style={S.lossTrack}>
+        {/* Бар декоративный: серьёзность несут ранг + счёт «{correct}/{total}» +
+            «N missed», поэтому смысл не завязан на цвет (colorblind-safe). */}
+        <div aria-hidden="true" style={S.lossTrack}>
           <div style={{ height: "100%", width: `${pct}%`, borderRadius: "var(--radius-full)", background: lossColor(pct) }} />
         </div>
       </div>
       <span style={S.lossScore}>
         {item.correct} / {item.total}
       </span>
-      <span style={S.lossPts}>−{lost} pts</span>
+      <span style={S.lossPts}>{lost} missed</span>
       <span style={{ color: "var(--text-disabled)", flex: "none" }}>
         <Icon name="chevron-right" size={18} strokeWidth={2.2} />
       </span>
@@ -493,6 +495,9 @@ const DASH_CSS = `
 .dash-band{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
 .dash-more summary{list-style:none;cursor:pointer}
 .dash-more summary::-webkit-details-marker{display:none}
+.dash-more summary svg{transition:transform .2s ease}
+.dash-more[open] summary svg{transform:rotate(180deg)}
+@media (prefers-reduced-motion:reduce){.dash-more summary svg{transition:none}}
 @media (min-width:768px){
   .dash-wrap{padding:32px 28px 56px}
   .dash-hi{font-size:30px;white-space:nowrap}
