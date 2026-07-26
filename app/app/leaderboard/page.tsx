@@ -13,6 +13,7 @@ import { AppShell } from "../_AppShell";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
 import LeaderboardControls from "./LeaderboardControls";
+import { LeagueMotion } from "./LeagueMotion";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +35,18 @@ function medalColor(rank: number): string | null {
   return rank === 1 ? "var(--gold-500)" : rank === 2 ? "var(--slate-300)" : rank === 3 ? "var(--orange-500)" : null;
 }
 
+// Deterministic avatar tint from the user id — identity + visual variety without
+// stored avatars (the medal colours still override the top 3).
+const AVATAR_COLORS = ["var(--violet-600)", "var(--sky-500)", "var(--green-500)", "var(--gold-500)", "var(--orange-500)", "var(--error)"];
+function avatarColor(id: string): string {
+  let s = 0;
+  for (let i = 0; i < id.length; i++) s += id.charCodeAt(i);
+  return AVATAR_COLORS[s % AVATAR_COLORS.length];
+}
+
 /**
  * League tiers — детерминированная классификация реального Elo-рейтинга в
- * именованные лиги (НЕ выдуманная недельная промо-механика: чистая функция над
- * существующим `profile.rating`). Старт 1000 → Amethyst (брендовая «домашняя»
- * лига); путь наверх честно завязан на рост рейтинга.
+ * именованные лиги (чистая функция над `profile.rating`).
  */
 interface Tier {
   key: string;
@@ -68,14 +76,8 @@ export default async function Leaderboard({
   const period = asPeriod(sp.period);
   const profile = await getProfile();
 
-  // Scope chips: always "global"; add the user's region (+ its country ancestor)
-  // if any. Region has public RLS read, so the anon client may fetch names by id.
-  const scopeOptions: { value: string; label: string }[] = [
-    { value: "global", label: "Global" },
-  ];
+  const scopeOptions: { value: string; label: string }[] = [{ value: "global", label: "Global" }];
   if (profile?.region_id) {
-    // own + его parent одним self-join (parent зависит от own.parent_id — водопад
-    // сворачиваем в один запрос). Owner-path: region — публичные имена территорий.
     const parentRegion = alias(region, "parent_region");
     const [row] = await db
       .select({
@@ -89,9 +91,7 @@ export default async function Leaderboard({
       .where(eq(region.id, profile.region_id))
       .limit(1);
     if (row) {
-      if (row.parentId && row.parentName) {
-        scopeOptions.push({ value: row.parentId, label: row.parentName });
-      }
+      if (row.parentId && row.parentName) scopeOptions.push({ value: row.parentId, label: row.parentName });
       scopeOptions.push({ value: row.ownId, label: row.ownName });
     }
   }
@@ -113,10 +113,14 @@ export default async function Leaderboard({
   const tIdx = tierIndex(rating);
   const nextTier = TIERS[tIdx + 1] ?? null;
 
+  // Podium for the top 3 (only when the board is deep enough); the rest list out.
+  const podium = rows.length >= 3 ? rows.slice(0, 3) : [];
+  const listRows = podium.length ? rows.slice(3) : rows;
+
   return (
     <AppShell active="leaderboard">
       <style>{LB_CSS}</style>
-      <div style={S.arena}>
+      <div data-league-root style={S.arena}>
         <div className="lb-wrap" style={S.wrap}>
           {/* Header */}
           <div style={S.head}>
@@ -140,49 +144,133 @@ export default async function Leaderboard({
           {rows.length === 0 ? (
             <div style={S.empty}>No ranking yet — sit a rated test to enter the league.</div>
           ) : (
-            <div className="lb-grid" style={S.grid}>
-              {/* Ranked board */}
-              <div style={S.list}>
-                {rows.map((r) => (
-                  <RowItem key={r.userId} row={r} showScore={showScore} />
-                ))}
-                {viewerPinned && viewerRow ? (
-                  <>
-                    <div style={S.divider} />
-                    <RowItem row={viewerRow} showScore={showScore} />
-                  </>
-                ) : null}
-              </div>
+            <>
+              {podium.length > 0 && <Podium top={podium} showScore={showScore} />}
 
-              {/* Side: tiers + standing */}
-              <div style={S.side}>
-                <TiersCard activeIdx={tIdx} rating={rating} nextTier={nextTier} />
-                <StandingCard
-                  viewer={viewer}
-                  nextUp={nextUp}
-                  total={total}
-                  showScore={showScore}
-                  val={val}
-                />
+              <div className="lb-grid" style={S.grid}>
+                {/* Ranked board */}
+                <div>
+                  <ol style={S.list}>
+                    {listRows.map((r) => (
+                      <RowItem key={r.userId} row={r} showScore={showScore} />
+                    ))}
+                  </ol>
+                  {viewerPinned && viewerRow ? (
+                    <div style={S.pinned}>
+                      <div style={S.pinnedLabel}>Your position</div>
+                      <ol style={{ ...S.list, marginTop: 7 }}>
+                        <RowItem row={viewerRow} showScore={showScore} />
+                      </ol>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Side: tiers + standing */}
+                <div style={S.side}>
+                  <TiersCard activeIdx={tIdx} rating={rating} nextTier={nextTier} />
+                  <StandingCard viewer={viewer} nextUp={nextUp} total={total} showScore={showScore} val={val} />
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
+      <LeagueMotion />
     </AppShell>
   );
 }
 
-/* Tier ladder — реальный рейтинг → именованная лига; «You're here» на текущей. */
-function TiersCard({
-  activeIdx,
-  rating,
-  nextTier,
-}: {
-  activeIdx: number;
-  rating: number;
-  nextTier: Tier | null;
-}) {
+/* Top-3 podium — pedestals rise on load; crown on #1, medal-tinted avatars. */
+function Podium({ top, showScore }: { top: LeaderRow[]; showScore: boolean }) {
+  const byRank = new Map(top.map((r) => [r.rank, r]));
+  const order = [byRank.get(2), byRank.get(1), byRank.get(3)].filter(Boolean) as LeaderRow[];
+  const HEIGHT: Record<number, number> = { 1: 120, 2: 92, 3: 70 };
+  return (
+    <div style={S.podium}>
+      {order.map((r) => {
+        const medal = medalColor(r.rank)!;
+        return (
+          <div key={r.userId} style={S.pod}>
+            {r.rank === 1 && (
+              <span style={{ color: "var(--gold-500)", marginBottom: 4 }}>
+                <Icon name="crown" size={18} strokeWidth={2.2} />
+              </span>
+            )}
+            <div style={{ ...S.podAv, background: avatarColor(r.userId), ...(r.isViewer ? { boxShadow: "0 0 0 3px var(--brand)" } : null) }}>
+              {initials(r.displayName)}
+              <span style={{ ...S.podRk, background: medal }}>{r.rank}</span>
+            </div>
+            <div style={S.podName}>{firstName(r.displayName)}</div>
+            <div style={S.podXp}>
+              {fmt(showScore ? r.score : r.rating)}
+              {showScore ? " XP" : ""}
+            </div>
+            <div
+              data-pedestal={HEIGHT[r.rank]}
+              style={{ ...S.pedestal, height: HEIGHT[r.rank], background: `linear-gradient(180deg, color-mix(in oklab, ${medal} 70%, white), color-mix(in oklab, ${medal} 34%, white))` }}
+            >
+              #{r.rank}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* Rank movement since the last snapshot. Null (no baseline yet) → render nothing. */
+function Delta({ d }: { d: number | null }) {
+  if (d == null) return null;
+  if (d > 0)
+    return (
+      <span style={{ ...S.delta, ...S.deltaUp }}>
+        <Icon name="chevron-up" size={11} strokeWidth={3} />
+        {d}
+      </span>
+    );
+  if (d < 0)
+    return (
+      <span style={{ ...S.delta, ...S.deltaDown }}>
+        <Icon name="chevron-down" size={11} strokeWidth={3} />
+        {-d}
+      </span>
+    );
+  return <span style={{ ...S.delta, ...S.deltaFlat }}>–</span>;
+}
+
+function RowItem({ row, showScore }: { row: LeaderRow; showScore: boolean }) {
+  const medal = medalColor(row.rank);
+  return (
+    <li data-row style={{ ...S.lrow, ...(row.isViewer ? S.lrowYou : null) }}>
+      <div style={{ ...S.rk, ...(medal ? { color: medal } : null) }}>{row.rank}</div>
+      <div
+        style={{
+          ...S.av,
+          background: avatarColor(row.userId),
+          ...(medal ? { boxShadow: `0 0 0 2px ${medal}` } : null),
+        }}
+      >
+        {initials(row.displayName)}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...S.nm, fontWeight: row.isViewer ? 800 : 600 }}>
+          {row.displayName || "—"}
+          {row.isViewer && <span style={{ color: "var(--brand-active)", fontWeight: 700 }}> · you</span>}
+        </div>
+        {row.regionName && <div style={S.region}>{row.regionName}</div>}
+      </div>
+      <Delta d={row.delta} />
+      <div style={S.xp}>
+        {fmt(showScore ? row.score : row.rating)}
+        <span style={S.xpUnit}>{showScore ? " XP" : ""}</span>
+      </div>
+    </li>
+  );
+}
+
+/* Tier ladder — реальный рейтинг → именованная лига; «You're here» на текущей.
+   Неактивные тиры приглушены ТОКЕНОМ (--text-muted, AA), не opacity (контраст). */
+function TiersCard({ activeIdx, rating, nextTier }: { activeIdx: number; rating: number; nextTier: Tier | null }) {
   return (
     <div style={S.card}>
       <div style={S.eyebrow}>Tiers</div>
@@ -193,16 +281,14 @@ function TiersCard({
           .map(({ t, i }) => {
             const here = i === activeIdx;
             return (
-              <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 11, opacity: here ? 1 : 0.55 }}>
-                <span style={{ width: 30, height: 30, flex: "none", borderRadius: 9, display: "grid", placeItems: "center", background: `color-mix(in oklab, ${t.color} 18%, var(--surface))`, color: t.color }}>
+              <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 11 }}>
+                <span style={{ width: 30, height: 30, flex: "none", borderRadius: 9, display: "grid", placeItems: "center", background: `color-mix(in oklab, ${t.color} 18%, var(--surface))`, color: t.color, ...(here ? null : { opacity: 0.7 }) }}>
                   <Icon name="trophy" size={16} strokeWidth={2.2} />
                 </span>
-                <span style={{ flex: 1, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: here ? 800 : 600, color: "var(--text-primary)" }}>
+                <span style={{ flex: 1, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: here ? 800 : 600, color: here ? "var(--text-primary)" : "var(--text-muted)" }}>
                   {t.name}
                 </span>
-                {here && (
-                  <span style={S.herePill}>You&apos;re here</span>
-                )}
+                {here && <span style={S.herePill}>You&apos;re here</span>}
               </div>
             );
           })}
@@ -221,7 +307,7 @@ function TiersCard({
   );
 }
 
-/* Your standing — реальный ранг/из скольких + дистанция до следующего. */
+/* Your standing — реальный ранг (count-up) + дистанция до следующего (chase-бар). */
 function StandingCard({
   viewer,
   nextUp,
@@ -253,11 +339,14 @@ function StandingCard({
     <div style={S.standing}>
       <div style={S.standingEyebrow}>Your standing</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={S.standingRank}>#{viewer.rank}</span>
+        <span style={S.standingRank}>
+          #<span data-countup={viewer.rank}>{viewer.rank}</span>
+        </span>
         <span style={S.standingOf}>of {total}</span>
+        <Delta d={viewer.delta} />
       </div>
       <div style={S.standingTrack}>
-        <div style={{ height: "100%", width: `${pct}%`, borderRadius: "var(--radius-full)", background: "var(--brand)" }} />
+        <div data-fill={pct} style={{ height: "100%", width: `${pct}%`, borderRadius: "var(--radius-full)", background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", transformOrigin: "left" }} />
       </div>
       <div style={S.standingHint}>
         {nextUp ? (
@@ -278,37 +367,7 @@ function StandingCard({
   );
 }
 
-function RowItem({ row, showScore }: { row: LeaderRow; showScore: boolean }) {
-  const medal = medalColor(row.rank);
-  return (
-    <div style={{ ...S.lrow, ...(row.isViewer ? S.lrowYou : null) }}>
-      <div style={{ ...S.rk, ...(medal ? { color: medal } : null) }}>{row.rank}</div>
-      <div
-        style={{
-          ...S.av,
-          ...(medal
-            ? { background: `color-mix(in oklab, ${medal} 80%, white)`, color: "#1a1525", boxShadow: `0 0 0 2px ${medal}` }
-            : null),
-        }}
-      >
-        {initials(row.displayName)}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ ...S.nm, fontWeight: row.isViewer ? 800 : 600 }}>
-          {row.displayName || "—"}
-          {row.isViewer && <span style={{ color: "var(--brand-active)", fontWeight: 700 }}> · you</span>}
-        </div>
-        {row.regionName && <div style={S.region}>{row.regionName}</div>}
-      </div>
-      <div style={S.xp}>
-        {fmt(showScore ? row.score : row.rating)}
-        <span style={S.xpUnit}>{showScore ? " XP" : ""}</span>
-      </div>
-    </div>
-  );
-}
-
-// Адаптив лидерборда. База = мобильный (доска и сайдбар в стек); ≥768px = десктоп.
+// Адаптив лидерборда. База = мобильный (стек); ≥768px = десктоп.
 const LB_CSS = `
 .lb-wrap{padding:22px 16px 40px}
 .lb-grid{display:grid;grid-template-columns:1fr;gap:16px}
@@ -327,16 +386,29 @@ const S: Record<string, React.CSSProperties> = {
   sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
   scopeNote: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", margin: "0 2px 16px" },
 
+  podium: { display: "grid", gridTemplateColumns: "1fr 1.15fr 1fr", gap: 12, alignItems: "end", marginBottom: 18 },
+  pod: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 },
+  podAv: { position: "relative", width: 58, height: 58, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-base)", color: "#fff", marginBottom: 8, boxShadow: "0 6px 16px -6px rgba(20,40,55,.4)" },
+  podRk: { position: "absolute", bottom: -6, right: -6, width: 24, height: 24, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#1a1525", border: "2px solid var(--bg-base)" },
+  podName: { fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-sm)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-primary)" },
+  podXp: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)", marginBottom: 9 },
+  pedestal: { width: "100%", borderRadius: "var(--radius-md) var(--radius-md) 0 0", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 10, fontFamily: "var(--font-mono)", fontWeight: 700, color: "#fff", borderTop: "1px solid rgba(0,0,0,.05)" },
+
   grid: { alignItems: "start" },
-  list: { display: "flex", flexDirection: "column", gap: 7 },
-  divider: { height: 1, background: "var(--border)", margin: "4px 0" },
+  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 7 },
+  pinned: { marginTop: 12 },
+  pinnedLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
 
   lrow: { display: "flex", alignItems: "center", gap: 13, padding: "11px 15px", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-md)" },
   lrowYou: { background: "var(--brand-subtle)", borderColor: "var(--brand)", boxShadow: "0 0 28px -8px color-mix(in oklab, var(--brand) 70%, transparent)" },
   rk: { width: 24, flex: "none", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-muted)" },
-  av: { width: 38, height: 38, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, background: "var(--surface-hover)", color: "var(--text-secondary)", boxShadow: "inset 0 0 0 1px var(--border)" },
+  av: { width: 38, height: 38, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, color: "#fff" },
   nm: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   region: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", marginTop: 1 },
+  delta: { display: "inline-flex", alignItems: "center", gap: 1, flex: "none", fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 700, padding: "2px 6px", borderRadius: "var(--radius-full)" },
+  deltaUp: { color: "var(--success-text)", background: "var(--success-subtle)" },
+  deltaDown: { color: "var(--error-text)", background: "var(--error-subtle)" },
+  deltaFlat: { color: "var(--text-muted)", background: "var(--surface-inset)" },
   xp: { flex: "none", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "var(--text-base)", fontWeight: 600, color: "var(--text-primary)" },
   xpUnit: { fontSize: "var(--text-2xs)", color: "var(--text-muted)" },
 
@@ -348,11 +420,11 @@ const S: Record<string, React.CSSProperties> = {
 
   standing: { background: "linear-gradient(180deg, var(--brand-subtle), var(--surface))", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-md)" },
   standingEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand-active)", marginBottom: 8 },
-  standingRank: { fontFamily: "var(--font-ui)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.03em" },
+  standingRank: { fontFamily: "var(--font-ui)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" },
   standingOf: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
   standingTrack: { height: 9, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden", margin: "12px 0 8px" },
   standingHint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
-  standingEmpty: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.5, color: "var(--text-secondary)", margin: "0" },
+  standingEmpty: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.5, color: "var(--text-secondary)", margin: 0 },
 
   empty: { marginTop: 24, padding: "2rem", textAlign: "center", color: "var(--text-muted)", border: "1px dashed var(--border)", borderRadius: "var(--radius-lg)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)" },
 };
