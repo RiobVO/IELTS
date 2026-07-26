@@ -29,6 +29,19 @@ interface SlotCtx {
 }
 const Ctx = createContext<SlotCtx | null>(null);
 
+/**
+ * Practice-аффордансы читаются из контекста, а не приходят пропсом в дерево: само
+ * дерево мемоизировано по [html], а рендер аффорданса обязан быть свежим на каждый
+ * тик (вердикты/ответы меняются). Плейсхолдер ниже стабилен, поэтому мемо цело.
+ * В mock контекст пуст → плейсхолдеры не рисуют ничего, выдача прежняя.
+ */
+const AffCtx = createContext<((questionNumber: number) => ReactNode) | null>(null);
+
+function AffordanceAnchor({ q }: { q: number }) {
+  const render = useContext(AffCtx);
+  return render ? <>{render(q)}</> : null;
+}
+
 // HTML-атрибут → React-проп (для нестандартных имён).
 const ATTR: Record<string, string> = {
   class: "className",
@@ -144,7 +157,33 @@ function slotNumbersIn(el: Element): number[] {
   return orderUnique(nums);
 }
 
-function convert(node: ChildNode, key: string): ReactNode {
+/**
+ * Теги, внутрь которых нельзя дописать блок аффорданса, не сломав вёрстку/валидность
+ * (в `tr` допустимы только ячейки, в `ul`/`ol` — только `li`, и т.п.). Вопрос, чей
+ * контейнер оказался таким, инлайн-якоря не получает — он уходит в общий кластер
+ * после блока, как было раньше (типичный случай — matching-таблица A–I).
+ */
+const NO_INLINE_ANCHOR = new Set([
+  "table", "thead", "tbody", "tfoot", "tr", "colgroup", "col", "ul", "ol", "dl", "select",
+  // Ячейка технически принимает блок, но в matching-таблице она шириной в одну букву —
+  // карточка аффорданса разорвала бы сетку. Такие вопросы уходят в кластер под таблицей.
+  "td", "th",
+]);
+
+/** Единственный номер вопроса внутри элемента, иначе null (0 или несколько слотов). */
+function soleQuestionNumber(el: Element): number | null {
+  const nums = slotNumbersIn(el);
+  return nums.length === 1 ? nums[0] : null;
+}
+
+function convert(
+  node: ChildNode,
+  key: string,
+  /** Пока true — ищем контейнер отдельного вопроса, чтобы подвесить аффорданс. */
+  seekAnchor: boolean,
+  /** Куда сложить номера, получившие инлайн-якорь (остальные пойдут в кластер). */
+  anchored: Set<number>,
+): ReactNode {
   if (node.nodeType === 3) return node.textContent; // text
   if (node.nodeType !== 1) return null;
   const el = node as Element;
@@ -161,8 +200,20 @@ function convert(node: ChildNode, key: string): ReactNode {
     props[ATTR[at.name] ?? at.name] = at.value;
   }
   if (VOID.has(tag)) return createElement(tag, props);
-  const children = Array.from(el.childNodes).map((c, i) => convert(c, `${key}.${i}`));
-  return createElement(tag, props, children);
+
+  // Самый ВЕРХНИЙ элемент, покрывающий ровно один вопрос — граница этого вопроса
+  // (у канона клиента это `#question-N`). Глубже якорь не ищем: иначе аффорданс сел бы
+  // на вложенный label одного из вариантов ответа.
+  const sole = seekAnchor && !NO_INLINE_ANCHOR.has(tag) ? soleQuestionNumber(el) : null;
+  const childSeek = seekAnchor && sole == null;
+  const children = Array.from(el.childNodes).map((c, i) => convert(c, `${key}.${i}`, childSeek, anchored));
+  if (sole == null) return createElement(tag, props, children);
+
+  anchored.add(sole);
+  return createElement(tag, props, [
+    ...children,
+    <AffordanceAnchor key={`${key}.aff`} q={sole} />,
+  ]);
 }
 
 export function QuestionHtml({
@@ -198,13 +249,20 @@ export function QuestionHtml({
       const doc = new DOMParser().parseFromString(`<body><div id="r">${html}</div></body>`, "text/html");
       const root = doc.getElementById("r");
       if (!root) return null;
-      const out = Array.from(root.childNodes).map((c, i) => ({
-        node: convert(c, String(i)),
-        // Аффордансы вешаем ПОСЛЕ каждого top-level блока (группа/таблица), по номерам
-        // слотов внутри него — не инлайном у слота: слот может быть ячейкой таблицы или
-        // одним из radio-группы (вставка сломала бы вёрстку / задублировала бы аффорданс).
-        numbers: c.nodeType === 1 ? slotNumbersIn(c as Element) : [],
-      }));
+      const out = Array.from(root.childNodes).map((c, i) => {
+        // Аффорданс живёт ВНУТРИ контейнера своего вопроса, если такой есть (канон
+        // клиента: `#question-N`) — иначе шесть карточек группы сваливались бы кучей
+        // в конец блока, оторванные от вопросов. Не инлайном у самого слота: слот может
+        // быть ячейкой таблицы или одним из radio-группы.
+        const anchored = new Set<number>();
+        const node = convert(c, String(i), true, anchored);
+        // В кластер после блока идут только вопросы БЕЗ своего контейнера (matching-
+        // таблицы и прочая вёрстка, куда блок не вставить) — прежнее поведение.
+        const numbers = (c.nodeType === 1 ? slotNumbersIn(c as Element) : []).filter(
+          (n) => !anchored.has(n),
+        );
+        return { node, numbers };
+      });
       return out.length ? out : null;
     } catch {
       return null; // битый HTML → фоллбэк
@@ -221,21 +279,23 @@ export function QuestionHtml({
   if (!mounted || blocks == null) return <>{fallback}</>;
   return (
     <Ctx.Provider value={ctxValue}>
-      <style>{Q_CSS}</style>
-      <div className="q-verbatim">
-        {blocks.map((b, i) => (
-          <Fragment key={i}>
-            {b.node}
-            {renderAffordances && b.numbers.length > 0 && (
-              <div className="qa-cluster">
-                {b.numbers.map((n) => (
-                  <Fragment key={n}>{renderAffordances(n)}</Fragment>
-                ))}
-              </div>
-            )}
-          </Fragment>
-        ))}
-      </div>
+      <AffCtx.Provider value={renderAffordances ?? null}>
+        <style>{Q_CSS}</style>
+        <div className="q-verbatim">
+          {blocks.map((b, i) => (
+            <Fragment key={i}>
+              {b.node}
+              {renderAffordances && b.numbers.length > 0 && (
+                <div className="qa-cluster">
+                  {b.numbers.map((n) => (
+                    <Fragment key={n}>{renderAffordances(n)}</Fragment>
+                  ))}
+                </div>
+              )}
+            </Fragment>
+          ))}
+        </div>
+      </AffCtx.Provider>
     </Ctx.Provider>
   );
 }
@@ -321,7 +381,10 @@ const Q_CSS = `
    Классы аффордансов (.exam-*) идут из READING_CSS шелла (общие для обоих путей);
    их 39px-отступ под номер здесь не нужен (номер уже в .qa-num) — зануляем. */
 .q-verbatim .qa-cluster{display:flex;flex-direction:column;gap:10px;margin:6px 0 26px}
-.q-verbatim .qa-item{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-inset)}
+/* margin — для аффорданса, стоящего ВНУТРИ контейнера своего вопроса; в кластере
+   расстояние задаёт gap, поэтому там его снимаем. */
+.q-verbatim .qa-item{margin:10px 0 4px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-inset)}
+.q-verbatim .qa-cluster .qa-item{margin:0}
 .q-verbatim .qa-num{margin-bottom:4px;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
 .q-verbatim .qa-item .exam-check,.q-verbatim .qa-item .exam-fmt-hint,.q-verbatim .qa-item .exam-strategy,.q-verbatim .qa-item .exam-wtl{padding-left:0}
 .q-verbatim .qa-item .exam-strategy-list{padding-left:22px}
