@@ -272,34 +272,36 @@ function FocusCard({ weakest }: { weakest: Weak | null }) {
         </div>
         {weakest ? (
           <>
-            <h2 style={S.focusTitle}>{weakest.label}</h2>
+            <h2 className="dash-focus-title" style={S.focusTitle}>{weakest.label}</h2>
             <p style={S.focusText}>
-              Your weakest type so far —{" "}
-              <b style={{ color: "#fff" }}>
-                {weakest.correct} of {weakest.total} right
-              </b>
-              . Closing it is the single fastest move toward your band.
+              Your weakest type so far — closing it is the single fastest move toward your band.
             </p>
-            <div style={{ marginTop: 20 }}>
+            <div style={{ marginTop: 22 }}>
+              <div style={S.focusProgHead}>
+                <span style={S.focusProgLabel}>Accuracy</span>
+                <span style={S.focusProgVal}>
+                  {weakest.correct} / {weakest.total}
+                </span>
+              </div>
               <div aria-hidden="true" style={S.focusTrack}>
                 <div style={{ ...S.focusFill, width: `${pct}%` }} />
               </div>
             </div>
             <div style={S.focusCta}>
-              <Button variant="secondary" trailingIcon="arrow-right" href={`/app/${weakest.section}?q_type=${encodeURIComponent(weakest.type)}`} style={{ color: "var(--brand-active)" }}>
+              <Button variant="secondary" size="lg" trailingIcon="arrow-right" href={`/app/${weakest.section}?q_type=${encodeURIComponent(weakest.type)}`} style={{ color: "var(--brand-active)" }}>
                 Fix this weakness
               </Button>
             </div>
           </>
         ) : (
           <>
-            <h2 style={S.focusTitle}>Take your first test</h2>
+            <h2 className="dash-focus-title" style={S.focusTitle}>Take your first test</h2>
             <p style={S.focusText}>
               Sit a test to surface your weakest question type — then we&apos;ll point your daily
               focus straight at it.
             </p>
             <div style={S.focusCta}>
-              <Button variant="secondary" trailingIcon="arrow-right" href="/app/reading" style={{ color: "var(--brand-active)" }}>
+              <Button variant="secondary" size="lg" trailingIcon="arrow-right" href="/app/reading" style={{ color: "var(--brand-active)" }}>
                 Browse tests
               </Button>
             </div>
@@ -428,11 +430,11 @@ function BandReadout({
         ? `${gap.toFixed(1)} band to go`
         : "Target reached 🎯";
   return (
-    <div style={{ ...S.card, ...S.bandCard }}>
+    <div style={{ ...S.card, ...S.bandCard, ...S.bandCardFilled }}>
       <div style={{ flex: "none" }}>
         <div style={S.bandLabel}>Your band</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
-          <span style={S.bandNum}>{band}</span>
+          <span className="dash-band-num" style={S.bandNum}>{band}</span>
           {target != null ? (
             <span style={S.bandTarget}>
               / target <span style={{ fontFamily: "var(--font-mono)", color: "var(--brand)" }}>{target}</span>
@@ -468,14 +470,15 @@ function LossRow({ item, idx }: { item: Weak; idx: number }) {
   return (
     // Deep-link в дрилл этого типа В ЕГО СЕКЦИИ — listening-слабость не уводим в
     // reading-каталог (там её типа нет). Каталог фильтрует по ?q_type (_CatalogView).
-    <Link href={`/app/${item.section}?q_type=${encodeURIComponent(item.type)}`} style={S.loss}>
+    <Link className="dash-loss" href={`/app/${item.section}?q_type=${encodeURIComponent(item.type)}`} style={S.loss}>
       <span style={{ ...S.lossRank, ...(worst ? S.lossRankWorst : null) }}>{idx + 1}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={S.lossName}>{item.label}</div>
         {/* Бар декоративный (aria-hidden): серьёзность несут ранг + счёт + «N missed».
-            Заливка — спокойный brand-hue, единственный красный в спайне = ранг худшей. */}
+            Один резкий акцент = бар худшей строки (full brand), остальные — спокойный
+            brand-border; красный остаётся только на ранге худшей (lossRankWorst). */}
         <div aria-hidden="true" style={S.lossTrack}>
-          <div style={{ height: "100%", width: `${pct}%`, borderRadius: "var(--radius-full)", background: "var(--brand-border)" }} />
+          <div style={{ height: "100%", width: `${pct}%`, borderRadius: "var(--radius-full)", background: worst ? "var(--brand)" : "var(--brand-border)" }} />
         </div>
       </div>
       <span style={S.lossScore}>
@@ -502,7 +505,7 @@ function TestRow({ a }: { a: AttemptRow }) {
     a.submitted_at ? ` · ${relTime(a.submitted_at)}` : ""
   }`;
   return (
-    <Link href={`/app/reading/${a.content_item_id}/result?a=${a.id}`} style={S.trow}>
+    <Link className="dash-trow" href={`/app/reading/${a.content_item_id}/result?a=${a.id}`} style={S.trow}>
       <span style={S.trowIc}>
         <Icon name="book-open" size={19} strokeWidth={2.2} />
       </span>
@@ -528,16 +531,22 @@ function TestRow({ a }: { a: AttemptRow }) {
 // (padding / flex-direction / width) живут в классах, не inline.
 const DASH_CSS = `
 .dash-wrap{padding:20px 16px 48px}
-.dash-hi{font-size:24px;white-space:normal}
-.dash-focus{padding:24px}
+.dash-hi{font-size:26px;white-space:normal}
+.dash-focus{padding:26px}
+.dash-focus-title{font-size:34px}
 .dash-sect{padding:20px 16px}
 .dash-sect-tight{padding:18px 16px 8px}
 .dash-band{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
+.dash-band-num{font-size:60px}
+/* Loss / recent — это ссылки: явный hover-фидбэк подтверждает кликабельность. */
+.dash-loss,.dash-trow{transition:background-color var(--duration-fast) var(--ease-standard)}
+.dash-loss:hover{background:var(--surface-inset)}
+.dash-trow:hover{background:var(--surface-inset)}
 .dash-more summary{list-style:none;cursor:pointer}
 .dash-more summary::-webkit-details-marker{display:none}
 .dash-more summary svg{transition:transform .2s ease}
 .dash-more[open] summary svg{transform:rotate(180deg)}
-@media (prefers-reduced-motion:reduce){.dash-more summary svg{transition:none}}
+@media (prefers-reduced-motion:reduce){.dash-more summary svg,.dash-loss,.dash-trow{transition:none}}
 /* This week — полоса momentum: телефон = сегменты стопкой, десктоп = в ряд. */
 .dash-week{padding:16px}
 .dash-week-row{display:flex;flex-direction:column;gap:16px;align-items:flex-start}
@@ -545,9 +554,11 @@ const DASH_CSS = `
 .dash-week-cta{display:flex;justify-content:center;width:100%}
 @media (min-width:768px){
   .dash-wrap{padding:32px 28px 56px}
-  .dash-hi{font-size:30px;white-space:nowrap}
+  .dash-hi{font-size:32px;white-space:nowrap}
+  .dash-focus-title{font-size:42px}
+  .dash-band-num{font-size:72px}
   .dash-band{flex-direction:row;align-items:center;gap:32px}
-  .dash-focus{padding:34px}
+  .dash-focus{padding:38px}
   .dash-sect{padding:28px 30px}
   .dash-sect-tight{padding:22px 30px 12px}
   .dash-week{padding:14px 22px}
@@ -594,7 +605,7 @@ const S: Record<string, React.CSSProperties> = {
     flexDirection: "column",
   },
   focusInner: { position: "relative", display: "flex", flexDirection: "column", height: "100%" },
-  focusMark: { position: "absolute", right: -26, bottom: -30, width: 190, height: 190, opacity: 0.14, pointerEvents: "none" },
+  focusMark: { position: "absolute", right: -30, bottom: -34, width: 220, height: 220, opacity: 0.18, pointerEvents: "none" },
   focusEyebrow: {
     display: "inline-flex",
     alignItems: "center",
@@ -604,10 +615,15 @@ const S: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     color: "rgba(255,255,255,0.92)",
   },
-  focusTitle: { fontFamily: "var(--font-ui)", fontSize: 30, fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "#fff", margin: "14px 0 0" },
+  focusTitle: { fontFamily: "var(--font-ui)", fontWeight: 900, letterSpacing: "var(--tracking-tighter)", color: "#fff", margin: "14px 0 0", textWrap: "balance" },
   focusText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", lineHeight: 1.55, color: "rgba(255,255,255,0.85)", margin: "11px 0 0", maxWidth: 420, textWrap: "pretty" },
-  focusTrack: { height: 8, borderRadius: "var(--radius-full)", background: "rgba(255,255,255,0.25)", overflow: "hidden", maxWidth: 320 },
+  focusTrack: { height: 10, borderRadius: "var(--radius-full)", background: "rgba(255,255,255,0.25)", overflow: "hidden", maxWidth: 380 },
   focusFill: { height: "100%", background: "#fff", borderRadius: "var(--radius-full)" },
+  // Accuracy-ридаут в hero: тихий caps-лейбл + крупная mono-цифра (фирменный знак
+  // «цифры = mono») — контраст веса, и число выносит data из прозы (тон прозы тёплый).
+  focusProgHead: { display: "flex", alignItems: "baseline", justifyContent: "space-between", maxWidth: 380, marginBottom: 8 },
+  focusProgLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "rgba(255,255,255,0.85)" },
+  focusProgVal: { fontFamily: "var(--font-mono)", fontSize: "var(--text-md)", fontWeight: 600, color: "#fff" },
   focusCta: { marginTop: "auto", paddingTop: 26 },
 
   /* This week — momentum-полоса (segments: stats | dots | league | cta) */
@@ -625,15 +641,21 @@ const S: Record<string, React.CSSProperties> = {
 
   /* Band readout */
   bandCard: { padding: "24px 28px" },
-  bandNum: { fontFamily: "var(--font-mono)", fontSize: 56, lineHeight: 1, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em" },
+  // Headline-метрика приподнята над рядом «плоских» карточек: ambient shadow-md +
+  // brand-рамка — presence без «нажимаемого» solid-канта (band-ридаут не кликабелен).
+  // ТОЛЬКО в заполненном состоянии (пустой band остаётся тихим, см. bandEmptyNum).
+  bandCardFilled: { boxShadow: "var(--shadow-md)", borderColor: "var(--brand-border)" },
+  bandNum: { fontFamily: "var(--font-mono)", lineHeight: 1, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.02em" },
   bandTarget: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-muted)" },
   // Пустое состояние band: absence намеренно тихая (34px, не 56px) — disabled-«—»
   // не должно быть одним из крупнейших элементов экрана и читаться как «сломано».
   bandEmptyNum: { fontFamily: "var(--font-mono)", fontSize: 34, lineHeight: 1, fontWeight: 600, color: "var(--text-disabled)", letterSpacing: "-0.02em", marginTop: 8 },
   bandEmptyText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", lineHeight: 1.5, color: "var(--text-muted)", margin: 0, maxWidth: 460 },
-  bandScale: { position: "relative", height: 12, borderRadius: "var(--radius-full)", background: "var(--surface-inset)" },
+  // Шкала band — гридлайны по целым (0…9) поверх трека: slim-бар читается как
+  // измерительная шкала IELTS, а не безымянный progress (committed density).
+  bandScale: { position: "relative", height: 14, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", backgroundImage: "repeating-linear-gradient(90deg, transparent 0, transparent calc(100% / 9 - 1px), var(--border) calc(100% / 9 - 1px), var(--border) calc(100% / 9))" },
   bandFill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: "var(--radius-full)", background: "linear-gradient(90deg, var(--brand-active), var(--brand))" },
-  bandTick: { position: "absolute", top: -6, width: 4, height: 24, borderRadius: 3, background: "var(--text-primary)" },
+  bandTick: { position: "absolute", top: -6, width: 4, height: 26, borderRadius: 3, background: "var(--text-primary)" },
   bandLegend: { display: "flex", justifyContent: "space-between", marginTop: 9, fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
 
   /* Sections */
@@ -658,7 +680,7 @@ const S: Record<string, React.CSSProperties> = {
   lossRank: { width: 26, height: 26, flex: "none", borderRadius: 8, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 600, background: "var(--surface-inset)", color: "var(--text-muted)" },
   lossRankWorst: { background: "var(--error-subtle)", color: "var(--error-text)" },
   lossName: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-  lossTrack: { height: 7, background: "var(--surface-inset)", borderRadius: "var(--radius-full)", overflow: "hidden", marginTop: 8 },
+  lossTrack: { height: 9, background: "var(--surface-inset)", borderRadius: "var(--radius-full)", overflow: "hidden", marginTop: 8 },
   lossScore: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", minWidth: 46, textAlign: "right" },
   // Нейтральная пилюля (не красно-залитая): единственный красный акцент в списке —
   // ранг худшей строки (lossRankWorst), а не каскад из пяти красных пятен.
