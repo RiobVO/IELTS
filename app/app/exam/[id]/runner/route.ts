@@ -41,6 +41,7 @@ export async function GET(
         category: contentItem.category,
         html: contentItem.runnerHtml,
         status: contentItem.status,
+        durationSeconds: contentItem.durationSeconds,
       })
       .from(contentItem)
       .where(eq(contentItem.id, id)),
@@ -100,9 +101,21 @@ export async function GET(
   // иначе Number(null)===0 склампилось бы в 5 минут.
   const minParam = new URL(req.url).searchParams.get("min");
   const minRaw = minParam == null ? NaN : Math.round(Number(minParam));
-  const minutes = Number.isFinite(minRaw)
+  const requested = Number.isFinite(minRaw)
     ? Math.min(180, Math.max(5, minRaw))
     : null;
+  // Фолбэк лимита, когда ?min= не пришёл: iframe-путь (ModeStart в /app/exam) пресетов
+  // не показывает, поэтому раньше лимит не доезжал вовсе и раннеры без собственного
+  // mock-режима (семейство C) шли секундомером без ограничения. Берём длительность теста,
+  // иначе — по типу (полный тест 60 мин, одиночный пассаж 20), как на атомизированной
+  // странице. Практис лимита не получает (ниже он и не передаётся).
+  const fallbackMinutes =
+    item.durationSeconds != null
+      ? Math.min(180, Math.max(5, Math.round(item.durationSeconds / 60)))
+      : isFullCategory(item.category)
+        ? 60
+        : 20;
+  const minutes = requested ?? fallbackMinutes;
   // Единый read-time рендер (полифил storage → ретаргет bridge → прогресс-мост → re-skin
   // → форс режима попытки → анти-утечка → practice-only аудио-мост). Порядок и mock-выдача
   // байт-в-байт прежние (покрыто render-runner.test.ts). Нет <head> для полифила →
