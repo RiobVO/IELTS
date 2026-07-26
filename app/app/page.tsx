@@ -125,6 +125,7 @@ export default async function Dashboard() {
     const isToday = i === 6;
     return {
       lab: DOW[d.getUTCDay()],
+      name: d.toLocaleDateString("en-US", { weekday: "long" }),
       state: isToday ? "today" : activeDays.has(dayKey(d)) ? "on" : "off",
     } as const;
   });
@@ -154,7 +155,7 @@ export default async function Dashboard() {
       <style>{DASH_CSS}</style>
       <div className="dash-wrap" style={S.wrap}>
         {/* Greeting */}
-        <div className="dash-greet" style={S.greet}>
+        <div style={S.greet}>
           <div>
             <div style={S.eyebrow}>Welcome back</div>
             <h1 className="dash-hi" style={S.hi}>Hi, {name}</h1>
@@ -162,16 +163,10 @@ export default async function Dashboard() {
           <div style={S.date}>{today}</div>
         </div>
 
-        {/* Hero — focus + this-week momentum */}
-        <div className="dash-hero" style={S.hero}>
-          <FocusCard weakest={weakest} />
-          <WeekCard streak={streak} xp={xp} rating={rating} rank={globalRank} week={week} />
-        </div>
+        {/* Focus — единственный визуальный якорь, full-width */}
+        <FocusCard weakest={weakest} />
 
-        {/* Band readout */}
-        <BandReadout band={bandLatest} target={bandTarget} gap={gapNum} hasAttempts={hasAttempts} />
-
-        {/* Where you lose points */}
+        {/* Where you lose points — сразу под фокусом (ядро экрана) */}
         {weak.length > 0 && (
           <div className="dash-sect" style={S.card}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
@@ -208,6 +203,12 @@ export default async function Dashboard() {
             )}
           </div>
         )}
+
+        {/* Band readout */}
+        <BandReadout band={bandLatest} target={bandTarget} gap={gapNum} hasAttempts={hasAttempts} />
+
+        {/* This week — тонкая полоса momentum под диагностикой, не co-hero */}
+        <WeekCard streak={streak} xp={xp} rating={rating} rank={globalRank} week={week} />
 
         {/* Recent tests */}
         <div className="dash-sect-tight" style={S.card}>
@@ -281,7 +282,8 @@ function FocusCard({ weakest }: { weakest: Weak | null }) {
   );
 }
 
-/* This week — стрик + неделя активности + XP + место в глобальной лиге. */
+/* This week — momentum-полоса (streak | неделя активности | лига | continue),
+   демоут под диагностику. На телефоне сегменты стопкой, на десктопе в ряд. */
 function WeekCard({
   streak,
   xp,
@@ -293,54 +295,61 @@ function WeekCard({
   xp: number;
   rating: number;
   rank: number | null;
-  week: readonly { lab: string; state: "today" | "on" | "off" }[];
+  week: readonly { lab: string; name: string; state: "today" | "on" | "off" }[];
 }) {
   const dot = {
     today: { background: "var(--streak)" },
     on: { background: "color-mix(in oklab, var(--streak) 16%, var(--surface))" },
     off: { background: "var(--surface-inset)" },
   } as const;
+  // Доступное имя дня для скринридера; видимая буква S/M/T… остаётся aria-hidden.
+  const dayState = { today: "today", on: "practiced", off: "no practice" } as const;
   return (
-    <div className="dash-week" style={{ ...S.card, ...S.week }}>
-      <div style={S.label}>This week</div>
-      <div style={S.flameBlk}>
-        <span style={S.flameIc}>
-          <Icon name="flame" size={26} strokeWidth={2.2} />
-        </span>
-        <div>
-          <div style={S.flameNum}>{streak}</div>
-          <div style={S.flameSub}>day streak</div>
-        </div>
-        <div style={{ marginLeft: "auto", textAlign: "right" }}>
-          <div style={{ ...S.flameNum, fontSize: 24 }}>{fmt(xp)}</div>
-          <div style={S.flameSub}>XP</div>
-        </div>
-      </div>
-      <div style={S.weekRow}>
-        {week.map((w, i) => (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-            <div style={{ width: "100%", height: 32, borderRadius: 10, ...dot[w.state] }} />
-            <div style={S.weekLab}>{w.lab}</div>
+    <div className="dash-week" style={S.card}>
+      <div className="dash-week-row">
+        <div style={S.weekStats}>
+          <span style={S.flameIc}>
+            <Icon name="flame" size={24} strokeWidth={2.2} />
+          </span>
+          <div>
+            <div style={S.flameNum}>{streak}</div>
+            <div style={S.flameSub}>day streak</div>
           </div>
-        ))}
-      </div>
-      <Link href="/app/leaderboard" style={S.leagueRow}>
-        <span style={S.leagueIc}>
-          <Icon name="crown" size={20} strokeWidth={2.2} />
-        </span>
-        <span style={S.leagueName}>{rank != null ? "Global league" : "Unranked"}</span>
-        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ marginLeft: 6 }}>
+            <div style={{ ...S.flameNum, fontSize: 22 }}>{fmt(xp)}</div>
+            <div style={S.flameSub}>XP</div>
+          </div>
+        </div>
+        <div className="dash-week-dots">
+          {week.map((w, i) => (
+            <div
+              key={i}
+              aria-label={`${w.name}: ${dayState[w.state]}`}
+              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}
+            >
+              <div aria-hidden="true" style={{ width: "100%", height: 30, borderRadius: 9, ...dot[w.state] }} />
+              <div aria-hidden="true" style={S.weekLab}>{w.lab}</div>
+            </div>
+          ))}
+        </div>
+        <Link href="/app/leaderboard" style={S.weekLeague}>
+          <span style={S.leagueIcSm}>
+            <Icon name="crown" size={18} strokeWidth={2.2} />
+          </span>
+          <span style={S.leagueName}>{rank != null ? "Global league" : "Unranked"}</span>
           {rank != null ? (
             <span style={S.leagueRank}>#{rank}</span>
           ) : (
             <span style={S.leagueHint}>Take a rated test</span>
           )}
           <span style={S.leagueRating}>{rating}</span>
-        </span>
-      </Link>
-      <Button fullWidth icon="play" href="/app/reading" style={{ justifyContent: "center" }}>
-        Continue practice
-      </Button>
+        </Link>
+        <div className="dash-week-cta">
+          <Button icon="play" href="/app/reading" style={{ justifyContent: "center" }}>
+            Continue practice
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -360,7 +369,7 @@ function BandReadout({
   // Нет band → не рисуем фейковую шкалу: честный CTA в зависимости от истории.
   if (band == null) {
     return (
-      <div className="dash-band dash-bandblk" style={{ ...S.card, ...S.bandCard }}>
+      <div className="dash-band" style={{ ...S.card, ...S.bandCard }}>
         <div style={{ flex: "none" }}>
           <div style={S.bandLabel}>Your band</div>
           <div style={S.bandEmptyNum}>—</div>
@@ -389,7 +398,7 @@ function BandReadout({
         ? `${gap.toFixed(1)} band to go`
         : "Target reached 🎯";
   return (
-    <div className="dash-bandblk" style={{ ...S.card, ...S.bandCard }}>
+    <div style={{ ...S.card, ...S.bandCard }}>
       <div style={{ flex: "none" }}>
         <div style={S.bandLabel}>Your band</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
@@ -478,36 +487,38 @@ function TestRow({ a }: { a: AttemptRow }) {
 
 // Адаптив дашборда. Переключаемые grid/flex/padding/размеры — здесь, не inline
 // (иначе media-query проигрывает inline-стилю). База = мобильный, ≥768px = десктоп.
+// Адаптив дашборда. DOM-порядок = визуальный (одна колонка), поэтому НИКАКОГО
+// order/display:contents — фокус клавиатуры/скринридера идёт ровно как видно
+// (focus → weakness → band → week → recent). Переключаемые по брейкпоинту свойства
+// (padding / flex-direction / width) живут в классах, не inline.
 const DASH_CSS = `
 .dash-wrap{padding:20px 16px 48px}
 .dash-hi{font-size:24px;white-space:normal}
-/* Мобайл (база): .dash-hero растворяется (display:contents), его дети Focus/Week
-   становятся прямыми flex-элементами .dash-wrap, и порядок задаём через order —
-   сначала фокус и диагностика слабостей (ядро экрана), вовлечение (week) и история
-   уходят ниже, чтобы payload не был закопан под двумя hero-карточками на телефоне. */
-.dash-hero{display:contents}
-.dash-greet{order:0}
-.dash-focus{order:1;padding:24px}
-.dash-sect{order:2;padding:20px 16px}
-.dash-bandblk{order:3}
-.dash-week{order:4}
-.dash-sect-tight{order:5;padding:18px 16px 8px}
+.dash-focus{padding:24px}
+.dash-sect{padding:20px 16px}
+.dash-sect-tight{padding:18px 16px 8px}
 .dash-band{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
 .dash-more summary{list-style:none;cursor:pointer}
 .dash-more summary::-webkit-details-marker{display:none}
 .dash-more summary svg{transition:transform .2s ease}
 .dash-more[open] summary svg{transform:rotate(180deg)}
 @media (prefers-reduced-motion:reduce){.dash-more summary svg{transition:none}}
+/* This week — полоса momentum: телефон = сегменты стопкой, десктоп = в ряд. */
+.dash-week{padding:16px}
+.dash-week-row{display:flex;flex-direction:column;gap:16px;align-items:flex-start}
+.dash-week-dots{display:flex;gap:7px;width:100%}
+.dash-week-cta{display:flex;justify-content:center;width:100%}
 @media (min-width:768px){
   .dash-wrap{padding:32px 28px 56px}
   .dash-hi{font-size:30px;white-space:nowrap}
-  /* Десктоп: восстанавливаем 2-колоночный hero и DOM-порядок секций. */
-  .dash-hero{display:grid;grid-template-columns:1.45fr 1fr;gap:18px}
-  .dash-greet,.dash-focus,.dash-sect,.dash-bandblk,.dash-week,.dash-sect-tight{order:0}
   .dash-band{flex-direction:row;align-items:center;gap:32px}
   .dash-focus{padding:34px}
   .dash-sect{padding:28px 30px}
   .dash-sect-tight{padding:22px 30px 12px}
+  .dash-week{padding:14px 22px}
+  .dash-week-row{flex-direction:row;align-items:center;gap:22px}
+  .dash-week-dots{flex:1;width:auto;max-width:300px}
+  .dash-week-cta{width:auto;margin-left:auto}
 }
 `;
 
@@ -535,15 +546,13 @@ const S: Record<string, React.CSSProperties> = {
   hi: { fontFamily: "var(--font-ui)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "8px 0 0" },
   date: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", paddingBottom: 4 },
 
-  hero: { alignItems: "stretch" },
-
   /* Focus hero */
   focus: {
     borderRadius: "var(--radius-xl)",
     position: "relative",
     overflow: "hidden",
     // Затемнён до brand-active→deeper: светлейший стоп = violet-700, чтобы белый
-    // ink-текст (вкл. body@0.85 / eyebrow@0.82) держал WCAG AA (5.0–5.3:1).
+    // ink-текст (вкл. body@0.85 / eyebrow@0.92) держал WCAG AA (5.0–5.3:1).
     background: "linear-gradient(150deg, var(--brand-active), color-mix(in oklab, var(--brand-active) 78%, black))",
     boxShadow: "var(--shadow-md)",
     display: "flex",
@@ -566,24 +575,14 @@ const S: Record<string, React.CSSProperties> = {
   focusFill: { height: "100%", background: "#fff", borderRadius: "var(--radius-full)" },
   focusCta: { marginTop: "auto", paddingTop: 26 },
 
-  /* This week */
-  week: { padding: "24px", display: "flex", flexDirection: "column" },
-  label: {
-    fontFamily: "var(--font-mono)",
-    fontSize: "var(--text-xs)",
-    letterSpacing: "var(--tracking-caps)",
-    textTransform: "uppercase",
-    color: "var(--text-muted)",
-    fontWeight: 600,
-  },
-  flameBlk: { display: "flex", alignItems: "center", gap: 15, marginTop: 14 },
-  flameIc: { width: 50, height: 50, flex: "none", borderRadius: 15, display: "grid", placeItems: "center", background: "color-mix(in oklab, var(--streak) 15%, var(--surface))", color: "var(--streak)" },
-  flameNum: { fontFamily: "var(--font-mono)", fontSize: 32, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1, letterSpacing: "-0.02em" },
+  /* This week — momentum-полоса (segments: stats | dots | league | cta) */
+  weekStats: { display: "flex", alignItems: "center", gap: 14, flex: "none" },
+  flameIc: { width: 46, height: 46, flex: "none", borderRadius: 14, display: "grid", placeItems: "center", background: "color-mix(in oklab, var(--streak) 15%, var(--surface))", color: "var(--streak)" },
+  flameNum: { fontFamily: "var(--font-mono)", fontSize: 30, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1, letterSpacing: "-0.02em" },
   flameSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)", marginTop: 3 },
-  weekRow: { display: "flex", gap: 7, marginTop: 18 },
   weekLab: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", fontWeight: 600 },
-  leagueRow: { display: "flex", alignItems: "center", gap: 13, padding: "16px 0", margin: "18px 0", borderTop: "1px solid var(--border-subtle)", textDecoration: "none", color: "inherit" },
-  leagueIc: { width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)" },
+  weekLeague: { display: "flex", alignItems: "center", gap: 10, flex: "none", textDecoration: "none", color: "inherit", padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--surface-inset)" },
+  leagueIcSm: { width: 32, height: 32, flex: "none", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)" },
   leagueName: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 600, color: "var(--text-secondary)" },
   leagueRank: { fontFamily: "var(--font-mono)", fontSize: "var(--text-lg)", fontWeight: 600, color: "var(--text-primary)" },
   leagueRating: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--brand)", background: "var(--brand-subtle)", borderRadius: "var(--radius-full)", padding: "3px 9px" },
