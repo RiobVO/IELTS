@@ -306,12 +306,13 @@ describe("skinRunnerBrand — регресс на legacy-фикстурах (Ins
     expect(out).not.toContain("ielts-logo-img"); // Inspera-якоря в фикстуре нет — no-op
   });
 
-  it("reading.html: RE_LOGO_TEXT (не глоб.) снимает лишь ПЕРВЫЙ span.ielts-logo — второй цел", () => {
-    // Часовой: если Inspera-текст-якорь станет глобальным / начнёт матчить span,
-    // второй span.ielts-logo исчезнет и этот счётчик упадёт с 1 до 0.
+  it("reading.html: вордмарк заменён в ОБОИХ местах — стартовый экран и шапка", () => {
+    // Раньше замена была не-глобальной и чинила только первое вхождение (стартовый
+    // экран), а ВИДИМАЯ шапка экзамена оставалась чужим «IELTS» — дефект всплыл на
+    // CDI «Volume 8 Test 6» (2026-07-26), где его поймал import-guard.
     const out = skinRunnerBrand(readingFixture);
-    expect(out).toContain("bando-brand");
-    expect(out.match(/class="ielts-logo"/g)).toHaveLength(1);
+    expect(out).not.toContain('class="ielts-logo"');
+    expect(out.match(/bando-brand"/g) ?? []).toHaveLength(2);
   });
 });
 
@@ -623,3 +624,37 @@ describe("injectProgressBridge", () => {
 // гипотетический незнакомый bridge-вариант с тем же protocol-маркером ielts-submit.
 const SEND_MARKER_ONLY =
   "<script>(function(){function __send(ans){ parent.postMessage({ type: 'ielts-submit', answers: ans }, '*'); } window.__unknownHook = __send; })();</script>";
+
+// CDI «Volume 8 Test 6» (2026-07-26): вордмарк повторяется — в шапке и на стартовом
+// экране. Не-глобальная замена чинила только первый, второй уезжал на прод чужим
+// «IELTS»; поймал это import-guard (runnerBrandResidue), сообщением в бота.
+describe("skinRunnerBrand — повторяющийся вордмарк", () => {
+  const twice = `<!doctype html><html><head><title>T</title></head><body>
+<div id="startScreen"><div class="brand"><span class="ielts-logo" aria-label="IELTS">IELTS</span></div></div>
+<header class="header"><div class="header__logo"><div class="brand">
+<span class="ielts-logo" aria-label="IELTS">IELTS</span>
+<a class="brand-telegram" href="https://t.me/CD_materialss">tg</a>
+</div></div></header>
+</body></html>`;
+
+  it("заменяет ВСЕ вхождения вордмарка, не только первое", () => {
+    const out = skinRunnerBrand(twice);
+    expect(out).not.toContain("ielts-logo");
+    expect(out.match(/bando-brand"/g) ?? []).toHaveLength(2);
+  });
+
+  it("чужой канал срезан, остатков t.me нет", () => {
+    const out = skinRunnerBrand(twice);
+    expect(out).not.toContain("t.me");
+    expect(out).not.toContain("brand-telegram");
+  });
+
+  it("import-guard больше не жалуется на этот шаблон", () => {
+    expect(runnerBrandResidue(twice)).toEqual([]);
+  });
+
+  it("идемпотентно: повторный skin ничего не добавляет", () => {
+    const once = skinRunnerBrand(twice);
+    expect(skinRunnerBrand(once)).toBe(once);
+  });
+});

@@ -112,6 +112,10 @@ const RE_LOGO_IMG = /<img\b[^>]*class=["'][^"']*brand-logo[^"']*["'][^>]*>/gi;
 // (ReadinMarathons/Mock) — QA 2026-07-02. class обязан быть РОВНО (ielts-)logo,
 // чтобы обёртка div.header__logo не матчилась.
 const RE_LOGO_TEXT = /<(span|div)\b[^>]*class=["'](?:ielts-)?logo["'][^>]*>[\s\S]*?<\/\1>/i;
+// Тот же якорь для ЗАМЕНЫ: вордмарк встречается в шапке И на стартовом экране (CDI
+// `Volume 8 Test 6`, 2026-07-26 — два `span.ielts-logo`). Не-глобальная замена чинила
+// только первый, второй уезжал на прод чужим «IELTS» — import-guard это и поймал.
+const RE_LOGO_TEXT_ALL = /<(span|div)\b[^>]*class=["'](?:ielts-)?logo["'][^>]*>[\s\S]*?<\/\1>/gi;
 
 // Inspera live-desktop-shell (диагностика 2026-07-21): шапка несёт ДВА вхождения
 // каждого маркера — img.ielts-logo-img (внешний cloudfront-src .../ielts.svg → CSP
@@ -119,7 +123,7 @@ const RE_LOGO_TEXT = /<(span|div)\b[^>]*class=["'](?:ielts-)?logo["'][^>]*>[\s\S
 // в exam-header. RE_LOGO_IMG (brand-logo) картинку не матчит; RE_LOGO_TEXT не
 // глобальный → чинил бы только ПЕРВОЕ (скрытое startScreen) вхождение, видимая шапка
 // оставалась «IELTS». Отдельные ГЛОБАЛЬНЫЕ якоря, чтобы вычистить оба. Текст-якорь
-// сужен до <div> — span.ielts-logo (CDI, одиночный) остаётся за RE_LOGO_TEXT нетронут.
+// сужен до <div>: span-вариант закрывает RE_LOGO_TEXT_ALL, тоже глобальный.
 const RE_INSPERA_LOGO_IMG = /<img\b[^>]*class=["'][^"']*ielts-logo-img[^"']*["'][^>]*>/gi;
 const RE_INSPERA_LOGO_TEXT = /<div\b[^>]*class=["']ielts-logo["'][^>]*>[\s\S]*?<\/div>/gi;
 
@@ -157,7 +161,7 @@ export function skinRunnerBrand(html: string): string {
 
   if (hasText) {
     out = out.replace(RE_LOGO_IMG, ""); // картинку убираем, bando-знак ставим вместо текста
-    out = out.replace(RE_LOGO_TEXT, BANDO_BRAND);
+    out = out.replace(RE_LOGO_TEXT_ALL, BANDO_BRAND);
     // Inspera-семейство: снять битые cloudfront-картинки (оба вхождения) и заменить
     // оставшийся текст-фолбэк div.ielts-logo (RE_LOGO_TEXT снял лишь первый). No-op на
     // прочих семействах (нет ielts-logo-img / div.ielts-logo).
