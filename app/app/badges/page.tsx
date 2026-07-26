@@ -172,7 +172,7 @@ export default async function BadgesPage() {
             <Ring pct={earnedTotal / Math.max(1, badges.length)} size={64} color="var(--brand)" sw={5} />
             <b style={S.ringCountB}>
               <span data-countup={earnedTotal}>{earnedTotal}</span>
-              <small style={{ fontSize: 10, color: "var(--text-muted)" }}>/{badges.length}</small>
+              <small style={{ fontSize: 11, color: "var(--text-secondary)" }}>/{badges.length}</small>
             </b>
           </div>
         </div>
@@ -235,6 +235,7 @@ export default async function BadgesPage() {
             {/* Streak keeper */}
             <div style={{ ...S.motCard, ...S.streakCard }}>
               <span style={S.flameGlow} />
+              <h2 style={S.srOnly}>Streak</h2>
               <div style={S.streakTop}>
                 <span className="bdg-flame" style={S.flame}>
                   <Icon name="flame" size={26} strokeWidth={2.2} />
@@ -292,7 +293,7 @@ export default async function BadgesPage() {
               <div style={S.heatLegend} aria-hidden="true">
                 <span>Less</span>
                 {heatLevel.map((_, i) => (
-                  <span key={i} style={{ width: 11, height: 11, borderRadius: 3, flex: "none", background: heatColor(i) }} />
+                  <span key={i} style={{ width: 11, height: 11, borderRadius: 3, flex: "none", background: heatColor(i), boxShadow: "inset 0 0 0 1px var(--border)" }} />
                 ))}
                 <span>More</span>
               </div>
@@ -376,7 +377,7 @@ function Node({ n, current }: { n: TrackNode; current: boolean }) {
       : `${n.name} — locked${n.prog?.hint ? ` · ${n.prog.hint}` : ""}`;
   const state = earned ? "earned" : current ? "current" : "locked";
   return (
-    <div className="bdg-node" tabIndex={0} data-tip={tip} style={S.node}>
+    <div className="bdg-node" tabIndex={earned ? 0 : undefined} data-tip={tip} style={S.node}>
       <div style={{ ...S.medal, ...(earned ? S.medalEarned : current ? S.medalCurrent : S.medalLocked) }} data-pop={earned ? "" : undefined}>
         {current && n.prog && (
           <div style={{ position: "absolute", inset: -5 }}>
@@ -391,7 +392,7 @@ function Node({ n, current }: { n: TrackNode; current: boolean }) {
         )}
       </div>
       <span style={{ ...S.nodeName, ...(state === "locked" ? { color: "var(--text-muted)" } : null) }}>{n.name}</span>
-      <span style={{ ...S.nodeTag, color: earned ? "var(--text-link)" : current ? "var(--brand-active)" : "var(--text-muted)" }}>
+      <span style={{ ...S.nodeTag, color: earned ? "var(--text-link)" : current ? "var(--brand-active)" : "var(--text-secondary)" }}>
         {earned ? "Earned" : n.prog?.hint ?? "Locked"}
       </span>
     </div>
@@ -409,10 +410,10 @@ const BDG_CSS = `
 .bdg-heat-cell:hover{transform:scale(1.22)}
 .bdg-node{cursor:default}
 .bdg-node:focus-visible{outline:none;box-shadow:0 0 0 4px color-mix(in oklab,var(--brand) 28%,transparent);border-radius:var(--radius-md)}
-.bdg-tip{position:fixed;z-index:90;pointer-events:none;background:var(--slate-900);color:#fff;font-size:var(--text-xs);font-weight:600;line-height:1.4;padding:8px 11px;border-radius:10px;box-shadow:var(--shadow-lg);max-width:240px;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s var(--ease-out)}
+.bdg-tip{position:fixed;z-index:90;pointer-events:none;background:var(--surface-inverse);color:var(--surface-inverse-ink);font-size:var(--text-xs);font-weight:600;line-height:1.4;padding:8px 11px;border-radius:10px;box-shadow:var(--shadow-lg);max-width:240px;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s var(--ease-out)}
 .bdg-tip.show{opacity:1;transform:translateY(0)}
-.bdg-tip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--slate-900)}
-.bdg-tip.below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:var(--slate-900)}
+.bdg-tip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--surface-inverse)}
+.bdg-tip.below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:var(--surface-inverse)}
 @media (min-width:560px){ .bdg-hero{flex-wrap:nowrap;padding:24px 26px} }
 @media (min-width:900px){
   .bdg-wrap{padding:30px 28px 56px}
@@ -434,24 +435,24 @@ const S: Record<string, React.CSSProperties> = {
   ringCount: { position: "relative", width: 64, height: 64, flex: "none", display: "grid", placeItems: "center" },
   ringCountB: { position: "relative", fontFamily: "var(--font-mono)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--brand)", display: "flex", alignItems: "baseline", gap: 1 },
 
-  hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "linear-gradient(150deg, var(--slate-900), var(--slate-950))", color: "#fff", display: "flex", alignItems: "center", gap: 22, marginBottom: 26, boxShadow: "var(--shadow-lg)" },
+  hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "linear-gradient(150deg, var(--surface-inverse), var(--surface-inverse-deep))", color: "var(--surface-inverse-ink)", display: "flex", alignItems: "center", gap: 22, marginBottom: 26, boxShadow: "var(--shadow-lg)" },
   heroRing: { position: "relative", width: 96, height: 96, flex: "none", zIndex: 1 },
-  heroMedal: { position: "absolute", inset: 11, borderRadius: "50%", display: "grid", placeItems: "center", background: "rgba(255,255,255,0.08)", color: "#fff" },
-  heroEyebrow: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--violet-300)", fontWeight: 600 },
+  heroMedal: { position: "absolute", inset: 11, borderRadius: "50%", display: "grid", placeItems: "center", background: "rgba(255,255,255,0.08)", color: "var(--surface-inverse-ink)" },
+  heroEyebrow: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", letterSpacing: "var(--tracking-snug)", color: "var(--violet-300)", fontWeight: 600 },
   heroTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "7px 0 4px" },
   heroDesc: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.8)", lineHeight: 1.5 },
-  heroB: { color: "#fff", fontFamily: "var(--font-mono)" },
+  heroB: { color: "var(--surface-inverse-ink)", fontFamily: "var(--font-mono)" },
 
   track: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "18px 22px", marginBottom: 14, boxShadow: "var(--shadow-sm)" },
   trackHead: { display: "flex", alignItems: "center", gap: 10, marginBottom: 20 },
   trackIc: { width: 30, height: 30, flex: "none", borderRadius: 9, display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)" },
   trackName: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-base)", color: "var(--text-primary)" },
-  trackMeta: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
+  trackMeta: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-secondary)" },
 
   rail: { position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "0 6px" },
   railBg: { position: "absolute", left: 38, right: 38, top: 31, height: 4, borderRadius: "var(--radius-full)", background: "var(--surface-inset)" },
   railFill: { position: "absolute", left: 38, top: 31, height: 4, borderRadius: "var(--radius-full)", background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", transformOrigin: "left", boxShadow: "0 0 12px -2px color-mix(in oklab, var(--brand) 80%, transparent)", maxWidth: "calc(100% - 76px)" },
-  node: { position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: "33%", textAlign: "center" },
+  node: { position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: "33%", minWidth: 0, textAlign: "center" },
   medal: { width: 62, height: 62, borderRadius: "50%", display: "grid", placeItems: "center", position: "relative" },
   medalEarned: { background: "linear-gradient(165deg, var(--brand), var(--brand-active))", color: "var(--text-on-brand)", boxShadow: "var(--glow-brand)" },
   medalCurrent: { background: "var(--surface)", color: "var(--brand)" },
@@ -462,10 +463,10 @@ const S: Record<string, React.CSSProperties> = {
 
   side: { display: "flex", flexDirection: "column", gap: 14 },
   motCard: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-sm)" },
-  streakCard: { position: "relative", overflow: "hidden", background: "linear-gradient(165deg, var(--surface-premium), var(--surface-premium-deep))", color: "#fff", border: 0 },
+  streakCard: { position: "relative", overflow: "hidden", background: "linear-gradient(165deg, var(--surface-premium), var(--surface-premium-deep))", color: "var(--surface-premium-ink)", border: 0 },
   flameGlow: { position: "absolute", left: -40, top: -46, width: 170, height: 170, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--orange-500) 55%, transparent), transparent 70%)", pointerEvents: "none" },
   streakTop: { display: "flex", alignItems: "center", gap: 14, position: "relative", zIndex: 1 },
-  flame: { width: 54, height: 54, flex: "none", borderRadius: 14, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--orange-500), var(--streak))", color: "#fff", boxShadow: "0 0 30px -4px color-mix(in oklab, var(--orange-500) 85%, transparent)" },
+  flame: { width: 54, height: 54, flex: "none", borderRadius: 14, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--orange-500), var(--streak))", color: "var(--surface-premium-ink)", boxShadow: "0 0 30px -4px color-mix(in oklab, var(--orange-500) 85%, transparent)" },
   streakNum: { fontFamily: "var(--font-mono)", fontSize: 34, fontWeight: 700, lineHeight: 1 },
   streakLbl: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "rgba(255,255,255,0.72)", textTransform: "uppercase", letterSpacing: "var(--tracking-caps)", fontWeight: 700, marginTop: 3 },
   streakWeek: { display: "flex", gap: 6, margin: "16px 0 13px", position: "relative", zIndex: 1 },
@@ -473,14 +474,14 @@ const S: Record<string, React.CSSProperties> = {
   dayDot: { width: "100%", height: 30, borderRadius: 8, background: "rgba(255,255,255,0.10)", display: "grid", placeItems: "center" },
   dayDone: { background: "linear-gradient(165deg, var(--orange-500), var(--streak))" },
   dayToday: { background: "rgba(255,255,255,0.14)", boxShadow: "inset 0 0 0 1.5px var(--gold-500)" },
-  dayL: { fontFamily: "var(--font-ui)", fontSize: 9, color: "rgba(255,255,255,0.5)", fontWeight: 700 },
+  dayL: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "rgba(255,255,255,0.7)", fontWeight: 700 },
   streakNudge: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.92)", position: "relative", zIndex: 1, lineHeight: 1.45 },
   gold: { color: "var(--gold-500)" },
 
   heatTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--text-primary)", margin: "0 0 3px" },
-  heatSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "0 0 14px" },
+  heatSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-secondary)", margin: "0 0 14px" },
   heatGrid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 },
-  heatLegend: { display: "flex", alignItems: "center", gap: 4, marginTop: 10, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)" },
+  heatLegend: { display: "flex", alignItems: "center", gap: 4, marginTop: 10, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-secondary)" },
   heatFoot: { display: "flex", alignItems: "center", gap: 8, marginTop: 13, fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.4 },
   heatB: { color: "var(--text-primary)", fontFamily: "var(--font-mono)" },
 
@@ -488,5 +489,7 @@ const S: Record<string, React.CSSProperties> = {
   goalRing: { position: "relative", width: 72, height: 72, flex: "none", display: "grid", placeItems: "center" },
   goalRingB: { position: "relative", fontFamily: "var(--font-mono)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--brand)" },
   goalH: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--text-primary)", margin: "0 0 3px" },
-  goalP: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", margin: 0, lineHeight: 1.45 },
+  goalP: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", margin: 0, lineHeight: 1.45 },
+
+  srOnly: { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 },
 };

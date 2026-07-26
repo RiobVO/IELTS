@@ -12,7 +12,6 @@
 import { useEffect, useRef } from "react";
 
 const EASE_OUT = "cubic-bezier(0.16, 1, 0.3, 1)";
-const SPRING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
 const prefersReduced = () =>
   typeof window !== "undefined" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -76,7 +75,7 @@ export function BadgesMotion() {
         anims.push(
           el.animate(
             [{ transform: "scale(.4)", opacity: 0 }, { transform: "scale(1)", opacity: 1 }],
-            { duration: 500, delay: 260 + i * 60, easing: SPRING, fill: "backwards" },
+            { duration: 500, delay: 260 + i * 60, easing: EASE_OUT, fill: "backwards" },
           ),
         );
       });
@@ -85,7 +84,7 @@ export function BadgesMotion() {
         anims.push(
           el.animate(
             [{ transform: "scale(.5)", opacity: 0.35 }, { transform: "scale(1)", opacity: 1 }],
-            { duration: 380, delay: 320 + i * 13, easing: SPRING, fill: "backwards" },
+            { duration: 380, delay: 320 + i * 13, easing: EASE_OUT, fill: "backwards" },
           ),
         );
       });
