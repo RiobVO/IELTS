@@ -111,21 +111,27 @@ export default async function Dashboard() {
   const gapNum =
     bandLatest != null && bandTarget != null ? bandTarget - bandLatest : null;
 
-  // Week-dots — реальная активность за последние 7 дней (из submitted_at).
-  const activeDays = new Set(
-    attempts.filter((a) => a.submitted_at).map((a) => dayKey(new Date(a.submitted_at!))),
-  );
+  // Week-dots — реальная активность за последние 7 дней (из submitted_at). Считаем
+  // НЕ только факт практики, но и число тестов за день — для hover-подсказки столбца.
+  const dayCount = new Map<string, number>();
+  for (const a of attempts) {
+    if (!a.submitted_at) continue;
+    const k = dayKey(new Date(a.submitted_at));
+    dayCount.set(k, (dayCount.get(k) ?? 0) + 1);
+  }
   const now = new Date();
   const DOW = ["S", "M", "T", "W", "T", "F", "S"];
   const week = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (6 - i)),
     );
+    const count = dayCount.get(dayKey(d)) ?? 0;
     const isToday = i === 6;
     return {
       lab: DOW[d.getUTCDay()],
       name: d.toLocaleDateString("en-US", { weekday: "long" }),
-      state: isToday ? "today" : activeDays.has(dayKey(d)) ? "on" : "off",
+      count,
+      state: isToday ? "today" : count > 0 ? "on" : "off",
     } as const;
   });
 
@@ -312,6 +318,15 @@ function FocusCard({ weakest }: { weakest: Weak | null }) {
   );
 }
 
+/* Текст hover-подсказки дня: коротко (сам день читается из позиции столбца), чтобы
+   подсказка не уезжала за край вьюпорта на мобиле. */
+function weekdayTip(w: { name: string; count: number; state: "today" | "on" | "off" }): string {
+  const tests = (n: number) => `${n} test${n === 1 ? "" : "s"}`;
+  if (w.state === "today") return w.count > 0 ? `Today · ${tests(w.count)}` : "Today";
+  if (w.state === "on") return tests(w.count);
+  return "No practice";
+}
+
 /* This week — momentum-полоса (streak | неделя активности | лига | continue),
    демоут под диагностику. На телефоне сегменты стопкой, на десктопе в ряд. */
 function WeekCard({
@@ -325,7 +340,7 @@ function WeekCard({
   xp: number;
   rating: number;
   rank: number | null;
-  week: readonly { lab: string; name: string; state: "today" | "on" | "off" }[];
+  week: readonly { lab: string; name: string; count: number; state: "today" | "on" | "off" }[];
 }) {
   const dot = {
     today: { background: "var(--streak)" },
@@ -354,11 +369,16 @@ function WeekCard({
           {week.map((w, i) => (
             <div
               key={i}
+              className="weekday"
+              role="img"
               aria-label={`${w.name}: ${dayState[w.state]}`}
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}
             >
               <div aria-hidden="true" style={{ width: "100%", height: 30, borderRadius: 9, ...dot[w.state] }} />
               <div aria-hidden="true" style={S.weekLab}>{w.lab}</div>
+              {/* Hover-ридаут столбца: число тестов / today / rest — декоративный
+                  (aria-hidden), доступную версию несёт aria-label ячейки. */}
+              <span aria-hidden="true" className="daytip">{weekdayTip(w)}</span>
             </div>
           ))}
         </div>
@@ -552,6 +572,19 @@ const DASH_CSS = `
 .dash-week-row{display:flex;flex-direction:column;gap:16px;align-items:flex-start}
 .dash-week-dots{display:flex;gap:7px;width:100%}
 .dash-week-cta{display:flex;justify-content:center;width:100%}
+/* Hover-подсказка дня — брендовый dark-тултип над столбцом (mouse-enhancement;
+   SR читает aria-label ячейки). reduced-motion гасится глобально в base.css. */
+.weekday{position:relative}
+.daytip{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translate(-50%,4px);padding:6px 10px;border-radius:var(--radius-sm);background:var(--slate-900);color:#fff;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;white-space:nowrap;box-shadow:var(--shadow-md);opacity:0;visibility:hidden;pointer-events:none;z-index:5;transition:opacity var(--duration-fast) var(--ease-standard),transform var(--duration-fast) var(--ease-standard)}
+.daytip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--slate-900)}
+.weekday:hover .daytip{opacity:1;visibility:visible;transform:translate(-50%,0)}
+/* Крайние столбцы — якорим подсказку внутрь, иначе на мобиле она уедет за край. */
+.dash-week-dots .weekday:first-child .daytip{left:0;transform:translate(0,4px)}
+.dash-week-dots .weekday:first-child:hover .daytip{transform:translate(0,0)}
+.dash-week-dots .weekday:first-child .daytip::after{left:14px}
+.dash-week-dots .weekday:last-child .daytip{left:auto;right:0;transform:translate(0,4px)}
+.dash-week-dots .weekday:last-child:hover .daytip{transform:translate(0,0)}
+.dash-week-dots .weekday:last-child .daytip::after{left:auto;right:14px}
 @media (min-width:768px){
   .dash-wrap{padding:32px 28px 56px}
   .dash-hi{font-size:32px;white-space:nowrap}
