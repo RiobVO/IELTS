@@ -1,6 +1,5 @@
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { db } from "@/db";
 import { answerKey, attempt, badge, contentItem, question } from "@/db/schema";
 import { getProfile, getUser } from "@/lib/auth";
@@ -13,14 +12,10 @@ import { Badge } from "@/components/core/Badge";
 import { Icon } from "@/components/core/icons";
 import BadgeUnlock from "./BadgeUnlock";
 import { ShareResult } from "./ShareResult";
-import { AnimatedDonut, CountUp, RevealBars, FadeUp } from "./reveal";
+import { AnimatedDonut, CountUp, FadeUp } from "./reveal";
+import { AccuracyByType, AnswerKeyFilter, type AccRow, type AKItem, type AKType } from "./InsightReport";
 
 export const dynamic = "force-dynamic";
-
-const barColor = (pct: number) =>
-  pct < 45 ? "var(--error)" : pct < 70 ? "var(--warn)" : "var(--success)";
-const barText = (pct: number) =>
-  pct < 45 ? "var(--error-text)" : pct < 70 ? "var(--warn-text)" : "var(--success-text)";
 
 function fmtDuration(sec: number): string {
   if (sec < 60) return `${sec}s`;
@@ -189,6 +184,40 @@ export default async function ResultPage({
   const weakestType = weakest ? qtypeLabel(weakest[0]) : null;
   const shareHeadline = `I scored ${shareScore} on bando${weakestType ? ` — weakest type: ${weakestType}` : ""}. Train your IELTS Reading & Listening:`;
 
+  // Variant A — interactive insight data, built from the already-loaded grade
+  // result (no extra queries, perf-safe). The answer_key fields are attached
+  // ONLY when fullReview, so a gated user's HTML never carries them.
+  const accRows: AccRow[] = perType.map(([type, s], i) => ({
+    type,
+    label: qtypeLabel(type),
+    correct: s.correct,
+    total: s.total,
+    weak: i === 0,
+    missed: result.perQuestion.filter((q) => q.qtype === type && !q.correct).map((q) => q.number),
+    got: result.perQuestion.filter((q) => q.qtype === type && q.correct).map((q) => q.number),
+    practiseHref: `/app/reading?q_type=${encodeURIComponent(type)}`,
+  }));
+  const akTypes: AKType[] = perType.map(([type]) => ({ type, label: qtypeLabel(type) }));
+  const akItems: AKItem[] = result.perQuestion.map((q) => {
+    const m = meta.get(q.number)!;
+    const given = Array.isArray(q.given) ? q.given.join(", ") : q.given;
+    const base: AKItem = {
+      number: q.number,
+      qtype: q.qtype,
+      label: qtypeLabel(q.qtype),
+      correct: q.correct,
+      given: given && given !== "" ? given : "—",
+    };
+    if (!fullReview) return base;
+    const ev = m.evidence as { para: string; snippet: string } | null;
+    return {
+      ...base,
+      answer: (m.accept as string[]).join(" / "),
+      explanation: m.explanation,
+      evidence: ev?.snippet ?? null,
+    };
+  });
+
   return (
     <AppShell active="reading">
       <style>{RESULT_CSS}</style>
@@ -221,26 +250,61 @@ export default async function ResultPage({
           </div>
         )}
 
-        {/* Top metrics — donut + band + key metrics */}
-        <div className="res-metrics" style={S.metricsCard}>
-          <div style={S.donutBlock}>
-            <AnimatedDonut pct={correctPct} />
-            <div>
-              <div style={S.metricEyebrow}>{banded ? "Band score" : "Score"}</div>
-              <div style={S.bandBig}>
-                <CountUp
-                  value={banded ? Number(att.bandScore) : result.percent}
-                  decimals={banded ? 1 : 0}
-                  suffix={banded ? "" : "%"}
-                />
+        {/* Insight hero — the verdict: what's costing you the most, with score */}
+        <div style={S.hero}>
+          <div className="res-herogrid" style={S.heroGrid}>
+            <div style={S.scoreStack}>
+              <AnimatedDonut pct={correctPct} />
+              <div style={{ textAlign: "center" }}>
+                <div style={S.metricEyebrow}>{banded ? "Band score" : "Score"}</div>
+                <div style={S.bandBig}>
+                  <CountUp
+                    value={banded ? Number(att.bandScore) : result.percent}
+                    decimals={banded ? 1 : 0}
+                    suffix={banded ? "" : "%"}
+                  />
+                </div>
+                <div style={S.rawLine}>
+                  {result.rawScore}/{result.total} correct
+                </div>
               </div>
-              <div style={S.rawLine}>
-                {result.rawScore}/{result.total} correct
-              </div>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              {weakest ? (
+                <>
+                  <div style={S.verdictEy}>Your biggest gap</div>
+                  <h2 className="res-verdict" style={S.verdict}>
+                    <span style={S.verdictEm}>{qtypeLabel(weakest[0])}</span> is where you lose
+                    the most — {weakest[1].correct} of {weakest[1].total} right.
+                  </h2>
+                  <p style={S.verdictSub}>
+                    Closing one weak type lifts your score faster than grinding full tests.
+                    Start here, then re-test.
+                  </p>
+                  <div style={S.verdictCta}>
+                    <Button href={`/app/reading?q_type=${encodeURIComponent(weakest[0])}`} trailingIcon="arrow-right">
+                      Drill {qtypeLabel(weakest[0])}
+                    </Button>
+                    <Button variant="ghost" href="#answer-key">
+                      See all answers
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={S.verdictEy}>Your result</div>
+                  <h2 className="res-verdict" style={S.verdict}>
+                    You got {result.rawScore} of {result.total} right.
+                  </h2>
+                  <p style={S.verdictSub}>
+                    Review every question below to see exactly where your points went.
+                  </p>
+                </>
+              )}
             </div>
           </div>
           {metrics.length > 0 && (
-            <div className="res-mgrid" style={S.metricsGrid}>
+            <div className="res-herometrics" style={S.heroMetrics}>
               {metrics.map((m) => (
                 <div key={m.label} style={S.metricTile}>
                   <div style={{ ...S.metricValue, color: m.color }}>{m.value}</div>
@@ -251,34 +315,8 @@ export default async function ResultPage({
           )}
         </div>
 
-        {/* Accuracy by question type */}
-        {perType.length > 0 && (
-          <div className="res-card" style={S.card}>
-            <div style={S.cardTitle}>Accuracy by question type</div>
-            <RevealBars style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-              {perType.map(([type, s], i) => {
-                const p = Math.round((s.correct / s.total) * 100);
-                return (
-                  <div key={type} className="res-acc" style={S.accRow}>
-                    <div className="res-accname" style={S.accName}>
-                      <span style={S.accLabel}>{qtypeLabel(type)}</span>
-                      {i === 0 && <span data-weakest className="res-weakest" style={S.weakest}>WEAKEST</span>}
-                    </div>
-                    <div style={S.accTrack}>
-                      <div data-grow style={{ height: "100%", width: `${Math.max(p, 2)}%`, borderRadius: "var(--radius-full)", background: barColor(p) }} />
-                    </div>
-                    <span style={{ ...S.accScore, color: barText(p) }}>
-                      {s.correct}/{s.total}
-                    </span>
-                    <Link href={`/app/reading?q_type=${encodeURIComponent(type)}`} className="res-practise" style={S.practise}>
-                      <span className="res-practise-label">Practise </span>→
-                    </Link>
-                  </div>
-                );
-              })}
-            </RevealBars>
-          </div>
-        )}
+        {/* Accuracy by type — tap a type to reveal which questions you missed */}
+        {accRows.length > 0 && <AccuracyByType rows={accRows} />}
 
         {/* Recommendation */}
         {weakest && (
@@ -302,7 +340,7 @@ export default async function ResultPage({
             explanation and text evidence are revealed only when `fullReview` is
             true — currently free for all (REVIEW_OPEN). When the flag is closed,
             those props aren't rendered, so the answer_key never reaches the HTML. */}
-        <section style={{ marginTop: 18 }}>
+        <section id="answer-key" style={{ marginTop: 18, scrollMarginTop: 80 }}>
           <div style={S.reviewHead}>
             <h2 style={S.h2}>{fullReview ? "Full answer key" : "What you missed"}</h2>
             {fullReview ? (
@@ -313,27 +351,7 @@ export default async function ResultPage({
               <Badge tone="brand">Answers on Premium</Badge>
             )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {result.perQuestion.map((q) => {
-              const m = meta.get(q.number)!;
-              const given = Array.isArray(q.given) ? q.given.join(", ") : q.given;
-              const correctAns = (m.accept as string[]).join(" / ");
-              const ev = m.evidence as { para: string; snippet: string } | null;
-              return (
-                <ReviewCard
-                  key={q.number}
-                  number={q.number}
-                  qtype={q.qtype}
-                  correct={q.correct}
-                  given={given && given !== "" ? given : "—"}
-                  answer={correctAns}
-                  explanation={m.explanation}
-                  evidence={ev?.snippet ?? null}
-                  reveal={fullReview}
-                />
-              );
-            })}
-          </div>
+          <AnswerKeyFilter items={akItems} types={akTypes} />
         </section>
 
         {/* Gated path (flag closed): weak types + right/wrong are free above;
@@ -370,82 +388,15 @@ export default async function ResultPage({
   );
 }
 
-function ReviewCard({
-  number,
-  qtype,
-  correct,
-  given,
-  answer,
-  explanation,
-  evidence,
-  reveal,
-}: {
-  number: number;
-  qtype: string;
-  correct: boolean;
-  given: string;
-  answer: string;
-  explanation: string | null;
-  evidence: string | null;
-  /** Reveal the correct answer, explanation and evidence. When false they are
-   *  NOT rendered, so the answer_key never reaches a gated user's HTML. */
-  reveal: boolean;
-}) {
-  return (
-    <div style={S.rev}>
-      <div style={S.revHead}>
-        <span style={{ ...S.revMark, background: correct ? "var(--success-subtle)" : "var(--error-subtle)", color: correct ? "var(--success-text)" : "var(--error-text)" }}>
-          <Icon name={correct ? "check" : "x"} size={14} />
-        </span>
-        <span style={S.revNum}>Q{number}</span>
-        <span style={S.revType}>{qtypeLabel(qtype)}</span>
-      </div>
-      <div style={S.revLines}>
-        <div>
-          <span style={S.revLabel}>You </span>
-          <b style={{ color: correct ? "var(--success-text)" : "var(--error-text)" }}>{given}</b>
-        </div>
-        {!correct && reveal && (
-          <div>
-            <span style={S.revLabel}>Answer </span>
-            <b style={{ color: "var(--text-primary)" }}>{answer}</b>
-          </div>
-        )}
-      </div>
-      {reveal && explanation && (
-        <div style={S.expl}>
-          <Icon name="lightbulb" size={14} style={{ color: "var(--warn-text)", marginTop: 2, flex: "none" }} />
-          <span>{explanation}</span>
-        </div>
-      )}
-      {reveal && evidence && (
-        <div style={S.evidence}>
-          <Icon name="book-open" size={15} style={{ color: "var(--reading-muted)", marginTop: 2, flex: "none" }} />
-          <span>“{evidence}”</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Адаптив result. База = мобильный (метрики стек, узкая accName, practise → стрелка);
-// ≥560px = десктоп. Переключаемые grid/border/width — в классах, не inline.
+// Адаптив result-героя. База = мобильный (донат-стек над вердиктом); ≥620px =
+// две колонки. Переключаемые grid-свойства живут в классах, не inline (иначе
+// inline перебивает media-query — responsive-inline-class invariant).
 const RESULT_CSS = `
-.res-card{padding:18px 16px}
-.res-metrics{grid-template-columns:1fr;gap:18px;padding:18px 16px}
-.res-mgrid{border-top:1px solid var(--border-subtle);padding-top:16px}
-.res-acc{gap:10px}
-.res-accname{width:96px}
-.res-practise-label{display:none}
-.res-weakest{display:none}
-@media (min-width:560px){
-  .res-card{padding:20px 24px}
-  .res-metrics{grid-template-columns:auto 1fr;gap:22px;padding:22px}
-  .res-mgrid{border-top:none;padding-top:0;border-left:1px solid var(--border-subtle);padding-left:22px}
-  .res-acc{gap:14px}
-  .res-accname{width:200px}
-  .res-practise-label{display:inline}
-  .res-weakest{display:inline-flex}
+.res-herogrid{grid-template-columns:1fr;gap:18px}
+.res-herometrics{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
+.res-verdict{text-wrap:balance}
+@media (min-width:620px){
+  .res-herogrid{grid-template-columns:auto 1fr;gap:26px}
 }
 `;
 
@@ -457,43 +408,29 @@ const S: Record<string, React.CSSProperties> = {
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
   repSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
 
-  metricsCard: { display: "grid", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", alignItems: "center", marginBottom: 14 },
-  donutBlock: { display: "flex", alignItems: "center", gap: 20 },
+  // Insight hero
+  hero: { position: "relative", overflow: "hidden", background: "radial-gradient(120% 140% at 0% 0%, var(--violet-100), transparent 55%), var(--surface)", border: "1px solid var(--brand-border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-md)", padding: 24, marginBottom: 14 },
+  heroGrid: { display: "grid", alignItems: "center" },
+  scoreStack: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10 },
+  verdictEy: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand)", marginBottom: 8 },
+  verdict: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", lineHeight: 1.16, margin: "0 0 8px", color: "var(--text-primary)" },
+  verdictEm: { color: "var(--brand)" },
+  verdictSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", maxWidth: "46ch", margin: "0 0 16px", lineHeight: 1.5 },
+  verdictCta: { display: "flex", gap: 10, flexWrap: "wrap" },
+  heroMetrics: { display: "grid", gap: 10, marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border-subtle)" },
+
   metricEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
   bandBig: { fontFamily: "var(--font-mono)", fontSize: 46, fontWeight: 600, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.02em" },
   rawLine: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 2 },
-  metricsGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   metricTile: { background: "var(--surface-inset)", borderRadius: 12, padding: "12px 14px" },
   metricValue: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xl)", fontWeight: 600 },
   metricLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", fontWeight: 600, marginTop: 2 },
-
-  card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-sm)", marginBottom: 14 },
-  cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", marginBottom: 14 },
-  accRow: { display: "flex", alignItems: "center" },
-  // Колонка имени держит фикс-ширину (бары всех строк выровнены). Подпись —
-  // сжимаемый ellipsis-span (minWidth:0), бейдж WEAKEST — flex:none, поэтому
-  // бейдж никогда не режется, а сокращается подпись.
-  accName: { flex: "none", display: "flex", alignItems: "center", gap: 7, minWidth: 0, overflow: "hidden", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)" },
-  accLabel: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  weakest: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--error-text)", background: "var(--error-subtle)", padding: "2px 6px", borderRadius: "var(--radius-full)", flex: "none" },
-  accTrack: { flex: 1, height: 9, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
-  accScore: { width: 44, flex: "none", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 600 },
-  practise: { flex: "none", textAlign: "right", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
 
   recoCard: { display: "flex", alignItems: "center", gap: 14, border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", borderRadius: "var(--radius-xl)", padding: "16px 20px", boxShadow: "var(--shadow-solid)", marginBottom: 14, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
   recoIcon: { flex: "none", color: "var(--brand)" },
 
   reviewHead: { display: "flex", alignItems: "center", gap: 8, margin: "0 0 12px" },
   h2: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 800, margin: 0, color: "var(--text-primary)" },
-  rev: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "var(--space-4)" },
-  revHead: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 },
-  revMark: { width: 24, height: 24, borderRadius: 6, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" },
-  revNum: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
-  revType: { fontFamily: "var(--font-reading)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
-  revLines: { display: "flex", gap: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", marginBottom: 10 },
-  revLabel: { color: "var(--text-muted)" },
-  expl: { display: "flex", gap: 8, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: "var(--leading-relaxed)" },
-  evidence: { marginTop: 10, display: "flex", gap: 8, fontFamily: "var(--font-reading)", fontSize: "var(--text-sm)", color: "var(--reading-text)", background: "var(--reading-surface)", border: "1px solid var(--reading-rule)", borderRadius: "var(--radius-md)", padding: "10px 12px" },
 
   upsell: { marginTop: 18, border: "1px solid var(--brand-border)", background: "var(--brand-subtle)", borderRadius: "var(--radius-xl)", padding: "1.4rem 1.3rem", textAlign: "center" },
   upsellTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 800, color: "var(--text-link)" },
