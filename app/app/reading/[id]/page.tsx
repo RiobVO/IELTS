@@ -42,7 +42,7 @@ export default async function ReadingTestPage({
     getProfile(),
     supabase
       .from("passage")
-      .select('title,body_html,"order",audio_path')
+      .select('title,body_html,"order",audio_path,questions_html')
       .eq("content_item_id", id)
       .order("order"),
     supabase
@@ -61,6 +61,15 @@ export default async function ReadingTestPage({
     body_html: normalizePassageHtml((p as { body_html: string }).body_html, test.title),
   }));
   const questionsData = questionsRes.data;
+
+  // Verbatim question-panel HTML (real-IELTS render). Используем, только если ВСЕ
+  // пассажи его несут (иначе — фоллбэк на атомизированный список). Listening и
+  // старые/непокрытые тесты → null → текущий рендер.
+  const qHtmlParts = (passagesRes.data ?? []).map(
+    (p) => (p as { questions_html: string | null }).questions_html,
+  );
+  const questionsHtml =
+    qHtmlParts.length > 0 && qHtmlParts.every(Boolean) ? qHtmlParts.join("\n") : null;
 
   // Access gate (§4.8): a Basic user must not even reach the exam for a
   // Premium/Ultra test. effectiveTier downgrades an expired premium to basic,
@@ -116,6 +125,7 @@ export default async function ReadingTestPage({
       title={test.title}
       category={test.category}
       initialAnnotations={annotations as never}
+      questionsHtml={questionsHtml}
     />
   );
 }

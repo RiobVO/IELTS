@@ -8,6 +8,7 @@ import { Icon } from "@/components/core/icons";
 import { AudioPlayer } from "@/components/exam/AudioPlayer";
 import { ExamTimer } from "@/components/exam/ExamTimer";
 import { QuestionNavigator, type NavPart } from "@/components/exam/QuestionNavigator";
+import { QuestionHtml } from "@/components/exam/QuestionHtml";
 import { PassagePane, type AnnotationRow } from "./PassagePane";
 import { saveProgress, submitAttempt } from "./actions";
 
@@ -124,6 +125,7 @@ export default function ExamRunner({
   title,
   category,
   initialAnnotations,
+  questionsHtml,
 }: {
   attemptId: string;
   contentItemId: string;
@@ -137,6 +139,8 @@ export default function ExamRunner({
   category: string;
   /** Reader highlights/notes for this test (W2-1) — reading mode only. */
   initialAnnotations?: AnnotationRow[];
+  /** Verbatim question-panel HTML (real-IELTS render); null → atomized fallback. */
+  questionsHtml?: string | null;
 }) {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>(initialAnswers);
   // Флаги «отметить на потом» — клиентские/эфемерные (review aid, не персистятся).
@@ -481,6 +485,18 @@ export default function ExamRunner({
       );
   }
 
+  const questionList = questions.map((q) => (
+    <QuestionBlock
+      key={q.id}
+      q={q}
+      value={answers[String(q.number)] ?? ""}
+      flagged={!!flags[String(q.number)]}
+      onAnswer={set}
+      onToggle={toggle}
+      onFlag={flag}
+    />
+  ));
+
   return (
     <div className="exam-cambridge" style={S.shell}>
       <style>{READING_CSS}</style>
@@ -552,17 +568,7 @@ export default function ExamRunner({
               <div style={S.sheetHead}>
                 <span style={S.sheetHint}>Answer as you listen — the recording plays once.</span>
               </div>
-              {questions.map((q) => (
-                <QuestionBlock
-                  key={q.id}
-                  q={q}
-                  value={answers[String(q.number)] ?? ""}
-                  flagged={!!flags[String(q.number)]}
-                  onAnswer={set}
-                  onToggle={toggle}
-                  onFlag={flag}
-                />
-              ))}
+              {questionList}
             </div>
           </div>
         </>
@@ -593,17 +599,11 @@ export default function ExamRunner({
             {/* Questions pane (навигатор вынесен в нижнюю полосу) */}
             <div className="exam-pane exam-pane-q" style={S.qPane}>
               <div ref={qScrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 20px 28px" }}>
-              {questions.map((q) => (
-                <QuestionBlock
-                  key={q.id}
-                  q={q}
-                  value={answers[String(q.number)] ?? ""}
-                  flagged={!!flags[String(q.number)]}
-                  onAnswer={set}
-                  onToggle={toggle}
-                  onFlag={flag}
-                />
-              ))}
+              {questionsHtml ? (
+                <QuestionHtml html={questionsHtml} answers={answers} onAnswer={set} onToggle={toggle} fallback={questionList} />
+              ) : (
+                questionList
+              )}
             </div>
           </div>
         </div>
