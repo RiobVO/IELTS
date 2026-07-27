@@ -26,6 +26,8 @@ describe("canonQuestionType", () => {
     ["Diagram Labelling", "diagram_label"],
     ["Plan / Map / Diagram Labelling", "map_labelling"],
     ["Map Labelling", "map_labelling"],
+    ["Map/Plan labelling", "map_labelling"],
+    ["Plan/Map labelling", "map_labelling"],
     ["Form Completion", "form_completion"],
     ["Short Answer", "short_answer"],
     ["Short Answer Questions", "short_answer"],
