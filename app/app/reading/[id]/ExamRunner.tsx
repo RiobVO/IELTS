@@ -25,6 +25,36 @@ interface Passage {
   order: number;
 }
 
+type ExamMode = "practice" | "mock";
+interface StoredMode {
+  mode: ExamMode;
+  startedAt: number;
+  deadline: number | null;
+}
+const MODE_KEY = (id: string) => `bando-exam-mode:${id}`;
+/** Режим теста (Practice/Mock) — клиентский, переживает refresh через localStorage,
+ *  keyed по attemptId. Хранилище может быть недоступно (private mode) → мягкая деградация. */
+function readStoredMode(id: string): StoredMode | null {
+  try {
+    const raw = localStorage.getItem(MODE_KEY(id));
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<StoredMode>;
+    if ((v.mode === "practice" || v.mode === "mock") && typeof v.startedAt === "number") {
+      return { mode: v.mode, startedAt: v.startedAt, deadline: typeof v.deadline === "number" ? v.deadline : null };
+    }
+  } catch {
+    /* storage недоступен / битый JSON — режим просто не восстановим */
+  }
+  return null;
+}
+function writeStoredMode(id: string, v: StoredMode): void {
+  try {
+    localStorage.setItem(MODE_KEY(id), JSON.stringify(v));
+  } catch {
+    /* storage недоступен (private mode/quota) — режим не сохранится, не критично */
+  }
+}
+
 function fmt(sec: number): string {
   const s = Math.max(0, Math.floor(sec));
   const m = Math.floor(s / 60);
@@ -98,6 +128,21 @@ export default function ExamRunner({
   const [pending, startSubmit] = useTransition();
   const qScrollRef = useRef<HTMLDivElement>(null);
 
+  const isListening = !!audioSrc;
+  // Practice/Mock — клиентский режим (только Reading). Mock в БД НЕ пишется
+  // (ensureAttempt не трогаем): серверное время от started_at — истина; Mock-таймер и
+  // авто-сабмит чисто клиентские (авто-сабмит зовёт обычный submitAttempt).
+  const [hydrated, setHydrated] = useState(false);
+  const [examMode, setExamMode] = useState<ExamMode>("practice");
+  const [started, setStarted] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [practiceSeconds, setPracticeSeconds] = useState(0);
+  const [mockRemaining, setMockRemaining] = useState<number | null>(null);
+  const startedAtRef = useRef<number | null>(null);
+  const deadlineRef = useRef<number | null>(null);
+  const autoSubmitted = useRef(false);
+  const submitRef = useRef<() => void>(() => {});
+
   // Listening: раннер владеет <audio> и часами; AudioPlayer — контролируемый presentational.
   const audioRef = useRef<HTMLAudioElement>(null);
   const [audioPlaying, setAudioPlaying] = useState(false);
@@ -165,10 +210,157 @@ export default function ExamRunner({
     if (el && wrap) wrap.scrollTo({ top: el.offsetTop - 14, behavior: "smooth" });
   };
 
-  const isListening = !!audioSrc;
+  // submitRef держит свежий submit (с актуальными answers) для авто-сабмита из таймера.
+  useEffect(() => {
+    submitRef.current = submit;
+  });
+
+  // Гидрация режима из localStorage (после mount — SSR не знает storage). Stored →
+  // продолжаем в том же режиме (refresh не сбрасывает Mock-дедлайн, реплея нет); есть
+  // прогресс без режима → resume в practice без start-screen; иначе → показать start-screen.
+  useEffect(() => {
+    if (isListening) {
+      setHydrated(true);
+      return;
+    }
+    const stored = readStoredMode(attemptId);
+    if (stored) {
+      setExamMode(stored.mode);
+      startedAtRef.current = stored.startedAt;
+      deadlineRef.current = stored.deadline;
+      if (stored.mode === "practice") {
+        setPracticeSeconds(Math.max(0, Math.floor((Date.now() - stored.startedAt) / 1000)));
+      }
+      setStarted(true);
+    } else if (Object.keys(initialAnswers).length > 0) {
+      startedAtRef.current = Date.now();
+      setStarted(true);
+    }
+    setHydrated(true);
+  }, [attemptId, isListening, initialAnswers]);
+
+  // Practice: счёт вверх, замирает на паузе (интервал гейтится paused).
+  useEffect(() => {
+    if (isListening || !started || examMode !== "practice" || paused) return;
+    const t = setInterval(() => setPracticeSeconds((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [isListening, started, examMode, paused]);
+
+  // Mock: обратный отсчёт от wall-clock дедлайна (refresh-корректно).
+  useEffect(() => {
+    if (isListening || !started || examMode !== "mock") return;
+    const tick = () => {
+      const dl = deadlineRef.current;
+      if (dl != null) setMockRemaining(Math.max(0, Math.round((dl - Date.now()) / 1000)));
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [isListening, started, examMode]);
+
+  // Mock авто-сабмит при 0 (единожды). Клиент лишь инициирует — сервер считает время и грейдит.
+  useEffect(() => {
+    if (examMode === "mock" && started && mockRemaining === 0 && !autoSubmitted.current) {
+      autoSubmitted.current = true;
+      submitRef.current();
+    }
+  }, [examMode, started, mockRemaining]);
+
+  const beginPractice = () => {
+    const now = Date.now();
+    startedAtRef.current = now;
+    deadlineRef.current = null;
+    autoSubmitted.current = false;
+    setExamMode("practice");
+    setPaused(false);
+    setPracticeSeconds(0);
+    setStarted(true);
+    writeStoredMode(attemptId, { mode: "practice", startedAt: now, deadline: null });
+  };
+  const beginMock = (minutes: number) => {
+    const now = Date.now();
+    const deadline = now + minutes * 60_000;
+    startedAtRef.current = now;
+    deadlineRef.current = deadline;
+    autoSubmitted.current = false;
+    setExamMode("mock");
+    setMockRemaining(minutes * 60);
+    setStarted(true);
+    writeStoredMode(attemptId, { mode: "mock", startedAt: now, deadline });
+  };
+  const togglePause = () => setPaused((p) => !p);
+  const restart = () => {
+    if (typeof window !== "undefined" && !window.confirm("Restart this test? Your answers and timing will be cleared.")) return;
+    setAnswers({});
+    setFlags({});
+    setCurrent(questions[0]?.number ?? 1);
+    const now = Date.now();
+    startedAtRef.current = now;
+    autoSubmitted.current = false;
+    setPaused(false);
+    setPracticeSeconds(0);
+    writeStoredMode(attemptId, { mode: "practice", startedAt: now, deadline: null });
+  };
+  const mockTotalSeconds = () => {
+    const dl = deadlineRef.current;
+    const st = startedAtRef.current;
+    return dl != null && st != null ? Math.max(1, Math.round((dl - st) / 1000)) : 60;
+  };
+
   const meta = `${categoryLabel(category)} · ${questions.length} questions`;
 
   const partGroups = buildParts(questions, answers, flags);
+
+  const defaultMockMinutes =
+    durationSeconds != null
+      ? Math.max(5, Math.round(durationSeconds / 60))
+      : questions.length >= 40
+        ? 60
+        : questions.length >= 27
+          ? 40
+          : 20;
+  const mockPresets = Array.from(new Set([20, 40, 60, defaultMockMinutes])).sort((a, b) => a - b);
+
+  // Таймер шапки: Reading после гидрации/старта — по режиму; Listening и до гидрации —
+  // прежнее поведение (durationSeconds ? обратный отсчёт : счёт вверх).
+  let timerArea: React.ReactNode;
+  if (!isListening && hydrated && started) {
+    if (examMode === "mock") {
+      const total = mockTotalSeconds();
+      timerArea = (
+        <>
+          <span style={badge(true)}>Mock</span>
+          <ExamTimer remainingSeconds={mockRemaining ?? total} totalSeconds={total} />
+        </>
+      );
+    } else {
+      timerArea = (
+        <>
+          <span style={badge(false)}>Practice</span>
+          <span style={S.clock}>
+            <Icon name={paused ? "pause" : "clock"} size={18} style={{ color: "var(--text-muted)" }} /> {fmt(practiceSeconds)}
+          </span>
+          <button type="button" onClick={togglePause} aria-label={paused ? "Resume timer" : "Pause timer"} title={paused ? "Resume" : "Pause"} style={S.ctrlBtn}>
+            <Icon name={paused ? "play" : "pause"} size={16} />
+          </button>
+          <button type="button" onClick={restart} aria-label="Restart test" title="Restart test" style={S.ctrlBtnText}>
+            Restart
+          </button>
+        </>
+      );
+    }
+  } else if (!isListening && hydrated && !started) {
+    timerArea = null; // start-screen открыт — таймер не показываем
+  } else {
+    timerArea =
+      durationSeconds != null && remaining != null ? (
+        <ExamTimer remainingSeconds={remaining} totalSeconds={durationSeconds} />
+      ) : (
+        <span style={S.clock}>
+          <Icon name="clock" size={18} style={{ color: "var(--text-muted)" }} /> {fmt(elapsed)}
+        </span>
+      );
+  }
 
   return (
     <div style={S.shell}>
@@ -184,13 +376,7 @@ export default function ExamRunner({
           <div style={S.topMeta}>{meta}</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
-          {durationSeconds != null && remaining != null ? (
-            <ExamTimer remainingSeconds={remaining} totalSeconds={durationSeconds} />
-          ) : (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", background: "var(--surface-raised)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "var(--text-lg)", fontWeight: 500, color: "var(--text-primary)" }}>
-              <Icon name="clock" size={18} style={{ color: "var(--text-muted)" }} /> {fmt(elapsed)}
-            </span>
-          )}
+          {timerArea}
           <Button trailingIcon="arrow-right" onClick={submit} loading={pending}>
             Submit
           </Button>
@@ -301,6 +487,17 @@ export default function ExamRunner({
         total={questions.length}
         onJump={jump}
       />
+
+      {!isListening && hydrated && !started && (
+        <StartScreen
+          title={title}
+          meta={meta}
+          defaultMinutes={defaultMockMinutes}
+          presets={mockPresets}
+          onPractice={beginPractice}
+          onMock={beginMock}
+        />
+      )}
     </div>
   );
 }
@@ -341,6 +538,36 @@ const tabBtn = (active: boolean): React.CSSProperties => ({
   fontSize: "var(--text-sm)",
   fontWeight: 700,
   cursor: "pointer",
+  transition: "var(--transition-colors)",
+});
+
+// Бейдж режима (Practice/Mock) в шапке.
+const badge = (mock: boolean): React.CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "5px 10px",
+  borderRadius: "var(--radius-sm)",
+  background: mock ? "var(--brand-subtle)" : "var(--surface-hover)",
+  color: mock ? "var(--brand)" : "var(--text-secondary)",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-2xs)",
+  fontWeight: 800,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+});
+
+// Кнопка-пресет минут на start-screen (Mock).
+const presetBtn = (sel: boolean): React.CSSProperties => ({
+  flex: 1,
+  height: 38,
+  borderRadius: "var(--radius-sm)",
+  cursor: "pointer",
+  border: `1.5px solid ${sel ? "var(--brand)" : "var(--border)"}`,
+  background: sel ? "var(--brand-subtle)" : "var(--surface-raised)",
+  color: sel ? "var(--text-primary)" : "var(--text-secondary)",
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--text-sm)",
+  fontWeight: 600,
   transition: "var(--transition-colors)",
 });
 
@@ -477,6 +704,84 @@ const QuestionBlock = memo(function QuestionBlock({
   );
 });
 
+/**
+ * StartScreen — выбор режима перед стартом (Reading): Practice (без таймера, пауза/рестарт)
+ * или Mock (обратный отсчёт + авто-сабмит). Overlay поверх раннера; показывается только на
+ * свежей попытке (resume/refresh минует его — режим восстановлен из localStorage).
+ */
+function StartScreen({
+  title,
+  meta,
+  defaultMinutes,
+  presets,
+  onPractice,
+  onMock,
+}: {
+  title: string;
+  meta: string;
+  defaultMinutes: number;
+  presets: number[];
+  onPractice: () => void;
+  onMock: (minutes: number) => void;
+}) {
+  const [minutes, setMinutes] = useState(defaultMinutes);
+  return (
+    <div style={SS.overlay} role="dialog" aria-modal="true" aria-label="Choose how to take this test">
+      <div style={SS.panel}>
+        <span style={SS.kicker}>Ready to begin</span>
+        <h1 style={SS.startTitle}>{title}</h1>
+        <p style={SS.startMeta}>{meta}</p>
+        <div style={SS.cards}>
+          <div style={SS.card}>
+            <span style={SS.cardIcon}>
+              <Icon name="pencil-check" size={22} />
+            </span>
+            <div style={SS.cardTitle}>Practice</div>
+            <p style={SS.cardDesc}>Untimed. Pause, restart, and work at your own pace — no exam pressure.</p>
+            <Button variant="secondary" fullWidth trailingIcon="arrow-right" onClick={onPractice}>
+              Start practice
+            </Button>
+          </div>
+          <div style={SS.card}>
+            <span style={{ ...SS.cardIcon, background: "var(--brand-subtle)", color: "var(--brand)" }}>
+              <Icon name="clock" size={22} />
+            </span>
+            <div style={SS.cardTitle}>Mock exam</div>
+            <p style={SS.cardDesc}>Timed countdown that auto-submits at zero — just like the real test.</p>
+            <div style={SS.presets} role="group" aria-label="Time limit in minutes">
+              {presets.map((m) => {
+                const sel = m === minutes;
+                return (
+                  <button key={m} type="button" onClick={() => setMinutes(m)} aria-pressed={sel} style={presetBtn(sel)}>
+                    {m} min
+                  </button>
+                );
+              })}
+            </div>
+            <Button variant="primary" fullWidth trailingIcon="arrow-right" onClick={() => onMock(minutes)}>
+              Start mock · {minutes} min
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SS: Record<string, React.CSSProperties> = {
+  overlay: { position: "fixed", inset: 0, zIndex: 50, display: "grid", placeItems: "center", padding: 20, background: "color-mix(in oklab, var(--bg-base) 82%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" },
+  panel: { width: "100%", maxWidth: 620, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-lg)", padding: "28px 26px" },
+  kicker: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" },
+  startTitle: { margin: "8px 0 4px", fontFamily: "var(--font-reading)", fontSize: "var(--text-2xl)", fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.15 },
+  startMeta: { margin: "0 0 20px", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
+  cards: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 },
+  card: { display: "flex", flexDirection: "column", gap: 9, padding: 18, borderRadius: "var(--radius-lg)", border: "1.5px solid var(--border)", background: "var(--surface-raised)" },
+  cardIcon: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: "var(--radius-md)", background: "var(--surface-hover)", color: "var(--text-secondary)" },
+  cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 800, color: "var(--text-primary)" },
+  cardDesc: { margin: 0, flex: 1, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: 1.5 },
+  presets: { display: "flex", gap: 6 },
+};
+
 const READING_CSS = `
 .bando-reading{font-family:var(--font-reading);color:var(--reading-text);font-size:var(--text-base);line-height:var(--leading-relaxed)}
 .bando-reading p{margin:0 0 1em}
@@ -529,6 +834,10 @@ const S: Record<string, React.CSSProperties> = {
 
   // width/flex/display → .exam-pane-q (адаптив)
   qPane: { flexDirection: "column", background: "var(--bg-base)" },
+
+  clock: { display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", background: "var(--surface-raised)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "var(--text-lg)", fontWeight: 500, color: "var(--text-primary)" },
+  ctrlBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface-raised)", color: "var(--text-secondary)", cursor: "pointer", transition: "var(--transition-colors)" },
+  ctrlBtnText: { display: "inline-flex", alignItems: "center", height: 38, padding: "0 12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface-raised)", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, transition: "var(--transition-colors)" },
 
   card: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "var(--space-4)", boxShadow: "var(--shadow-solid)" },
   qNum: { fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: "var(--text-sm)", width: 28, height: 28, borderRadius: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", marginTop: 1 },
