@@ -38,7 +38,7 @@ export class RegradeRequiredError extends Error {
  */
 export async function persistTest(
   parsed: ParsedTest,
-  opts: { sourceFilePath?: string; createdBy?: string } = {},
+  opts: { sourceFilePath?: string; createdBy?: string; runnerHtml?: string } = {},
 ): Promise<string> {
   return db.transaction(async (tx) => {
     if (opts.sourceFilePath) {
@@ -78,6 +78,7 @@ export async function persistTest(
         bandType: parsed.bandType as ContentInsert["bandType"],
         questionTypes: parsed.questionTypes,
         bandScale: parsed.bandScale, // raw->band table for Full tests; null otherwise
+        runnerHtml: opts.runnerHtml ?? null,
         status: "draft",
         createdBy: opts.createdBy ?? null,
       })
