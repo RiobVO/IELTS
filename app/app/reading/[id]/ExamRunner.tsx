@@ -55,6 +55,27 @@ function writeStoredMode(id: string, v: StoredMode): void {
   }
 }
 
+// Listening: окно переноса/проверки ответов после конца записи (как в Cambridge-симуляторе).
+const TRANSFER_SECONDS = 2 * 60;
+const AUDIO_KEY = (id: string) => `bando-audio-start:${id}`;
+/** Момент первого Play записи (ms) — клиентский якорь single-pass: refresh резюмит с реальной
+ *  позиции (forward-seek), реплея нет. keyed по attemptId; storage может быть недоступен. */
+function readAudioStart(id: string): number | null {
+  try {
+    const v = Number(localStorage.getItem(AUDIO_KEY(id)));
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+function writeAudioStart(id: string, ms: number): void {
+  try {
+    localStorage.setItem(AUDIO_KEY(id), String(ms));
+  } catch {
+    /* storage недоступен — single-pass якорь не сохранится (degraded, не критично) */
+  }
+}
+
 function fmt(sec: number): string {
   const s = Math.max(0, Math.floor(sec));
   const m = Math.floor(s / 60);
@@ -143,17 +164,18 @@ export default function ExamRunner({
   const autoSubmitted = useRef(false);
   const submitRef = useRef<() => void>(() => {});
 
-  // Listening: раннер владеет <audio> и часами; AudioPlayer — контролируемый presentational.
+  // Listening: раннер владеет <audio>. Строгий single-pass (шаг 3): без паузы/seek/replay,
+  // таймер привязан к записи, после конца — окно transfer. Старт/резюм — через gate-оверлей.
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioCur, setAudioCur] = useState(0);
   const [audioDur, setAudioDur] = useState(0);
-  const toggleAudio = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    if (a.paused) void a.play();
-    else a.pause();
-  };
+  const [audioPhase, setAudioPhase] = useState<"gate" | "playing" | "transfer">("gate");
+  const [buffered, setBuffered] = useState(0);
+  const [canPlay, setCanPlay] = useState(false);
+  const [audRemaining, setAudRemaining] = useState<number | null>(null);
+  const [transferRemaining, setTransferRemaining] = useState<number | null>(null);
+  const audioStartedAtRef = useRef<number | null>(null);
+  const resumeDecided = useRef(false);
 
   useEffect(() => {
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
@@ -220,6 +242,9 @@ export default function ExamRunner({
   // прогресс без режима → resume в practice без start-screen; иначе → показать start-screen.
   useEffect(() => {
     if (isListening) {
+      // single-pass якорь: если запись уже запускали — продолжим с реальной позиции (эффекты ниже).
+      const s = readAudioStart(attemptId);
+      if (s) audioStartedAtRef.current = s;
       setHydrated(true);
       return;
     }
@@ -307,6 +332,83 @@ export default function ExamRunner({
     return dl != null && st != null ? Math.max(1, Math.round((dl - st) / 1000)) : 60;
   };
 
+  // Listening single-pass: при возврате после refresh решаем фазу по реальному времени.
+  useEffect(() => {
+    if (!isListening || audioDur <= 0 || resumeDecided.current) return;
+    resumeDecided.current = true;
+    const anchor = audioStartedAtRef.current;
+    if (anchor == null) return; // свежий тест → остаёмся на gate (fresh)
+    const elapsed = (Date.now() - anchor) / 1000;
+    if (elapsed >= audioDur + TRANSFER_SECONDS) {
+      if (!autoSubmitted.current) {
+        autoSubmitted.current = true;
+        submitRef.current();
+      }
+    } else if (elapsed >= audioDur) {
+      setAudioPhase("transfer");
+      setTransferRemaining(Math.max(0, Math.round(audioDur + TRANSFER_SECONDS - elapsed)));
+    }
+    // elapsed < audioDur → gate(resume): тап продолжит с позиции; время ведёт heartbeat ниже.
+  }, [isListening, audioDur]);
+
+  // Listening heartbeat: остаток записи / transfer, переход в transfer и авто-сабмит по wall-clock.
+  useEffect(() => {
+    if (!isListening) return;
+    const tick = () => {
+      const anchor = audioStartedAtRef.current;
+      if (anchor == null || audioDur <= 0) return;
+      const elapsed = (Date.now() - anchor) / 1000;
+      if (elapsed < audioDur) {
+        setAudRemaining(Math.max(0, Math.round(audioDur - elapsed)));
+      } else {
+        setTransferRemaining(Math.max(0, Math.round(audioDur + TRANSFER_SECONDS - elapsed)));
+        setAudioPhase("transfer");
+        if (elapsed >= audioDur + TRANSFER_SECONDS && !autoSubmitted.current) {
+          autoSubmitted.current = true;
+          submitRef.current();
+        }
+      }
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [isListening, audioDur]);
+
+  // В transfer звук останавливаем (на случай, если переход опередил событие ended).
+  useEffect(() => {
+    if (audioPhase === "transfer" && audioRef.current) audioRef.current.pause();
+  }, [audioPhase]);
+
+  // Старт/резюм записи (требует жеста — из gate-оверлея). Fresh: с 0 + якорь.
+  // Resume: forward-seek к реальной позиции (реплея нет).
+  const playAudio = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    const anchor = audioStartedAtRef.current;
+    if (anchor == null) {
+      const now = Date.now();
+      audioStartedAtRef.current = now;
+      writeAudioStart(attemptId, now);
+      try {
+        a.currentTime = 0;
+      } catch {
+        /* seek до буфера может не пройти — не критично */
+      }
+    } else {
+      const elapsed = (Date.now() - anchor) / 1000;
+      try {
+        a.currentTime = Math.max(0, elapsed);
+      } catch {
+        /* forward-seek не прошёл — продолжим с текущей позиции */
+      }
+    }
+    setAudioPhase("playing");
+    void a.play().catch(() => {
+      /* воспроизведение не стартовало — вернём gate, пользователь попробует снова */
+      setAudioPhase("gate");
+    });
+  };
+
   const meta = `${categoryLabel(category)} · ${questions.length} questions`;
 
   const partGroups = buildParts(questions, answers, flags);
@@ -321,10 +423,27 @@ export default function ExamRunner({
           : 20;
   const mockPresets = Array.from(new Set([20, 40, 60, defaultMockMinutes])).sort((a, b) => a - b);
 
-  // Таймер шапки: Reading после гидрации/старта — по режиму; Listening и до гидрации —
-  // прежнее поведение (durationSeconds ? обратный отсчёт : счёт вверх).
+  // Таймер шапки: Listening — по записи (audio remaining → transfer); Reading после
+  // гидрации/старта — по режиму; до гидрации Reading — прежнее поведение.
   let timerArea: React.ReactNode;
-  if (!isListening && hydrated && started) {
+  if (isListening) {
+    if (audioDur <= 0) {
+      timerArea = (
+        <span style={S.clock}>
+          <Icon name="clock" size={18} style={{ color: "var(--text-muted)" }} /> --:--
+        </span>
+      );
+    } else if (audioPhase === "transfer") {
+      timerArea = (
+        <>
+          <span style={badge(true)}>Transfer</span>
+          <ExamTimer remainingSeconds={transferRemaining ?? TRANSFER_SECONDS} totalSeconds={TRANSFER_SECONDS} />
+        </>
+      );
+    } else {
+      timerArea = <ExamTimer remainingSeconds={audRemaining ?? audioDur} totalSeconds={audioDur} />;
+    }
+  } else if (hydrated && started) {
     if (examMode === "mock") {
       const total = mockTotalSeconds();
       timerArea = (
@@ -349,7 +468,7 @@ export default function ExamRunner({
         </>
       );
     }
-  } else if (!isListening && hydrated && !started) {
+  } else if (hydrated && !started) {
     timerArea = null; // start-screen открыт — таймер не показываем
   } else {
     timerArea =
@@ -396,20 +515,33 @@ export default function ExamRunner({
                   <audio
                     ref={audioRef}
                     src={audioSrc}
-                    preload="metadata"
+                    preload="auto"
                     onLoadedMetadata={(e) => setAudioDur(e.currentTarget.duration || 0)}
                     onTimeUpdate={(e) => setAudioCur(e.currentTarget.currentTime)}
-                    onPlay={() => setAudioPlaying(true)}
-                    onPause={() => setAudioPlaying(false)}
-                    onEnded={() => setAudioPlaying(false)}
+                    onProgress={(e) => {
+                      const a = e.currentTarget;
+                      if (a.duration > 0 && a.buffered.length > 0) {
+                        setBuffered(Math.min(1, a.buffered.end(a.buffered.length - 1) / a.duration));
+                      }
+                    }}
+                    onCanPlay={() => setCanPlay(true)}
+                    onError={() => setCanPlay(true)}
+                    onEnded={() => setAudioPhase("transfer")}
                     style={{ display: "none" }}
                   />
-                  <AudioPlayer
-                    progress={audioDur > 0 ? audioCur / audioDur : 0}
-                    playing={audioPlaying}
-                    totalSeconds={audioDur}
-                    onTogglePlay={toggleAudio}
-                  />
+                  {audioPhase === "transfer" ? (
+                    <div style={S.transferBanner}>
+                      <Icon name="pencil-check" size={18} style={{ color: "var(--brand)" }} />
+                      <span>Recording finished — use the transfer time to check and complete your answers.</span>
+                    </div>
+                  ) : (
+                    <AudioPlayer
+                      progress={audioDur > 0 ? audioCur / audioDur : 0}
+                      playing={audioPhase === "playing"}
+                      totalSeconds={audioDur}
+                      locked
+                    />
+                  )}
                 </>
               )}
             </div>
@@ -487,6 +619,15 @@ export default function ExamRunner({
         total={questions.length}
         onJump={jump}
       />
+
+      {isListening && hydrated && audioPhase === "gate" && (
+        <ListeningGate
+          resume={audioStartedAtRef.current != null}
+          buffered={buffered}
+          canPlay={canPlay}
+          onPlay={playAudio}
+        />
+      )}
 
       {!isListening && hydrated && !started && (
         <StartScreen
@@ -768,6 +909,46 @@ function StartScreen({
   );
 }
 
+/**
+ * ListeningGate — оверлей старта/резюма записи Listening (single-pass). Показывает буфер
+ * загрузки; Play активна когда хватает буфера. Resume-вариант — после refresh: продолжить
+ * с реальной позиции (без реплея).
+ */
+function ListeningGate({
+  resume,
+  buffered,
+  canPlay,
+  onPlay,
+}: {
+  resume: boolean;
+  buffered: number;
+  canPlay: boolean;
+  onPlay: () => void;
+}) {
+  return (
+    <div style={SS.overlay} role="dialog" aria-modal="true" aria-label="Listening recording">
+      <div style={{ ...SS.panel, maxWidth: 460, textAlign: "center" }}>
+        <span style={{ ...SS.cardIcon, width: 52, height: 52, margin: "0 auto 14px", background: "var(--brand-subtle)", color: "var(--brand)" }}>
+          <Icon name="headphones" size={26} />
+        </span>
+        <h1 style={SS.startTitle}>{resume ? "Continue the recording" : "Listening test"}</h1>
+        <p style={SS.startMeta}>
+          {resume
+            ? "The recording kept playing while you were away. It resumes from the current point — no rewind or replay."
+            : "The recording plays once. You can't pause, rewind, or replay it — answer as you listen."}
+        </p>
+        <div style={SS.bufferTrack} aria-hidden="true">
+          <div style={{ ...SS.bufferFill, width: `${Math.round(buffered * 100)}%` }} />
+        </div>
+        <p style={SS.bufferLabel}>{canPlay ? "Audio ready" : `Loading audio… ${Math.round(buffered * 100)}%`}</p>
+        <Button variant="primary" fullWidth disabled={!canPlay} trailingIcon="arrow-right" onClick={onPlay}>
+          {resume ? "Resume" : "Play recording"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 const SS: Record<string, React.CSSProperties> = {
   overlay: { position: "fixed", inset: 0, zIndex: 50, display: "grid", placeItems: "center", padding: 20, background: "color-mix(in oklab, var(--bg-base) 82%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" },
   panel: { width: "100%", maxWidth: 620, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-lg)", padding: "28px 26px" },
@@ -780,6 +961,9 @@ const SS: Record<string, React.CSSProperties> = {
   cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 800, color: "var(--text-primary)" },
   cardDesc: { margin: 0, flex: 1, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: 1.5 },
   presets: { display: "flex", gap: 6 },
+  bufferTrack: { height: 6, borderRadius: 999, background: "var(--surface-hover)", overflow: "hidden", margin: "6px 0" },
+  bufferFill: { height: "100%", background: "var(--brand)", borderRadius: 999, transition: "width 200ms linear" },
+  bufferLabel: { margin: "0 0 16px", fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", color: "var(--text-muted)" },
 };
 
 const READING_CSS = `
@@ -838,6 +1022,7 @@ const S: Record<string, React.CSSProperties> = {
   clock: { display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", background: "var(--surface-raised)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: "var(--text-lg)", fontWeight: 500, color: "var(--text-primary)" },
   ctrlBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface-raised)", color: "var(--text-secondary)", cursor: "pointer", transition: "var(--transition-colors)" },
   ctrlBtnText: { display: "inline-flex", alignItems: "center", height: 38, padding: "0 12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface-raised)", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, transition: "var(--transition-colors)" },
+  transferBanner: { display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: "var(--radius-lg)", border: "2px solid var(--brand)", background: "var(--brand-subtle)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600 },
 
   card: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "var(--space-4)", boxShadow: "var(--shadow-solid)" },
   qNum: { fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: "var(--text-sm)", width: 28, height: 28, borderRadius: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", marginTop: 1 },
