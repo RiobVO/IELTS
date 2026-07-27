@@ -117,29 +117,33 @@ Tiers, idempotent submit, single in_progress, submit rate-limit — **переи
 
 ## 6. Мост (узел, переписанный после проверки на файлах)
 
-Reading и listening имеют **разный scope и разные точки сабмита** — единого
-внешнего monkey-patch недостаточно. Мост инжектируется в файл при очистке, по
-шаблону:
+Мост — это **внешний `<script>`, добавляемый в конец файла при очистке** (НЕ
+инъекция внутрь IIFE: их перехват-точки доступны снаружи). Ответы собираются
+прямым обходом DOM по их селекторам — мост не зависит от их scope/функций. Две
+версии по детектированному шаблону:
 
-**Reading** (логика на верхнем уровне `<script>`, функции глобальны):
-- единая точка — `showResults()` (её зовут и `autoSubmitMock`, и handler deliver-кнопки);
-- инъекция переопределяет `window.showResults` на сбор+postMessage и `window.markOnPage`
-  на no-op (чтобы не мелькала разметка по уже вырезанным ключам);
-- сбор ответов — `window.getAnswer(q)` for q in 1..Q_END.
+**Reading** (функции `showResults`/`markOnPage` — глобальные function declarations):
+- перехват: `window.showResults` → сбор+postMessage; `window.markOnPage` → no-op
+  (её зовут оба пути сабмита — `autoSubmitMock` и handler deliver-кнопки — до
+  `showResults`; no-op гасит разметку по уже вырезанным ключам);
+- сбор ответов из DOM: `input.inspera-input-text[name="qN"]` (текст),
+  `input[name="qN"]:checked` (radio TFNG/MCQ/matching),
+  `.dd-blank[data-q="N"] .drag-token[data-value]` (drag select).
 
-**Listening** (вся логика в IIFE, функции не глобальны):
-- единая точка — `$('#doSubmit').onclick` (его же зовёт авто-сабмит по таймеру);
-- инъекция кода **внутрь IIFE** (рядом с объявлением, после присваивания onclick):
-  сохранить оригинал, переопределить onclick на сбор+postMessage, подавить их report;
-- сбор ответов — их `getUserAnswer(q)` (в scope IIFE).
+**Listening** (логика в IIFE, но сабмит-точка — свойство DOM-элемента):
+- перехват: `document.getElementById('doSubmit').onclick` → сбор+postMessage
+  (авто-сабмит по таймеру зовёт тот же `onclick`, стр 1466 эталона);
+- сбор ответов из DOM: `input.gap[data-q="N"]` (текст),
+  `.mcq input[name="qN"]:checked` / checkbox (radio/multi),
+  `.dropzone[data-q="N"][data-value]` (drag matching).
 
-Формат ответов (`{number: value}`, value = буква / текст / для multi — буква за
-вопрос) совместим с нашим грейдингом (`mcq_set`/`text_accept`/`exact`,
+Формат собранных ответов — `{ "N": value }`, value = буква / текст / для multi —
+массив букв; совместим с нашим грейдингом (`mcq_set`/`text_accept`/`exact`,
 нормализация trim/upper/collapse) по всем типам — проверено на обоих файлах.
 
-«Контракт шаблона» (стабильные имена `showResults`/`getAnswer`/`#doSubmit`/
-`getUserAnswer`, селекторы `data-q`/`name=qN`/`.dropzone[data-value]`/`.dd-blank`)
-фиксируется в этом spec; будущие файлы обязаны ему следовать.
+«Контракт шаблона» (стабильные точки `showResults`/`markOnPage`/`#doSubmit`,
+селекторы выше) фиксируется в этом spec; будущие файлы обязаны ему следовать.
+Если sanitize не находит перехват-точку — импорт падает с понятной ошибкой.
 
 ## 7. Изменения схемы БД (минимальные)
 
