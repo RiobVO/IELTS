@@ -17,6 +17,8 @@ interface Question {
   qtype: string;
   prompt_html: string;
   options: { value: string; label: string }[] | null;
+  // passage_id → группировка вопросов по Part в нижнем навигаторе (read существующей колонки).
+  passage_id: string | null;
 }
 
 export default async function ReadingTestPage({
@@ -45,7 +47,7 @@ export default async function ReadingTestPage({
       .order("order"),
     supabase
       .from("question")
-      .select("id,number,qtype,prompt_html,options,group_key")
+      .select("id,number,qtype,prompt_html,options,group_key,passage_id")
       .eq("content_item_id", id)
       .order("number"),
   ]);
