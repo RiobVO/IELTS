@@ -57,6 +57,48 @@ export function extractData<T = unknown>(src: string, name: string): T | null {
   }
 }
 
+/**
+ * Some files don't store the per-question type map as a literal, but build it
+ * at runtime via a range-builder IIFE:
+ *   const QTYPE = {};
+ *   (function(){ const set=(a,b,t)=>{ for(let q=a;q<=b;q++) QTYPE[q]=t; };
+ *     set(1,6,'Table completion'); set(7,10,'Note completion'); ... })();
+ * `extractObjectLiteral` only sees the `{}` at declaration (the IIFE never runs),
+ * so the map comes back empty. Reconstruct it deterministically — no eval: find
+ * the setter (the function that writes `NAME[...] = ...`), parse its
+ * `setter(a, b, 'type')` calls and expand each into {q: type} for q∈[a,b].
+ * Tolerant of var|let|const, arrow/function form, quote style and spacing.
+ * Returns null when no range-builder shape is found (caller falls back).
+ */
+export function extractRangeBuilderTable(
+  src: string,
+  name: string,
+): Record<string, string> | null {
+  // Setter = a function whose body assigns `name[<idx>] = ...`. Derive its
+  // identifier rather than hardcoding `set`, so other call sites can't poison us.
+  const setterRe = new RegExp(
+    `(?:const|let|var)\\s+(\\w+)\\s*=\\s*(?:function\\s*)?\\([^)]*\\)\\s*(?:=>)?\\s*\\{[^}]*\\b${name}\\s*\\[[^\\]]+\\]\\s*=`,
+  );
+  const sm = setterRe.exec(src);
+  if (!sm) return null;
+  const setter = sm[1]!;
+
+  const callRe = new RegExp(
+    `\\b${setter}\\s*\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(['"\`])([\\s\\S]*?)\\3\\s*\\)`,
+    "g",
+  );
+  const out: Record<string, string> = {};
+  let m: RegExpExecArray | null;
+  while ((m = callRe.exec(src)) !== null) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    const type = m[4]!;
+    if (b < a) continue;
+    for (let q = a; q <= b; q++) out[String(q)] = type;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 /** Find `function NAME(...) { ... }` and return its full balanced-brace text. */
 function extractFunctionText(src: string, name: string): string | null {
   const re = new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{`);
