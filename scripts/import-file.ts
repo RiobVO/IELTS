@@ -19,18 +19,17 @@ if (!path) {
 }
 
 // Dynamic imports so dotenv loads before the DB client validates env.
-const { parseTest } = await import("../src/lib/import/parse-test.ts");
-const { persistTest } = await import("../src/lib/import/persist.ts");
+const { importRunner } = await import("../src/lib/import/runner/import-runner.ts");
 const { db } = await import("../src/db/index.ts");
 const { sql } = await import("drizzle-orm");
 
-const parsed = parseTest(readFileSync(resolve(path), "utf8"));
+const r = await importRunner(readFileSync(resolve(path), "utf8"), {
+  sourceFilePath: path,
+});
+const id = r.id;
 console.log(
-  `Parsed "${parsed.title}" — ${parsed.questions.length} questions, ${parsed.warnings.length} warning(s).`,
+  `Imported "${r.title}" — ${r.questions} questions, ${r.warnings} warning(s).`,
 );
-for (const w of parsed.warnings) console.log("  ⚠️ ", w);
-
-const id = await persistTest(parsed, { sourceFilePath: path });
 
 const rows = await db.execute(sql`
   SELECT

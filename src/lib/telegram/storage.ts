@@ -5,8 +5,7 @@
  * тестов) добавим, когда появится монетизация. Без новых зависимостей —
  * @supabase/supabase-js уже в проекте.
  */
-import { createClient } from "@supabase/supabase-js";
-import { env } from "@/env";
+import { createServiceClient } from "@/lib/supabase/service";
 
 const BUCKET = "audio";
 
@@ -19,11 +18,7 @@ export async function uploadAudio(
   bytes: ArrayBuffer,
   contentType: string,
 ): Promise<string> {
-  const supabase = createClient(
-    env.SUPABASE_URL,
-    env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false } },
-  );
+  const supabase = createServiceClient();
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(path, bytes, {
