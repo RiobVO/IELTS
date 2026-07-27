@@ -28,10 +28,10 @@ const CARDS: PlanCardMeta[] = [
     id: "basic",
     name: "Basic",
     tagline: "Get started for free.",
-    cta: "Your current plan",
+    cta: "Start free",
     features: [
-      { t: "Unlimited single passages & parts", on: true },
-      { t: "Score & % per test", on: true },
+      { t: "Unlimited Reading & Listening", on: true },
+      { t: "Score & band per test", on: true },
       { t: "Per-type breakdown", on: false },
       { t: "Answer explanations & evidence", on: false },
       { t: "Full 40-question mock tests", on: false },
@@ -50,29 +50,36 @@ const CARDS: PlanCardMeta[] = [
       { t: "Answer explanations & evidence", on: true, hero: true },
       { t: "Full 40-question mock tests", on: true },
       { t: "Drill any weak type on demand", on: true },
-      { t: "Priority new content", on: false },
+      { t: "AI Writing feedback — coming", on: true },
     ],
   },
   {
     id: "ultra",
     name: "Ultra",
     tagline: "Everything, plus a human check.",
-    cta: "Go Ultra",
+    cta: "Upgrade to Ultra",
     features: [
       { t: "Everything in Premium", on: true },
-      { t: "Monthly band prediction report", on: true, hero: true },
-      { t: "Priority new content", on: true },
-      { t: "Writing & Speaking add-ons (soon)", on: true },
+      { t: "Writing & Speaking — AI + human review (coming)", on: true, hero: true },
+      { t: "Monthly band-prediction report (coming)", on: true },
       { t: "1:1 strategy call (quarterly)", on: true, hero: true },
+      { t: "Priority new content", on: true },
       { t: "Cancel anytime", on: true },
     ],
   },
 ];
 
 const FAQ = [
-  { q: "Can I cancel anytime?", a: "Yes — cancel in one tap from your profile. You keep access until the end of the billing period." },
-  { q: "Is there a student discount?", a: "Premium is already priced for the region, and inviting friends earns you both XP to climb the league faster." },
-  { q: "What payment methods work?", a: "Local cards via Payme, Click and Uzum. More options are coming soon." },
+  { q: "Can I cancel anytime?", a: "Yes, one click in your profile. Access stays until the end of your paid period." },
+  { q: "What's the difference between free and paid?", a: "Reading & Listening are free forever. You pay for the per-type breakdown, full 40-question mock tests, and (coming) Writing & Speaking feedback." },
+  { q: "Premium vs Ultra?", a: "Premium gives all the analytics plus AI Writing feedback (coming). Ultra adds a real human review, a band-prediction report, and a 1:1 strategy call." },
+  { q: "Are the tests like the real IELTS?", a: "Yes — real Cambridge material in a runner that mirrors the computer-delivered exam: same interface, timer, drag-and-drop." },
+  { q: "How accurate is the band?", a: "Reading & Listening use the official Cambridge band scale. Writing & Speaking (coming) are scored on the 4 official criteria, with a human check on Ultra." },
+  { q: "When do Writing & Speaking launch?", a: "They're in active development; Ultra members get access first." },
+  { q: "What payment methods work?", a: "Local cards: Uzcard, Humo, and Visa/Mastercard." },
+  { q: "Is there a refund?", a: "Yes — 7-day money-back, no questions asked." },
+  { q: "Can I switch plans?", a: "Yes, upgrade or downgrade anytime; the difference is prorated." },
+  { q: "Do I need a card for the free plan?", a: "No. Basic needs no card — just sign up and start." },
 ];
 
 const fmt = (tiyin: number) => new Intl.NumberFormat("en-US").format(Math.round(tiyin / 100));
@@ -128,7 +135,7 @@ export default function PricingScreen({
 
       {/* Trust line */}
       <div style={S.trust}>
-        {["Cancel anytime", "Local cards accepted", "Free first full test"].map((t) => (
+        {["Cancel anytime", "Local cards (Uzcard, Humo, Visa)", "7-day money-back", "Free first full test"].map((t) => (
           <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
             <Icon name="circle-check" size={15} style={{ color: "var(--success-text)" }} /> {t}
           </span>
