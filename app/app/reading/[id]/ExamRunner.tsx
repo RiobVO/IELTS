@@ -482,7 +482,7 @@ export default function ExamRunner({
   }
 
   return (
-    <div style={S.shell}>
+    <div className="exam-cambridge" style={S.shell}>
       <style>{READING_CSS}</style>
 
       {/* Top bar */}
@@ -998,6 +998,30 @@ const READING_CSS = `
   .exam-pane-q{flex:none;width:460px}
   .exam-split[data-pane="passage"] .exam-pane-q,
   .exam-split[data-pane="questions"] .exam-pane-p{display:flex}
+}
+
+/* === Cambridge skin (шаг 4): бело-сине-графитовый вид реального computer-IELTS.
+   Переопределяем дизайн-токены на корне раннера — шапка/навигатор/таймер/карточки/
+   оверлеи/пассаж перекрашиваются разом. Шрифты НЕ трогаем (бренд-штрих по решению).
+   Структура/логика/аннотации те же — меняются только цвета и «плоскость». === */
+.exam-cambridge{
+  --bg-base:#eef3f8;--bg-raised:#ffffff;--surface:#ffffff;--surface-raised:#ffffff;
+  --surface-hover:#eaf1fb;--surface-inset:#e6eef7;
+  --border:#cfe0f0;--border-strong:#9fc6ea;
+  --brand:#2563eb;--brand-hover:#1d4ed8;--brand-edge:#1e40af;--brand-subtle:#e8f1fe;
+  --text-primary:#111827;--text-secondary:#374151;--text-muted:#6b7280;--text-on-brand:#ffffff;
+  --neutral-edge:#cbd5e1;--shadow-solid:0 1px 2px rgba(17,24,39,.06);--shadow-lg:0 10px 30px rgba(17,24,39,.13);
+  --warn:#f59e0b;--warn-subtle:#fef3c7;--warn-text:#92400e;--error:#dc2626;
+  --reading-text:#111827;--reading-surface:#ffffff;--reading-rule:#cfe0f0;--reading-muted:#6b7280;--reading-mark:rgb(253 224 71);
+}
+/* Пассаж под Cambridge: без буквицы; буквы абзацев — плоские (нужны для paragraph-matching), не кружки. */
+.exam-cambridge .bando-reading.editorial p.rp{padding-left:26px}
+.exam-cambridge .bando-reading.editorial p.rp::before{
+  border:none;background:transparent;width:auto;height:auto;top:.04em;
+  font-family:var(--font-ui);font-weight:700;font-size:.9em;color:var(--text-secondary);
+}
+.exam-cambridge .bando-reading.editorial p.rp[data-first]::first-letter{
+  float:none;font-size:inherit;line-height:inherit;font-weight:inherit;padding:0;color:inherit;
 }
 `;
 
