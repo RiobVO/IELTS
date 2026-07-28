@@ -323,6 +323,13 @@ export const attempt = pgTable(
       .on(t.userId, t.submittedAt)
       .where(sql`${t.status} = 'submitted'`),
     index("attempt_content_item_id_idx").on(t.contentItemId),
+    // Partial over submitted, keyed (user, content_item, submitted_at): covers
+    // the leaderboard sumSince DISTINCT ON (user_id, content_item_id) ORDER BY
+    // ... submitted_at — additive to the (user, submitted_at) index above
+    // (migration 0017).
+    index("attempt_user_content_submitted_idx")
+      .on(t.userId, t.contentItemId, t.submittedAt)
+      .where(sql`${t.status} = 'submitted'`),
     // At most one in_progress attempt per (user, test) — DB-level guard behind
     // ensureAttempt's ON CONFLICT DO NOTHING (anti-cheat §4.6, migration 0007).
     uniqueIndex("attempt_one_in_progress_idx")
