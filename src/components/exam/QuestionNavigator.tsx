@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, memo, useState } from "react";
 
 const RING = "0 0 0 2px var(--surface), 0 0 0 4px var(--brand)";
 
@@ -73,7 +73,9 @@ function NavCell({ q, active, onJump }: { q: NavQuestion; active: boolean; onJum
  * клавиатурный фокус показывает брендовый RING, flagged несёт точку в углу.
  * Справа — счётчик отвеченных. Метки Part показываем только при >1 секции.
  */
-export function QuestionNavigator({ parts, current, answered, total, onJump }: QuestionNavigatorProps) {
+// memo: раннер тикает таймер-стейт 1/сек (на Listening ~4/сек); при стабильных
+// parts (useMemo)/onJump (useCallback) полоса навигатора не ре-рендерится на тик.
+export const QuestionNavigator = memo(function QuestionNavigator({ parts, current, answered, total, onJump }: QuestionNavigatorProps) {
   const multi = parts.length > 1;
   return (
     <nav aria-label="Question navigator" style={S.bar}>
@@ -95,7 +97,7 @@ export function QuestionNavigator({ parts, current, answered, total, onJump }: Q
       </span>
     </nav>
   );
-}
+});
 
 const S: Record<string, CSSProperties> = {
   bar: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { categoryLabel } from "@/lib/labels";
 import { Icon } from "@/components/core/icons";
 import { addAnnotation, deleteAnnotation, updateAnnotationNote } from "./actions";
@@ -84,7 +84,9 @@ function unwrap(container: HTMLElement, id: string) {
   container.normalize();
 }
 
-export function PassagePane({
+// memo: пропсы (contentItemId/title/category/passages/initialAnnotations/className)
+// не меняются на тик таймера в раннере → тяжёлый рендер body_html не повторяется 1/сек.
+export const PassagePane = memo(function PassagePane({
   contentItemId,
   title,
   category,
@@ -100,6 +102,7 @@ export function PassagePane({
   /** Раннер задаёт раскладку панели (display/flex) классом — адаптив за ним. */
   className?: string;
 }) {
+  /* eslint-disable-line — тело компонента ниже без изменений */
   const scrollRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLElement>(null);
   const didInit = useRef(false);
@@ -347,7 +350,7 @@ export function PassagePane({
       )}
     </div>
   );
-}
+});
 
 const PASSAGE_CSS = `
 .bando-reading.editorial{font-family:var(--font-reading);color:var(--reading-text);line-height:1.75}
