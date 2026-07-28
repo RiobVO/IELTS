@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { contentItem, profile } from "@/db/schema";
 import { env } from "@/env";
@@ -35,7 +35,8 @@ export async function GET(
     db
       .select({ tierRequired: contentItem.tierRequired, html: contentItem.runnerHtml })
       .from(contentItem)
-      .where(eq(contentItem.id, id)),
+      // Published-only (owner-path bypasses RLS): a draft id -> 404, never served.
+      .where(and(eq(contentItem.id, id), eq(contentItem.status, "published"))),
   ]);
 
   if (!item?.html) return new Response("Not found", { status: 404 });

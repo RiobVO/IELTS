@@ -50,7 +50,10 @@ async function loadAccessData(
         bandScale: contentItem.bandScale,
       })
       .from(contentItem)
-      .where(eq(contentItem.id, contentItemId)),
+      // Owner-path bypasses RLS, so gate published HERE too: a draft/unpublished id
+      // never resolves -> caller redirects away. Keeps the start+submit gate from
+      // being weaker than the catalog's content_item_select_published policy.
+      .where(and(eq(contentItem.id, contentItemId), eq(contentItem.status, "published"))),
   ]);
   if (!prof || !item) return null;
   return {
