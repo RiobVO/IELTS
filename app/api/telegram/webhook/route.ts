@@ -1,6 +1,6 @@
 import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, exists, isNotNull, not, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { contentItem, passage } from "@/db/schema";
 import { telegramConfig } from "@/env";
@@ -175,16 +175,39 @@ async function handleHtmlUpload(
  * audio_path). Путь в bucket = `<contentItemId>.mp3` (upsert идемпотентен).
  */
 async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
+  // Привязываем к новейшему Listening-тесту, КОТОРОМУ ЕЩЁ НУЖНО аудио (нет ни одного
+  // passage с audio_path), а не к глобально-последнему listening. Иначе mp3 мог уехать
+  // на уже укомплектованный/чужой тест (два админа / повторная загрузка / задержка).
+  // Остаточная неоднозначность: при ДВУХ ждущих аудио черновиках берётся новейший —
+  // для точной привязки шли HTML и его mp3 до следующего HTML.
   const [test] = await db
     .select({ id: contentItem.id, title: contentItem.title, runnerHtml: contentItem.runnerHtml })
     .from(contentItem)
-    .where(eq(contentItem.section, "listening"))
+    .where(
+      and(
+        eq(contentItem.section, "listening"),
+        not(
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(passage)
+              .where(
+                and(
+                  eq(passage.contentItemId, contentItem.id),
+                  isNotNull(passage.audioPath),
+                ),
+              ),
+          ),
+        ),
+      ),
+    )
     .orderBy(desc(contentItem.createdAt))
     .limit(1);
   if (!test) {
     await sendMessage(
       chatId,
-      "Нет Listening-теста для привязки. Сначала пришли HTML Listening-теста, потом mp3.",
+      "Нет Listening-теста, ожидающего аудио. Сначала пришли HTML Listening-теста " +
+        "(без встроенного аудио), затем mp3.",
     );
     return;
   }
