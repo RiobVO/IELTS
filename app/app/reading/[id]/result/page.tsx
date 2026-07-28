@@ -82,6 +82,7 @@ export default async function ResultPage({
       .select({
         title: contentItem.title,
         category: contentItem.category,
+        section: contentItem.section,
         durationSeconds: contentItem.durationSeconds,
       })
       .from(contentItem)
@@ -144,6 +145,11 @@ export default async function ResultPage({
   const correctPct = result.total > 0 ? result.rawScore / result.total : 0;
   const title = ci[0]?.title ?? "Your report";
   const category = ci[0]?.category ?? null;
+  // Result-роут общий для обеих секций (reading/listening). Drill- и catalog-ссылки
+  // должны вести в каталог ЭТОЙ секции — иначе после Listening-теста «Drill»/«Back to
+  // catalog» уходили в Reading-фильтр, где listening-типов нет (AUDIT P2).
+  const section = ci[0]?.section === "listening" ? "listening" : "reading";
+  const catalogBase = `/app/${section}`;
 
   // Honest key metrics — only those backed by real data are rendered. Colour is
   // semantic: green ONLY when the number is genuinely good; neutral otherwise.
@@ -211,7 +217,7 @@ export default async function ResultPage({
     weak: i === 0,
     missed: result.perQuestion.filter((q) => q.qtype === type && !q.correct).map((q) => q.number),
     got: result.perQuestion.filter((q) => q.qtype === type && q.correct).map((q) => q.number),
-    practiseHref: `/app/reading?q_type=${encodeURIComponent(type)}`,
+    practiseHref: `${catalogBase}?q_type=${encodeURIComponent(type)}`,
   }));
   const akTypes: AKType[] = perType.map(([type]) => ({ type, label: qtypeLabel(type) }));
   const akItems: AKItem[] = result.perQuestion.map((q) => {
@@ -235,11 +241,11 @@ export default async function ResultPage({
   });
 
   return (
-    <AppShell active="reading">
+    <AppShell active={section}>
       <style>{RESULT_CSS}</style>
       <div style={S.wrap}>
         <div style={S.backRow}>
-          <Button variant="ghost" size="sm" icon="arrow-left" href="/app/reading">
+          <Button variant="ghost" size="sm" icon="arrow-left" href={catalogBase}>
             Catalog
           </Button>
         </div>
@@ -298,7 +304,7 @@ export default async function ResultPage({
                     Start here, then re-test.
                   </p>
                   <div style={S.verdictCta}>
-                    <Button href={`/app/reading?q_type=${encodeURIComponent(weakest[0])}`} trailingIcon="arrow-right">
+                    <Button href={`${catalogBase}?q_type=${encodeURIComponent(weakest[0])}`} trailingIcon="arrow-right">
                       Drill {qtypeLabel(weakest[0])}
                     </Button>
                     <Button variant="ghost" href="#answer-key">
@@ -345,7 +351,7 @@ export default async function ResultPage({
                 <b style={{ color: "var(--text-primary)" }}>Recommended:</b> start with{" "}
                 {qtypeLabel(weakest[0])} — your weakest type and the fastest band gain.
               </div>
-              <Button href={`/app/reading?q_type=${encodeURIComponent(weakest[0])}`} trailingIcon="arrow-right" style={{ flex: "none" }}>
+              <Button href={`${catalogBase}?q_type=${encodeURIComponent(weakest[0])}`} trailingIcon="arrow-right" style={{ flex: "none" }}>
                 Start
               </Button>
             </div>
@@ -392,7 +398,7 @@ export default async function ResultPage({
         )}
 
         <div style={S.footer}>
-          <Button variant="secondary" fullWidth href="/app/reading">
+          <Button variant="secondary" fullWidth href={catalogBase}>
             Back to catalog
           </Button>
           <Button fullWidth trailingIcon="arrow-right" href={`/app/reading/${id}`}>

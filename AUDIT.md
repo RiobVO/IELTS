@@ -87,15 +87,6 @@ _CatalogView.tsx:29 — examHref = has_runner ? `/app/exam/${id}` : `/app/readin
   «other students». Показывается при `total >= 5` (`:169`).
 - **Статус:** open.
 
-### P2 — Listening-result ведёт drill-ссылками в Reading-каталог
-- **Severity:** P2 — minor UX.
-- **Где:** `app/app/reading/[id]/result/page.tsx:214,301,348` — все `practiseHref`/CTA захардкожены
-  на `/app/reading?q_type=...`. Result-роут общий для обоих section (см. exam-архитектуру).
-- **Суть:** после Listening-теста все «Drill»/«Practise» ведут в Reading-фильтр.
-- **Предложение:** дотянуть `content_item.section` в `ci`-выборку (`:81-89`, сейчас не тянется),
-  ветвить base path (`/app/reading` vs `/app/listening`).
-- **Статус:** open.
-
 ### P3 — SCHEMA_NOTES фиксирует «13 tables», реально 16
 - **Severity:** P3 — minor (schema governance / verify-count).
 - **Где:** `SCHEMA_NOTES.md:7,14` («Table count: 13»). Реально в `src/db/schema.ts` — **16** `pgTable`:
@@ -106,6 +97,17 @@ _CatalogView.tsx:29 — examHref = has_runner ? `/app/exam/${id}` : `/app/readin
 ---
 
 ## Закрыто
+
+### P2 — Listening-result ведёт drill-ссылками в Reading-каталог
+- **Severity:** P2 — minor UX.
+- **Было:** `app/app/reading/[id]/result/page.tsx` — `practiseHref` и все «Drill»/«Start»/«Back to
+  catalog» CTA захардкожены на `/app/reading?q_type=...`. Result-роут общий для обеих секций, поэтому
+  после Listening-теста дрилл-ссылки уходили в Reading-каталог (где listening-типов нет).
+- **Закрыто:** 2026-06-24 — в `ci`-выборку дотянут `content_item.section`; выведен `catalogBase`
+  (`/app/${section}`), на него переведены все catalog/drill-ссылки + `AppShell active` (теперь
+  секционный; в навигации всё равно подсвечивает Practice). «Try again» → `/app/reading/${id}`
+  оставлен как есть — это runner-routing (has_runner), отдельный долг, не секционный base path.
+- **Не трогали:** grading/percentile/answer_key, `InsightReport`, submit/runner. tsc + build чисто.
 
 ### P2 — draft-тест доступен по прямому owner-пути `/app/exam/:id` (Codex: P1)
 - **Severity:** P2 — defense-in-depth (понижено с Codex P1: эксплойт требовал знать UUID
