@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { attempt } from "@/db/schema";
+import { getActiveBadges } from "@/lib/content/badges";
 import {
   computeStats,
   badgeProgress,
@@ -77,8 +78,8 @@ export default async function BadgesPage() {
   // badge: PUBLIC read RLS. user_badge: OWNER-ONLY read (RLS + explicit eq is
   // defence-in-depth). Activity is the user's own attempt timestamps (owner path,
   // server-only). All three run in parallel.
-  const [{ data: badgeData }, { data: earnedData }, activityRows] = await Promise.all([
-    supabase.from("badge").select("id,code,name,description,criteria"),
+  const [badgeData, { data: earnedData }, activityRows] = await Promise.all([
+    getActiveBadges(),
     supabase.from("user_badge").select("badge_id,earned_at").eq("user_id", user.id),
     db
       .select({ submittedAt: attempt.submittedAt })
@@ -86,7 +87,7 @@ export default async function BadgesPage() {
       .where(and(eq(attempt.userId, user.id), eq(attempt.status, "submitted"), gte(attempt.submittedAt, since))),
   ]);
 
-  const badges = (badgeData ?? []) as BadgeRow[];
+  const badges: BadgeRow[] = badgeData;
   const earnedMap = new Map<string, string>(
     ((earnedData ?? []) as { badge_id: string; earned_at: string }[]).map((e) => [e.badge_id, e.earned_at]),
   );

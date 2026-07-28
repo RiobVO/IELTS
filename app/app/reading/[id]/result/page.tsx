@@ -1,7 +1,8 @@
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
-import { answerKey, attempt, badge, contentItem, question } from "@/db/schema";
+import { answerKey, attempt, contentItem, question } from "@/db/schema";
+import { getActiveBadges } from "@/lib/content/badges";
 import { getProfile, getUser } from "@/lib/auth";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
@@ -37,7 +38,21 @@ export default async function ResultPage({
   const { a: attemptId, unlocked } = await searchParams;
   if (!attemptId) notFound();
 
-  const [att] = await db.select().from(attempt).where(eq(attempt.id, attemptId));
+  // Явная проекция: тянем только реально используемые ниже колонки. `answers`
+  // нужен для re-grade; тяжёлый `per_type_breakdown` НЕ нужен (разбор
+  // пересчитывается через grade()), как и mode/status/started_at.
+  const [att] = await db
+    .select({
+      userId: attempt.userId,
+      contentItemId: attempt.contentItemId,
+      answers: attempt.answers,
+      submittedAt: attempt.submittedAt,
+      timeUsedSeconds: attempt.timeUsedSeconds,
+      rawScore: attempt.rawScore,
+      bandScore: attempt.bandScore,
+    })
+    .from(attempt)
+    .where(eq(attempt.id, attemptId));
   // Ownership check — a user can only see their own attempt's review.
   if (!att || att.userId !== user.id || att.contentItemId !== id) notFound();
 
@@ -170,13 +185,14 @@ export default async function ResultPage({
   }
 
   // Badges this submit just unlocked — codes passed on the submit redirect.
+  // Фильтруем кэш PUBLIC-таблицы badge в памяти (тег `badge`), без сырого
+  // per-request запроса; гард по длине сохраняет нулевую стоимость без анлоков.
   const unlockedCodes = (unlocked ?? "").split(",").map((c) => c.trim()).filter(Boolean);
   const unlockedBadges =
     unlockedCodes.length > 0
-      ? await db
-          .select({ id: badge.id, code: badge.code, name: badge.name, description: badge.description, icon: badge.icon })
-          .from(badge)
-          .where(inArray(badge.code, unlockedCodes))
+      ? (await getActiveBadges())
+          .filter((b) => unlockedCodes.includes(b.code))
+          .map((b) => ({ id: b.id, code: b.code, name: b.name, description: b.description, icon: b.icon }))
       : [];
 
   // Shareable one-liner for the Telegram viral loop (W1-5).
