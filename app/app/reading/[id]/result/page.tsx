@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { answerKey, attempt, contentItem, question } from "@/db/schema";
 import { getActiveBadges } from "@/lib/content/badges";
 import { getProfile, getUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
 import { categoryLabel, qtypeLabel } from "@/lib/labels";
@@ -136,6 +137,8 @@ export default async function ResultPage({
           .orderBy(desc(attempt.submittedAt))
           .limit(1)
       : Promise.resolve([]),
+    // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+    getHeaderData(),
   ]);
 
   const fullReview = profile

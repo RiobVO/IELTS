@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { leaderboardEntry } from "@/db/schema";
 import { categoryLabel, qtypeLabel, LISTENING_CATEGORIES } from "@/lib/labels";
@@ -84,6 +85,9 @@ export default async function Dashboard() {
         ),
       )
       .limit(1),
+    // Пре-варм данных шапки конкурентно с телом дашборда (cache()'d; AppShell
+    // переиспользует — убирает trailing notification-хоп).
+    getHeaderData(),
   ]);
 
   // One-time onboarding gate (W1-2): until the user captures their profile we

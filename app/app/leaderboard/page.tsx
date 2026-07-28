@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getProfile, requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { region } from "@/db/schema";
 import { periodLabel } from "@/lib/labels";
@@ -72,6 +73,8 @@ export default async function Leaderboard({
   searchParams: Promise<{ period?: string; scope?: string }>;
 }) {
   await requireUser();
+  // Пре-варм данных шапки конкурентно с телом страницы (cache()'d; AppShell reuses).
+  void getHeaderData();
   const sp = await searchParams;
   const period = asPeriod(sp.period);
   const profile = await getProfile();

@@ -1,6 +1,7 @@
 import { and, eq, gte } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { attempt } from "@/db/schema";
 import { getActiveBadges } from "@/lib/content/badges";
@@ -85,6 +86,8 @@ export default async function BadgesPage() {
       .select({ submittedAt: attempt.submittedAt })
       .from(attempt)
       .where(and(eq(attempt.userId, user.id), eq(attempt.status, "submitted"), gte(attempt.submittedAt, since))),
+    // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+    getHeaderData(),
   ]);
 
   const badges: BadgeRow[] = badgeData;

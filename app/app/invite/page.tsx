@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { AppShell } from "../_AppShell";
 import { Icon } from "@/components/core/icons";
 import InviteLink from "./InviteLink";
@@ -13,6 +14,8 @@ interface ReferralRow {
 
 export default async function InvitePage() {
   await requireUser();
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
   const profile = await getProfile();
   const supabase = await createClient();
 

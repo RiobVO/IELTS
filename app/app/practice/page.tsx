@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { getPublishedTests } from "@/lib/content/published";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { qtypeLabel, LISTENING_CATEGORIES } from "@/lib/labels";
@@ -52,6 +53,8 @@ export default async function PracticeHub() {
       .limit(20),
     getPublishedTests("reading"),
     getPublishedTests("listening"),
+    // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+    getHeaderData(),
   ]);
 
   const userTier: Tier = profile
