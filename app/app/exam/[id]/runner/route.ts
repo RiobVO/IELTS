@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { contentItem, profile } from "@/db/schema";
 import { getUser } from "@/lib/auth";
+import { scopeRunnerStorage } from "@/lib/import/runner/scope-storage";
 import { effectiveTier, meetsTier } from "@/lib/tiers";
 
 // Отдаёт очищенный runner_html в iframe. Auth — через middleware (/app защищён) +
@@ -38,7 +39,13 @@ export async function GET(
     return new Response("Forbidden", { status: 403 });
   }
 
-  return new Response(item.html, {
+  // Заскоупить весь localStorage раннера под user.id (анти-утечка черновика между
+  // аккаунтами в одном браузере). Трансформируем КОПИЮ строки — контент в БД не трогаем.
+  // Нет точки инжекта → fail-closed (нескоупленный html вернул бы утечку).
+  const html = scopeRunnerStorage(item.html, user.id);
+  if (!html) return new Response("Runner unavailable", { status: 500 });
+
+  return new Response(html, {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
