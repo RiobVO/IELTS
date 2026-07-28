@@ -12,6 +12,7 @@ import {
   SUBMIT_THROTTLE_MAX,
 } from "@/lib/anti-cheat";
 import { getUser } from "@/lib/auth";
+import { bandForScore } from "@/lib/grading/band";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
 import { recomputeLeaderboard } from "@/lib/progress/leaderboard";
@@ -324,8 +325,7 @@ export async function submitAttempt(
 
   // Band only for Full tests (40Q): map raw score via the stored band_scale (§11),
   // already read above. Single passage/part has no band_scale -> null (percent only).
-  const scale = accessData.bandScale;
-  const bandValue = scale ? (scale[String(result.rawScore)] ?? null) : null;
+  const bandValue = bandForScore(accessData.bandScale, result.rawScore);
 
   const submittedAt = new Date();
   // SERVER-trusted elapsed: now - started_at (stamped at exam start). The client

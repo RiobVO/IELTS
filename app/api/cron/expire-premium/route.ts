@@ -1,9 +1,9 @@
-import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { and, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { profile } from "@/db/schema";
 import { cronSecret } from "@/env";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 /**
  * Cron-даунгрейд просроченных подписок (BRIEF §11). Профили, у которых
@@ -19,14 +19,11 @@ import { cronSecret } from "@/env";
 export const dynamic = "force-dynamic";
 
 function authorized(request: Request): boolean {
-  const secret = cronSecret();
-  if (secret === null) return false; // ключ не настроен -> fail closed
-  // Сравнение постоянного времени (паритет с verifyWebhook), чтобы не утекать
-  // секрет по таймингу побайтового ===.
-  const got = Buffer.from(request.headers.get("authorization") ?? "");
-  const want = Buffer.from(`Bearer ${secret}`);
-  if (got.length !== want.length) return false;
-  return timingSafeEqual(got, want);
+  // Чистая проверка вынесена в src/lib/cron-auth.ts (тестируется без Request).
+  return isCronAuthorized(
+    request.headers.get("authorization"),
+    cronSecret(),
+  );
 }
 
 async function downgradeExpired(): Promise<number> {
