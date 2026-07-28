@@ -13,14 +13,16 @@ import {
   sendUploadResult,
 } from "@/lib/telegram/client";
 import { uploadAudio } from "@/lib/telegram/storage";
-import { parseTest } from "@/lib/import/parse-test";
-import { persistTest, RegradeRequiredError } from "@/lib/import/persist";
+import { importRunner } from "@/lib/import/runner/import-runner";
+import { setRunnerAudioSrc } from "@/lib/import/runner/sanitize-runner";
+import { RegradeRequiredError } from "@/lib/import/persist";
 
 /**
  * Telegram-бот импорта контента (admin-канал, аналог /admin). Умеет:
- *  - HTML-файл теста  -> parseTest -> persistTest (draft) + кнопка «Опубликовать»;
- *  - mp3-файл         -> кладёт в Supabase Storage и привязывает к последнему
- *    Listening-тесту (audio_path -> public URL), затем кнопка «Опубликовать»;
+ *  - HTML-файл теста  -> importRunner (iframe-движок: parse->persist->sanitize->
+ *    runner_html, аудио из HTML само) (draft) + кнопка «Опубликовать»;
+ *  - mp3-файл         -> кладёт в Supabase Storage, привязывает к последнему
+ *    Listening-тесту (audio_path + подмена <audio src> в runner_html), затем кнопка;
  *  - нажатие кнопки   -> draft -> published (как /admin setStatus).
  *
  * Middleware исключает /api/telegram из auth: запрос от Telegram, не от юзера.
@@ -130,22 +132,25 @@ async function handleHtmlUpload(
   try {
     const path = await getFilePath(doc.file_id);
     const html = await downloadFileText(path);
-    const parsed = parseTest(html);
-    // createdBy опущен -> persistTest пишет null (у бота нет Supabase-сессии;
-    // content_item.createdBy nullable). sourceFilePath даёт идемпотентность.
-    const id = await persistTest(parsed, { sourceFilePath: name });
-    const warn = parsed.warnings.length
-      ? `\n⚠️ предупреждений: ${parsed.warnings.length}`
+    // importRunner = тот же путь, что /admin (iframe-движок + read-time ребренд).
+    // createdBy опущен -> persistTest пишет null (у бота нет Supabase-сессии).
+    // sourceFilePath даёт идемпотентность.
+    const r = await importRunner(html, { sourceFilePath: name });
+    const warn = r.warnings ? `\n⚠️ предупреждений: ${r.warnings}` : "";
+    const brand = r.brandWarnings.length
+      ? `\n🚩 бренд не вычищен (новый источник?): ${r.brandWarnings.join("; ")} — проверь шапку в раннере.`
       : "";
-    const audioHint =
-      parsed.section === "listening"
-        ? "\n🎧 Это Listening — пришли mp3 этого теста следующим файлом."
+    const isListening = r.hasAudio || /listening/i.test(r.title);
+    const audioHint = !r.hasAudio && isListening
+      ? "\n🎧 Это Listening без аудио в файле — пришли mp3 следующим файлом."
+      : r.hasAudio
+        ? "\n🎧 Аудио подхвачено из файла."
         : "";
     await sendUploadResult(
       chatId,
-      `✅ «${parsed.title}» сохранён как draft.\n` +
-        `${parsed.section} · вопросов: ${parsed.questions.length}${warn}${audioHint}`,
-      id,
+      `✅ «${r.title}» сохранён как draft.\n` +
+        `вопросов: ${r.questions}${warn}${brand}${audioHint}`,
+      r.id,
     );
   } catch (e) {
     if (e instanceof RegradeRequiredError) {
@@ -171,7 +176,7 @@ async function handleHtmlUpload(
  */
 async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
   const [test] = await db
-    .select({ id: contentItem.id, title: contentItem.title })
+    .select({ id: contentItem.id, title: contentItem.title, runnerHtml: contentItem.runnerHtml })
     .from(contentItem)
     .where(eq(contentItem.section, "listening"))
     .orderBy(desc(contentItem.createdAt))
@@ -191,10 +196,18 @@ async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
       bytes,
       file.mime_type ?? "audio/mpeg",
     );
+    // passage.audio_path — для каталога/легаси-раннера; <audio src> в runner_html —
+    // для iframe-движка (он читает звук ИЗ своего html, не из passage). Патчим оба.
     await db
       .update(passage)
       .set({ audioPath: url })
       .where(and(eq(passage.contentItemId, test.id), eq(passage.order, 1)));
+    if (test.runnerHtml) {
+      await db
+        .update(contentItem)
+        .set({ runnerHtml: setRunnerAudioSrc(test.runnerHtml, url) })
+        .where(eq(contentItem.id, test.id));
+    }
     revalidateTag("content_item");
     await sendUploadResult(
       chatId,

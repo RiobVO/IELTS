@@ -27,13 +27,18 @@ export async function uploadTest(formData: FormData) {
   }
   const html = await file.text();
 
-  let summary: { title: string; questions: number; warnings: number };
+  let summary: { title: string; questions: number; warnings: number; brand: string };
   try {
     const r = await importRunner(html, {
       sourceFilePath: file.name,
       createdBy: profile.id,
     });
-    summary = { title: r.title, questions: r.questions, warnings: r.warnings };
+    summary = {
+      title: r.title,
+      questions: r.questions,
+      warnings: r.warnings,
+      brand: r.brandWarnings.join("; "),
+    };
   } catch (e) {
     if (e instanceof RegradeRequiredError) {
       console.error("admin uploadTest refused — test has attempts", e);
@@ -54,6 +59,7 @@ export async function uploadTest(formData: FormData) {
       uploaded: summary.title,
       q: String(summary.questions),
       w: String(summary.warnings),
+      ...(summary.brand ? { brand: summary.brand } : {}),
     }).toString()}`,
   );
 }

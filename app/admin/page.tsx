@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ uploaded?: string; q?: string; w?: string; error?: string }>;
+  searchParams: Promise<{ uploaded?: string; q?: string; w?: string; brand?: string; error?: string }>;
 }) {
   const profile = await requireAdmin();
   const sp = await searchParams;
@@ -43,6 +43,13 @@ export default async function AdminPage({
           <p style={S.ok}>
             Uploaded “{sp.uploaded}” — {sp.q} question(s)
             {Number(sp.w) > 0 ? `, ${sp.w} warning(s)` : ""}. Status: draft.
+          </p>
+        )}
+        {sp.brand && (
+          <p style={S.err}>
+            ⚠️ Branding not auto-cleaned: {sp.brand}. The source logo / foreign link may
+            still show — this file’s header is from an unrecognized source. Check it in the
+            runner before publishing (and the brand re-skin may need extending).
           </p>
         )}
 

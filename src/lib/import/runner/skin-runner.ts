@@ -96,3 +96,23 @@ export function skinRunnerBrand(html: string): string {
   }
   return out.replace(/<\/head>/i, `${BRAND_FONT}${BRAND_STYLE}</head>`);
 }
+
+/**
+ * Import-time guard: что в шапке осталось НЕ вычищено после skinRunnerBrand. Пусто
+ * = всё ок (наш логотип встанет, чужого канала нет). Непусто = шапка из НОВОГО
+ * источника не распознана нашими якорями → чужой логотип/ссылка просочатся на прод
+ * молча; нужна ручная проверка или расширение skinRunnerBrand под новую вёрстку.
+ * Гоняется при импорте (admin/бот показывают предупреждение), не на read-time.
+ */
+export function runnerBrandResidue(rawHtml: string): string[] {
+  const skinned = skinRunnerBrand(rawHtml);
+  const issues: string[] = [];
+  const tme = skinned.match(/t\.me\/[A-Za-z0-9_+]+/gi);
+  if (tme) issues.push(`foreign telegram link(s) not stripped: ${[...new Set(tme)].join(", ")}`);
+  const hadLogo =
+    /class=["'][^"']*brand-logo["']/i.test(rawHtml) || RE_LOGO_TEXT.test(rawHtml);
+  if (hadLogo && !skinned.includes("bando-brand")) {
+    issues.push("source logo not replaced with bando (header markup unrecognized)");
+  }
+  return issues;
+}

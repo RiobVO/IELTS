@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { skinRunnerGate, skinRunnerBrand } from "./skin-runner";
+import { skinRunnerGate, skinRunnerBrand, runnerBrandResidue } from "./skin-runner";
 
 describe("skinRunnerGate", () => {
   const gate =
@@ -90,5 +90,25 @@ describe("skinRunnerBrand", () => {
   it("no-op на html без шапки раннера (незнакомый шаблон — не калечим)", () => {
     const plain = "<!doctype html><html><head></head><body><p>hi</p></body></html>";
     expect(skinRunnerBrand(plain)).toBe(plain);
+  });
+});
+
+describe("runnerBrandResidue (import-time guard)", () => {
+  it("чисто на распознанной шапке (логотип заменён, канал убран)", () => {
+    expect(runnerBrandResidue(LISTENING_HEAD)).toEqual([]);
+    expect(runnerBrandResidue(READING_HEAD)).toEqual([]);
+  });
+
+  it("чисто на html без всякого брендинга", () => {
+    expect(runnerBrandResidue("<html><head></head><body><p>hi</p></body></html>")).toEqual([]);
+  });
+
+  it("флагует чужой t.me, если шапка из НОВОГО источника не распознана", () => {
+    const newSource =
+      '<html><head></head><body><div class="topbar">' +
+      '<a href="https://t.me/SomeNewChannel">join</a></div></body></html>';
+    const issues = runnerBrandResidue(newSource);
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.join(" ")).toContain("t.me/SomeNewChannel");
   });
 });
