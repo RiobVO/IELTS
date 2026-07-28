@@ -17,6 +17,7 @@
 import { and, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { attempt, contentItem, profile } from "@/db/schema";
+import { isTooFastToRate } from "@/lib/anti-cheat";
 import { createNotifications } from "@/lib/notifications/create";
 import { ELO_FLOOR, ratingDeltas } from "@/lib/rating/elo";
 import { type AwardedBadge, evaluateBadges } from "./badges";
@@ -28,6 +29,8 @@ export interface PostSubmitInput {
   attemptId: string;
   rawScore: number;
   total: number;
+  /** Серверное время прохождения (submit − start) — для floor-guard рейтинга. */
+  timeUsedSeconds: number;
   submittedAt: Date;
 }
 
@@ -113,7 +116,13 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
             eq(attempt.status, "submitted"),
           ),
         );
-      const rated = (c?.n ?? 0) === 1;
+      // First-attempt-only И не подозрительно быстрый сабмит. Floor-guard
+      // (§4.6): инстант-сабмит (start→submit за секунды) не двигает Elo/difficulty
+      // — иначе мусорным быстрым прогоном можно фармить рейтинг. Стрик/XP ниже
+      // применяются всё равно (низкая ценность, не вектор лидерборда).
+      const rated =
+        (c?.n ?? 0) === 1 &&
+        !isTooFastToRate(input.timeUsedSeconds, input.total);
 
       // Defaults carried into the profile write when not rated.
       let newRating = p.rating;
