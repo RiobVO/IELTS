@@ -4,32 +4,28 @@
  *
  * SERVER-ONLY. Uses the Drizzle owner client (`@/db`, bypasses RLS) because it
  * must read ALL `badge` rows and the user's `user_badge`/`profile`/`attempt`/
- * `leaderboard_entry` rows and then WRITE privileged `user_badge` +
- * `notification` rows on the user's behalf — none of which the anon (RLS) path
- * can do for the awarding flow. It never touches `answer_key`.
+ * `leaderboard_entry` rows and then WRITE privileged `user_badge` rows on the
+ * user's behalf — none of which the anon (RLS) path can do for the awarding
+ * flow. It never touches `answer_key`. The `badge_unlocked` notification is
+ * written by the caller (`applyPostSubmit`) from the returned set, not here, so
+ * a badge unlocks exactly one notification.
  *
  * Called from `applyPostSubmit` AFTER the streak/rating profile write, so streak
  * and rating are current. first_place (champion) is computed directly from
  * profile ratings here, so it does NOT depend on the leaderboard rebuild (which
  * is deferred to after() in submitAttempt).
  *
- * BEST-EFFORT: the whole body is wrapped — on ANY error it logs and returns [];
- * a notification failure never loses an award. Only badges the user has NOT yet
- * earned are processed, and inserts are `onConflictDoNothing`, so concurrent or
- * repeat submits award/notify nothing again (idempotent).
+ * BEST-EFFORT: the whole body is wrapped — on ANY error it logs and returns [].
+ * Only badges the user has NOT yet earned are processed, and inserts are
+ * `onConflictDoNothing`, so concurrent or repeat submits award nothing again
+ * (idempotent).
  *
  * The `badge.criteria` jsonb is a discriminated union on `type` shared verbatim
  * with the seed (Agent A) — see the SHARED CRITERIA CONTRACT in the task brief.
  */
 import { and, eq, gt, lt, or } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  attempt,
-  badge,
-  notification,
-  profile,
-  userBadge,
-} from "@/db/schema";
+import { attempt, badge, profile, userBadge } from "@/db/schema";
 
 export interface AwardedBadge {
   id: string;
@@ -39,132 +35,46 @@ export interface AwardedBadge {
   icon: string | null;
 }
 
-/** The `badge.criteria` jsonb shapes (discriminated union on `type`). */
-export type Criteria =
-  | { type: "volume"; tests: number }
-  | { type: "streak"; days: number }
-  | { type: "rating"; min: number }
-  | { type: "perfect" }
-  | {
-      type: "accuracy";
-      qtype: string;
-      minQuestions: number;
-      minPct: number;
-    }
-  | { type: "first_place"; scope: string; period: string };
+import {
+  type Criteria,
+  type UserStats,
+  type QtypeAgg,
+  isMet,
+  badgeProgress,
+} from "./badge-criteria";
 
-/** Per-qtype aggregate (summed correct/total across submitted attempts). */
-interface QtypeAgg {
-  correct: number;
-  total: number;
-}
-
-/** Everything a criteria can be evaluated against, computed once per call. */
-export interface UserStats {
-  rating: number;
-  currentStreak: number;
-  volume: number;
-  hasPerfect: boolean;
-  perQtype: Map<string, QtypeAgg>;
-  isFirstPlaceGlobalAllTime: boolean;
-}
+// Чистые предикаты/типы критериев вынесены в ./badge-criteria (без IO-импортов —
+// тестируются без БД/env). Реэкспорт сохраняет прежний путь импорта для
+// потребителей (badges/page, content/badges).
+export { isMet, badgeProgress };
+export type { Criteria, UserStats, BadgeProgress } from "./badge-criteria";
 
 /** Shape of an attempt's stored `per_type_breakdown` jsonb. */
 type PerTypeBreakdown = Record<string, { correct: number; total: number }>;
 
-/** Does `stats` satisfy `criteria`? Unknown type => not met. */
-function isMet(criteria: Criteria, stats: UserStats): boolean {
-  switch (criteria.type) {
-    case "volume":
-      return stats.volume >= criteria.tests;
-    case "streak":
-      return stats.currentStreak >= criteria.days;
-    case "rating":
-      return stats.rating >= criteria.min;
-    case "perfect":
-      return stats.hasPerfect;
-    case "accuracy": {
-      const agg = stats.perQtype.get(criteria.qtype);
-      if (!agg || agg.total <= 0) return false;
-      if (agg.total < criteria.minQuestions) return false;
-      return (agg.correct / agg.total) * 100 >= criteria.minPct;
-    }
-    case "first_place":
-      // The only first_place scope/period we precompute an award for is the
-      // global / all_time #1 (the "champion" badge). Any other scope/period is
-      // treated as not-met (no source of truth computed here).
-      return (
-        criteria.scope === "global" &&
-        criteria.period === "all_time" &&
-        stats.isFirstPlaceGlobalAllTime
-      );
-    default:
-      // Unknown discriminant — never award.
-      return false;
-  }
-}
-
-/** Read-side progress of a not-yet-earned badge (for the badges page). */
-export interface BadgeProgress {
-  /** 0..1 ratio toward the unlock threshold (clamped). */
-  pct: number;
-  /** Human hint, e.g. "3 / 10 tests". */
-  hint: string;
-}
-
-const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
-
-/**
- * How close `stats` is to satisfying `criteria` — same thresholds as `isMet`,
- * surfaced as a ratio + hint for the locked-badge rings. Two-condition criteria
- * (accuracy: enough answered AND high enough %) track the visible "answered"
- * gate; the % is enforced by `isMet` at award time.
- */
-export function badgeProgress(criteria: Criteria, stats: UserStats): BadgeProgress {
-  switch (criteria.type) {
-    case "volume":
-      return { pct: clamp01(stats.volume / criteria.tests), hint: `${stats.volume} / ${criteria.tests} tests` };
-    case "streak":
-      return { pct: clamp01(stats.currentStreak / criteria.days), hint: `${stats.currentStreak} / ${criteria.days} days` };
-    case "rating":
-      return { pct: clamp01(stats.rating / criteria.min), hint: `${stats.rating} / ${criteria.min} rating` };
-    case "perfect":
-      return { pct: stats.hasPerfect ? 1 : 0, hint: stats.hasPerfect ? "Earned" : "Score 100% on a test" };
-    case "accuracy": {
-      const agg = stats.perQtype.get(criteria.qtype);
-      const answered = agg?.total ?? 0;
-      return { pct: clamp01(answered / criteria.minQuestions), hint: `${answered} / ${criteria.minQuestions} answered` };
-    }
-    case "first_place":
-      return {
-        pct: stats.isFirstPlaceGlobalAllTime ? 1 : 0,
-        hint: stats.isFirstPlaceGlobalAllTime ? "Earned" : "Reach #1 globally",
-      };
-    default:
-      return { pct: 0, hint: "" };
-  }
-}
-
 /** Compute every stat a criteria can need, once, from the owner DB path. */
 export async function computeStats(userId: string): Promise<UserStats> {
-  const [p] = await db
-    .select({
-      rating: profile.rating,
-      currentStreak: profile.currentStreak,
-      ratedCount: profile.ratedCount,
-      hidden: profile.hiddenFromLeaderboard,
-    })
-    .from(profile)
-    .where(eq(profile.id, userId))
-    .limit(1);
-
-  const attempts = await db
-    .select({
-      rawScore: attempt.rawScore,
-      perTypeBreakdown: attempt.perTypeBreakdown,
-    })
-    .from(attempt)
-    .where(and(eq(attempt.userId, userId), eq(attempt.status, "submitted")));
+  // profile и attempts независимы — один round-trip вместо двух (горячий путь).
+  // first_place ниже зависит от p, поэтому остаётся последовательным после.
+  const [[p], attempts] = await Promise.all([
+    db
+      .select({
+        rating: profile.rating,
+        currentStreak: profile.currentStreak,
+        ratedCount: profile.ratedCount,
+        hidden: profile.hiddenFromLeaderboard,
+      })
+      .from(profile)
+      .where(eq(profile.id, userId))
+      .limit(1),
+    db
+      .select({
+        rawScore: attempt.rawScore,
+        perTypeBreakdown: attempt.perTypeBreakdown,
+      })
+      .from(attempt)
+      .where(and(eq(attempt.userId, userId), eq(attempt.status, "submitted"))),
+  ]);
 
   let hasPerfect = false;
   const perQtype = new Map<string, QtypeAgg>();
@@ -235,28 +145,33 @@ export async function computeStats(userId: string): Promise<UserStats> {
 
 /**
  * Evaluate all badges for `userId`, award any newly-earned ones (insert
- * `user_badge` + a `badge_unlocked` `notification`), and return the newly-earned
- * badges. Never throws.
+ * `user_badge`), and return the newly-earned badges. The `badge_unlocked`
+ * notification is emitted by the caller from this return — see `applyPostSubmit`.
+ * Never throws.
  */
 export async function evaluateBadges(userId: string): Promise<AwardedBadge[]> {
   try {
-    const badges = await db
-      .select({
-        id: badge.id,
-        code: badge.code,
-        name: badge.name,
-        description: badge.description,
-        icon: badge.icon,
-        criteria: badge.criteria,
-      })
-      .from(badge);
+    // badge (все строки) и userBadge (заработанные юзером) независимы — один
+    // round-trip вместо двух последовательных в горячем submit-пути.
+    const [badges, earnedRows] = await Promise.all([
+      db
+        .select({
+          id: badge.id,
+          code: badge.code,
+          name: badge.name,
+          description: badge.description,
+          icon: badge.icon,
+          criteria: badge.criteria,
+        })
+        .from(badge),
+      db
+        .select({ badgeId: userBadge.badgeId })
+        .from(userBadge)
+        .where(eq(userBadge.userId, userId)),
+    ]);
 
     if (badges.length === 0) return [];
 
-    const earnedRows = await db
-      .select({ badgeId: userBadge.badgeId })
-      .from(userBadge)
-      .where(eq(userBadge.userId, userId));
     const earned = new Set(earnedRows.map((r) => r.badgeId));
 
     // Only bother computing stats if there is at least one un-earned badge.
@@ -284,9 +199,10 @@ export async function evaluateBadges(userId: string): Promise<AwardedBadge[]> {
     // Award: insert user_badge rows; onConflictDoNothing guards the composite
     // PK against concurrent/duplicate submits double-inserting. `.returning()`
     // yields ONLY the rows actually inserted by THIS call (a losing concurrent
-    // insert returns nothing), so the notification + return reflect exactly the
-    // awards we won — never a duplicate `badge_unlocked` (notification has no
-    // unique constraint to lean on).
+    // insert returns nothing), so the return reflects exactly the awards we won.
+    // The caller turns this set into one `badge_unlocked` notification per badge
+    // (notification has no unique constraint to lean on), so emitting it there —
+    // not here — keeps awards at exactly one notification each.
     const inserted = await db
       .insert(userBadge)
       .values(newlyEarned.map((b) => ({ userId, badgeId: b.id })))
@@ -294,22 +210,6 @@ export async function evaluateBadges(userId: string): Promise<AwardedBadge[]> {
       .returning({ badgeId: userBadge.badgeId });
     const insertedIds = new Set(inserted.map((r) => r.badgeId));
     const awarded = newlyEarned.filter((b) => insertedIds.has(b.id));
-    if (awarded.length === 0) return [];
-
-    // Notify per award — best-effort and isolated so a notification failure
-    // doesn't lose the (already-persisted) badge award.
-    for (const b of awarded) {
-      try {
-        await db.insert(notification).values({
-          userId,
-          type: "badge_unlocked",
-          title: b.name,
-          body: b.description,
-        });
-      } catch (e) {
-        console.error("evaluateBadges: notification insert failed", b.code, e);
-      }
-    }
 
     return awarded;
   } catch (e) {
