@@ -32,7 +32,7 @@ const CARDS: PlanCardMeta[] = [
     features: [
       { t: "Unlimited Reading & Listening", on: true },
       { t: "Score & band per test", on: true },
-      { t: "Per-type breakdown", on: false },
+      { t: "Per-type breakdown", on: true },
       { t: "Answer explanations & evidence", on: false },
       { t: "Full 40-question mock tests", on: false },
       { t: "League & badges", on: true },

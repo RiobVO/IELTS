@@ -74,7 +74,14 @@ export async function persistTest(
         title: parsed.title,
         sourceFilePath: opts.sourceFilePath ?? null,
         durationSeconds: parsed.durationSeconds,
-        tierRequired: "basic",
+        // Full mock tests (Reading/Listening) are a Premium feature; single
+        // passages/parts stay Basic. Gating at the source means the catalog lock
+        // (meetsTier) and the server tier-gates apply to every new import without
+        // a manual step. Already-imported tests are backfilled separately.
+        tierRequired:
+          parsed.category === "full_reading" || parsed.category === "full_listening"
+            ? "premium"
+            : "basic",
         bandType: parsed.bandType as ContentInsert["bandType"],
         questionTypes: parsed.questionTypes,
         bandScale: parsed.bandScale, // raw->band table for Full tests; null otherwise
