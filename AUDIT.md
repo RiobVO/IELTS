@@ -6,24 +6,26 @@
 отложенное вынесено в отдельный раздел (это принятые решения, НЕ баги).
 
 > Порядок работы по находкам — по явной просьбе пользователя. Этот файл — реестр, не план.
-> Ближайший порядок: (1) ✅ P0 iframe isolation закрыт (2026-06-24, см. «Закрыто»);
-> (2) продуктовая задача Practice Hub — следующая; (3) затем P2/P3 из этого реестра.
+> Ближайший порядок: (1) ✅ P0 iframe isolation закрыт и проверен на Vercel prod (2026-06-24,
+> см. «Закрыто»); (2) ✅ Practice Hub реализован и проверен на Vercel prod (2026-06-24);
+> (3) **текущая работа — открытые P2/P3 из этого реестра по приоритету.**
 
 ---
 
 ## Ближайший порядок работ
 
 1. **✅ P0 закрыт (2026-06-24):** `/app/exam/[id]` runner_html изолирован в opaque origin
-   (sandbox `allow-scripts allow-modals` без `allow-same-origin`). Детали — в разделе «Закрыто».
-2. **Practice Hub after P0:** заменить верхние пункты Reading/Listening на единый `Practice` →
-   `/app/practice`. Внутри хаба показать четыре IELTS-skills: Reading и Listening как живые входы в
-   существующие каталоги, Writing и Speaking как честные `Coming soon` / Ultra-hook без разморозки
-   Phase 3 AI.
-3. **Back to audit:** после Practice Hub продолжить открытые P2/P3 по приоритету.
+   (sandbox `allow-scripts allow-modals` без `allow-same-origin`) и проверен на Vercel prod.
+   Детали — в разделе «Закрыто».
+2. **✅ Practice Hub закрыт (2026-06-24):** верхние пункты Reading/Listening заменены единым
+   `Practice` → `/app/practice`; Reading/Listening — живые входы в существующие каталоги,
+   Writing/Speaking — честные `Coming soon` / Ultra-hook без разморозки Phase 3 AI. Continuation-герой
+   (recommended/resume/first-test) сверху против «лишнего клика». Реализован, отревьюен (nav-состояние,
+   RSC-границы, auth/тиры/scope — чисто), проверен на Vercel prod (commit `956d43c`).
+3. **▶ Текущая работа — back to audit:** открытые P2/P3 ниже по приоритету, по одной находке (по
+   явной просьбе пользователя).
 
-Practice Hub — **не audit-баг**, а продуктовая IA-задача. Качество реализации: профессиональный хаб,
-а не промежуточная страница с четырьмя пустыми плитками; сохранить прямые CTA/recommendation, чтобы
-не ощущался лишний клик до практики.
+Practice Hub был **не audit-багом**, а продуктовой IA-задачей — закрыт отдельным треком выше.
 
 ---
 
@@ -37,7 +39,8 @@ _CatalogView.tsx:29 — examHref = has_runner ? `/app/exam/${id}` : `/app/readin
 ```
 
 - **`/app/exam/[id]`** (НОВЫЙ, целевой) — `app/app/exam/[id]/ExamFrame.tsx` (iframe) +
-  `runner/route.ts`. Рендерит очищенный `runner_html` — оригинальный HTML теста. **Несёт P0.**
+  `runner/route.ts`. Рендерит очищенный `runner_html` — оригинальный HTML теста. **P0 isolation
+  закрыт:** sandbox `allow-scripts allow-modals` без `allow-same-origin`.
 - **`/app/reading/[id]`** (LEGACY) — `app/app/reading/[id]/ExamRunner.tsx` + `src/components/exam/*`
   (`QuestionHtml`/`QuestionNavigator`/`ExamTimer`/`AudioPlayer`). Атомизированные вопросы
   (+ опц. verbatim `questions_html` из `passage`). Для тестов без `runner_html`.
@@ -145,8 +148,12 @@ _CatalogView.tsx:29 — examHref = has_runner ? `/app/exam/${id}` : `/app/readin
   симулированном opaque-window: no-throw + Storage-семантика; +`bridge.test.ts` на retarget/идемпотентность/
   скоупинг), `npx tsc --noEmit` чисто. CSP-хосты сверены с фикстурами (внешний html2pdf-скрипт
   вырезается санитайзером; единственная внешка — cdnjs FA + Google Fonts; listening-аудио переписано
-  на Supabase). **Финальная приёмка — реальный браузер на Vercel-проде** (рендер/аудио/сабмит экзамена,
-  reading и listening) — автоматические/MCP-проверки тут не доказывают.
+  на Supabase). **Live Vercel prod acceptance 2026-06-24:** Reading
+  `/app/exam/b910fd84-6a30-4e9c-9383-c25d8cecbdbb` и Listening
+  `/app/exam/4c834f23-873b-4a9a-be04-0ed90cefa996` оба отдают iframe sandbox
+  `allow-scripts allow-modals`; parent не читает iframe DOM (`parentCanReadIframeDOM=false`);
+  runner-контент рендерится; console `error/warning` пустые; Listening audio доходит до `Ready to play`
+  и `Audio is Playing`; ручной smoke подтвердил Reading submit → result и Listening submit → result.
 - **Остаток (не дыра):** CSP-вайтлист хостов выведен из 2 текущих шаблонов (Reading-Full + Listening);
   импорт теста из нового источника с другой внешкой будет CSP-заблокирован (видимый сбой, не утечка) —
   расширять вайтлист при появлении нового шаблона.
