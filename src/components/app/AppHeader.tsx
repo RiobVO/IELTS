@@ -5,10 +5,12 @@ import { useInteractive } from "@/components/core/util";
 import { Icon } from "@/components/core/icons";
 import { Button } from "@/components/core/Button";
 import { NotificationsBell, type NotifItem } from "./NotificationsBell";
+import { navHighlight } from "./navActive";
 
 /** Активный раздел сайта — подсветка в навигации. */
 export type ActivePage =
   | "dashboard"
+  | "practice"
   | "reading"
   | "listening"
   | "leaderboard"
@@ -33,8 +35,9 @@ const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
 const LINKS: { id: ActivePage; label: string; href: string; icon: Parameters<typeof Icon>[0]["name"] }[] = [
   { id: "dashboard", label: "Home", href: "/app", icon: "target" },
-  { id: "reading", label: "Reading", href: "/app/reading", icon: "book-open" },
-  { id: "listening", label: "Listening", href: "/app/listening", icon: "headphones" },
+  // Practice — единый вход во все 4 skill; reading/listening остаются каталогами
+  // под ним и подсвечивают этот пункт (см. navHighlight).
+  { id: "practice", label: "Practice", href: "/app/practice", icon: "dumbbell" },
   { id: "leaderboard", label: "League", href: "/app/leaderboard", icon: "crown" },
   { id: "badges", label: "Badges", href: "/app/badges", icon: "award" },
 ];
@@ -173,6 +176,8 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
   const burger = useInteractive();
   const [open, setOpen] = useState(false);
   const onPricing = active === "pricing";
+  // Practice-пункт подсвечивается и на /app/reading, и на /app/listening.
+  const hi = navHighlight(active);
 
   // Drawer: Esc закрывает, body-scroll лочится пока открыт, ресайз в десктоп
   // (≥1024px) закрывает — иначе скрытый классом drawer оставит scroll-lock висеть.
@@ -227,7 +232,7 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
 
         <nav className="ah-nav" style={{ marginLeft: 22, gap: 4 }}>
           {LINKS.map((l) => (
-            <NavLink key={l.id} link={l} active={active === l.id} />
+            <NavLink key={l.id} link={l} active={hi === l.id} />
           ))}
         </nav>
 
@@ -377,7 +382,7 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
 
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {LINKS.map((l) => (
-            <DrawerLink key={l.id} link={l} active={active === l.id} onClose={() => setOpen(false)} />
+            <DrawerLink key={l.id} link={l} active={hi === l.id} onClose={() => setOpen(false)} />
           ))}
         </div>
 

@@ -1,5 +1,6 @@
 import type * as React from "react";
 import { type ActivePage } from "./AppHeader";
+import { navHighlight } from "./navActive";
 import { Icon } from "@/components/core/icons";
 import { Skeleton } from "@/components/core/Skeleton";
 
@@ -13,8 +14,7 @@ import { Skeleton } from "@/components/core/Skeleton";
 
 const NAV = [
   { id: "dashboard", label: "Home" },
-  { id: "reading", label: "Reading" },
-  { id: "listening", label: "Listening" },
+  { id: "practice", label: "Practice" },
   { id: "leaderboard", label: "League" },
   { id: "badges", label: "Badges" },
 ] as const;
@@ -57,7 +57,8 @@ export function AppShellSkeleton({
 
           <nav className="ahs-nav" style={{ marginLeft: 22, gap: 4 }}>
             {NAV.map((l) => {
-              const on = active === l.id;
+              // reading/listening loading тоже подсвечивают Practice (как в живой шапке).
+              const on = active != null && navHighlight(active) === l.id;
               return (
                 <span
                   key={l.id}
@@ -132,6 +133,48 @@ export function CatalogSkeleton() {
     </div>
   );
 }
+
+/** Контент-скелет Practice Hub — заголовок, hero-полоса, сетка из 4 skill-карт.
+    Сетка зеркалит .ph-grid страницы (1-up → 2-up на 640px), чтобы свап скелета на
+    контент не давал layout-shift; брейкпоинт-колонки в классе, не inline. */
+export function PracticeSkeleton() {
+  return (
+    <div style={P.wrap}>
+      <style>{`.phs-grid{display:grid;grid-template-columns:1fr;gap:16px}@media(min-width:640px){.phs-grid{grid-template-columns:1fr 1fr}}`}</style>
+      <Skeleton w={120} h={14} style={{ marginBottom: 12 }} />
+      <Skeleton w={300} h={28} style={{ marginBottom: 10 }} />
+      <Skeleton w={360} h={14} style={{ marginBottom: 26 }} />
+
+      <Skeleton w="100%" h={132} r="var(--radius-xl)" style={{ marginBottom: 26 }} />
+
+      <Skeleton w={120} h={14} style={{ marginBottom: 14 }} />
+      <div className="phs-grid">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} style={P.card}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <Skeleton w={46} h={46} r={14} />
+              <Skeleton w={64} h={22} r="var(--radius-full)" style={{ marginLeft: "auto" }} />
+            </div>
+            <Skeleton w="50%" h={22} style={{ marginBottom: 12 }} />
+            <Skeleton w="92%" h={13} style={{ marginBottom: 6 }} />
+            <Skeleton w="78%" h={13} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const P: Record<string, React.CSSProperties> = {
+  wrap: { maxWidth: 980, margin: "0 auto", padding: "var(--space-8) var(--space-6) var(--space-12)" },
+  card: {
+    background: "var(--surface)",
+    border: "2px solid var(--border)",
+    borderRadius: "var(--radius-lg)",
+    padding: "22px",
+    boxShadow: "var(--shadow-solid)",
+  },
+};
 
 const H: Record<string, React.CSSProperties> = {
   bar: {
