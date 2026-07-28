@@ -87,7 +87,14 @@ export function skinRunnerBrand(html: string): string {
   if (!hasText && !hasImg) return html; // незнакомая шапка — не трогаем
   if (!/<\/head>/i.test(html)) return html; // нет безопасной точки инжекта
 
-  let out = html.replace(RE_TELEGRAM, ""); // увести трафик на чужой канал — нельзя
+  let out = html.replace(RE_TELEGRAM, ""); // тег чужого канала в шапке
+  // Чужой канал живёт ещё и в JS «share-result card» (CHANNEL/CHANNEL_URL =
+  // '@chan'/'t.me/chan') + любых остаточных t.me-ссылках. Вычищаем везде, иначе
+  // карточка «поделиться» рекламировала бы чужой канал. В exam-раннере свой
+  // t.me-ссылки нет → срезаем любую.
+  out = out.replace(/((?:const|let|var)\s+CHANNEL(?:_URL)?\s*=\s*)(["'])[^"']*\2/g, "$1$2$2");
+  out = out.replace(/https?:\/\/t\.me\/[A-Za-z0-9_+]+/gi, "");
+  out = out.replace(/\bt\.me\/[A-Za-z0-9_+]+/gi, "");
   if (hasText) {
     out = out.replace(RE_LOGO_IMG, ""); // картинку убираем, bando-знак ставим вместо текста
     out = out.replace(RE_LOGO_TEXT, BANDO_BRAND);

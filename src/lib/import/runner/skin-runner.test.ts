@@ -41,6 +41,7 @@ const LISTENING_HEAD = `<!doctype html><html><head><title>IELTS Listening — Ca
 <a class="brand-telegram" href="https://t.me/EnjoyListeningTests" target="_blank" rel="noopener noreferrer" title="Join"><svg viewBox="0 0 24 24"><path d="M1 1"/></svg></a>
 </div></div>
 <div id="playOverlay">gate</div>
+<script>const CHANNEL='@EnjoyListeningTests';const CHANNEL_URL='t.me/EnjoyListeningTests';</script>
 </body></html>`;
 
 // Reading-вариант — тот же шаблон, другой чужой канал, без playOverlay.
@@ -58,6 +59,12 @@ describe("skinRunnerBrand", () => {
   it("удаляет чужой telegram-канал целиком (анти-увод трафика)", () => {
     expect(out).not.toContain("t.me/EnjoyListeningTests");
     expect(out).not.toContain("brand-telegram");
+  });
+
+  it("вычищает чужой канал и из share-card JS (CHANNEL/CHANNEL_URL обнулены)", () => {
+    expect(out).not.toMatch(/t\.me\//i);
+    expect(out).toMatch(/CHANNEL\s*=\s*['"]['"]/);
+    expect(out).toMatch(/CHANNEL_URL\s*=\s*['"]['"]/);
   });
 
   it("убирает картинку-логотип источника", () => {
