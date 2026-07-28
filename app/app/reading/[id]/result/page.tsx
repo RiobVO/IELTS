@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
 import { answerKey, attempt, contentItem, question } from "@/db/schema";
@@ -56,6 +56,25 @@ export default async function ResultPage({
   // Ownership check — a user can only see their own attempt's review.
   if (!att || att.userId !== user.id || att.contentItemId !== id) notFound();
 
+  // Percentile «of other students» считается по ПЕРВОЙ submitted-попытке каждого
+  // ДРУГОГО юзера: ретейки не накручивают поле, и сам пользователь исключён (тот же
+  // first-attempt-per-user анти-фарм, что у лидерборда; поддержан индексом
+  // attempt_user_content_submitted_idx, migration 0017). isNotNull(raw_score) — чтобы
+  // редкая legacy-строка без балла не раздувала знаменатель «of other students».
+  const otherFirsts = db
+    .selectDistinctOn([attempt.userId], { rawScore: attempt.rawScore })
+    .from(attempt)
+    .where(
+      and(
+        eq(attempt.contentItemId, id),
+        eq(attempt.status, "submitted"),
+        ne(attempt.userId, user.id),
+        isNotNull(attempt.rawScore),
+      ),
+    )
+    .orderBy(attempt.userId, asc(attempt.submittedAt))
+    .as("other_firsts");
+
   // Review depth seam (§4.8): `hasFullReview` follows the launch flag REVIEW_OPEN
   // — currently OPEN, so the review is free for everyone. The Premium gate is
   // intact (flip REVIEW_OPEN to re-gate). effectiveTier still downgrades an
@@ -88,16 +107,15 @@ export default async function ResultPage({
       .from(contentItem)
       .where(eq(contentItem.id, id))
       .limit(1),
-    // Percentile vs other students: count of submitted attempts on this test and
-    // how many scored strictly below this one (shown only when there are enough).
+    // Percentile vs other students: over each OTHER student's first attempt, how
+    // many scored strictly below this one (shown only when there are enough).
     att.rawScore != null
       ? db
           .select({
             total: sql<number>`count(*)::int`,
-            below: sql<number>`count(*) filter (where ${attempt.rawScore} < ${att.rawScore})::int`,
+            below: sql<number>`count(*) filter (where ${otherFirsts.rawScore} < ${att.rawScore})::int`,
           })
-          .from(attempt)
-          .where(and(eq(attempt.contentItemId, id), eq(attempt.status, "submitted")))
+          .from(otherFirsts)
       : Promise.resolve([{ total: 0, below: 0 }]),
     // Previous submitted attempt on this test (for the "since last test" delta).
     att.submittedAt
