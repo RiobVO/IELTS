@@ -5,6 +5,12 @@
 > эталонные computer-delivered IELTS HTML-файлы. **BRIEF на этом треке отложен**
 > (явное решение пользователя): источник истины для экзамена — эталонные HTML.
 
+> **⚠️ Обновление 2026-06-24 (P0-изоляция):** sandbox-решение §8 и risk §9.4 пересмотрены.
+> Раннер изолирован в **opaque origin** (`allow-scripts allow-modals`, без `allow-same-origin`);
+> rationale «localStorage + аудио требуют same-origin» снят: storage — in-memory полифил
+> (`runner-storage.ts`), аудио грузится absolute-https под `media-src`. Контракт сабмита — по
+> `e.source === iframe.contentWindow`, не по origin. Актуальная истина — AUDIT.md «Закрыто» (P0).
+
 ## 1. Проблема
 
 Текущий пайплайн парсит загруженный HTML-файл теста в БД (passage/question/

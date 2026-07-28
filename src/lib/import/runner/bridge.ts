@@ -54,9 +54,11 @@ function __collect(){
   return a;
 }`;
 
-// targetOrigin = свой origin (iframe и parent на нашем origin); parent дополнительно
-// проверяет event.origin при приёме.
-const SEND = `function __send(ans){ try{ parent.postMessage({ type: 'ielts-submit', answers: ans || __collect() }, window.location.origin); }catch(e){} }`;
+// Раннер исполняется в opaque origin (iframe sandbox без allow-same-origin): там
+// window.location.origin === "null", а postMessage(data, "null") бросает — поэтому
+// targetOrigin = "*". Безопасно: parent валидирует отправителя по идентичности окна
+// (e.source === iframe.contentWindow в ExamFrame), а не по origin.
+const SEND = `function __send(ans){ try{ parent.postMessage({ type: 'ielts-submit', answers: ans || __collect() }, '*'); }catch(e){} }`;
 
 // Reading: оба пути сабмита (deliver-кнопка и autoSubmitMock) зовут markOnPage()
 // затем showResults() — глушим разметку (ключи вырезаны) и перехватываем сабмит.
@@ -84,3 +86,16 @@ export const LISTENING_BRIDGE = `<script>(function(){${LISTENING_COLLECT}
   }
   __hook();
 })();</script>`;
+
+// Read-time миграция legacy-рядов. runner_html, импортированные ДО P0-изоляции, несут в
+// bridge `targetOrigin = window.location.origin`. После снятия allow-same-origin раннер в
+// opaque origin → window.location.origin === "null", postMessage(data, "null") бросает, и
+// сабмит молча не уходит. Точечно переписываем targetOrigin ИМЕННО ielts-submit-сообщения
+// на "*" (фикстуры собственный window.location.origin не используют — единственный матч это
+// инжектированный SEND). No-op для новых рядов (SEND уже эмитит "*").
+export function retargetBridgeOrigin(html: string): string {
+  return html.replace(
+    /(parent\.postMessage\(\s*\{\s*type:\s*['"]ielts-submit['"][\s\S]*?\}\s*),\s*window\.location\.origin\s*\)/g,
+    "$1, '*')",
+  );
+}
