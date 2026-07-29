@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
 import { answerKey, attempt, contentItem, question } from "@/db/schema";
@@ -39,29 +39,11 @@ export default async function ResultPage({
   const { a: attemptId, unlocked } = await searchParams;
   if (!attemptId) notFound();
 
-  // Явная проекция: тянем только реально используемые ниже колонки. `answers`
-  // нужен для re-grade; тяжёлый `per_type_breakdown` НЕ нужен (разбор
-  // пересчитывается через grade()), как и mode/status/started_at.
-  const [att] = await db
-    .select({
-      userId: attempt.userId,
-      contentItemId: attempt.contentItemId,
-      answers: attempt.answers,
-      submittedAt: attempt.submittedAt,
-      timeUsedSeconds: attempt.timeUsedSeconds,
-      rawScore: attempt.rawScore,
-      bandScore: attempt.bandScore,
-    })
-    .from(attempt)
-    .where(eq(attempt.id, attemptId));
-  // Ownership check — a user can only see their own attempt's review.
-  if (!att || att.userId !== user.id || att.contentItemId !== id) notFound();
-
-  // Percentile «of other students» считается по ПЕРВОЙ submitted-попытке каждого
-  // ДРУГОГО юзера: ретейки не накручивают поле, и сам пользователь исключён (тот же
-  // first-attempt-per-user анти-фарм, что у лидерборда; поддержан индексом
-  // attempt_user_content_submitted_idx, migration 0017). isNotNull(raw_score) — чтобы
-  // редкая legacy-строка без балла не раздувала знаменатель «of other students».
+  // otherFirsts: ПЕРВАЯ submitted-попытка каждого ДРУГОГО юзера на этот тест
+  // (ретейки не накручивают percentile, сам пользователь исключён — тот же
+  // first-attempt-per-user анти-фарм, что у лидерборда; индекс
+  // attempt_user_content_submitted_idx, migration 0017). isNotNull(raw_score) —
+  // чтобы редкая legacy-строка без балла не раздувала знаменатель.
   const otherFirsts = db
     .selectDistinctOn([attempt.userId], { rawScore: attempt.rawScore })
     .from(attempt)
@@ -76,13 +58,30 @@ export default async function ResultPage({
     .orderBy(attempt.userId, asc(attempt.submittedAt))
     .as("other_firsts");
 
-  // Review depth seam (§4.8): `hasFullReview` follows the launch flag REVIEW_OPEN
-  // — currently OPEN, so the review is free for everyone. The Premium gate is
-  // intact (flip REVIEW_OPEN to re-gate). effectiveTier still downgrades an
-  // expired premium so the gated path stays correct when the flag is closed.
-  // answer_key is read server-side (owner role) and revealed only AFTER submit,
-  // only to the attempt's owner, and only when `fullReview` is true.
-  const [profile, rows, ci, pctRow, prevRows] = await Promise.all([
+  // Один параллельный слой. Раньше att-read лидировал отдельным хопом, потому что
+  // pctRow/prevRows зависели от его JS-значений; теперь они берут att.raw_score /
+  // att.submitted_at коррелированными подзапросами по attemptId, поэтому весь набор
+  // читается одним round-trip. Проверка владения — JS-гард ПОСЛЕ (notFound для UX);
+  // answer_key в `rows` дополнительно заперт SQL-EXISTS: строки вернутся ТОЛЬКО для
+  // attempt этого юзера — чужой/несуществующий id → пустой ключ, БД его не читает,
+  // так что инвариант «answer_key только владельцу» держится на уровне SQL.
+  // Review depth seam (§4.8): `hasFullReview` follows the launch flag REVIEW_OPEN —
+  // currently OPEN; effectiveTier downgrades an expired premium when the flag closes.
+  const [attRows, profile, rows, ci, pctRow, prevRows] = await Promise.all([
+    // Явная проекция: только используемые ниже колонки. `answers` — для re-grade;
+    // тяжёлый per_type_breakdown НЕ нужен (разбор пересчитывается через grade()).
+    db
+      .select({
+        userId: attempt.userId,
+        contentItemId: attempt.contentItemId,
+        answers: attempt.answers,
+        submittedAt: attempt.submittedAt,
+        timeUsedSeconds: attempt.timeUsedSeconds,
+        rawScore: attempt.rawScore,
+        bandScore: attempt.bandScore,
+      })
+      .from(attempt)
+      .where(eq(attempt.id, attemptId)),
     getProfile(),
     db
       .select({
@@ -96,7 +95,26 @@ export default async function ResultPage({
       })
       .from(question)
       .innerJoin(answerKey, eq(answerKey.questionId, question.id))
-      .where(eq(question.contentItemId, id))
+      // EXISTS-гард: answer_key раскрывается, только если этот attempt принадлежит
+      // юзеру и относится к этому тесту — иначе ни одной строки (БД не отдаёт ключ
+      // для чужой/несуществующей попытки, до и независимо от JS-проверки владения).
+      .where(
+        and(
+          eq(question.contentItemId, id),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(attempt)
+              .where(
+                and(
+                  eq(attempt.id, attemptId),
+                  eq(attempt.userId, user.id),
+                  eq(attempt.contentItemId, id),
+                ),
+              ),
+          ),
+        ),
+      )
       .orderBy(question.number),
     db
       .select({
@@ -111,35 +129,40 @@ export default async function ResultPage({
       .from(contentItem)
       .where(eq(contentItem.id, id))
       .limit(1),
-    // Percentile vs other students: over each OTHER student's first attempt, how
-    // many scored strictly below this one (shown only when there are enough).
-    att.rawScore != null
-      ? db
-          .select({
-            total: sql<number>`count(*)::int`,
-            below: sql<number>`count(*) filter (where ${otherFirsts.rawScore} < ${att.rawScore})::int`,
-          })
-          .from(otherFirsts)
-      : Promise.resolve([{ total: 0, below: 0 }]),
-    // Previous submitted attempt on this test (for the "since last test" delta).
-    att.submittedAt
-      ? db
-          .select({ rawScore: attempt.rawScore, bandScore: attempt.bandScore })
-          .from(attempt)
-          .where(
-            and(
-              eq(attempt.userId, user.id),
-              eq(attempt.contentItemId, id),
-              eq(attempt.status, "submitted"),
-              lt(attempt.submittedAt, att.submittedAt),
-            ),
-          )
-          .orderBy(desc(attempt.submittedAt))
-          .limit(1)
-      : Promise.resolve([]),
+    // Percentile vs other students: сколько ДРУГИХ набрали строго меньше этой
+    // попытки. att.raw_score берётся коррелированным подзапросом по attemptId
+    // (NULL → сравнение false → below=0; JS-гард ниже прячет метрику для legacy).
+    db
+      .select({
+        total: sql<number>`count(*)::int`,
+        below: sql<number>`count(*) filter (where ${otherFirsts.rawScore} < (select sub.raw_score from ${attempt} sub where sub.id = ${attemptId}))::int`,
+      })
+      .from(otherFirsts),
+    // Предыдущая submitted-попытка на этом тесте (дельта «since last test»). Граница
+    // по времени = att.submitted_at коррелированным подзапросом по attemptId.
+    db
+      .select({ rawScore: attempt.rawScore, bandScore: attempt.bandScore })
+      .from(attempt)
+      .where(
+        and(
+          eq(attempt.userId, user.id),
+          eq(attempt.contentItemId, id),
+          eq(attempt.status, "submitted"),
+          lt(
+            attempt.submittedAt,
+            sql`(select sub.submitted_at from ${attempt} sub where sub.id = ${attemptId})`,
+          ),
+        ),
+      )
+      .orderBy(desc(attempt.submittedAt))
+      .limit(1),
     // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
     getHeaderData(),
   ]);
+
+  const att = attRows[0];
+  // Ownership — пользователь видит разбор только своей попытки на этот тест.
+  if (!att || att.userId !== user.id || att.contentItemId !== id) notFound();
 
   const fullReview = profile
     ? hasFullReview(
