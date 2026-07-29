@@ -5,8 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > **Активный трек — perf/lag `/app`** (см. «🔜 Current — perf/lag /app» ниже). P0 iframe-раннер ✅,
 > Practice Hub ✅ и ВСЕ P2/P3 из [AUDIT.md](./AUDIT.md) ✅ закрыты и на Vercel prod (2026-06-24);
 > реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist (`4339f92`), rank-2 leaderboard (`ed2a612`),
-> rank-3 exam/reading START (`7678f44`) и rank-4 Result (`6600249`) сделаны, **следующие — rank 5–8**
-> (leaderboard viewer-row merge / badges concurrent / getPublishedTests parallelize / daily-count batch).
+> rank-3 exam/reading START (`7678f44`), rank-4 Result (`6600249`) и rank-7 getPublishedTests
+> parallelize (`a8feabd`) сделаны, **остаются — leaderboard viewer-row merge / badges concurrent /
+> Basic daily-count batch**.
 > Любую новую работу вне этого порядка начинать по явной просьбе пользователя.
 >
 > Справка: [BRIEF.md](./BRIEF.md) — истина (спека/стек/§5/§6.1/§9). [BACKLOG.md](./BACKLOG.md) —
@@ -207,9 +208,11 @@ RLS, server-only grading, `answer_key` never client-side, tier gating, idempoten
    whole set reads in one round-trip. Ownership is a JS guard after the await; `answer_key` is locked
    behind a SQL `EXISTS` gate (rows return only for the owner — invariant now holds at the DB level).
    Equivalence + gate confirmed against prod data (8 attempts). ≈ −1 serial hop.
-5–8 (NEXT): leaderboard viewer-row merge, badges `computeStats` concurrent,
-   `getPublishedTests` cold-start parallelize, Basic daily-count batch — detail in the
-   `prod-infra-topology` memory.
+7. ✅ **getPublishedTests parallelize** — done (commit `a8feabd`): the cached catalog builder read the
+   published list then the grouped Q-counts serially; counts never depended on the list, so both now run
+   in one `Promise.all` (−1 round-trip on a cold cache miss). Cache key/tag/revalidate unchanged.
+Remaining (NEXT): leaderboard viewer-row merge, badges `computeStats` concurrent, Basic daily-count
+   batch — detail in the `prod-infra-topology` memory.
 
 Verify perf on **prod** via Server-Timing headers (can't measure latency from a static checkout; user
 reads prod numbers from UZ). Code verification per change: `npx tsc --noEmit` + `npm run build` (dev
