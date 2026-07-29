@@ -14,9 +14,9 @@ import { effectiveTier, meetsTier } from "@/lib/tiers";
 const SUPABASE_MEDIA_ORIGIN = new URL(env.SUPABASE_URL).origin;
 
 // Отдаёт очищенный runner_html в iframe. Auth — через middleware (/app защищён) +
-// явная проверка тут; доступ по tier — inline (gateAccess в actions.ts делает
-// redirect(), несовместимый с route handler). Контент платный → НЕ публичный
-// Storage. Старт/daily-limit уже гейтятся на странице через ensureAttempt; здесь
+// явная проверка тут; доступ по tier — inline meetsTier ниже (redirect() из route
+// handler невозможен). Контент платный → НЕ публичный Storage. Старт/daily-limit уже
+// гейтятся на exam-странице (enforceAccess перед startAttempt); здесь
 // defense-in-depth на случай прямого GET /runner.
 export async function GET(
   _req: Request,
