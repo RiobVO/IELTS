@@ -62,3 +62,28 @@ describe("parseRunner — listening qtype", () => {
     expect(new Set(r.parsed.questions.map((q) => q.qtype)).size).toBeGreaterThan(1);
   });
 });
+
+// Review-gate (Task B): parser должен ПОДНИМАТЬ low-confidence места, а не молча
+// фоллбэчить. Q2 — неизвестный тип + пустой ключ; Q3 — fuzzy-тип (CONTAINS).
+const readingWithIssues = `<!doctype html><html><head><title>WTest</title></head><body>
+<script>
+var correctAnswers = {"1":"TRUE","2":"","3":"A"};
+var questionTypes = {"1":"True/False/Not Given","2":"Frobnicate","3":"Some Matching"};
+</script></body></html>`;
+
+describe("parseRunner — warnings (review gate)", () => {
+  const w = parseRunner(readingWithIssues).parsed.warnings;
+  it("флагует неизвестный тип с фоллбэком на short_answer", () => {
+    expect(w.some((x) => /Q2/.test(x) && /short_answer/i.test(x))).toBe(true);
+  });
+  it("флагует низко-уверенный (fuzzy) тип", () => {
+    expect(w.some((x) => /Q3/.test(x) && /matching_info/.test(x))).toBe(true);
+  });
+  it("флагует пустой ключ", () => {
+    expect(w.some((x) => /Q2/.test(x) && /key/i.test(x))).toBe(true);
+  });
+  it("чистый файл: нет unknown-type / empty-key warnings", () => {
+    const clean = parseRunner(reading).parsed.warnings;
+    expect(clean.some((x) => /unknown type|empty answer key/i.test(x))).toBe(false);
+  });
+});

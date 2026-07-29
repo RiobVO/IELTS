@@ -50,14 +50,30 @@ function parseReadingRunner(html: string): RunnerParseResult {
   const bandScale = extractFunctionTable(src, "getBandFor40", 0, 40);
 
   const numbers = Object.keys(correct).map(Number).sort((a, b) => a - b);
+  const warnings: string[] = [];
   const questions = numbers.map((n) => {
     const k = String(n);
     const answer: ParsedAnswerKey = accept[k]?.length
       ? { mode: "text_accept", accept: accept[k]!, explanation: expl[k] ?? null, evidence: evid[k] ?? null }
       : { mode: "exact", accept: [NORM(correct[k])], explanation: expl[k] ?? null, evidence: evid[k] ?? null };
-    const qtype = canonQuestionType(types[k] ?? "").type ?? "short_answer";
-    return mkQuestion(n, qtype, answer);
+    // Review-gate (BRIEF §4.2.1): не глотать неуверенный маппинг типа — поднять
+    // в warnings, чтобы админ увидел fallback перед публикацией.
+    const canon = canonQuestionType(types[k] ?? "");
+    if (canon.type === null) {
+      warnings.push(`Q${n}: unknown type ${JSON.stringify(types[k] ?? "")} → fell back to short_answer`);
+    } else if (!canon.confident) {
+      warnings.push(`Q${n}: low-confidence type ${JSON.stringify(types[k] ?? "")} → ${canon.type}`);
+    }
+    if (!answer.accept.some((a) => (a ?? "").trim() !== "")) {
+      warnings.push(`Q${n}: empty answer key`);
+    }
+    return mkQuestion(n, canon.type ?? "short_answer", answer);
   });
+  // Агрегаты-подсказки: отсутствие разбора/доказательства — не блокер, инфо.
+  const noExpl = numbers.filter((n) => !expl[String(n)]).length;
+  if (noExpl > 0) warnings.push(`${noExpl} question(s) without explanation`);
+  const noEvid = numbers.filter((n) => !evid[String(n)]).length;
+  if (noEvid > 0) warnings.push(`${noEvid} question(s) without evidence`);
 
   // Full Reading (40Q) несёт getBandFor40 → bandScale; одиночный пассаж — нет.
   // По этому признаку разводим категорию/длительность (иначе 13Q-пассаж покажется
@@ -73,7 +89,7 @@ function parseReadingRunner(html: string): RunnerParseResult {
     bandScale: bandScale ? toStringKeys(bandScale) : null,
     passages: [{ order: 1, title: null, bodyHtml: "", audioPath: null, questionsHtml: null }],
     questions,
-    warnings: [],
+    warnings,
   };
   return { parsed, externalAudioSrc: null };
 }
@@ -92,6 +108,7 @@ function parseListeningRunner(html: string): RunnerParseResult {
   const bandScale = extractFunctionTable(src, "band", 0, 40);
 
   const numbers = Object.keys(key).map(Number).sort((a, b) => a - b);
+  const warnings: string[] = [];
   const questions = numbers.map((n) => {
     const variants = key[String(n)] ?? [];
     const answer: ParsedAnswerKey = {
@@ -100,8 +117,17 @@ function parseListeningRunner(html: string): RunnerParseResult {
       explanation: null,
       evidence: null,
     };
-    const qtype = canonQuestionType(types[String(n)] ?? "").type ?? "short_answer";
-    return mkQuestion(n, qtype, answer);
+    // Review-gate: поднять неуверенный маппинг типа и пустой ключ в warnings.
+    const canon = canonQuestionType(types[String(n)] ?? "");
+    if (canon.type === null) {
+      warnings.push(`Q${n}: unknown type ${JSON.stringify(types[String(n)] ?? "")} → fell back to short_answer`);
+    } else if (!canon.confident) {
+      warnings.push(`Q${n}: low-confidence type ${JSON.stringify(types[String(n)] ?? "")} → ${canon.type}`);
+    }
+    if (!answer.accept.some((a) => (a ?? "").trim() !== "")) {
+      warnings.push(`Q${n}: empty answer key`);
+    }
+    return mkQuestion(n, canon.type ?? "short_answer", answer);
   });
 
   const $ = cheerio.load(html);
@@ -119,7 +145,7 @@ function parseListeningRunner(html: string): RunnerParseResult {
     bandScale: bandScale ? toStringKeys(bandScale) : null,
     passages: [{ order: 1, title: null, bodyHtml: "", audioPath: null, questionsHtml: null }],
     questions,
-    warnings: [],
+    warnings,
   };
   return { parsed, externalAudioSrc };
 }
