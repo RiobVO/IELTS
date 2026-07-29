@@ -87,6 +87,9 @@ export async function persistTest(
         bandScale: parsed.bandScale, // raw->band table for Full tests; null otherwise
         runnerHtml: opts.runnerHtml ?? null,
         status: "draft",
+        // Review gate: a fresh import is always unreviewed (reviewed_at NULL).
+        // The detailed parser warnings ride along for the admin review screen.
+        importWarnings: parsed.warnings,
         createdBy: opts.createdBy ?? null,
       })
       .returning({ id: contentItem.id });

@@ -209,6 +209,12 @@ export const contentItem = pgTable(
     // Sanitized interactive runner HTML (iframe-wrapper track). NULL = legacy.
     runnerHtml: text("runner_html"),
     status: contentStatus("status").notNull().default("draft"),
+    // Review gate (BRIEF §4.2.1): an imported draft must be approved before it
+    // can be published. NULL = not yet reviewed; (re)import resets it (the row is
+    // replaced). import_warnings holds the parser's low-confidence notes for the
+    // review screen (unknown/fallback qtypes, empty keys, missing evidence).
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    importWarnings: jsonb("import_warnings"),
     version: integer("version").notNull().default(1),
     // Elo difficulty rating of the test itself (BRIEF §4.6 anti-cheat / Elo).
     // Updated server-side after each rated attempt; count tracks rated attempts.
