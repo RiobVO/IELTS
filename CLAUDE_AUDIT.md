@@ -15,15 +15,16 @@
 - ✅ P1 too-fast в weekly/monthly leaderboard → floor-guard тем же предикатом, что и Elo; без миграции (commit `5de6198`).
 - ✅ P2 OAuth/Google drift → `google` в enum (migration `0018`) + trigger-clamp + analytics-тип + OAuth-signup в воронку (commit `3c8f5a9`).
 - ✅ P3 Basic daily-limit doc drift → `SCHEMA_NOTES`/`LAUNCH` синхронизированы с `BASIC_DAILY_LIMIT=25` (commit `7cfe5ca`).
+- ✅ P1 admin publish review gate → parser warnings + `content_item.reviewed_at`/`import_warnings` (migration `0019`) + Approve-перед-Publish с серверным enforcement (commits `af20b55`, `e28e4fb`, `2185269`).
 
 Открыто:
 
-- ⏳ P1 admin publish review gate → в работе (Task B).
 - ⏸ P2 pending payments expiry → отложено в payment-hardening пакет (вместе с D1 provider signatures).
 - ⏸ P3 invite Host header → низкий приоритет (на Vercel host валидируется платформой).
 
-Деплой: миграцию `0018` применить к Supabase (`npm run db:migrate`). Код обратно совместим — прод не падает без неё, но
-Google сохраняется как `google` (а не `email`) только после применения.
+Деплой: применить миграции к Supabase (`npm run db:migrate`) — `0018` (google в enum) и `0019` (review-gate колонки). Код
+обратно совместим: прод не падает без них (google сохраняется как `email`, а publish работает по-старому), но фичи
+включаются только после применения.
 
 ## Как пользоваться
 
@@ -112,7 +113,7 @@ recompute строит weekly/monthly snapshots по всем `submitted` first 
 
 ### P1 — admin publish не подтверждает качество answer keys перед публикацией
 
-Статус: open — в работе (Task B).
+Статус: closed — commits `af20b55`/`e28e4fb`/`2185269` (2026-06-25). Parser warnings + `reviewed_at`/`import_warnings` (migration `0019`) + Approve-перед-Publish с серверным enforcement.
 Тип: gap.
 Усилие: M.
 
