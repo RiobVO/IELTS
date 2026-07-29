@@ -54,7 +54,7 @@ interface SectionVisual {
 }
 const SECTION: Record<Section, SectionVisual> = {
   reading: { tileBg: "var(--brand-subtle)", tileFg: "var(--text-link)", icon: "book-open", label: "Reading" },
-  listening: { tileBg: "var(--info-subtle)", tileFg: "color-mix(in oklab, var(--info) 75%, black)", icon: "headphones", label: "Listening" },
+  listening: { tileBg: "var(--info-subtle)", tileFg: "var(--info-text)", icon: "headphones", label: "Listening" },
 };
 
 interface ComingInfo {
@@ -176,17 +176,19 @@ export function PracticeCatalog({
           onClick={() => selectSkill("reading")}
           bg={cardBg("reading", "var(--brand-subtle)")}
           bd={cardBd("reading", "var(--brand)")}
+          pressed={skill === "reading"}
         />
         <SkillCard
           letter="L"
           name="Listening"
           meta={listeningMeta}
           tileBg="var(--info-subtle)"
-          tileFg="color-mix(in oklab, var(--info) 75%, black)"
+          tileFg="var(--info-text)"
           badge={{ tone: "success", text: "Live" }}
           onClick={() => selectSkill("listening")}
           bg={cardBg("listening", "var(--info-subtle)")}
           bd={cardBd("listening", "var(--info)")}
+          pressed={skill === "listening"}
         />
         <SkillCard
           letter="W"
@@ -199,6 +201,8 @@ export function PracticeCatalog({
           onClick={() => selectSkill("writing")}
           bg={cardBg("writing", "var(--warn-subtle)")}
           bd={cardBd("writing", "var(--warn)")}
+          expanded={skill === "writing"}
+          controls="pc-locked-panel"
         />
         <SkillCard
           letter="S"
@@ -211,6 +215,8 @@ export function PracticeCatalog({
           onClick={() => selectSkill("speaking")}
           bg={cardBg("speaking", "var(--success-subtle)")}
           bd={cardBd("speaking", "var(--success)")}
+          expanded={skill === "speaking"}
+          controls="pc-locked-panel"
         />
       </section>
 
@@ -269,7 +275,15 @@ function HeroCard({ hero }: { hero: HeroData }) {
         <div style={S.heroTitle}>{hero.title}</div>
         <div style={S.heroSub}>{hero.sub}</div>
         {hero.progress ? (
-          <div style={S.rail}>
+          <div
+            style={S.rail}
+            role="progressbar"
+            aria-label="Test progress"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuetext={`${hero.progress.answered} of ${hero.progress.total} answered`}
+          >
             <div style={{ height: "100%", width: `${pct}%`, background: "white", borderRadius: "var(--radius-full)" }} />
           </div>
         ) : (
@@ -296,6 +310,9 @@ function SkillCard({
   onClick,
   bg,
   bd,
+  pressed,
+  expanded,
+  controls,
 }: {
   letter: string;
   name: string;
@@ -307,9 +324,22 @@ function SkillCard({
   onClick: () => void;
   bg: string;
   bd: string;
+  /** Reading/Listening — фильтр-тоггл (aria-pressed). */
+  pressed?: boolean;
+  /** Writing/Speaking — раскрытие locked-панели (aria-expanded + aria-controls). */
+  expanded?: boolean;
+  controls?: string;
 }) {
   return (
-    <button type="button" onClick={onClick} className="pc-skillcard" style={{ ...S.skillCard, background: bg, borderColor: bd }}>
+    <button
+      type="button"
+      onClick={onClick}
+      className="pc-skillcard"
+      aria-pressed={pressed}
+      aria-expanded={expanded}
+      aria-controls={controls}
+      style={{ ...S.skillCard, background: bg, borderColor: bd }}
+    >
       <div style={S.skillTop}>
         <span style={{ ...S.skillTile, background: tileBg, color: tileFg }}>{letter}</span>
         <Badge tone={badge.tone}>{badge.text}</Badge>
@@ -359,7 +389,7 @@ function TestRow({ t }: { t: PracticeTest }) {
 function LockedPanel({ skill, onBack }: { skill: "writing" | "speaking"; onBack: () => void }) {
   const sk = COMING[skill];
   return (
-    <div className="pc-locked" style={S.locked}>
+    <div id="pc-locked-panel" className="pc-locked" style={S.locked}>
       <div className="pc-bars" style={S.bars}>
         <span style={{ ...S.bar, width: "100%", background: sk.color, animation: "pc-grow .6s var(--ease-out) .25s forwards" }} />
         <span style={{ ...S.bar, width: "70%", background: sk.subtle, animation: "pc-grow .6s var(--ease-out) .15s forwards" }} />
@@ -392,6 +422,7 @@ const cat = (v: string) => categoryLabel(v);
 const CSS = `
 .pc-wrap{padding:24px 16px 56px}
 .pc-h1{font-size:30px}
+.pc-showall{height:38px}
 .pc-headrow{display:grid;grid-template-columns:1fr;gap:20px}
 .pc-skills{display:grid;grid-template-columns:1fr;gap:14px}
 .pc-catalog{display:grid;grid-template-columns:1fr;gap:20px;align-items:start}
@@ -406,6 +437,7 @@ const CSS = `
 .pc-back:hover{color:var(--text-primary)!important}
 @media (min-width:560px){
   .pc-skills{grid-template-columns:repeat(2,1fr);gap:16px}
+  .pc-showall{height:28px}
 }
 @media (min-width:768px){
   .pc-wrap{padding:32px 28px 72px}
@@ -439,16 +471,16 @@ const S: Record<string, CSSProperties> = {
 
   // Hero — violet 3D-карта, белый ink (WCAG AA на brand).
   hero: { background: "var(--brand)", borderRadius: 22, boxShadow: "0 5px 0 0 var(--brand-edge)", padding: 24, color: "white", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 20, minHeight: 200 },
-  heroEyebrow: { fontSize: 12, fontWeight: 700, opacity: 0.9, letterSpacing: "0.03em", marginBottom: 10 },
+  heroEyebrow: { fontSize: 12, fontWeight: 700, letterSpacing: "0.03em", marginBottom: 10 },
   heroTitle: { fontSize: 20, fontWeight: 800, letterSpacing: "-0.015em", lineHeight: 1.2, textWrap: "balance" },
-  heroSub: { fontSize: 13, opacity: 0.9, marginTop: 8, lineHeight: 1.45 },
-  rail: { height: 8, borderRadius: "var(--radius-full)", background: "rgba(255,255,255,.25)", overflow: "hidden", marginTop: 14 },
-  heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, opacity: 0.92, marginTop: 12 },
-  heroBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 13, background: "white", color: "var(--brand)", fontSize: 15, fontWeight: 800, textDecoration: "none", boxShadow: "0 4px 0 0 rgba(0,0,0,.18)", cursor: "pointer", transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
+  heroSub: { fontSize: 13, marginTop: 8, lineHeight: 1.45 },
+  rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
+  heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
+  heroBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 13, background: "white", color: "var(--brand)", fontSize: 15, fontWeight: 800, textDecoration: "none", boxShadow: "0 4px 0 0 color-mix(in oklab, black 18%, transparent)", cursor: "pointer", transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
 
   // Skills
   skills: {},
-  skillCard: { textAlign: "left", border: "2px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-solid)", padding: 20, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
+  skillCard: { textAlign: "left", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
   skillTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
   skillTile: { width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center", fontSize: 19, fontWeight: 800 },
   skillName: { fontSize: 18, fontWeight: 800, letterSpacing: "-0.015em" },
@@ -459,12 +491,12 @@ const S: Record<string, CSSProperties> = {
   filterCol: {},
   listHead: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 },
   listTitle: { margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
-  showAll: { display: "inline-flex", alignItems: "center", gap: 5, height: 28, padding: "0 11px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "var(--transition-colors)" },
+  showAll: { display: "inline-flex", alignItems: "center", gap: 5, padding: "0 13px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "var(--transition-colors)" },
   resultCount: { fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-muted)" },
-  empty: { padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: 18 },
+  empty: { padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)" },
 
   // Test row
-  row: { display: "flex", alignItems: "center", gap: 18, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-solid)", padding: "18px 20px", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
+  row: { display: "flex", alignItems: "center", gap: 18, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: "18px 20px", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
   rowTile: { width: 48, height: 48, flex: "none", borderRadius: 13, display: "grid", placeItems: "center" },
   rowPill: { fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", padding: "2px 8px", borderRadius: "var(--radius-full)" },
   rowMeta: { fontSize: 12, color: "var(--text-muted)" },
