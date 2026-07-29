@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { captureServer } from "@/lib/analytics/server";
 import { verifyTurnstile } from "@/lib/anti-bot/turnstile";
+import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
 
 function fail(message: string): never {
@@ -13,7 +14,8 @@ function fail(message: string): never {
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/app") || "/app";
+  // `next` приходит из формы — нормализуем до внутреннего пути (open-redirect guard).
+  const next = safeNextPath(formData.get("next") as string | null);
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
