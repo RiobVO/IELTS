@@ -44,7 +44,7 @@ export async function AppShell({
         markAllRead={markAllRead}
         signOut={signOut}
       />
-      <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+      <main id="content" style={{ flex: 1, minHeight: 0 }}>{children}</main>
     </div>
   );
 }
