@@ -15,15 +15,18 @@
  * called after each rated attempt. At current scale a full rebuild in one
  * transaction is fine; an incremental/cron version is a later optimization.
  */
-import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  answerKey,
   attempt,
   leaderboardEntry,
   leaderboardSnapshot,
   profile,
+  question,
   region,
 } from "@/db/schema";
+import { tallyEligibleScores } from "./leaderboard-score";
 
 export type Period = "weekly" | "monthly" | "all_time";
 
@@ -136,7 +139,10 @@ function rankPeriod(
  *
  * Anti-farm (§4.6): each test counts at most once — its first submitted attempt
  * — so replaying the same test cannot pad weekly/monthly scores (mirrors the
- * "only the first attempt is rated" rule).
+ * "only the first attempt is rated" rule). The same floor-guard as rating
+ * applies: a too-fast first attempt (isTooFastToRate) is excluded from the
+ * period sums too, so an instant submit can't enter weekly/monthly without
+ * having moved Elo.
  */
 export async function recomputeLeaderboard(): Promise<void> {
   const now = new Date();
@@ -167,41 +173,51 @@ export async function recomputeLeaderboard(): Promise<void> {
   const parentOf = new Map<string, string | null>();
   for (const r of regions) parentOf.set(r.id, r.parentId);
 
-  // Windowed score sums (weekly / monthly) — grouped on the DB. Anti-farm: a
-  // test contributes only its FIRST submitted attempt (DISTINCT ON earliest per
-  // (user, content_item)), so replays can't pad period scores (§4.6).
-  const sumSince = async (sinceMs: number): Promise<Map<string, number>> => {
-    const since = new Date(now.getTime() - sinceMs);
-    const firstAttempt = db
-      .selectDistinctOn([attempt.userId, attempt.contentItemId], {
-        userId: attempt.userId,
-        rawScore: attempt.rawScore,
-        submittedAt: attempt.submittedAt,
-      })
-      .from(attempt)
-      .where(eq(attempt.status, "submitted"))
-      .orderBy(attempt.userId, attempt.contentItemId, asc(attempt.submittedAt))
-      .as("fa");
+  // First submitted attempt per (user, test) — единый pull для weekly+monthly.
+  // Анти-фарм (§4.6): DISTINCT ON берёт САМЫЙ РАННИЙ submitted attempt каждого
+  // теста, поэтому реплеи не накручивают период. Floor-guard (too-fast)
+  // применяется ниже в JS тем же предикатом, что и rating (tallyEligibleScores
+  // → isTooFastToRate), так что leaderboard и Elo исключают мгновенные сабмиты
+  // строго одинаково. На текущем масштабе pull first-attempts в Node дёшев;
+  // incremental/cron-агрегация — later optimization (как и сам recompute).
+  const firstAttempts = await db
+    .selectDistinctOn([attempt.userId, attempt.contentItemId], {
+      userId: attempt.userId,
+      contentItemId: attempt.contentItemId,
+      rawScore: attempt.rawScore,
+      timeUsedSeconds: attempt.timeUsedSeconds,
+      submittedAt: attempt.submittedAt,
+    })
+    .from(attempt)
+    .where(eq(attempt.status, "submitted"))
+    .orderBy(attempt.userId, attempt.contentItemId, asc(attempt.submittedAt));
 
-    const rows = await db
-      .select({
-        userId: firstAttempt.userId,
-        total: sql<number>`coalesce(sum(${firstAttempt.rawScore}), 0)::int`,
-      })
-      .from(firstAttempt)
-      .where(gte(firstAttempt.submittedAt, since))
-      .groupBy(firstAttempt.userId);
+  // Число вопросов теста (count answer_key) — порог too-fast в floor-guard.
+  const qCounts = await db
+    .select({
+      contentItemId: question.contentItemId,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(question)
+    .innerJoin(answerKey, eq(answerKey.questionId, question.id))
+    .groupBy(question.contentItemId);
+  const totalByTest = new Map<string, number>();
+  for (const r of qCounts) totalByTest.set(r.contentItemId, Number(r.n) || 0);
 
-    const m = new Map<string, number>();
-    for (const r of rows) {
-      // Hidden users excluded from the leaderboard entirely.
-      if (visibleIds.has(r.userId)) m.set(r.userId, Number(r.total) || 0);
-    }
-    return m;
+  // Визибл + в окне периода → floor-guard + сумма raw_score по юзеру.
+  const scoreInWindow = (sinceMs: number): Map<string, number> => {
+    const since = now.getTime() - sinceMs;
+    const inWindow = firstAttempts.filter(
+      (a) =>
+        visibleIds.has(a.userId) &&
+        a.submittedAt != null &&
+        a.submittedAt.getTime() >= since,
+    );
+    return tallyEligibleScores(inWindow, totalByTest);
   };
 
-  const weekScore = await sumSince(WEEK_MS);
-  const monthScore = await sumSince(MONTH_MS);
+  const weekScore = scoreInWindow(WEEK_MS);
+  const monthScore = scoreInWindow(MONTH_MS);
 
   // all_time score = rating.
   const allTimeScore = new Map<string, number>();
