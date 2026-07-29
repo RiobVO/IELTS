@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **Активный трек — perf/lag `/app`** (см. «🔜 Current — perf/lag /app» ниже). P0 iframe-раннер ✅,
 > Practice Hub ✅ и ВСЕ P2/P3 из [AUDIT.md](./AUDIT.md) ✅ закрыты и на Vercel prod (2026-06-24);
-> реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist (`4339f92`), rank-2 leaderboard (`ed2a612`),
-> rank-3 exam/reading START (`7678f44`), rank-4 Result (`6600249`) и rank-7 getPublishedTests
-> parallelize (`a8feabd`) сделаны, **остаются — leaderboard viewer-row merge / badges concurrent /
+> реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist (`4339f92`), rank-2 leaderboard + viewer-row merge
+> (`ed2a612`/`990a868`), rank-3 exam/reading START (`7678f44`), rank-4 Result (`6600249`) и rank-7
+> getPublishedTests parallelize (`a8feabd`) сделаны, **остаются — badges `computeStats` concurrent /
 > Basic daily-count batch**.
 > Любую новую работу вне этого порядка начинать по явной просьбе пользователя.
 >
@@ -196,8 +196,9 @@ RLS, server-only grading, `answer_key` never client-side, tier gating, idempoten
 2. ✅ **Leaderboard `readLeaderboard`** — done (commit `ed2a612`): deleted the redundant region-name
    lookup (page now threads the pre-resolved `scopeLabel`, null for global) and `Promise.all`'d the
    top-100 join + snapshot ranks. ≈ −2 serial hops; owner-path PUBLIC columns only; `getSnapshotRanks`
-   stays fail-open. The viewer-pinned-row merge is still a separate query-shape-sensitive follow-up
-   (rank-5 below).
+   stays fail-open. **Viewer-row merge done** (commit `990a868`): the "you are #137" own-row lookup now
+   reads inside the same `Promise.all` (always-run when viewerId, discarded if the viewer is in top-100,
+   no UNION/OR so the top-100 query shape is untouched). ≈ −1 more serial hop. Leaderboard fully closed.
 3. ✅ **Exam/Reading START** — done (commit `7678f44`): the start gate+attempt moved to a server-only
    module (`src/lib/exam/access.ts`: `loadAccessData`+`enforceAccess`+new `startAttempt`); the RSC pages
    now gate with the `content_item`+`profile` they already read and call `startAttempt` (no re-read).
@@ -211,8 +212,8 @@ RLS, server-only grading, `answer_key` never client-side, tier gating, idempoten
 7. ✅ **getPublishedTests parallelize** — done (commit `a8feabd`): the cached catalog builder read the
    published list then the grouped Q-counts serially; counts never depended on the list, so both now run
    in one `Promise.all` (−1 round-trip on a cold cache miss). Cache key/tag/revalidate unchanged.
-Remaining (NEXT): leaderboard viewer-row merge, badges `computeStats` concurrent, Basic daily-count
-   batch — detail in the `prod-infra-topology` memory.
+Remaining (NEXT): badges `computeStats` concurrent, Basic daily-count batch — detail in the
+   `prod-infra-topology` memory.
 
 Verify perf on **prod** via Server-Timing headers (can't measure latency from a static checkout; user
 reads prod numbers from UZ). Code verification per change: `npx tsc --noEmit` + `npm run build` (dev
