@@ -295,8 +295,10 @@ through the server-privileged path (Drizzle owner / `service_role`). Idempotency
 - **`src/lib/tiers.ts` is the single gating rule.** `effectiveTier({tier,
   premium_until})` demotes an expired premium/ultra to `basic` (the cron downgrade
   may lag, so gates never trust a stale stored tier); `meetsTier` (basic<premium<
-  ultra); `hasFullReview` (premium+); `BASIC_DAILY_LIMIT=3` (§4.8 placeholder `N`).
-  Every gate uses `effectiveTier`, never the raw column.
+  ultra); `hasFullReview` (premium+); `BASIC_DAILY_LIMIT=25` (§4.8 placeholder `N`,
+  set high at launch — no monetization yet, effectively unlimited for a real
+  student — tighten it as an upsell when paid tiers go live). Every gate uses
+  `effectiveTier`, never the raw column.
 - **Gating points (defense-in-depth).** Catalog (`reading/page.tsx`) shows a lock
   pill + routes locked tests to `/app/upgrade` (doesn't hide them). Exam start
   (`reading/[id]/page.tsx`) redirects on tier mismatch. **The submit server action
