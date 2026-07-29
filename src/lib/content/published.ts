@@ -17,33 +17,35 @@ import { contentItem, question } from "@/db/schema";
  */
 export const getPublishedTests = unstable_cache(
   async (section: "reading" | "listening") => {
-    const items = await db
-      .select({
-        id: contentItem.id,
-        title: contentItem.title,
-        category: contentItem.category,
-        question_types: contentItem.questionTypes,
-        duration_seconds: contentItem.durationSeconds,
-        tier_required: contentItem.tierRequired,
-        // Флаг наличия очищенного раннера (iframe-обёртка) — НЕ тащим сам text
-        // (~200КБ/тест) в кэш каталога; каталог только маршрутизирует по нему.
-        has_runner: sql<boolean>`${contentItem.runnerHtml} IS NOT NULL`,
-      })
-      .from(contentItem)
-      .where(
-        and(eq(contentItem.section, section), eq(contentItem.status, "published")),
-      )
-      .orderBy(desc(contentItem.createdAt));
+    // items (список секции) и counts (Q-count на тест, grouped) независимы — на
+    // cold-start (промах кэша) читаем их одним параллельным слоем, не последовательно.
+    // counts кэшируется вместе со списком и инвалидируется тем же тегом content_item.
+    const [items, counts] = await Promise.all([
+      db
+        .select({
+          id: contentItem.id,
+          title: contentItem.title,
+          category: contentItem.category,
+          question_types: contentItem.questionTypes,
+          duration_seconds: contentItem.durationSeconds,
+          tier_required: contentItem.tierRequired,
+          // Флаг наличия очищенного раннера (iframe-обёртка) — НЕ тащим сам text
+          // (~200КБ/тест) в кэш каталога; каталог только маршрутизирует по нему.
+          has_runner: sql<boolean>`${contentItem.runnerHtml} IS NOT NULL`,
+        })
+        .from(contentItem)
+        .where(
+          and(eq(contentItem.section, section), eq(contentItem.status, "published")),
+        )
+        .orderBy(desc(contentItem.createdAt)),
+      db
+        .select({ cid: question.contentItemId, n: sql<number>`count(*)::int` })
+        .from(question)
+        .groupBy(question.contentItemId),
+    ]);
     if (items.length === 0) return [];
 
-    // Кол-во вопросов на тест — одним grouped-count (для Q-count в карточке
-    // каталога); кэшируется вместе со списком, инвалидируется тем же тегом.
-    const counts = await db
-      .select({ cid: question.contentItemId, n: sql<number>`count(*)::int` })
-      .from(question)
-      .groupBy(question.contentItemId);
     const byId = new Map(counts.map((c) => [c.cid, Number(c.n) || 0]));
-
     return items.map((it) => ({ ...it, question_count: byId.get(it.id) ?? 0 }));
   },
   ["published-tests"],
