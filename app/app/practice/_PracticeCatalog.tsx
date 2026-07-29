@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useState, useTransition, type CSSProperties } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/core/icons";
 import { Badge } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
 import { QuestionFilter } from "@/components/exam/QuestionFilter";
 import { qtypeLabel, categoryLabel } from "@/lib/labels";
+import { setTargetBand } from "./actions";
+
+/** Valid IELTS targets — same scale the onboarding select offers. */
+const BANDS = ["4.0", "4.5", "5.0", "5.5", "6.0", "6.5", "7.0", "7.5", "8.0", "8.5", "9.0"];
 
 /**
  * PracticeCatalog — клиентское тело экрана практики (редизайн «bando»). Держит
@@ -94,6 +98,8 @@ export function PracticeCatalog({
   hero,
   readingMeta,
   listeningMeta,
+  targetBand,
+  bestBand,
 }: {
   tests: PracticeTest[];
   filterCategories: FilterOption[];
@@ -102,6 +108,10 @@ export function PracticeCatalog({
   hero: HeroData;
   readingMeta: string;
   listeningMeta: string;
+  /** Onboarding-set goal; editable inline. null only on the unset edge. */
+  targetBand: number | null;
+  /** Best single-test band so far (max R/L), or null if no tests submitted. */
+  bestBand: number | null;
 }) {
   const [selCats, setSelCats] = useState<string[]>([]);
   const [selTypes, setSelTypes] = useState<string[]>([]);
@@ -152,6 +162,7 @@ export function PracticeCatalog({
           </div>
           <h1 className="pc-h1" style={S.h1}>Pick what to drill.</h1>
           <p style={S.sub}>Browse every Reading and Listening test, or filter straight to the question type you want to fix.</p>
+          <GoalBar target={targetBand} best={bestBand} />
           {drillWeakest && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 22 }}>
               <button type="button" onClick={drill} style={S.drillChip} className="pc-drill">
@@ -261,6 +272,58 @@ export function PracticeCatalog({
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+/* ── Goal bar (target band + gap, inline-editable) ───────────────────────── */
+function GoalBar({ target, best }: { target: number | null; best: number | null }) {
+  const [value, setValue] = useState(target);
+  const [pending, startTransition] = useTransition();
+  if (value == null) return null; // unset edge — onboarding normally guarantees it
+
+  const change = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const next = Number(e.target.value);
+    setValue(next); // optimistic; revalidate confirms server-side
+    startTransition(() => {
+      void setTargetBand(next.toFixed(1));
+    });
+  };
+
+  const reached = best != null && best >= value;
+  const pct = best != null ? Math.min(100, Math.round((best / value) * 100)) : 0;
+
+  return (
+    <div style={S.goal}>
+      <span style={S.goalLab}>Target</span>
+      <select
+        aria-label="Target band"
+        value={value.toFixed(1)}
+        onChange={change}
+        disabled={pending}
+        style={S.goalSelect}
+      >
+        {BANDS.map((b) => (
+          <option key={b} value={b}>{b}</option>
+        ))}
+      </select>
+      {best == null ? (
+        <span style={S.goalHint}>Sit a test to measure your gap</span>
+      ) : (
+        <>
+          <span style={S.goalTrack}>
+            <span style={{ ...S.goalFill, width: `${pct}%` }} />
+          </span>
+          <span style={S.goalLab}>
+            best test <b style={{ color: "var(--text-primary)" }}>{best.toFixed(1)}</b>
+          </span>
+          {reached ? (
+            <span style={S.goalReached}>Target reached</span>
+          ) : (
+            <span style={S.goalGap}>+{(value - best).toFixed(1)} to go</span>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -468,6 +531,16 @@ const S: Record<string, CSSProperties> = {
   h1: { margin: 0, lineHeight: 1.04, fontWeight: 800, letterSpacing: "-0.025em", color: "var(--text-primary)", textWrap: "balance" },
   sub: { margin: "12px 0 0", fontSize: 17, lineHeight: 1.5, color: "var(--text-muted)", maxWidth: "46ch" },
   drillChip: { display: "inline-flex", alignItems: "center", gap: 8, height: 42, padding: "0 16px", borderRadius: "var(--radius-full)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "var(--transition-colors)" },
+
+  // Goal bar — target band + gap, inline-editable target select.
+  goal: { marginTop: 20, display: "inline-flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
+  goalLab: { fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
+  goalSelect: { fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 16, color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "var(--surface-inset)", padding: "4px 8px", cursor: "pointer" },
+  goalTrack: { position: "relative", display: "inline-block", width: 120, height: 8, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
+  goalFill: { position: "absolute", insetBlock: 0, left: 0, height: "100%", background: "var(--brand)", borderRadius: "var(--radius-full)" },
+  goalGap: { fontSize: 13, fontWeight: 800, color: "var(--text-link)" },
+  goalReached: { fontSize: 13, fontWeight: 800, color: "var(--success-text)" },
+  goalHint: { fontSize: 13, fontWeight: 600, color: "var(--text-muted)" },
 
   // Hero — violet 3D-карта, белый ink (WCAG AA на brand).
   hero: { background: "var(--brand)", borderRadius: 22, boxShadow: "0 5px 0 0 var(--brand-edge)", padding: 24, color: "white", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 20, minHeight: 200 },
