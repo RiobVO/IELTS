@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **Активный трек — perf/lag `/app`** (см. «🔜 Current — perf/lag /app» ниже). P0 iframe-раннер ✅,
 > Practice Hub ✅ и ВСЕ P2/P3 из [AUDIT.md](./AUDIT.md) ✅ закрыты и на Vercel prod (2026-06-24);
-> реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist (`4339f92`), rank-2 leaderboard (`ed2a612`) и
-> rank-3 exam/reading START (`7678f44`) сделаны, **следующий — rank-4 Result** (5-query `Promise.all`).
+> реестр AUDIT.md пуст. Perf: rank-1 AppShell-hoist (`4339f92`), rank-2 leaderboard (`ed2a612`),
+> rank-3 exam/reading START (`7678f44`) и rank-4 Result (`6600249`) сделаны, **следующие — rank 5–8**
+> (leaderboard viewer-row merge / badges concurrent / getPublishedTests parallelize / daily-count batch).
 > Любую новую работу вне этого порядка начинать по явной просьбе пользователя.
 >
 > Справка: [BRIEF.md](./BRIEF.md) — истина (спека/стек/§5/§6.1/§9). [BACKLOG.md](./BACKLOG.md) —
@@ -201,8 +202,12 @@ RLS, server-only grading, `answer_key` never client-side, tier gating, idempoten
    now gate with the `content_item`+`profile` they already read and call `startAttempt` (no re-read).
    `submitAttempt` and the `/runner` GET keep their own gate (defense-in-depth); `startAttempt` carries
    no gate and isn't a Server Action (network-unreachable). ≈ −1 serial hop per start path.
-4. **Result — NEXT:** leading att-read → 5-query `Promise.all` collapsed into 1 via correlated subselects
-   (pctRow/prevRows). 5–8: leaderboard viewer-row merge, badges `computeStats` concurrent,
+4. ✅ **Result** — done (commit `6600249`): the leading att-read folded into the same `Promise.all`;
+   `pctRow`/`prevRows` get their bounds via correlated subselects on `attemptId` (not JS values), so the
+   whole set reads in one round-trip. Ownership is a JS guard after the await; `answer_key` is locked
+   behind a SQL `EXISTS` gate (rows return only for the owner — invariant now holds at the DB level).
+   Equivalence + gate confirmed against prod data (8 attempts). ≈ −1 serial hop.
+5–8 (NEXT): leaderboard viewer-row merge, badges `computeStats` concurrent,
    `getPublishedTests` cold-start parallelize, Basic daily-count batch — detail in the
    `prod-infra-topology` memory.
 
