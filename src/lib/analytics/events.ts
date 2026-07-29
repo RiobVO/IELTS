@@ -16,7 +16,10 @@ export const AnalyticsEvent = {
 
 /** Свойства каждого события (ключ объекта = имя события в PostHog). */
 export type EventProperties = {
-  signup: { auth_provider: "email" | "apple" | "facebook"; has_ref: boolean };
+  signup: {
+    auth_provider: "email" | "apple" | "facebook" | "google";
+    has_ref: boolean;
+  };
   test_start: {
     content_item_id: string;
     section: string;
