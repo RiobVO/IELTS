@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > [SCHEMA_NOTES.md](./SCHEMA_NOTES.md) — разрешённые неоднозначности схемы. [BACKLOG.md](./BACKLOG.md) —
 > продуктовый бэклог (Волна 1 закрыта, Волна 2 ждёт). [AUDIT.md](./AUDIT.md) — реестр аудита.
 > [REDESIGN.md](./REDESIGN.md) / [WORKLOG.md](./WORKLOG.md) — закрытые треки (редизайн / perf+sec).
+> [CLAUDE_AUDIT.md](./CLAUDE_AUDIT.md) — актуальный широкий аудит 2026-06-25: открытые находки и deferred blockers для Claude Code.
 > Новую работу начинать по явной просьбе пользователя.
 
 ## Source of truth
@@ -52,6 +53,10 @@ security model (BRIEF §6.1, anti-cheat §4.6):
 anon/authenticated). The exam page deliberately does not select it; the result/review page reads
 explanations + evidence server-side via the Drizzle (owner) path, only after submit and only for the
 attempt's owner. Grading runs **only on the server** — the client sends answers, never a score.
+**`attempt_review_snapshot`** (D3, migration `0021`) holds the correct answers + explanation/evidence
+captured at submit and is locked the **same way** (RLS on, grants revoked) — `/result` reads it owner-path
+(falls back to the live key for legacy attempts); a client read there would bypass the answer_key lock
+**and** the tier gate, so never grant it to anon/authenticated.
 
 ## Exam architecture — TWO runners (in-progress migration)
 
@@ -75,8 +80,9 @@ lacks `runner_html`.
 
 ## Migrations & schema
 
-- `src/db/schema.ts` (Drizzle) is the **typed source of truth** (16 tables as of migration
-  `0014_leaderboard_snapshot`).
+- `src/db/schema.ts` (Drizzle) is the **typed source of truth** (18 tables as of migration
+  `0022_signup_throttle`; the audit-closure batch added `attempt_review_snapshot` (0021) and
+  `signup_throttle` (0022), plus enum/column changes in 0018–0020).
   The executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by a
   custom up/down migrator (`scripts/migrate.ts`) with a `_migrations` bookkeeping table. **Keep
   schema.ts and the SQL in lockstep when the model changes.**

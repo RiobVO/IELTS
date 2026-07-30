@@ -300,7 +300,7 @@ async function main() {
   await sql.unsafe(readFileSync(join(HERE, "bootstrap-supabase-local.sql"), "utf8"));
   await resetPublicSchema();
 
-  // 1. migrate up -> 16 tables
+  // 1. migrate up -> APP_TABLE_COUNT tables
   await migrateUp(sql);
   let n = await countAppTables();
   if (n === APP_TABLE_COUNT) ok(`migrate up — ${n} tables created`);
