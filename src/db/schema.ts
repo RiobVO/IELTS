@@ -591,3 +591,104 @@ export const payment = pgTable(
     index("payment_user_created_idx").on(t.userId, t.createdAt),
   ],
 );
+
+/* -------------------------------------------------------------------------- */
+/* Writing Lab (Phase 3) — AI essay evaluation tables                          */
+/* Additive (migration 0023). Core R/L grading/import stays LLM-free. RLS       */
+/* mirrors existing tables: writing_task published-gated (like content_item),   */
+/* submission/feedback owner-read (like annotation), writing_feedback_debug     */
+/* hard-locked (like answer_key — grants revoked, raw never reaches the client).*/
+/* -------------------------------------------------------------------------- */
+export const writingCategory = pgEnum("writing_category", ["academic", "general"]);
+export const writingTaskStatus = pgEnum("writing_task_status", ["draft", "published"]);
+export const writingSubmissionStatus = pgEnum("writing_submission_status", [
+  "pending",
+  "evaluating",
+  "completed",
+  "failed",
+]);
+export const writingConfidence = pgEnum("writing_confidence", ["low", "medium", "high"]);
+
+export const writingTask = pgTable(
+  "writing_task",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    category: writingCategory("category").notNull(),
+    prompt: text("prompt").notNull(),
+    tierRequired: userTier("tier_required").notNull().default("ultra"),
+    status: writingTaskStatus("status").notNull().default("draft"),
+    createdBy: uuid("created_by").references(() => profile.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("writing_task_status_idx").on(t.status, t.category)],
+);
+
+export const writingSubmission = pgTable(
+  "writing_submission",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profile.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => writingTask.id, { onDelete: "cascade" }),
+    essayText: text("essay_text").notNull(),
+    wordCount: integer("word_count").notNull(),
+    status: writingSubmissionStatus("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("writing_submission_user_created_idx").on(t.userId, t.createdAt),
+    index("writing_submission_status_updated_idx").on(t.status, t.updatedAt),
+  ],
+);
+
+export const writingFeedback = pgTable("writing_feedback", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  submissionId: uuid("submission_id")
+    .notNull()
+    .unique()
+    .references(() => writingSubmission.id, { onDelete: "cascade" }),
+  bandLow: numeric("band_low", { precision: 2, scale: 1 }).notNull(),
+  bandHigh: numeric("band_high", { precision: 2, scale: 1 }).notNull(),
+  confidence: writingConfidence("confidence").notNull(),
+  criteria: jsonb("criteria").notNull(),
+  topFixes: jsonb("top_fixes").notNull(),
+  annotations: jsonb("annotations").notNull(),
+  rewrite: jsonb("rewrite").notNull(),
+  checklist: jsonb("checklist").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const writingFeedbackDebug = pgTable(
+  "writing_feedback_debug",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => writingSubmission.id, { onDelete: "cascade" }),
+    rawOutput: text("raw_output").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("writing_feedback_debug_submission_idx").on(t.submissionId)],
+);
