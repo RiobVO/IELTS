@@ -33,6 +33,22 @@ export function exceedsSubmitRate(submitsInWindow: number): boolean {
   return submitsInWindow >= SUBMIT_THROTTLE_MAX;
 }
 
+/** Скользящее окно signup-лимита, секунд (1 час). */
+export const SIGNUP_THROTTLE_WINDOW_SECONDS = 60 * 60;
+
+/** Максимум регистраций с одного IP в окне. >= порога -> отказ. Tunable. */
+export const SIGNUP_THROTTLE_MAX = 10;
+
+/**
+ * true, если число регистраций с одного IP в окне достигло потолка — текущую
+ * регистрацию отклоняем (§11 anti-abuse, поверх captcha). Чистая — порог
+ * тестируется без БД; сам COUNT в окне делает server action по индексу
+ * signup_throttle (ip_hash, created_at).
+ */
+export function exceedsSignupRate(signupsInWindow: number): boolean {
+  return signupsInWindow >= SIGNUP_THROTTLE_MAX;
+}
+
 /**
  * Минимальный «честный» темп: секунд на вопрос, ниже которого сабмит физически не
  * может быть человеческим (start → почти мгновенная сдача). Консервативный — в разы

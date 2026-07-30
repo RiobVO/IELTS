@@ -362,6 +362,23 @@ export const attemptReviewSnapshot = pgTable("attempt_review_snapshot", {
 });
 
 /* -------------------------------------------------------------------------- */
+/* signup_throttle — signup velocity-cap (anti-abuse, migration 0022)          */
+/* SERVER-ONLY: written/read by the signUp action (owner path). RLS on, grants  */
+/* revoked. Stores sha256(ip) (not PII), one row per signup attempt.            */
+/* -------------------------------------------------------------------------- */
+export const signupThrottle = pgTable(
+  "signup_throttle",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ipHash: text("ip_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("signup_throttle_ip_created_idx").on(t.ipHash, t.createdAt)],
+);
+
+/* -------------------------------------------------------------------------- */
 /* badge / user_badge                                                          */
 /* -------------------------------------------------------------------------- */
 export const badge = pgTable("badge", {

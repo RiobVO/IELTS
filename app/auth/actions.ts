@@ -1,8 +1,17 @@
 "use server";
 
+import { createHash } from "node:crypto";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { db } from "@/db";
+import { signupThrottle } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
+import {
+  exceedsSignupRate,
+  SIGNUP_THROTTLE_WINDOW_SECONDS,
+} from "@/lib/anti-cheat";
 import { verifyTurnstile } from "@/lib/anti-bot/turnstile";
 import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
@@ -37,6 +46,25 @@ export async function signUp(formData: FormData) {
   if (!(await verifyTurnstile(captcha))) {
     fail("Could not verify you're human. Please try again.");
   }
+
+  // Signup velocity-cap (§11 anti-abuse): ограничиваем регистрации с одного IP в
+  // окне — поверх captcha (fail-open без ключей). IP из x-forwarded-for (на Vercel
+  // ставит платформа); для rate-limit достаточно — defense-in-depth, не
+  // security-граница. Храним sha256(ip), не сам адрес.
+  const ipRaw =
+    (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ipHash = createHash("sha256").update(ipRaw).digest("hex");
+  const since = new Date(Date.now() - SIGNUP_THROTTLE_WINDOW_SECONDS * 1000);
+  const [recent] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(signupThrottle)
+    .where(
+      and(eq(signupThrottle.ipHash, ipHash), gte(signupThrottle.createdAt, since)),
+    );
+  if (exceedsSignupRate(recent?.n ?? 0)) {
+    fail("Too many sign-ups from your network. Please try again later.");
+  }
+  await db.insert(signupThrottle).values({ ipHash });
 
   const supabase = await createClient();
   // The inviter's referral_code rides in auth user metadata under "ref_code".

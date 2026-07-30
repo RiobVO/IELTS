@@ -3,9 +3,11 @@
 import { describe, it, expect } from "vitest";
 import {
   countSubmitsInWindow,
+  exceedsSignupRate,
   exceedsSubmitRate,
   isTooFastToRate,
   MIN_RATED_SECONDS_PER_QUESTION,
+  SIGNUP_THROTTLE_MAX,
   SUBMIT_THROTTLE_MAX,
   SUBMIT_THROTTLE_WINDOW_SECONDS,
 } from "./anti-cheat";
@@ -48,6 +50,18 @@ describe("exceedsSubmitRate", () => {
 
   it("больше потолка → true", () => {
     expect(exceedsSubmitRate(SUBMIT_THROTTLE_MAX + 1)).toBe(true);
+  });
+});
+
+describe("exceedsSignupRate", () => {
+  it("меньше потолка → false", () => {
+    expect(exceedsSignupRate(SIGNUP_THROTTLE_MAX - 1)).toBe(false);
+  });
+  it("ровно потолок → true (граница включительна, >=)", () => {
+    expect(exceedsSignupRate(SIGNUP_THROTTLE_MAX)).toBe(true);
+  });
+  it("больше потолка → true", () => {
+    expect(exceedsSignupRate(SIGNUP_THROTTLE_MAX + 1)).toBe(true);
   });
 });
 
