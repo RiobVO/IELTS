@@ -1,11 +1,12 @@
 import { and, asc, desc, eq, exists, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
-import { answerKey, attempt, contentItem, question } from "@/db/schema";
+import { answerKey, attempt, attemptReviewSnapshot, contentItem, question } from "@/db/schema";
 import { getActiveBadges } from "@/lib/content/badges";
 import { getProfile, getUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { grade, type GradeKey } from "@/lib/grading/grade";
+import type { ReviewSnapshot } from "@/lib/exam/review-snapshot";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import { categoryLabel, qtypeLabel } from "@/lib/labels";
@@ -26,6 +27,16 @@ function fmtDuration(sec: number): string {
   const s = sec % 60;
   return s ? `${m}m ${s}s` : `${m}m`;
 }
+
+/** Единая форма строки разбора — из D3-snapshot или (legacy) живого answer_key. */
+type ReviewRow = {
+  number: number;
+  qtype: string;
+  mode: GradeKey["mode"];
+  accept: string[];
+  explanation: string | null;
+  evidence: { para: string; snippet: string } | null;
+};
 
 export default async function ResultPage({
   params,
@@ -69,7 +80,7 @@ export default async function ResultPage({
   // так что инвариант «answer_key только владельцу» держится на уровне SQL.
   // Review depth seam (§4.8): `hasFullReview` follows the launch flag REVIEW_OPEN —
   // currently OPEN; effectiveTier downgrades an expired premium when the flag closes.
-  const [attRows, profile, rows, ci, pctRow, prevRows] = await Promise.all([
+  const [attRows, profile, liveRows, snapRows, ci, pctRow, prevRows] = await Promise.all([
     // Явная проекция: только используемые ниже колонки. `answers` — для re-grade;
     // тяжёлый per_type_breakdown НЕ нужен (разбор пересчитывается через grade()).
     db
@@ -118,6 +129,30 @@ export default async function ResultPage({
         ),
       )
       .orderBy(question.number),
+    // D3: snapshot разбора (server-only locked-таблица attempt_review_snapshot).
+    // EXISTS-гард владения — как у answer_key выше: БД отдаёт snapshot ТОЛЬКО для
+    // attempt этого юзера на этот тест (defense-in-depth до JS-проверки).
+    db
+      .select({ snapshot: attemptReviewSnapshot.snapshot })
+      .from(attemptReviewSnapshot)
+      .where(
+        and(
+          eq(attemptReviewSnapshot.attemptId, attemptId),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(attempt)
+              .where(
+                and(
+                  eq(attempt.id, attemptId),
+                  eq(attempt.userId, user.id),
+                  eq(attempt.contentItemId, id),
+                ),
+              ),
+          ),
+        ),
+      )
+      .limit(1),
     db
       .select({
         title: contentItem.title,
@@ -173,15 +208,37 @@ export default async function ResultPage({
     : false;
 
   const answers = (att.answers ?? {}) as Record<string, string | string[]>;
+
+  // D3: предпочитаем snapshot, снятый на момент сдачи, ЖИВОМУ answer_key — иначе
+  // разбор «плывёт» при позднейшей правке контента. Fallback на live-ключ для
+  // legacy-попыток без snapshot (сданных до миграции 0021). Обе ветки сводятся к
+  // единой форме ReviewRow.
+  const snap = (snapRows[0]?.snapshot as ReviewSnapshot | undefined) ?? null;
+  const rows: ReviewRow[] = snap
+    ? snap.questions.map((q) => ({
+        number: q.number,
+        qtype: q.qtype,
+        mode: q.mode,
+        accept: q.accept,
+        explanation: q.explanation,
+        evidence: q.evidence,
+      }))
+    : liveRows.map((r) => ({
+        number: r.number,
+        qtype: r.qtype,
+        mode: r.mode,
+        accept: (r.accept as string[]) ?? [],
+        explanation: r.explanation,
+        evidence: (r.evidence as { para: string; snippet: string } | null) ?? null,
+      }));
+
   const keys: GradeKey[] = rows.map((r) => ({
     number: r.number,
     qtype: r.qtype,
     mode: r.mode,
-    accept: (r.accept as string[]) ?? [],
+    accept: r.accept,
   }));
-  // NB: разбор пересчитывается по ТЕКУЩЕМУ answer_key, а не по баллу, сохранённому
-  // в attempt на момент сдачи (полный re-grade отложен — BRIEF §11; деструктивный
-  // ре-импорт при наличии попыток уже заблокирован RegradeRequiredError).
+  // Балл пересчитывается grade() по ключам snapshot (стабилен), а не по live-ключу.
   const result = grade(keys, answers);
   const meta = new Map(rows.map((r) => [r.number, r]));
 
