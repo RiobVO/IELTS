@@ -153,3 +153,20 @@ export function turnstileConfig(): { siteKey: string; secretKey: string } | null
   if (!siteKey?.trim() || !secretKey?.trim()) return null;
   return { siteKey: siteKey.trim(), secretKey: secretKey.trim() };
 }
+
+/**
+ * Опциональная конфигурация AI Writing Lab (Phase 3 — оценка эссе Task 2). Как и
+ * остальные seam-и — НЕ обязательна для старта: без неё Writing Lab выключен
+ * (оценка недоступна, но приложение бутится). Активируется только когда заданы
+ * ОБА: GEMINI_API_KEY (ключ провайдера) и WRITING_EVAL_MODEL (id модели Gemini
+ * Flash, резолвится бенчмарком до публичного включения). Один без другого = выкл
+ * (ключ без модели нечего звать; модель без ключа нечем). SERVER-ONLY секреты.
+ * Ядро Reading/Listening остаётся LLM-free — эти ключи живут только в
+ * writing-слое (src/lib/writing/).
+ */
+export function writingEvalConfig(): { apiKey: string; model: string } | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.WRITING_EVAL_MODEL;
+  if (!apiKey?.trim() || !model?.trim()) return null;
+  return { apiKey: apiKey.trim(), model: model.trim() };
+}

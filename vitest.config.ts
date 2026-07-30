@@ -1,11 +1,18 @@
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
-// Только волна 1 — чистая логика, окружение node, без DOM. Тесты co-located
-// с модулями (relative import), поэтому alias `@/` здесь НЕ нужен; добавим
-// `resolve.alias` отдельно, когда тест парсера реально его потребует (волна 2).
+// Чистая логика, окружение node, без DOM. Тесты co-located с модулями. Большинство
+// импортируют relative, но writing-слой использует alias `@/` (`@/env`,
+// `@/lib/writing/...`) — резолвим его здесь, иначе `vi.mock("@/env")` и бенчмарк
+// не найдут модули. `scripts/*.test.ts` включён ради офлайн-бенчмарка writing-слоя.
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
+  },
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
   },
 });
