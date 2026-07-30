@@ -455,3 +455,45 @@ on with zero anon/authenticated grants + no policy; the other three `SELECT`-onl
 for `authenticated`). **Supabase application pending** — additive with no readers
 until the evaluator ships, so it can land before Plan 2 (the evaluator) without a
 deploy-window break.
+
+## Phase 3 Writing — evaluator + benchmark (Plan 2)
+
+The essay evaluator engine — no DB writes, no route, no UI (those are Plan 3). All
+new code lives under `src/lib/writing/evaluator/` + `scripts/`; `@google/genai` and
+`zod` are imported **only** in the writing layer, so the R/L core stays LLM-free.
+
+- **Provider seam.** One thin `Evaluator.evaluate(input)` interface (`types.ts`), a
+  single Gemini adapter (`gemini.ts`, `ai.models.generateContent` with
+  `config.responseMimeType:'application/json'` + `responseSchema`), and a
+  `getEvaluator()` factory (`index.ts`). MVP = one provider, no fallback; a second
+  provider later changes only the factory, never callers (spec "Evaluator: provider").
+- **Zod is the single contract.** `FeedbackSchema` both derives Gemini's
+  `responseSchema` (`z.toJSONSchema`, zod v4 — emits `minItems`/`maxItems`/`enum`/
+  `minimum`/`maximum`) AND validates `response.text` (`FeedbackSchema.parse` throws on
+  schema-invalid / non-JSON → caller maps to a failed submission). The derived JSON
+  Schema is accepted by the SDK at the type level (`responseSchema: SchemaUnion =
+  Schema | unknown`); live Gemini OpenAPI-subset fit (it ignores `$schema`/
+  `additionalProperties`) is proven on the benchmark run, not assumed — if a construct
+  is rejected, hand-author the JSON Schema and keep Zod for validation only.
+- **Env seam (optional, fail-off).** `writingEvalConfig()` (`src/env.ts`) returns the
+  `{apiKey, model}` pair only when BOTH `GEMINI_API_KEY` + `WRITING_EVAL_MODEL` are
+  set, else `null` — the app boots without them and Writing Lab is simply disabled
+  (mirrors the Turnstile/PostHog fail-open seams; same getter style, not a zod env).
+
+### Calibration set + ops-gate (blocks product enable, NOT this plan)
+
+`scripts/benchmark-writing.ts` runs the evaluator over a human-labeled calibration
+set and reports schema-validity + band-accuracy (±0.5). Pure metrics
+(`bandMid`/`withinHalfBand`/`accuracy`) are unit-tested; the runner is lazy
+(`getEvaluator` + dotenv imported dynamically inside `main()`, after env loads — the
+"Scripts gotcha" discipline) and invoked manually only at the ops-gate.
+
+- **Calibration-set shape:** `{ taskPrompt: string; essay: string; category:
+  "academic"|"general"; trueBand: number }[]`, path passed as argv — **never
+  committed** (copyright: expert-graded own essays; Cambridge official samples are an
+  external sanity reference with legal access only, never a repo fixture).
+- **`WRITING_EVAL_MODEL` is filled only after** a Gemini Flash candidate passes the
+  ±0.5 band-accuracy gate on that set (an INTERNAL model-selection metric, not a
+  user-facing promise — UX always shows range + confidence). Until then the var stays
+  blank and **Writing Lab stays disabled in product**. Tests are fully mocked
+  (`vi.mock("@google/genai")`), so this plan is unblocked by the missing set.
