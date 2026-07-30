@@ -24,8 +24,8 @@
 
 Раздел «Осознанно отложенное» (D1–D5) — статус (решения 2026-06-25):
 
-- ⛔ D1 provider-specific payment signatures → BLOCKED-external (решение: провайдеры ещё не подключены). Нужны схемы подписи + sandbox-ключи Payme/Click/Uzum; до онбординга placeholder fail-closed в проде (доступ не выдаёт) — безопасен.
-- 🟡 D2 anti-bot/email-verify/referral farming → captchaToken УЖЕ подключён (`app/auth/actions.ts:34-37`, проверено — claim `SCHEMA_NOTES:246` устарел). Остаётся: signup velocity-cap (нужна IP-инфра) + порог referral-награды (мелкое продуктовое). Активация Turnstile ждёт Cloudflare-ключей (fail-open).
+- 🟡 D1 provider-specific payment signatures → seam укреплён: constant-time `hmacHexValid` вынесен и покрыт тестами (commit `2865df9`). Provider-specific схемы (Payme/Click/Uzum) остаются BLOCKED-external — нужны их docs + sandbox-ключи; до онбординга placeholder fail-closed в проде (доступ не выдаёт).
+- 🟢 D2 anti-bot/referral farming → captchaToken подключён (было); ✅ signup velocity-cap по IP (table `signup_throttle`, migration `0022`, commit `e0cfc86`); ✅ referral-награда только за rated first attempt (commit `9332b65`). Остаётся: активация Turnstile (Cloudflare-ключи, fail-open) + email-verify policy (настройка Supabase, не код).
 - 🟢 D3 result snapshot → ✅ forward-часть закрыта (commit `fd8bef1`, migration `0021`): snapshot разбора снимается на submit в server-only locked-таблицу `attempt_review_snapshot` (RLS + revoke, зеркало `answer_key`), `/result` читает его с fallback на live-ключ; verify проверяет anon-denied (нет client-утечки gated ключа). ⏳ Остаётся открытым: full **regrade исторических результатов** при правке ключа (требует content-versioning) — отдельный трек, делать перед активным content-ops.
 - 🤝 D4 full review free → РЕШЕНО: пересмотр на Wave 2 pricing (с retention/conversion-данными). Сейчас `REVIEW_OPEN=true` остаётся. Кода не требует.
 - 🧊 D5 AI Phase 3 → РЕШЕНО: остаётся frozen (§4.2 LLM-free core; CLAUDE.md FROZEN/LAST). Не баг, осознанный трек.
