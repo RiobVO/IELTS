@@ -16,7 +16,6 @@
  * src/lib/progress/referral.ts), иначе краш между захватом и продлением оставил
  * бы статус 'completed' без выданного доступа.
  */
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { captureServer } from "@/lib/analytics/server";
 import { captureError } from "@/lib/monitoring/capture";
@@ -24,6 +23,7 @@ import { db } from "@/db";
 import { payment, profile } from "@/db/schema";
 import { type PaymentProviderKey, paymentSecret } from "@/env";
 import { isPaymentExpired, validateEntitlement } from "./plans";
+import { hmacHexValid } from "./webhook-signature";
 
 /** true в боевом окружении — там stub-режим вебхука запрещён (fail closed). */
 function isProduction(): boolean {
@@ -72,12 +72,9 @@ export function verifyWebhook(
     return false;
   }
 
-  // ПЛЕЙСХОЛДЕР: HMAC-SHA256(rawBody, secret) в hex. Реальная схема — у провайдера.
-  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  const sentBuf = Buffer.from(sent, "hex");
-  const expectedBuf = Buffer.from(expected, "hex");
-  if (sentBuf.length !== expectedBuf.length) return false;
-  return timingSafeEqual(sentBuf, expectedBuf);
+  // Generic HMAC-SHA256(rawBody, secret) hex, constant-time. ПЛЕЙСХОЛДЕР — у
+  // каждого провайдера своя схема; заменить на провайдер-специфичную при онбординге.
+  return hmacHexValid(secret, sent, rawBody);
 }
 
 /**
