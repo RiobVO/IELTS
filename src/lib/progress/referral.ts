@@ -1,7 +1,13 @@
 /**
  * Referral reward engine (BRIEF §4.9 / §11 anti-abuse). Runs once, server-side,
- * from the post-submit hook: rewards an invitee's referral ONLY after they have
- * completed >= 1 test, and EXACTLY once.
+ * from the post-submit hook: rewards an invitee's referral ONLY after a RATED
+ * first attempt (anti-farm), and EXACTLY once.
+ *
+ * Anti-farm tightening (§11): the reward requires `rated` — i.e. a genuine first
+ * attempt that wasn't an instant too-fast submit (same floor-guard as Elo). A
+ * too-fast/garbage submit no longer claims the referral; the `registered` row
+ * stays and a later genuine rated submit claims it. Without this, an invitee
+ * could farm the inviter's reward by instantly submitting an empty test.
  *
  * SERVER-ONLY. Uses the Drizzle owner client (`@/db`, bypasses RLS): granting
  * the inviter's XP and inserting notifications for another user are privileged
@@ -26,7 +32,14 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { notification, profile, referral } from "@/db/schema";
 
-export async function maybeRewardReferral(userId: string): Promise<void> {
+export async function maybeRewardReferral(
+  userId: string,
+  rated: boolean,
+): Promise<void> {
+  // Anti-farm: только RATED первая попытка триггерит награду. Не-rated (too-fast
+  // или ретейк) НЕ забирает 'registered'-строку — её заберёт позднейший
+  // настоящий rated-сабмит. Ранний выход ДО claim, иначе строка бы «сгорела».
+  if (!rated) return;
   try {
     // Claim + grant in one transaction: the status flip and both XP increments
     // commit or roll back together, so the reward can never be marked 'rewarded'
