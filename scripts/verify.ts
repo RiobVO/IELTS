@@ -2,7 +2,7 @@
  * Acceptance gate (BRIEF VERIFY block). Prints [OK]/[FAIL] per check; exits 0
  * only if every check passes.
  *
- *   1. migrate up        -> all 16 app tables present
+ *   1. migrate up        -> all 22 app tables present
  *   2. migrate down      -> clean revert (0 app tables)
  *   3. migrate up again  -> idempotent (re-apply works, second run is a no-op)
  *   4. anon role         -> SELECT * FROM answer_key is DENIED by RLS
@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 18; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022)
+const APP_TABLE_COUNT = 22; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023)
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);
