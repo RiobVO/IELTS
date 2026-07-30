@@ -60,6 +60,17 @@ export function cronSecret(): string | null {
 }
 
 /**
+ * Shared secret guarding the internal /api/writing/evaluate route. Absent => the
+ * route refuses all calls (fail closed): users must never reach the evaluator
+ * directly (cost-abuse via tokens). Mirrors cronSecret() — same Bearer pattern,
+ * checked with isCronAuthorized.
+ */
+export function writingInternalSecret(): string | null {
+  const v = process.env.WRITING_INTERNAL_SECRET;
+  return v && v.trim() !== "" ? v : null;
+}
+
+/**
  * Канонический публичный origin приложения для absolute-ссылок (invite/referral).
  * OPTIONAL: задан `NEXT_PUBLIC_SITE_URL` → строим ссылки от доверенного origin, а
  * не от входящего `Host` (anti-spoof: при нестандартном proxy/host заголовок
