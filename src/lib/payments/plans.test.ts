@@ -1,7 +1,7 @@
 // Юнит-тесты каталога тарифов (BRIEF §4.8). Контракт: поиск по паре (tier, months).
 // Сумму НЕ проверяем — это плейсхолдер-данные, а не поведение функции.
 import { describe, it, expect } from "vitest";
-import { PLANS, findPlan, validateEntitlement } from "./plans";
+import { PLANS, findPlan, isPaymentExpired, validateEntitlement } from "./plans";
 
 describe("findPlan", () => {
   it("возвращает тариф, совпадающий и по tier, и по months", () => {
@@ -75,5 +75,24 @@ describe("validateEntitlement", () => {
     expect(
       validateEntitlement({ tier: "basic", periodMonths: 1, amount: anyAmount }),
     ).toBe(false);
+  });
+});
+
+// Срок жизни PENDING-платежа: устаревший незавершённый чекаут нельзя применить.
+describe("isPaymentExpired", () => {
+  const now = new Date("2026-06-25T12:00:00.000Z");
+  it("true, когда expires_at в прошлом", () => {
+    expect(isPaymentExpired(new Date("2026-06-25T11:59:59.000Z"), now)).toBe(true);
+    expect(isPaymentExpired("2026-06-25T10:00:00.000Z", now)).toBe(true);
+  });
+  it("false, когда expires_at в будущем или ровно сейчас", () => {
+    expect(isPaymentExpired(new Date("2026-06-25T12:00:01.000Z"), now)).toBe(false);
+    expect(isPaymentExpired(new Date(now), now)).toBe(false); // ровно now — ещё жив
+  });
+  it("false для null (legacy-строки до 0020) — не ломаем старые pending", () => {
+    expect(isPaymentExpired(null, now)).toBe(false);
+  });
+  it("false для нечитаемой даты — не отклоняем по мусору", () => {
+    expect(isPaymentExpired("not-a-date", now)).toBe(false);
   });
 });

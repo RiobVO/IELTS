@@ -73,3 +73,28 @@ export function validateEntitlement(row: {
   const plan = findPlan(row.tier, row.periodMonths);
   return plan !== undefined && plan.amount === row.amount;
 }
+
+/**
+ * Срок жизни PENDING-чекаута. После него незавершённый платёж нельзя применить:
+ * webhook переводит устаревший pending в `failed` и доступ НЕ выдаёт (см.
+ * applyCompletedPayment). Это закрывает бессрочно-применимые abandoned-строки
+ * (reconciliation/fraud/поддержка). ПЛЕЙСХОЛДЕР до онбординга мерчанта — окно
+ * подогнать под реальные правила Payme/Click/Uzum (обычно 15 мин – 24 ч).
+ */
+export const PENDING_TTL_MS = 60 * 60 * 1000; // 1 час
+
+/**
+ * Истёк ли PENDING-платёж к моменту `now`. Чистая функция (решение webhook
+ * тестируется без БД). NULL `expires_at` (legacy-строки до миграции 0020) и
+ * нечитаемую дату трактуем как «не истёк» — не отклоняем по отсутствию/мусору
+ * данных, только по доказанно прошедшему сроку. Граница `==` ещё жив (строго <).
+ */
+export function isPaymentExpired(
+  expiresAt: Date | string | null,
+  now: Date,
+): boolean {
+  if (expiresAt == null) return false;
+  const t =
+    expiresAt instanceof Date ? expiresAt.getTime() : new Date(expiresAt).getTime();
+  return Number.isFinite(t) && t < now.getTime();
+}

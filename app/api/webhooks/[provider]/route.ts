@@ -66,13 +66,13 @@ export async function POST(
 
   const outcome = await applyCompletedPayment(provider, providerTransactionId);
 
-  // applied/duplicate -> 200 (успешный идемпотентный ack). not_found/invalid ->
-  // 400 (запрос некорректен, ретрай не поможет). error -> 500 (временная ошибка —
-  // провайдер ретраит, применение само идемпотентно).
+  // applied/duplicate -> 200 (успешный идемпотентный ack). not_found/invalid/
+  // expired -> 400 (запрос неприменим, ретрай не поможет). error -> 500
+  // (временная ошибка — провайдер ретраит, применение само идемпотентно).
   if (outcome === "error") {
     return NextResponse.json({ ok: false }, { status: 500 });
   }
-  if (outcome === "not_found" || outcome === "invalid") {
+  if (outcome === "not_found" || outcome === "invalid" || outcome === "expired") {
     return NextResponse.json({ ok: false, reason: outcome }, { status: 400 });
   }
   return NextResponse.json({ ok: true }, { status: 200 });

@@ -23,7 +23,7 @@ import { captureError } from "@/lib/monitoring/capture";
 import { db } from "@/db";
 import { payment, profile } from "@/db/schema";
 import { type PaymentProviderKey, paymentSecret } from "@/env";
-import { validateEntitlement } from "./plans";
+import { isPaymentExpired, validateEntitlement } from "./plans";
 
 /** true в боевом окружении — там stub-режим вебхука запрещён (fail closed). */
 function isProduction(): boolean {
@@ -87,6 +87,7 @@ export function verifyWebhook(
  *
  *   not_found — нет инициированного платежа с таким id (отклоняем, доступ не выдан).
  *   invalid   — (tier, срок, сумма) не соответствуют каталогу findPlan -> помечаем 'failed'.
+ *   expired   — pending протух (expires_at в прошлом) -> помечаем 'failed', доступ не выдан.
  *   duplicate — платёж уже был применён ранее (идемпотентный ack).
  *   applied   — доступ выдан.
  *   error     — внутренняя ошибка (вебхук ответит так, чтобы провайдер ретраил).
@@ -94,7 +95,9 @@ export function verifyWebhook(
 export async function applyCompletedPayment(
   provider: PaymentProviderKey,
   providerTransactionId: string,
-): Promise<"applied" | "duplicate" | "not_found" | "invalid" | "error"> {
+): Promise<
+  "applied" | "duplicate" | "not_found" | "invalid" | "expired" | "error"
+> {
   // Захваченная выдача для пост-коммит телеметрии (§11). Заполняется ТОЛЬКО на
   // успешном applied внутри транзакции, читается после её коммита.
   let granted: { userId: string; tier: string; periodMonths: number } | null =
@@ -110,6 +113,7 @@ export async function applyCompletedPayment(
           periodMonths: payment.periodMonths,
           amount: payment.amount,
           status: payment.status,
+          expiresAt: payment.expiresAt,
         })
         .from(payment)
         .where(
@@ -122,6 +126,23 @@ export async function applyCompletedPayment(
 
       if (!row) return "not_found";
       if (row.status === "completed") return "duplicate";
+
+      // Срок жизни pending: устаревший abandoned-чекаут больше не выдаёт доступ.
+      // Проверка ПОСЛЕ duplicate — уже applied-платёж остаётся идемпотентным даже
+      // после expires_at. Переводим в 'failed' (single-fire, как invalid ниже).
+      if (isPaymentExpired(row.expiresAt, new Date())) {
+        await tx
+          .update(payment)
+          .set({ status: "failed", updatedAt: sql`now()` })
+          .where(
+            and(
+              eq(payment.provider, provider),
+              eq(payment.providerTransactionId, providerTransactionId),
+              ne(payment.status, "completed"),
+            ),
+          );
+        return "expired";
+      }
 
       // 2. Сверка с каталогом: (tier, срок) должны быть продаваемым планом, а
       //    сумма — совпадать с его ценой. Инвариант независим от доверия к
