@@ -58,15 +58,14 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
 
       {/* Filter row */}
       <div className="wl-filterrow" style={S.filterRow}>
-        <div style={S.segment} role="tablist" aria-label="Filter by category">
+        <div style={S.segment} role="group" aria-label="Filter by category">
           {SEGMENTS.map((seg) => {
             const active = cat === seg.value;
             return (
               <button
                 key={seg.value}
                 type="button"
-                role="tab"
-                aria-selected={active}
+                aria-pressed={active}
                 onClick={() => setCat(seg.value)}
                 className="wl-seg"
                 style={{ ...S.seg, ...(active ? S.segActive : null) }}
@@ -152,16 +151,16 @@ const S: Record<string, CSSProperties> = {
 
   filterRow: {},
   segment: { display: "inline-flex", padding: 4, gap: 4, background: "var(--surface-inset)", borderRadius: "var(--radius-full)", flex: "none" },
-  seg: { appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, padding: "7px 16px", borderRadius: "var(--radius-full)", cursor: "pointer", transition: "var(--transition-colors)" },
+  seg: { appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, minHeight: 40, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 16px", borderRadius: "var(--radius-full)", cursor: "pointer", transition: "var(--transition-colors)" },
   segActive: { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-solid)" },
   count: { fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-muted)", flex: "none" },
 
   empty: { padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)" },
 
   row: { display: "flex", alignItems: "center", gap: 18, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: "18px 20px", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
-  rowTile: { width: 46, height: 46, flex: "none", borderRadius: 13, display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--text-link)" },
-  rowOver: { fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 5 },
-  rowPrompt: { fontSize: 15.5, fontWeight: 600, lineHeight: 1.4, color: "var(--text-primary)" },
+  rowTile: { width: 46, height: 46, flex: "none", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--text-link)" },
+  rowOver: { fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 5 },
+  rowPrompt: { fontSize: "var(--text-base)", fontWeight: 600, lineHeight: 1.4, color: "var(--text-primary)" },
   rowRight: { flex: "none", textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 },
   rowWords: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" },
   rowCta: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700 },

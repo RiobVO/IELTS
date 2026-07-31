@@ -30,11 +30,12 @@ a { color: var(--text-link); text-decoration: none; }
    fails contrast; Firefox also dims it, hence opacity:1). text-muted = ≥5.3:1. */
 ::placeholder { color: var(--text-muted); opacity: 1; }
 
-/* Visible, branded focus ring — keyboard only */
+/* Visible, branded focus ring — keyboard only. No border-radius here: the spread
+   box-shadow hugs the element's own radius, so rounded cards/buttons keep their
+   shape on focus instead of snapping to a fixed radius. */
 :focus-visible {
   outline: none;
   box-shadow: var(--ring);
-  border-radius: var(--radius-sm);
 }
 
 /* Custom scrollbar */
