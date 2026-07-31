@@ -4,7 +4,7 @@ import { getEvaluator } from "./index";
 
 describe("getEvaluator", () => {
   it("returns an evaluator whose evaluate() delegates to the Gemini adapter", async () => {
-    const r = await getEvaluator().evaluate({ essay: "e", taskPrompt: "t", category: "general" });
+    const r = await getEvaluator().evaluate({ essay: "e", taskPrompt: "t", category: "general", wordCount: 280 });
     expect(r.provider).toBe("gemini");
   });
 });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { writingInternalSecret } from "@/env";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { getEvaluator } from "@/lib/writing/evaluator";
+import { withUnderlengthFlag } from "@/lib/writing/underlength";
 import {
   claimForEvaluation,
   loadSubmissionForEval,
@@ -30,7 +31,11 @@ export async function POST(request: Request) {
       await markFailed(submissionId);
       return NextResponse.json({ ok: false, error: "submission_gone" }, { status: 200 });
     }
-    await persistFeedback(submissionId, await getEvaluator().evaluate(input));
+    const result = await getEvaluator().evaluate(input);
+    // Deterministic safety net: a sub-250-word essay always carries an underlength
+    // warning, even if the model omitted one (length is the trusted server count).
+    const feedback = withUnderlengthFlag(result.feedback, input.wordCount);
+    await persistFeedback(submissionId, { ...result, feedback });
     return NextResponse.json({ ok: true, claimed: true }, { status: 200 });
   } catch (e) {
     console.error("writing evaluate failed", submissionId, e);

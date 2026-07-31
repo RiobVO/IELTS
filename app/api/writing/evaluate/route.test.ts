@@ -28,13 +28,23 @@ describe("POST /api/writing/evaluate", () => {
     expect(evaluate).not.toHaveBeenCalled();
   });
   it("evaluates + persists on won claim", async () => {
-    claim.mockResolvedValue(true); load.mockResolvedValue({ essay: "e", taskPrompt: "t", category: "academic" });
+    claim.mockResolvedValue(true); load.mockResolvedValue({ essay: "e", taskPrompt: "t", category: "academic", wordCount: 300 });
     evaluate.mockResolvedValue({ feedback: {}, raw: "{}", provider: "gemini", model: "m", promptVersion: "v1" });
     await POST(req("Bearer s3cret", { submissionId: "s1" }));
     expect(persist).toHaveBeenCalledWith("s1", expect.any(Object));
   });
+  it("injects the underlength fix before persisting a short essay", async () => {
+    claim.mockResolvedValue(true); load.mockResolvedValue({ essay: "e", taskPrompt: "t", category: "academic", wordCount: 120 });
+    evaluate.mockResolvedValue({
+      feedback: { topFixes: ["broaden vocabulary"], checklist: [], criteria: [], annotations: [] },
+      raw: "{}", provider: "gemini", model: "m", promptVersion: "v1",
+    });
+    await POST(req("Bearer s3cret", { submissionId: "s1" }));
+    const persisted = persist.mock.calls[0][1];
+    expect(persisted.feedback.topFixes[0]).toMatch(/120 words/);
+  });
   it("marks failed when evaluate throws", async () => {
-    claim.mockResolvedValue(true); load.mockResolvedValue({ essay: "e", taskPrompt: "t", category: "academic" });
+    claim.mockResolvedValue(true); load.mockResolvedValue({ essay: "e", taskPrompt: "t", category: "academic", wordCount: 300 });
     evaluate.mockRejectedValue(new Error("boom"));
     await POST(req("Bearer s3cret", { submissionId: "s1" }));
     expect(fail).toHaveBeenCalledWith("s1"); expect(persist).not.toHaveBeenCalled();

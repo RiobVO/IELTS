@@ -43,12 +43,13 @@ export async function claimForEvaluation(submissionId: string): Promise<boolean>
 
 export async function loadSubmissionForEval(
   submissionId: string,
-): Promise<{ essay: string; taskPrompt: string; category: "academic" | "general" } | null> {
+): Promise<{ essay: string; taskPrompt: string; category: "academic" | "general"; wordCount: number } | null> {
   const [row] = await db
     .select({
       essay: writingSubmission.essayText,
       taskPrompt: writingTask.prompt,
       category: writingTask.category,
+      wordCount: writingSubmission.wordCount,
     })
     .from(writingSubmission)
     .innerJoin(writingTask, eq(writingTask.id, writingSubmission.taskId))
