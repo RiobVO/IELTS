@@ -15,6 +15,11 @@ describe("buildPrompt", () => {
   it("instructs a band RANGE, not a single score", () => {
     expect(buildPrompt(input).toLowerCase()).toContain("range");
   });
+  it("instructs annotation type and the original thesis", () => {
+    const p = buildPrompt(input);
+    expect(p).toMatch(/good.*style.*grammar/is);
+    expect(p.toLowerCase()).toContain("original thesis");
+  });
   it("has a stable version", () => {
     expect(PROMPT_VERSION).toBe("writing-task2-v1");
   });

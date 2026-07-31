@@ -12,8 +12,8 @@ const valid = {
     { name: "grammar_accuracy", bandLow: 6.0, bandHigh: 6.5, strength: "mixed structures", mainIssue: "article slips", nextStep: "proofread articles" },
   ],
   topFixes: ["clarify thesis", "add specific example", "reduce repeated vocabulary"],
-  annotations: [{ quote: "Many people think...", comment: "too general — be specific" }],
-  rewrite: { thesis: "Improved thesis sentence.", paragraph: "One rewritten body paragraph.", replacements: [{ from: "good", to: "beneficial" }] },
+  annotations: [{ quote: "Many people think...", comment: "too general — be specific", type: "style" }],
+  rewrite: { thesisOld: "Original thesis sentence.", thesis: "Improved thesis sentence.", paragraph: "One rewritten body paragraph.", replacements: [{ from: "good", to: "beneficial" }] },
   checklist: ["clear position", "two developed ideas", "paragraph links", "fewer grammar slips"],
 };
 
@@ -29,5 +29,15 @@ describe("FeedbackSchema", () => {
   });
   it("requires exactly 4 criteria", () => {
     expect(() => FeedbackSchema.parse({ ...valid, criteria: valid.criteria.slice(0, 3) })).toThrow();
+  });
+  it("requires an annotation type in good|style|grammar", () => {
+    expect(FeedbackSchema.safeParse({ ...valid, annotations: [{ quote: "x", comment: "y", type: "good" }] }).success).toBe(true);
+    expect(FeedbackSchema.safeParse({ ...valid, annotations: [{ quote: "x", comment: "y" }] }).success).toBe(false);
+    expect(FeedbackSchema.safeParse({ ...valid, annotations: [{ quote: "x", comment: "y", type: "bogus" }] }).success).toBe(false);
+  });
+  it("requires rewrite.thesisOld", () => {
+    const { thesisOld: _omit, ...rewriteNoOld } = valid.rewrite;
+    void _omit;
+    expect(FeedbackSchema.safeParse({ ...valid, rewrite: rewriteNoOld }).success).toBe(false);
   });
 });
