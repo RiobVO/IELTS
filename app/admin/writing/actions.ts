@@ -3,10 +3,26 @@
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { deleteWritingTask, insertWritingTask, setTaskStatus } from "@/lib/writing/admin";
+import {
+  coerceDifficulty,
+  coerceTaskType,
+  coerceTopic,
+  detectTaskType,
+  detectTopic,
+} from "@/lib/writing/topic-meta";
 import type { Tier } from "@/lib/tiers";
 
 const TIERS: readonly string[] = ["basic", "premium", "ultra"];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Parse a band field to a 0–9 value at 0.5 resolution, or null when blank/invalid. */
+function parseBand(raw: FormDataEntryValue | null): number | null {
+  const s = String(raw ?? "").trim();
+  if (s === "") return null;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n < 0 || n > 9) return null;
+  return Math.round(n * 2) / 2;
+}
 
 /**
  * Read a well-formed topic id from the form, or bail to the panel with an error.
@@ -38,7 +54,28 @@ export async function createWritingTask(formData: FormData) {
     redirect(`/admin/writing?error=${encodeURIComponent("A prompt and a valid category are required.")}`);
   }
 
-  await insertWritingTask({ prompt, category, tierRequired: tier, createdBy: admin.id, publish });
+  // "auto" runs the heuristic over the prompt text; an explicit value is stored as
+  // chosen; "" leaves the column null (the catalog renders a neutral card).
+  const topicRaw = String(formData.get("topic") ?? "auto");
+  const topic = topicRaw === "auto" ? detectTopic(prompt) : coerceTopic(topicRaw);
+  const typeRaw = String(formData.get("task_type") ?? "auto");
+  const taskType = typeRaw === "auto" ? detectTaskType(prompt) : coerceTaskType(typeRaw);
+  const difficulty = coerceDifficulty(formData.get("difficulty"));
+  const bandLow = parseBand(formData.get("band_low"));
+  const bandHigh = parseBand(formData.get("band_high"));
+
+  await insertWritingTask({
+    prompt,
+    category,
+    topic,
+    taskType,
+    difficulty,
+    bandLow,
+    bandHigh,
+    tierRequired: tier,
+    createdBy: admin.id,
+    publish,
+  });
   redirect(`/admin/writing?created=${publish ? "published" : "draft"}`);
 }
 

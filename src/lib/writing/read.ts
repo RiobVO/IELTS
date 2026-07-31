@@ -2,6 +2,14 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { writingFeedback, writingSubmission, writingTask } from "@/db/schema";
 import type { Feedback } from "./evaluator/types";
+import {
+  coerceDifficulty,
+  coerceTaskType,
+  coerceTopic,
+  type WritingDifficulty,
+  type WritingTaskType,
+  type WritingTopic,
+} from "./topic-meta";
 
 // UI reads for Writing Lab. Owner path (Drizzle, RLS-bypassing), the same trust
 // model as the reading result page: ownership is enforced in the WHERE clause
@@ -11,23 +19,66 @@ export interface CatalogTask {
   id: string;
   category: "academic" | "general";
   prompt: string;
+  topic: WritingTopic | null;
+  taskType: WritingTaskType | null;
+  difficulty: WritingDifficulty | null;
+  bandLow: number | null;
+  bandHigh: number | null;
+}
+
+const CATALOG_COLUMNS = {
+  id: writingTask.id,
+  category: writingTask.category,
+  prompt: writingTask.prompt,
+  topic: writingTask.topic,
+  taskType: writingTask.taskType,
+  difficulty: writingTask.difficulty,
+  bandLow: writingTask.bandLow,
+  bandHigh: writingTask.bandHigh,
+} as const;
+
+type CatalogRow = {
+  id: string;
+  category: "academic" | "general";
+  prompt: string;
+  topic: string | null;
+  taskType: string | null;
+  difficulty: number | null;
+  bandLow: string | null;
+  bandHigh: string | null;
+};
+
+// Narrow the raw text/numeric columns to the typed catalog shape. Unknown topic /
+// type (shouldn't happen — DB CHECK pins them) coerces to null → neutral card.
+function toCatalogTask(row: CatalogRow): CatalogTask {
+  return {
+    id: row.id,
+    category: row.category,
+    prompt: row.prompt,
+    topic: coerceTopic(row.topic),
+    taskType: coerceTaskType(row.taskType),
+    difficulty: coerceDifficulty(row.difficulty),
+    bandLow: row.bandLow != null ? Number(row.bandLow) : null,
+    bandHigh: row.bandHigh != null ? Number(row.bandHigh) : null,
+  };
 }
 
 export async function listPublishedTasks(): Promise<CatalogTask[]> {
-  return db
-    .select({ id: writingTask.id, category: writingTask.category, prompt: writingTask.prompt })
+  const rows = await db
+    .select(CATALOG_COLUMNS)
     .from(writingTask)
     .where(eq(writingTask.status, "published"))
     .orderBy(desc(writingTask.createdAt));
+  return rows.map(toCatalogTask);
 }
 
 export async function loadPublishedTask(taskId: string): Promise<CatalogTask | null> {
   const [row] = await db
-    .select({ id: writingTask.id, category: writingTask.category, prompt: writingTask.prompt })
+    .select(CATALOG_COLUMNS)
     .from(writingTask)
     .where(and(eq(writingTask.id, taskId), eq(writingTask.status, "published")))
     .limit(1);
-  return row ?? null;
+  return row ? toCatalogTask(row) : null;
 }
 
 export interface FeedbackResult {
