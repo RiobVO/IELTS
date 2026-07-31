@@ -73,9 +73,12 @@ export function CatalogNotice({
           Go unlimited
         </Button>
       )}
+      {/* На touch крестик-дисмисс растёт до 44×44 (комфортный тап); на mouse — 30×30. */}
+      <style>{"@media (pointer:coarse){.cn-dismiss{width:44px!important;height:44px!important}}"}</style>
       <Link
         href={dismissHref}
         aria-label="Dismiss notice"
+        className="cn-dismiss"
         style={{ flex: "none", display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: "var(--radius-sm)", color: "var(--text-muted)", textDecoration: "none" }}
       >
         <Icon name="x" size={16} />
