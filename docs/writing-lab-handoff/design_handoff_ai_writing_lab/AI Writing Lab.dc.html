@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/bando-design-system-b7fbe974-46aa-4834-9db9-3ba0f6e9f86a/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/bando-design-system-b7fbe974-46aa-4834-9db9-3ba0f6e9f86a/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/bando-design-system-b7fbe974-46aa-4834-9db9-3ba0f6e9f86a/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/bando-design-system-b7fbe974-46aa-4834-9db9-3ba0f6e9f86a/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/bando-design-system-b7fbe974-46aa-4834-9db9-3ba0f6e9f86a/tokens/radii.css">
+  <link rel="stylesheet" href="_ds/bando-design-system-b7fbe974-46aa-4834-9db9-3ba0f6e9f86a/tokens/elevation.css">
+  <link rel="stylesheet" href="_ds/bando-design-system-b7fbe974-46aa-4834-9db9-3ba0f6e9f86a/tokens/motion.css">
+  <link rel="stylesheet" href="_ds/bando-design-system-b7fbe974-46aa-4834-9db9-3ba0f6e9f86a/tokens/base.css">
+  <link rel="stylesheet" href="_ds/bando-design-system-b7fbe974-46aa-4834-9db9-3ba0f6e9f86a/styles.css">
+  <script src="_ds/bando-design-system-b7fbe974-46aa-4834-9db9-3ba0f6e9f86a/_ds_bundle.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    [data-scrollmain]::-webkit-scrollbar{width:10px}
+    [data-scrollmain]::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:999px;border:3px solid var(--bg-base)}
+    @keyframes wl-spin{to{transform:rotate(360deg)}}
+    @keyframes wl-pulse{0%,100%{opacity:.3}50%{opacity:1}}
+    @keyframes wl-bar{0%{left:-40%}100%{left:100%}}
+    @keyframes wl-up{from{transform:translateY(9px)}to{transform:none}}
+    @keyframes wl-pop{0%{transform:scale(.92)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
+    @keyframes wl-levitate{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+    @keyframes wl-sheen{0%{transform:translateX(-130%)}55%,100%{transform:translateX(320%)}}
+    @keyframes wl-rank{from{transform:scaleX(.5)}to{transform:scaleX(1)}}
+    @keyframes wl-grow{from{transform:scaleX(.35)}to{transform:scaleX(1)}}
+    @keyframes wl-dot{from{transform:scale(.2)}to{transform:scale(1)}}
+    @keyframes wl-ring{0%{box-shadow:0 0 0 0 var(--brand)}100%{box-shadow:0 0 0 7px transparent}}
+    .wl-fade{animation:wl-up .5s var(--ease-out) forwards}
+    .wl-press{transition:transform .12s var(--ease-standard),box-shadow .12s var(--ease-standard)}
+    .wl-press:hover{transform:translateY(-2px)}
+    .wl-press:active{transform:translateY(1px)}
+    @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;animation-iteration-count:1!important}}
+  </style>
+</helmet>
+
+<div style="display:flex;height:100vh;width:100%;overflow:hidden;font-family:var(--font-ui);background:var(--bg-base);color:var(--text-primary)">
+
+  <aside style="width:250px;flex:none;height:100%;display:flex;flex-direction:column;background:var(--slate-950);color:#fff;padding:18px 14px;overflow:auto">
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 8px 4px">
+      <svg viewBox="0 0 64 64" width="26" height="26" fill="none"><rect x="9" y="18" width="34" height="9" rx="4.5" fill="#8B5CF6"></rect><rect x="9" y="31" width="46" height="9" rx="4.5" fill="#fff" opacity="0.92"></rect><rect x="9" y="44" width="22" height="9" rx="4.5" fill="#fff" opacity="0.5"></rect></svg>
+      <div style="line-height:1.15">
+        <div style="font-weight:800;font-size:15px;letter-spacing:-0.01em">Writing Lab</div>
+        <div style="font-size:10.5px;color:rgba(236,233,245,0.45);font-weight:600;letter-spacing:0.04em">PROTOTYPE · JUMP TO ANY SCREEN</div>
+      </div>
+    </div>
+    <sc-for list="{{ nav }}" as="grp" hint-placeholder-count="3">
+      <div style="margin-top:14px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(236,233,245,0.38);padding:0 8px 6px">{{ grp.group }}</div>
+        <sc-for list="{{ grp.items }}" as="item" hint-placeholder-count="4">
+          <button onClick="{{ item.onClick }}" style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:none;cursor:pointer;padding:8px 8px;margin-bottom:2px;border-radius:9px;font-family:var(--font-ui);font-size:13px;font-weight:600;background:{{ item.bg }};color:{{ item.color }}">
+            <span style="width:3px;height:15px;border-radius:2px;flex:none;background:{{ item.bar }}"></span>
+            {{ item.label }}
+          </button>
+        </sc-for>
+      </div>
+    </sc-for>
+    <div style="margin-top:auto;padding:12px 10px 4px;font-size:11px;line-height:1.5;color:rgba(236,233,245,0.4)">Tip: <span style="color:rgba(236,233,245,0.7)">Get my feedback</span> auto-plays the real flow — queue → analyzing → feedback.</div>
+  </aside>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;height:100%">
+    <header style="flex:none;height:64px;display:flex;align-items:center;gap:8px;padding:0 26px;background:var(--surface);border-bottom:1px solid var(--border);z-index:5">
+      <div style="display:flex;align-items:center;gap:9px;margin-right:18px">
+        <svg viewBox="0 0 64 64" width="24" height="24" fill="none"><rect x="9" y="18" width="34" height="9" rx="4.5" fill="#8B5CF6"></rect><rect x="9" y="31" width="46" height="9" rx="4.5" fill="var(--slate-400)"></rect><rect x="9" y="44" width="22" height="9" rx="4.5" fill="var(--slate-300)"></rect></svg>
+        <span style="font-weight:800;font-size:18px;letter-spacing:-0.01em">band<span style="color:var(--brand)">o</span></span>
+      </div>
+      <nav style="display:flex;align-items:center;gap:2px;white-space:nowrap">
+        <span style="padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;color:var(--text-muted)">Home</span>
+        <span style="padding:8px 14px;border-radius:10px;font-size:14px;font-weight:700;color:var(--text-link);background:var(--brand-subtle)">Practice</span>
+        <span style="padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;color:var(--text-muted)">League</span>
+        <span style="padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;color:var(--text-muted)">Badges</span>
+      </nav>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
+        <button style="display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:var(--surface);cursor:pointer;border-radius:999px;padding:7px 14px;font-family:var(--font-ui);font-size:13.5px;font-weight:700;color:var(--text-primary);box-shadow:var(--shadow-solid)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--brand)" stroke-width="2.4" stroke-linecap="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>Upgrade</button>
+        <span style="color:var(--text-muted);display:inline-flex"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--streak)"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" stroke="none"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>2</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--warn-text)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>30</span>
+        <div style="width:34px;height:34px;border-radius:999px;background:var(--violet-200);color:var(--violet-700);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">U</div>
+        <span style="color:var(--text-disabled);display:inline-flex"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></span>
+      </div>
+    </header>
+
+    <main data-scrollmain style="flex:1;overflow:auto">
+
+      <!-- CATALOG -->
+      <sc-if value="{{ isCatalog }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Catalog" style="max-width:1080px;margin:0 auto;padding:30px 40px 90px">
+        <div style="display:grid;grid-template-columns:1fr 336px;gap:24px;align-items:stretch;margin-bottom:28px">
+          <div class="wl-fade" style="display:flex;flex-direction:column">
+            <div style="display:inline-flex;align-items:center;gap:8px;margin-bottom:14px;font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:0.12em;color:var(--text-link)"><span style="width:8px;height:8px;border-radius:999px;background:var(--brand)"></span>WRITING LAB</div>
+            <h1 style="margin:0 0 12px;font-size:42px;font-weight:800;letter-spacing:-0.03em;line-height:1.02">Pick a prompt<span style="color:var(--brand)">.</span></h1>
+            <p style="margin:0 0 22px;color:var(--text-secondary);font-size:16px;line-height:1.5;max-width:46ch">Write a Task 2 essay and get an estimated band with a concrete plan to climb — your AI coach, not a verdict.</p>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:auto">
+              <div style="display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:11px 18px;box-shadow:var(--shadow-solid)">
+                <span style="font-size:13px;font-weight:600;color:var(--text-secondary)">Target</span>
+                <span style="font-family:var(--font-mono);font-size:18px;font-weight:800;color:var(--text-primary)">7.0</span>
+                <span style="width:110px;height:8px;border-radius:999px;background:var(--surface-inset);overflow:hidden;display:inline-block"><span style="display:block;height:100%;width:88%;background:var(--brand);border-radius:999px"></span></span>
+                <span style="font-size:13px;color:var(--text-muted);white-space:nowrap">best <strong style="color:var(--text-primary);font-family:var(--font-mono)">6.5</strong> · <span style="color:var(--text-link);font-weight:700">+0.5 to go</span></span>
+              </div>
+              <button onClick="{{ goResult }}" style="display:inline-flex;align-items:center;gap:8px;border:1px solid var(--brand-border);background:var(--brand-subtle);color:var(--text-link);cursor:pointer;border-radius:999px;padding:10px 16px;font-family:var(--font-ui);font-size:13.5px;font-weight:700"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg> Drill weakest: Task Response</button>
+            </div>
+          </div>
+          <div class="wl-fade wl-press" onClick="{{ goAttempt }}" style="cursor:pointer;position:relative;overflow:hidden;border-radius:24px;background:var(--brand);color:#fff;padding:24px 26px;display:flex;flex-direction:column;box-shadow:var(--shadow-solid-lg)">
+            <div style="font-size:12px;font-weight:700;opacity:.82;margin-bottom:9px;position:relative;z-index:2">Continue your draft</div>
+            <div style="font-size:20px;font-weight:800;line-height:1.2;margin-bottom:7px;position:relative;z-index:2">Technology &amp; personal contact</div>
+            <div style="font-size:12px;opacity:.82;font-family:var(--font-mono);position:relative;z-index:2">Task 2 · 214 words · not submitted</div>
+            <div style="margin-top:14px;height:8px;border-radius:999px;background:rgba(255,255,255,.25);overflow:hidden;position:relative;z-index:2"><span style="display:block;height:100%;width:62%;background:#fff;border-radius:999px"></span></div>
+            <div style="margin-top:auto;padding-top:18px;position:relative;z-index:2"><span style="display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--text-link);font-weight:700;font-size:14px;border-radius:999px;padding:10px 18px">Resume writing →</span></div>
+            <div style="position:absolute;right:-12px;bottom:-6px;display:flex;flex-direction:column;gap:7px;opacity:.16;z-index:1">
+              <span style="height:13px;width:74px;border-radius:7px;background:#fff"></span>
+              <span style="height:13px;width:104px;border-radius:7px;background:#fff"></span>
+              <span style="height:13px;width:52px;border-radius:7px;background:#fff"></span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px;flex-wrap:wrap">
+          <div style="display:inline-flex;background:var(--surface-inset);border-radius:12px;padding:4px;gap:4px">
+            <sc-for list="{{ catSeg }}" as="seg" hint-placeholder-count="2">
+              <button onClick="{{ seg.onClick }}" style="border:none;cursor:pointer;border-radius:9px;padding:8px 18px;font-family:var(--font-ui);font-size:14px;font-weight:700;background:{{ seg.bg }};color:{{ seg.color }};box-shadow:{{ seg.shadow }}">{{ seg.label }}</button>
+            </sc-for>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;width:260px;max-width:100%;height:42px;padding:0 14px;background:var(--surface-raised);border:2px solid var(--border);border-radius:var(--radius-md)">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input placeholder="Search prompts" style="flex:1;min-width:0;border:none;outline:none;background:transparent;color:var(--text-primary);font-family:var(--font-ui);font-size:15px"/>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+          <sc-for list="{{ typeChips }}" as="chip" hint-placeholder-count="4">
+            <button onClick="{{ chip.onClick }}" style="display:inline-flex;align-items:center;gap:7px;border:1px solid {{ chip.border }};cursor:pointer;border-radius:999px;padding:7px 14px;font-family:var(--font-ui);font-size:13px;font-weight:600;background:{{ chip.bg }};color:{{ chip.color }}">{{ chip.label }}<span style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:{{ chip.countColor }}">{{ chip.count }}</span></button>
+          </sc-for>
+          <span style="margin-left:auto;font-size:12.5px;color:var(--text-muted)">{{ topicCount }} prompts · ~250 words · 40 min</span>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ topics }}" as="t" hint-placeholder-count="4">
+            <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Card" interactive="{{ true }}" on-click="{{ t.start }}" hint-size="100%,98px">
+              <div style="display:flex;align-items:center;gap:18px">
+                <div style="width:46px;height:46px;flex:none;border-radius:13px;background:var(--brand-subtle);color:var(--text-link);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--text-muted);text-transform:uppercase;margin-bottom:5px">Task 2 · {{ t.type }}</div>
+                  <p style="margin:0;font-size:15.5px;line-height:1.4;color:var(--text-primary);font-weight:600;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">{{ t.prompt }}</p>
+                </div>
+                <div style="display:flex;align-items:center;gap:18px;flex:none">
+                  <span style="font-size:12.5px;color:var(--text-muted);white-space:nowrap">~250 words</span>
+                  <span style="display:inline-flex;align-items:center;gap:6px;color:var(--text-link);font-weight:700;font-size:14px">Write <span style="font-size:15px">→</span></span>
+                </div>
+              </div>
+            </x-import>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ATTEMPT -->
+      <sc-if value="{{ isAttempt }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Attempt" style="max-width:1080px;margin:0 auto;padding:24px 40px 70px">
+        <button onClick="{{ goCatalog }}" style="display:inline-flex;align-items:center;gap:6px;border:none;background:none;cursor:pointer;color:var(--text-muted);font-family:var(--font-ui);font-size:13px;font-weight:600;padding:4px 0;margin-bottom:14px">← Back to catalog</button>
+        <div style="display:grid;grid-template-columns:320px 1fr;gap:24px;align-items:stretch">
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div style="padding:20px 22px;border-radius:18px;background:var(--brand-subtle);border:1px solid var(--brand-border)">
+              <div style="font-size:11px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-link);margin-bottom:9px">Task 2 · Academic</div>
+              <p style="margin:0;font-size:16px;line-height:1.55;color:var(--text-primary);font-weight:500">{{ topic }}</p>
+              <p style="margin:12px 0 0;font-size:12.5px;color:var(--text-secondary);line-height:1.5">Write at least 250 words. Give reasons and use examples from your own knowledge or experience.</p>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:14px;padding:16px 20px;border-radius:16px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-solid)">
+              <div style="line-height:1.1">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted)">Aiming for</div>
+                <div style="font-family:var(--font-mono);font-size:24px;font-weight:800;color:var(--text-primary)">7.0</div>
+              </div>
+              <div style="flex:1">
+                <div style="height:8px;border-radius:999px;background:var(--surface-inset);overflow:hidden"><span style="display:block;height:100%;width:88%;background:var(--brand);border-radius:999px"></span></div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:7px">Best so far <strong style="color:var(--text-primary);font-family:var(--font-mono)">6.5</strong> · <span style="color:var(--text-link);font-weight:700">+0.5 to go</span></div>
+              </div>
+            </div>
+
+            <div style="flex:1;padding:18px 20px;border-radius:16px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-solid)">
+              <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:14px">A solid Task 2 shape</div>
+              <sc-for list="{{ structure }}" as="st" hint-placeholder-count="4">
+                <div style="display:flex;gap:12px;padding-bottom:14px">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex:none">
+                    <span style="width:26px;height:26px;border-radius:999px;background:var(--brand-subtle);color:var(--text-link);font-family:var(--font-mono);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ st.n }}</span>
+                    <sc-if value="{{ st.line }}" hint-placeholder-val="{{ true }}"><span style="flex:1;width:2px;background:var(--border);margin-top:4px;min-height:14px"></span></sc-if>
+                  </div>
+                  <div style="padding-top:2px"><div style="font-size:13.5px;font-weight:700;color:var(--text-primary)">{{ st.title }}</div><div style="font-size:12.5px;color:var(--text-secondary);line-height:1.4">{{ st.hint }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+              <h2 style="margin:0;font-size:18px;font-weight:700">Your essay</h2>
+              <sc-if value="{{ timerOn }}" hint-placeholder-val="{{ true }}">
+                <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.ExamTimer" remaining-seconds="{{ 2382 }}" total-seconds="{{ 2400 }}" compact="{{ true }}" hint-size="130px,42px"></x-import>
+              </sc-if>
+              <sc-if value="{{ timerOff }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ toggleTimer }}" style="display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer;border-radius:999px;padding:8px 14px;font-family:var(--font-ui);font-size:13px;font-weight:600;color:var(--text-secondary)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Start 40-min timer</button>
+              </sc-if>
+            </div>
+
+            <textarea onInput="{{ updateEssay }}" value="{{ essay }}" placeholder="Start writing your response here…" style="flex:1;width:100%;min-height:470px;resize:vertical;padding:22px 24px;border:2px solid var(--border);border-radius:18px;background:var(--reading-surface);font-family:var(--font-reading);font-size:17px;line-height:1.7;color:var(--reading-text);outline:none;box-shadow:var(--shadow-solid)"></textarea>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:18px;padding:16px 22px;border-radius:18px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-solid);flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="position:relative;width:62px;height:62px;flex:none">
+              <svg viewBox="0 0 100 100" width="62" height="62" style="transform:rotate(-90deg)"><circle cx="50" cy="50" r="44" fill="none" stroke="var(--surface-inset)" stroke-width="9"></circle><circle cx="50" cy="50" r="44" fill="none" stroke="{{ counterColor }}" stroke-width="9" stroke-linecap="round" stroke-dasharray="{{ ringCirc }}" stroke-dashoffset="{{ ringOffset }}" style="transition:stroke-dashoffset .4s var(--ease-out)"></circle></svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:17px;font-weight:700;color:var(--text-primary)">{{ wordCount }}</div>
+            </div>
+            <div style="line-height:1.3">
+              <div style="font-size:13.5px;font-weight:700;color:{{ counterColor }}">{{ counterMsg }}</div>
+              <div style="font-size:12px;color:var(--text-muted)">words · min 20 · max 1000</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+            <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="primary" size="lg" trailing-icon="arrow-right" disabled="{{ submitDisabled }}" on-click="{{ submit }}" hint-size="210px,58px">Get my feedback</x-import>
+            <span style="font-size:12px;color:var(--text-muted)">Estimated band range — not an official IELTS score.</span>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- IN QUEUE -->
+      <sc-if value="{{ isQueue }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="In queue" style="max-width:560px;margin:0 auto;padding:72px 40px;text-align:center">
+        <div style="width:64px;height:64px;border-radius:999px;background:var(--surface-hover);display:flex;align-items:center;justify-content:center;margin:0 auto 24px">
+          <span style="display:flex;gap:5px">
+            <span style="width:9px;height:9px;border-radius:999px;background:var(--brand);animation:wl-pulse 1.1s ease-in-out infinite"></span>
+            <span style="width:9px;height:9px;border-radius:999px;background:var(--brand);animation:wl-pulse 1.1s ease-in-out .2s infinite"></span>
+            <span style="width:9px;height:9px;border-radius:999px;background:var(--brand);animation:wl-pulse 1.1s ease-in-out .4s infinite"></span>
+          </span>
+        </div>
+        <h1 style="margin:0 0 8px;font-size:25px;font-weight:800">You're in the queue</h1>
+        <p style="margin:0 auto 4px;max-width:40ch;color:var(--text-secondary);font-size:15px;line-height:1.5">Your essay is safely submitted. We'll start the moment a slot opens.</p>
+        <div style="font-family:var(--font-mono);font-size:13px;color:var(--text-muted);margin:18px 0 26px">2 essays ahead of you · est. wait ~40s</div>
+        <div style="text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:8px 12px;box-shadow:var(--shadow-solid)">
+          <sc-for list="{{ queueSteps }}" as="s" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:13px;padding:11px 8px;opacity:{{ s.op }}">
+              <span style="width:24px;height:24px;border-radius:999px;flex:none;border:2px solid {{ s.ring }};background:{{ s.fill }};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px">{{ s.mark }}</span>
+              <span style="font-size:14px;font-weight:{{ s.weight }};color:var(--text-primary)">{{ s.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin:18px 0 0;font-size:13px;color:var(--text-muted)">You can leave this page — we'll keep your spot. Only one analysis runs at a time.</p>
+      </div>
+      </sc-if>
+
+      <!-- ANALYZING -->
+      <sc-if value="{{ isAnalyzing }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Analyzing" style="max-width:560px;margin:0 auto;padding:64px 40px;text-align:center">
+        <div style="width:104px;height:96px;margin:0 auto 26px;position:relative;animation:wl-levitate 3s var(--ease-standard) infinite">
+          <div style="position:absolute;left:10px;top:16px;height:14px;width:58px;border-radius:7px;background:var(--brand);overflow:hidden">
+            <div style="position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.85),transparent);animation:wl-sheen 1.9s var(--ease-standard) infinite"></div>
+          </div>
+          <div style="position:absolute;left:10px;top:40px;height:14px;width:82px;border-radius:7px;background:var(--violet-300)"></div>
+          <div style="position:absolute;left:10px;top:64px;height:14px;width:40px;border-radius:7px;background:var(--violet-200)"></div>
+        </div>
+        <h1 style="margin:0 0 8px;font-size:25px;font-weight:800">Analyzing your essay…</h1>
+        <p style="margin:0 auto 6px;max-width:42ch;color:var(--text-secondary);font-size:15px;line-height:1.5">Reading your response against the four IELTS Task 2 criteria and drafting your plan.</p>
+        <div style="font-family:var(--font-mono);font-size:13px;color:var(--text-muted);margin:10px 0 24px">Usually 10–40 seconds</div>
+        <div style="position:relative;height:6px;border-radius:999px;background:var(--surface-inset);overflow:hidden;margin-bottom:26px">
+          <div style="position:absolute;top:0;bottom:0;width:38%;border-radius:999px;background:var(--brand);animation:wl-bar 1.5s var(--ease-standard) infinite"></div>
+        </div>
+        <div style="text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:8px 12px;box-shadow:var(--shadow-solid)">
+          <sc-for list="{{ analyzeSteps }}" as="s" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:13px;padding:11px 8px;opacity:{{ s.op }}">
+              <span style="width:24px;height:24px;border-radius:999px;flex:none;border:2px solid {{ s.ring }};background:{{ s.fill }};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px">{{ s.mark }}</span>
+              <span style="font-size:14px;font-weight:{{ s.weight }};color:var(--text-primary)">{{ s.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin:18px 0 0;font-size:13px;color:var(--text-muted)">Feel free to close this tab — your feedback will be waiting in Attempt history.</p>
+      </div>
+      </sc-if>
+
+      <!-- RESULT -->
+      <sc-if value="{{ isResult }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Feedback" style="max-width:980px;margin:0 auto;padding:28px 40px 120px">
+        <div class="wl-fade" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Feedback · Task 2</div>
+            <h1 style="margin:0;font-size:23px;font-weight:800;letter-spacing:-0.015em">Nice work finishing — here's where to focus next</h1>
+          </div>
+          <button onClick="{{ goHistory }}" style="border:1px solid var(--border);background:var(--surface);cursor:pointer;border-radius:999px;padding:8px 15px;font-family:var(--font-ui);font-size:13px;font-weight:600;color:var(--text-secondary)">View in history</button>
+        </div>
+
+        <!-- HERO -->
+        <div class="wl-fade" style="display:grid;grid-template-columns:330px 1fr;border-radius:24px;overflow:hidden;border:1px solid var(--brand-border);box-shadow:var(--shadow-solid-lg);margin-bottom:26px">
+          <div style="background:var(--brand-subtle);padding:28px 30px;display:flex;flex-direction:column;justify-content:center">
+            <div style="font-family:var(--font-mono);font-size:10.5px;font-weight:700;letter-spacing:0.14em;color:var(--text-link)">ESTIMATED BAND</div>
+            <div style="display:flex;align-items:baseline;gap:4px;margin:4px 0 12px">
+              <span style="font-family:var(--font-mono);font-size:60px;font-weight:800;line-height:1;color:var(--text-primary);letter-spacing:-0.02em;font-variant-numeric:tabular-nums">{{ bandLow }}</span>
+              <span style="font-family:var(--font-mono);font-size:30px;font-weight:700;color:var(--text-secondary)">–{{ band.high }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+              <span style="font-size:12.5px;font-weight:600;color:var(--text-secondary)">Confidence</span>
+              <span style="display:flex;gap:4px">
+                <sc-for list="{{ confDots }}" as="d" hint-placeholder-count="3"><span style="width:18px;height:6px;border-radius:999px;background:{{ d }}"></span></sc-for>
+              </span>
+              <span style="font-size:12.5px;font-weight:700;color:var(--text-link);text-transform:capitalize">{{ band.conf }}</span>
+            </div>
+            <p style="margin:0;font-size:11.5px;line-height:1.45;color:var(--text-muted);border-top:1px solid var(--brand-border);padding-top:12px">A coaching estimate to guide practice — <strong style="color:var(--text-secondary)">not an official IELTS score.</strong></p>
+          </div>
+          <div style="background:var(--surface);padding:26px 30px;border-left:4px solid var(--error);display:flex;flex-direction:column;justify-content:center">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
+              <span style="padding:3px 10px;border-radius:999px;background:var(--error-subtle);color:var(--error-text);font-size:11px;font-weight:700;letter-spacing:0.03em">BIGGEST BLOCKER</span>
+              <span style="font-family:var(--font-reading);font-size:17px;font-weight:600;color:var(--text-primary)">{{ blocker.criterion }}</span>
+            </div>
+            <p style="margin:0 0 12px;font-size:16px;line-height:1.55;color:var(--text-secondary)">{{ blocker.note }}</p>
+            <div style="font-size:12.5px;font-weight:600;color:var(--text-link)">Fix this one first — it moves your band the most.</div>
+          </div>
+        </div>
+
+        <!-- TOP 3 FIXES -->
+        <h2 class="wl-fade" style="margin:0 0 12px;font-size:16px;font-weight:700">Top 3 fixes, in priority order</h2>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:30px">
+          <sc-for list="{{ fixes }}" as="f" hint-placeholder-count="3">
+            <div class="wl-fade" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;display:flex;gap:13px;align-items:flex-start;box-shadow:var(--shadow-solid);animation-delay:{{ f.delay }}">
+              <span style="width:28px;height:28px;border-radius:999px;background:var(--brand);color:var(--text-on-brand);font-family:var(--font-mono);font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">{{ f.n }}</span>
+              <span style="font-size:14px;line-height:1.45;color:var(--text-primary);font-weight:500">{{ f.text }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- CRITERIA (worst first) -->
+        <div class="wl-fade" style="display:flex;align-items:baseline;justify-content:space-between;margin:0 0 12px">
+          <h2 style="margin:0;font-size:16px;font-weight:700">The four IELTS criteria</h2>
+          <span style="font-size:12.5px;color:var(--text-muted)">Weakest first</span>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow-solid);overflow:hidden;margin-bottom:30px">
+          <div style="display:grid;grid-template-columns:1fr 240px;gap:24px;align-items:end;padding:16px 24px 12px;background:var(--surface-inset)">
+            <div style="font-size:10.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted)">Criterion · estimated range</div>
+            <div style="position:relative;height:16px">
+              <span style="position:absolute;left:20%;transform:translateX(-50%);font-family:var(--font-mono);font-size:10px;color:var(--text-disabled)">5</span>
+              <span style="position:absolute;left:40%;transform:translateX(-50%);font-family:var(--font-mono);font-size:10px;color:var(--text-disabled)">6</span>
+              <span style="position:absolute;left:80%;transform:translateX(-50%);font-family:var(--font-mono);font-size:10px;color:var(--text-disabled)">8</span>
+              <span style="position:absolute;left:100%;transform:translateX(-50%);font-family:var(--font-mono);font-size:10px;color:var(--text-disabled)">9</span>
+              <span style="position:absolute;left:60%;transform:translateX(-50%);display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text-link);white-space:nowrap">TARGET 7.0</span>
+            </div>
+          </div>
+          <sc-for list="{{ criteria }}" as="c" hint-placeholder-count="4">
+            <div class="wl-fade" style="display:grid;grid-template-columns:1fr 240px;gap:24px;align-items:center;padding:18px 24px;border-top:1px solid var(--border-subtle);background:{{ c.rowBg }};animation-delay:{{ c.delay }}">
+              <div>
+                <div style="display:flex;align-items:center;gap:11px;margin-bottom:9px">
+                  <span style="width:24px;height:24px;flex:none;border-radius:8px;background:var(--surface-inset);color:var(--text-muted);font-family:var(--font-mono);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ c.rank }}</span>
+                  <span style="font-family:var(--font-reading);font-size:17px;font-weight:600;color:var(--text-primary)">{{ c.name }}</span>
+                  <sc-if value="{{ c.blocker }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;background:var(--error-subtle);color:var(--error-text);font-size:10px;font-weight:700;letter-spacing:0.03em"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 18H2Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>FIX FIRST</span></sc-if>
+                  <span style="margin-left:auto;font-family:var(--font-mono);font-size:15px;font-weight:800;color:var(--text-primary)">{{ c.range }}</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;padding-left:35px">
+                  <div style="display:flex;gap:10px;font-size:13px;line-height:1.4"><span style="width:52px;flex:none;font-size:10px;font-weight:700;letter-spacing:0.04em;color:var(--text-disabled);padding-top:1px">STRENGTH</span><span style="color:var(--text-secondary)">{{ c.strength }}</span></div>
+                  <div style="display:flex;gap:10px;font-size:13px;line-height:1.4"><span style="width:52px;flex:none;font-size:10px;font-weight:700;letter-spacing:0.04em;color:var(--text-disabled);padding-top:1px">WATCH</span><span style="color:var(--text-secondary)">{{ c.issue }}</span></div>
+                  <div style="display:flex;gap:10px;font-size:13px;line-height:1.4"><span style="width:52px;flex:none;font-size:10px;font-weight:700;letter-spacing:0.04em;color:var(--text-link);padding-top:1px">NEXT</span><span style="color:var(--text-primary);font-weight:500">{{ c.next }}</span></div>
+                </div>
+              </div>
+              <div style="position:relative;align-self:stretch;display:flex;align-items:center">
+                <div style="position:absolute;left:60%;top:-20px;bottom:-20px;border-left:1.5px dashed var(--brand-border)"></div>
+                <div style="position:relative;width:100%;height:10px;border-radius:999px;background:var(--surface-inset)">
+                  <div style="position:absolute;top:50%;transform:translateY(-50%);left:{{ c.pillLeft }};width:{{ c.pillWidth }};height:10px;border-radius:999px;background:var(--slate-700);box-shadow:var(--shadow-solid)"></div>
+                  <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:{{ c.pillLeft }};width:13px;height:13px;border-radius:999px;background:var(--surface);border:3px solid var(--slate-700)"></div>
+                  <div style="position:absolute;top:50%;transform:translate(-50%,-50%);left:{{ c.pillRight }};width:13px;height:13px;border-radius:999px;background:var(--surface);border:3px solid var(--slate-700)"></div>
+                </div>
+                <span style="position:absolute;right:0;top:-18px;font-size:11px;font-weight:600;color:var(--text-muted)">{{ c.gap }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- ANNOTATIONS in-context -->
+        <h2 class="wl-fade" style="margin:0 0 5px;font-size:16px;font-weight:700">Notes on your text</h2>
+        <p class="wl-fade" style="margin:0 0 12px;font-size:13.5px;color:var(--text-muted)">Tap a highlight to read the note. {{ annCount }} comments tied to what you actually wrote.</p>
+        <div class="wl-fade" style="display:flex;align-items:center;gap:18px;margin-bottom:14px;flex-wrap:wrap">
+          <span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text-secondary)"><span style="width:22px;height:11px;border-radius:4px;background:var(--success-subtle);border-bottom:2px solid var(--success)"></span>Good move</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text-secondary)"><span style="width:22px;height:11px;border-radius:4px;background:var(--warn-subtle);border-bottom:2px solid var(--warn)"></span>Style &amp; clarity</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text-secondary)"><span style="width:22px;height:11px;border-radius:4px;background:var(--error-subtle);border-bottom:2px solid var(--error)"></span>Grammar</span>
+        </div>
+        <div class="wl-fade" style="display:grid;grid-template-columns:1.45fr 1fr;gap:18px;margin-bottom:30px">
+          <div style="background:var(--reading-surface);border:1px solid var(--reading-rule);border-radius:18px;padding:24px 26px;box-shadow:var(--shadow-solid)">
+            <sc-for list="{{ essayParas }}" as="para" hint-placeholder-count="4">
+              <p style="margin:0 0 14px;font-family:var(--font-reading);font-size:16px;line-height:1.95;color:var(--reading-text)"><sc-for list="{{ para.parts }}" as="part" hint-placeholder-count="3"><sc-if value="{{ part.plain }}" hint-placeholder-val="{{ true }}">{{ part.text }}</sc-if><sc-if value="{{ part.mark }}" hint-placeholder-val="{{ true }}"><mark onClick="{{ part.onClick }}" style="background:{{ part.bg }};color:var(--reading-text);padding:1px 3px;border-radius:4px;cursor:pointer;border-bottom:2px solid {{ part.underline }};box-shadow:{{ part.shadow }}">{{ part.text }}</mark></sc-if></sc-for></p>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ annotations }}" as="a" hint-placeholder-count="3">
+              <button class="wl-press" onClick="{{ a.onClick }}" style="text-align:left;border:1px solid {{ a.border }};background:{{ a.bg }};border-left:3px solid {{ a.accent }};border-radius:12px;padding:13px 15px;cursor:pointer;animation:{{ a.pulse }}">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                  <span style="font-size:9.5px;font-weight:700;letter-spacing:0.05em;color:{{ a.accent }}">{{ a.typeLabel }}</span>
+                  <span style="font-family:var(--font-reading);font-size:12.5px;font-style:italic;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">“{{ a.quote }}”</span>
+                </div>
+                <div style="font-size:13.5px;line-height:1.5;color:var(--text-secondary)">{{ a.comment }}</div>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- PARTIAL REWRITE -->
+        <h2 class="wl-fade" style="margin:0 0 5px;font-size:16px;font-weight:700">A partial rewrite to learn from</h2>
+        <p class="wl-fade" style="margin:0 0 14px;font-size:13.5px;color:var(--text-muted)">We don't rewrite the whole essay — just enough to show the move, so the writing stays yours.</p>
+        <div class="wl-fade" style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px 22px;margin-bottom:12px;box-shadow:var(--shadow-solid)">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px">Stronger thesis</div>
+          <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px"><span style="font-size:10.5px;font-weight:700;color:var(--error-text);flex:none;margin-top:4px;width:46px">YOURS</span><p style="margin:0;font-size:14.5px;line-height:1.55;color:var(--text-muted);text-decoration:line-through;text-decoration-color:var(--error)">{{ rewrite.thesisOld }}</p></div>
+          <div style="display:flex;align-items:flex-start;gap:10px"><span style="font-size:10.5px;font-weight:700;color:var(--success-text);flex:none;margin-top:6px;width:46px">STRONGER</span><p style="margin:0;font-size:15.5px;line-height:1.6;color:var(--text-primary);font-family:var(--font-reading);background:var(--brand-subtle);padding:12px 16px;border-radius:12px;flex:1">{{ rewrite.thesisNew }}</p></div>
+        </div>
+        <div class="wl-fade" style="background:var(--reading-surface);border:1px solid var(--reading-rule);border-radius:18px;padding:20px 24px;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--reading-muted);margin-bottom:10px">One rewritten paragraph</div>
+          <p style="margin:0;font-family:var(--font-reading);font-size:16px;line-height:1.8;color:var(--reading-text)">{{ rewrite.paragraph }}</p>
+        </div>
+        <div class="wl-fade" style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px 22px;margin-bottom:30px;box-shadow:var(--shadow-solid)">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:14px">Swap these weak phrases</div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px">
+            <sc-for list="{{ rewrite.replacements }}" as="r" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:11px;font-size:14.5px;background:var(--surface-inset);border-radius:12px;padding:9px 14px">
+                <span style="font-family:var(--font-reading);color:var(--text-muted);text-decoration:line-through;text-decoration-color:var(--error)">{{ r.from }}</span>
+                <span style="color:var(--text-disabled);font-size:15px">→</span>
+                <span style="font-family:var(--font-reading);color:var(--success-text);font-weight:600">{{ r.to }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- CHECKLIST -->
+        <h2 class="wl-fade" style="margin:0 0 12px;font-size:16px;font-weight:700">Before your next attempt</h2>
+        <div class="wl-fade" style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:10px 12px;margin-bottom:28px;box-shadow:var(--shadow-solid)">
+          <sc-for list="{{ checklist }}" as="ck" hint-placeholder-count="4">
+            <button onClick="{{ ck.onClick }}" style="display:flex;align-items:center;gap:13px;width:100%;text-align:left;border:none;background:none;cursor:pointer;padding:12px 10px;border-radius:11px;font-family:var(--font-ui)">
+              <span style="width:24px;height:24px;border-radius:8px;flex:none;border:2px solid {{ ck.boxBorder }};background:{{ ck.boxBg }};display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;transition:var(--transition-colors)">{{ ck.mark }}</span>
+              <span style="font-size:14.5px;color:var(--text-primary);font-weight:500">{{ ck.text }}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div class="wl-fade" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px 22px;box-shadow:var(--shadow-solid)">
+          <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="primary" size="lg" trailing-icon="arrow-right" on-click="{{ tryAgain }}" hint-size="160px,58px">Try again</x-import>
+          <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="secondary" size="lg" on-click="{{ goCatalog }}" hint-size="180px,58px">Pick a new topic</x-import>
+          <span style="font-size:12.5px;color:var(--text-muted);margin-left:auto;max-width:38ch;text-align:right">This feedback is saved as a snapshot — reopen it any time and it won't change.</span>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- HISTORY -->
+      <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="History" style="max-width:880px;margin:0 auto;padding:34px 40px 90px">
+        <h1 style="margin:0 0 6px;font-size:27px;font-weight:800;letter-spacing:-0.015em">Attempt history</h1>
+        <p style="margin:0 0 24px;color:var(--text-secondary);font-size:14.5px">Every analysis is saved as a snapshot. Open it tomorrow and you'll see the same breakdown — it never re-scores.</p>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ history }}" as="h" hint-placeholder-count="3">
+            <div onClick="{{ goResult }}" style="cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px 22px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;box-shadow:var(--shadow-solid)">
+              <div style="min-width:0">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                  <span style="padding:2px 9px;border-radius:999px;background:var(--surface-hover);color:var(--text-secondary);font-size:11px;font-weight:700">{{ h.cat }}</span>
+                  <span style="font-size:12.5px;color:var(--text-muted);font-family:var(--font-mono)">{{ h.date }}</span>
+                  <sc-if value="{{ h.current }}" hint-placeholder-val="{{ true }}"><span style="padding:2px 9px;border-radius:999px;background:var(--success-subtle);color:var(--success-text);font-size:11px;font-weight:700">LATEST</span></sc-if>
+                </div>
+                <p style="margin:0;font-size:14.5px;line-height:1.45;color:var(--text-primary);font-weight:500;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">{{ h.topic }}</p>
+              </div>
+              <div style="display:flex;align-items:center;gap:18px;flex:none">
+                <div style="text-align:right">
+                  <div style="font-family:var(--font-mono);font-size:21px;font-weight:800;color:var(--text-primary)">{{ h.band }}</div>
+                  <div style="font-size:11px;color:var(--text-muted);text-transform:capitalize">{{ h.conf }} confidence</div>
+                </div>
+                <span style="color:var(--text-disabled);font-size:18px">→</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- FAILED -->
+      <sc-if value="{{ isFailed }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Analysis failed" style="max-width:520px;margin:0 auto;padding:78px 40px;text-align:center">
+        <div style="width:66px;height:66px;border-radius:999px;background:var(--error-subtle);color:var(--error-text);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;animation:wl-pop .5s var(--ease-spring) forwards"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg></div>
+        <h1 style="margin:0 0 8px;font-size:25px;font-weight:800">We couldn't finish your analysis</h1>
+        <p style="margin:0 auto 6px;max-width:42ch;color:var(--text-secondary);font-size:15px;line-height:1.55">Something went wrong on our side — not yours. Your essay is safe and exactly as you left it, and this attempt was <strong style="color:var(--text-primary)">not</strong> counted against your limit.</p>
+        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:28px;flex-wrap:wrap">
+          <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="primary" size="lg" on-click="{{ submit }}" hint-size="170px,58px">Try analysis again</x-import>
+          <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="secondary" size="lg" on-click="{{ retry }}" hint-size="160px,58px">Back to my essay</x-import>
+        </div>
+        <p style="margin:24px 0 0;font-size:12.5px;color:var(--text-muted)">If this keeps happening, it's on us — reach out and we'll sort it.</p>
+      </div>
+      </sc-if>
+
+      <!-- PREVIEW USED -->
+      <sc-if value="{{ isPreview }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Preview used" style="max-width:560px;margin:0 auto;padding:58px 40px;text-align:center">
+        <div style="width:62px;height:62px;border-radius:999px;background:var(--brand-subtle);color:var(--text-link);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;animation:wl-pop .5s var(--ease-spring) forwards"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></svg></div>
+        <h1 style="margin:0 0 8px;font-size:25px;font-weight:800">That was your free analysis — nice start</h1>
+        <p style="margin:0 auto 22px;max-width:44ch;color:var(--text-secondary);font-size:15px;line-height:1.55">Every student gets one full breakdown free, and you've used yours. It's saved — reread it any time. To keep practising with new essays, upgrade to Ultra.</p>
+        <div style="text-align:left;background:var(--surface);border:1px solid var(--brand-border);border-radius:20px;padding:20px 24px;margin-bottom:24px;box-shadow:var(--shadow-solid)">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-link);margin-bottom:12px">With Ultra you get</div>
+          <sc-for list="{{ ultraPerks }}" as="p" hint-placeholder-count="3">
+            <div style="display:flex;align-items:flex-start;gap:11px;padding:7px 0">
+              <span style="width:21px;height:21px;border-radius:999px;background:var(--success);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;flex:none">✓</span>
+              <span style="font-size:14.5px;color:var(--text-primary);line-height:1.45">{{ p }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap">
+          <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="primary" size="lg" trailing-icon="arrow-right" hint-size="190px,58px">Upgrade to Ultra</x-import>
+          <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="ghost" size="lg" on-click="{{ goResult }}" hint-size="170px,58px">Reread my feedback</x-import>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- DAILY LIMIT -->
+      <sc-if value="{{ isLimit }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Daily limit" style="max-width:540px;margin:0 auto;padding:66px 40px;text-align:center">
+        <div style="width:62px;height:62px;border-radius:999px;background:var(--warn-subtle);color:var(--warn-text);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;animation:wl-pop .5s var(--ease-spring) forwards"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <h1 style="margin:0 0 8px;font-size:25px;font-weight:800">You've hit today's analysis limit</h1>
+        <p style="margin:0 auto 8px;max-width:42ch;color:var(--text-secondary);font-size:15px;line-height:1.55">Ultra includes a generous number of analyses each day to keep feedback fast for everyone. You've used all of today's — they refresh on the clock below.</p>
+        <div style="display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:15px;font-weight:700;color:var(--text-primary);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:9px 18px;margin:16px 0 26px;box-shadow:var(--shadow-solid)">Resets in 07:20:14</div>
+        <p style="margin:0 0 22px;font-size:14px;color:var(--text-secondary)">Good time to review what you already got back:</p>
+        <div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap">
+          <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="primary" size="lg" on-click="{{ goResult }}" hint-size="200px,58px">Review last feedback</x-import>
+          <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="secondary" size="lg" on-click="{{ goHistory }}" hint-size="150px,58px">Open history</x-import>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- COMING SOON -->
+      <sc-if value="{{ isComing }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Coming soon" style="max-width:1080px;margin:0 auto;padding:30px 40px 90px">
+        <div style="display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:0.12em;color:var(--text-link)"><span style="width:8px;height:8px;border-radius:999px;background:var(--brand)"></span>PRACTICE LIBRARY</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:var(--shadow-solid)">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:30px"><span style="width:40px;height:40px;border-radius:12px;background:var(--brand-subtle);color:var(--text-link);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px">R</span><span style="padding:2px 9px;border-radius:999px;background:var(--success-subtle);color:var(--success-text);font-size:11px;font-weight:700">Live</span></div>
+            <div style="font-size:17px;font-weight:800">Reading</div><div style="font-size:12.5px;color:var(--text-muted)">4 tests</div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:var(--shadow-solid)">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:30px"><span style="width:40px;height:40px;border-radius:12px;background:var(--sky-200);color:var(--sky-500);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px">L</span><span style="padding:2px 9px;border-radius:999px;background:var(--success-subtle);color:var(--success-text);font-size:11px;font-weight:700">Live</span></div>
+            <div style="font-size:17px;font-weight:800">Listening</div><div style="font-size:12.5px;color:var(--text-muted)">5 tests · best 2</div>
+          </div>
+          <div style="background:var(--gold-200);border:2px solid var(--warn);border-radius:18px;padding:17px;box-shadow:var(--shadow-solid)">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:30px"><span style="width:40px;height:40px;border-radius:12px;background:var(--surface);color:var(--warn-text);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px">W</span><span style="padding:2px 9px;border-radius:999px;background:var(--surface);color:var(--warn-text);font-size:11px;font-weight:700">Soon</span></div>
+            <div style="font-size:17px;font-weight:800">Writing</div><div style="font-size:12.5px;color:var(--warn-text);font-family:var(--font-mono)">Ultra plan</div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:var(--shadow-solid)">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:30px"><span style="width:40px;height:40px;border-radius:12px;background:var(--green-200);color:var(--success-text);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px">S</span><span style="padding:2px 9px;border-radius:999px;background:var(--warn-subtle);color:var(--warn-text);font-size:11px;font-weight:700">Soon</span></div>
+            <div style="font-size:17px;font-weight:800">Speaking</div><div style="font-size:12.5px;color:var(--text-muted);font-family:var(--font-mono)">Ultra plan</div>
+          </div>
+        </div>
+
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:40px 44px;box-shadow:var(--shadow-solid);display:grid;grid-template-columns:170px 1fr;gap:30px;align-items:center">
+          <div style="width:150px;height:120px;position:relative;animation:wl-levitate 3.4s var(--ease-standard) infinite">
+            <div style="position:absolute;left:0;top:20px;height:18px;width:104px;border-radius:9px;background:var(--warn)"></div>
+            <div style="position:absolute;left:0;top:50px;height:18px;width:66px;border-radius:9px;background:var(--gold-500);opacity:.55"></div>
+            <div style="position:absolute;left:0;top:80px;height:18px;width:38px;border-radius:9px;background:var(--surface-inset)"></div>
+          </div>
+          <div>
+            <span style="display:inline-block;padding:4px 12px;border-radius:999px;background:var(--warn-subtle);color:var(--warn-text);font-size:12px;font-weight:700;margin-bottom:14px">Coming soon</span>
+            <h1 style="margin:0 0 12px;font-size:34px;font-weight:800;letter-spacing:-0.02em">Writing is on the way</h1>
+            <p style="margin:0 0 18px;max-width:56ch;color:var(--text-secondary);font-size:16px;line-height:1.55">Submit a Task 2 essay and get it scored on task response, coherence, lexical resource and grammar — with an estimated band and a model rewrite of one paragraph.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px">
+              <span style="padding:7px 13px;border-radius:999px;background:var(--surface-inset);color:var(--text-secondary);font-size:13px;font-weight:600">Task 2 — opinion essay</span>
+              <span style="padding:7px 13px;border-radius:999px;background:var(--surface-inset);color:var(--text-secondary);font-size:13px;font-weight:600">4 official criteria</span>
+              <span style="padding:7px 13px;border-radius:999px;background:var(--surface-inset);color:var(--text-secondary);font-size:13px;font-weight:600">Model rewrite + band estimate</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+              <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="primary" size="lg" trailing-icon="arrow-right" hint-size="180px,58px">Explore Ultra</x-import>
+              <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="secondary" size="lg" hint-size="190px,58px">Notify me at launch</x-import>
+              <button onClick="{{ goCatalog }}" style="border:none;background:none;cursor:pointer;color:var(--text-secondary);font-family:var(--font-ui);font-size:14px;font-weight:600;padding:8px 6px">Back to live tests</button>
+            </div>
+            <p style="margin:18px 0 0;font-size:12px;color:var(--text-muted)">Disabled until the feature is enabled for you.</p>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ADMIN -->
+      <sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Admin create topic" style="max-width:700px;margin:0 auto;padding:34px 40px 90px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <h1 style="margin:0;font-size:25px;font-weight:800;letter-spacing:-0.015em">New Task 2 topic</h1>
+          <span style="padding:3px 10px;border-radius:999px;background:var(--surface-hover);color:var(--text-secondary);font-size:11px;font-weight:700;letter-spacing:0.04em">DRAFT</span>
+        </div>
+        <p style="margin:0 0 24px;color:var(--text-secondary);font-size:14px">Students see this topic in the catalog only after you publish it.</p>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;box-shadow:var(--shadow-solid)">
+          <label style="display:block;margin-bottom:22px">
+            <span style="display:block;font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px">Prompt</span>
+            <textarea onInput="{{ setAdminPrompt }}" value="{{ adminPrompt }}" placeholder="e.g. Some people believe unpaid community service should be a compulsory part of high school programmes. To what extent do you agree or disagree?" style="width:100%;min-height:120px;resize:vertical;padding:14px 16px;border:2px solid var(--border);border-radius:14px;background:var(--surface-raised);font-family:var(--font-ui);font-size:15px;line-height:1.5;color:var(--text-primary);outline:none"></textarea>
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+            <label style="display:block"><span style="display:block;font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px">Category</span><select onChange="{{ setAdminCat }}" value="{{ adminCat }}" style="width:100%;height:46px;padding:0 14px;border:2px solid var(--border);border-radius:14px;background:var(--surface-raised);font-family:var(--font-ui);font-size:15px;color:var(--text-primary);outline:none;cursor:pointer"><option value="academic">Academic</option><option value="general">General</option></select></label>
+            <label style="display:block"><span style="display:block;font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px">Required plan</span><select onChange="{{ setAdminTier }}" value="{{ adminTier }}" style="width:100%;height:46px;padding:0 14px;border:2px solid var(--border);border-radius:14px;background:var(--surface-raised);font-family:var(--font-ui);font-size:15px;color:var(--text-primary);outline:none;cursor:pointer"><option value="basic">Basic</option><option value="premium">Premium</option><option value="ultra">Ultra</option></select></label>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:22px">
+          <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="primary" size="lg" icon="check" hint-size="160px,58px">Publish topic</x-import>
+          <x-import component-from-global-scope="BandoDesignSystem_b7fbe9.Button" variant="secondary" size="lg" hint-size="130px,58px">Save draft</x-import>
+          <span style="margin-left:auto;font-size:12.5px;color:var(--text-muted)">Draft → Published</span>
+        </div>
+      </div>
+      </sc-if>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:880}}">
+class Component extends DCLogic {
+  essayDefault = "Many people think technology is good for our modern life, and they use it every day for work and study. In my opinion technology brings a lot of benefits, but it also creates some problems that we should not ignore.\n\nFirst, technology makes communication faster. We can talk to family in other countries, and this is good for relationships. Also, students can find a lot of information online, which is important for their education and helps them learn new things quickly.\n\nHowever, there are also bad sides. Some people spend too much time on their phones and they forget about real life. This is not good for their health, and it is good for nobody when families stop talking at home.\n\nIn conclusion, I think technology is good if we use it in a correct way. People should try to find a balance so that technology stays a useful tool and does not control our daily life.";
+
+  academicTopics = [
+    { id: "a1", type: "Discussion + opinion", prompt: "Some people think university students should be free to study whatever they like. Others believe they should only study subjects useful for their future careers. Discuss both views and give your own opinion." },
+    { id: "a2", type: "Problem & solution", prompt: "In many countries the level of crime is rising. What do you think are the main causes of crime, and how can societies deal with those causes?" },
+    { id: "a3", type: "Opinion", prompt: "Many people believe that social media has done more harm than good to society. To what extent do you agree or disagree?" },
+    { id: "a4", type: "Opinion", prompt: "Technology is making communication easier in today's world, but at the expense of personal contact. To what extent do you agree or disagree?" }
+  ];
+  generalTopics = [
+    { id: "g1", type: "Discussion + opinion", prompt: "Some people prefer to spend their lives doing the same things and avoiding change. Others think that change is always a good thing. Discuss both views and give your opinion." },
+    { id: "g2", type: "Opinion", prompt: "Some people say that living in a city is better than living in the countryside. To what extent do you agree or disagree?" },
+    { id: "g3", type: "Advantages & disadvantages", prompt: "More and more people are working from home rather than in an office. Do the advantages of this trend outweigh the disadvantages?" }
+  ];
+
+  band = { low: "6.0", high: "6.5", conf: "medium" };
+  blocker = { criterion: "Task Response", note: "Your position is implied, not stated. Pick a side in sentence one and commit to it all the way through." };
+
+  criteriaRaw = [
+    { name: "Task Response", range: "6.0–6.5", mid: 6.25, strength: "Addresses the topic", issue: "Examples stay thin and general", next: "Develop one example in full — who, what, result", blocker: true },
+    { name: "Coherence and Cohesion", range: "6.0–6.5", mid: 6.25, strength: "Clear, separate paragraphs", issue: "Linking words repeat (\u201calso\u201d, \u201cand\u201d)", next: "Vary your cohesive devices between ideas", blocker: false },
+    { name: "Lexical Resource", range: "5.5–6.0", mid: 5.75, strength: "Topic vocabulary is present", issue: "Key words repeat too often", next: "Replace 3 repeated words with stronger synonyms", blocker: false },
+    { name: "Grammatical Range and Accuracy", range: "6.0–6.5", mid: 6.25, strength: "A mix of sentence structures", issue: "Article slips (a / the)", next: "Proofread every noun for its article", blocker: false }
+  ];
+
+  fixesRaw = [
+    "State your thesis clearly in the first sentence.",
+    "Add one specific, fully developed example.",
+    "Cut repeated \u201cgood\u201d and \u201cimportant\u201d — vary the wording."
+  ];
+
+  annotationsRaw = [
+    { quote: "Many people think technology is good", comment: "Too general to open with. Name a specific technology and a specific effect.", type: "style" },
+    { quote: "talk to family in other countries", comment: "Nice — a concrete, relatable detail. Develop one like this into a full example.", type: "good" },
+    { quote: "a lot of benefits", comment: "Vague quantity. Try \u201cnumerous benefits\u201d, or better, state which benefit.", type: "style" },
+    { quote: "it is good for nobody", comment: "Non-standard phrasing. Rewrite as \u201cno one benefits when\u2026\u201d.", type: "grammar" }
+  ];
+
+  annTypes = {
+    good:    { label: "GOOD MOVE", accent: "var(--success)", text: "var(--success-text)", subtle: "var(--success-subtle)", border: "var(--success-border)" },
+    style:   { label: "STYLE",     accent: "var(--warn)",    text: "var(--warn-text)",    subtle: "var(--warn-subtle)",    border: "var(--warn-border)" },
+    grammar: { label: "GRAMMAR",   accent: "var(--error)",   text: "var(--error-text)",   subtle: "var(--error-subtle)",   border: "var(--error-border)" }
+  };
+
+  rewrite = {
+    thesisOld: "In my opinion technology brings a lot of benefits, but it also creates some problems that we should not ignore.",
+    thesisNew: "While technology has clearly made communication faster, I believe it weakens the face-to-face contact that relationships depend on — a trade-off we must manage rather than ignore.",
+    paragraph: "Few inventions have reshaped daily life as quickly as digital technology, which most of us now rely on for both work and study. These tools have undeniably made communication more convenient: a video call can close the distance between continents in seconds. Yet that same convenience can crowd out the slower, in-person contact on which trust is built, and it is this balance — not the technology itself — that decides whether we gain or lose.",
+    replacements: [ { from: "good", to: "beneficial" }, { from: "a lot of", to: "numerous" }, { from: "important", to: "crucial" } ]
+  };
+
+  checklistRaw = [
+    "I state a clear position in the introduction",
+    "I develop two ideas in full, each with an example",
+    "My paragraphs link with varied connectors",
+    "I proofread for article (a / the) errors"
+  ];
+
+  history = [
+    { topic: "Technology is making communication easier in today's world, but at the expense of personal contact.", cat: "Academic", date: "Jun 24, 2026", band: "6.0–6.5", conf: "medium", current: true },
+    { topic: "Many countries spend large sums on space exploration. Is this a justified use of public money?", cat: "Academic", date: "Jun 21, 2026", band: "5.5–6.0", conf: "high", current: false },
+    { topic: "Some people prefer to spend their lives doing the same things and avoiding change.", cat: "General", date: "Jun 18, 2026", band: "6.5–7.0", conf: "low", current: false }
+  ];
+
+  state = {
+    screen: "catalog", cat: "academic", typeFilter: "all",
+    topic: "Technology is making communication easier in today's world, but at the expense of personal contact. To what extent do you agree or disagree?",
+    essay: this.essayDefault, timerOn: false, checks: {}, activeNote: 1,
+    revealed: false, bandVal: "6.0",
+    adminCat: "academic", adminTier: "ultra", adminPrompt: ""
+  };
+
+  clearFlow() { clearTimeout(this._t1); clearTimeout(this._t2); }
+
+  go(id) {
+    this.clearFlow();
+    this.setState({ screen: id });
+    requestAnimationFrame(() => { const el = document.querySelector('[data-scrollmain]'); if (el) el.scrollTop = 0; });
+  }
+
+  startFlow() {
+    this.clearFlow();
+    this.setState({ screen: "queue" });
+    requestAnimationFrame(() => { const el = document.querySelector('[data-scrollmain]'); if (el) el.scrollTop = 0; });
+    this._t1 = setTimeout(() => this.setState({ screen: "analyzing" }), 2400);
+    this._t2 = setTimeout(() => { this.setState({ screen: "result" }); }, 6400);
+  }
+
+  componentDidUpdate() {
+    if (this.state.screen === "result") { if (this._revealedFor !== "result") { this._revealedFor = "result"; this.runReveal(); } }
+    else { this._revealedFor = null; }
+  }
+  componentWillUnmount() { this.clearFlow(); if (this._raf) cancelAnimationFrame(this._raf); }
+
+  runReveal() {
+    const target = parseFloat(this.band.low);
+    const rm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (rm) { this.setState({ bandVal: target.toFixed(1) }); return; }
+    const startV = Math.max(0, target - 0.8);
+    this.setState({ bandVal: startV.toFixed(1) });
+    const t0 = performance.now(), dur = 950;
+    const tick = (t) => {
+      const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      this.setState({ bandVal: (startV + (target - startV) * e).toFixed(1) });
+      if (p < 1) this._raf = requestAnimationFrame(tick);
+    };
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = requestAnimationFrame(tick);
+  }
+
+  segmentEssay() {
+    const paras = this.state.essay.split(/\n\n+/);
+    const ann = this.annotationsRaw.map((a, i) => ({ ...a, n: i + 1, used: false }));
+    return paras.map((p) => {
+      const parts = []; let rest = p;
+      while (true) {
+        let best = null, bestIdx = -1;
+        for (const a of ann) { if (a.used) continue; const idx = rest.indexOf(a.quote); if (idx >= 0 && (bestIdx < 0 || idx < bestIdx)) { bestIdx = idx; best = a; } }
+        if (!best) { parts.push({ plain: true, mark: false, text: rest }); break; }
+        best.used = true;
+        if (bestIdx > 0) parts.push({ plain: true, mark: false, text: rest.slice(0, bestIdx) });
+        const active = this.state.activeNote === best.n;
+        const ty = this.annTypes[best.type] || this.annTypes.style;
+        parts.push({ plain: false, mark: true, text: best.quote, n: best.n, onClick: () => this.setState({ activeNote: best.n }), bg: ty.subtle, underline: ty.accent, shadow: active ? "0 0 0 2px " + ty.accent : "none" });
+        rest = rest.slice(bestIdx + best.quote.length);
+      }
+      return { parts };
+    });
+  }
+
+  barTone(mid) {
+    if (mid >= 6.5) return { bar: "var(--success)" };
+    if (mid >= 5.5) return { bar: "var(--warn)" };
+    return { bar: "var(--error)" };
+  }
+
+  renderVals() {
+    const S = this.state.screen;
+    const mk = (id, label) => { const a = S === id; return { label, onClick: () => this.go(id), bg: a ? "rgba(255,255,255,0.10)" : "transparent", color: a ? "#fff" : "rgba(236,233,245,0.6)", bar: a ? "var(--violet-400)" : "transparent" }; };
+    const nav = [
+      { group: "Practice flow", items: [mk("catalog", "Topic catalog"), mk("attempt", "Write an attempt"), mk("queue", "In queue"), mk("analyzing", "Analyzing"), mk("result", "Feedback"), mk("history", "Attempt history")] },
+      { group: "Edge states", items: [mk("failed", "Analysis failed"), mk("preview", "Preview used"), mk("limit", "Daily limit"), mk("coming", "Coming soon")] },
+      { group: "Admin", items: [mk("admin", "Create topic")] }
+    ];
+
+    const words = this.state.essay.trim().length ? this.state.essay.trim().split(/\s+/).filter(Boolean) : [];
+    const n = words.length, tooFew = n < 20, tooMany = n > 1000, submitDisabled = tooFew || tooMany;
+    let counterColor = "var(--success-text)";
+    if (tooFew || n === 0) counterColor = "var(--text-muted)";
+    if (tooMany) counterColor = "var(--error-text)";
+    let counterMsg = "Ready to submit";
+    if (n === 0) counterMsg = "Start writing";
+    else if (tooFew) counterMsg = (20 - n) + " more to reach the minimum";
+    else if (tooMany) counterMsg = (n - 1000) + " over the maximum — trim to submit";
+    const ringCirc = 2 * Math.PI * 44;
+    const ringPct = Math.max(0, Math.min(1, n / 250));
+    const ringOffset = ringCirc * (1 - ringPct);
+
+    const catSeg = [{ v: "academic", label: "Academic" }, { v: "general", label: "General" }].map((s) => {
+      const a = this.state.cat === s.v;
+      return { label: s.label, onClick: () => this.setState({ cat: s.v, typeFilter: "all" }), bg: a ? "var(--surface)" : "transparent", color: a ? "var(--text-primary)" : "var(--text-muted)", shadow: a ? "var(--shadow-solid)" : "none" };
+    });
+    const base = this.state.cat === "academic" ? this.academicTopics : this.generalTopics;
+    const types = ["all", ...Array.from(new Set(base.map((t) => t.type)))];
+    const typeChips = types.map((ty) => {
+      const sel = this.state.typeFilter === ty;
+      return { label: ty === "all" ? "All types" : ty, value: ty, count: ty === "all" ? base.length : base.filter((t) => t.type === ty).length, onClick: () => this.setState({ typeFilter: ty }), bg: sel ? "var(--brand)" : "var(--surface)", color: sel ? "var(--text-on-brand)" : "var(--text-secondary)", border: sel ? "var(--brand)" : "var(--border)", countColor: sel ? "rgba(255,255,255,0.7)" : "var(--text-disabled)" };
+    });
+    const filtered = base.filter((t) => this.state.typeFilter === "all" || t.type === this.state.typeFilter);
+    const start = (t) => () => { this.clearFlow(); this.setState({ topic: t.prompt, screen: "attempt" }); requestAnimationFrame(() => { const el = document.querySelector('[data-scrollmain]'); if (el) el.scrollTop = 0; }); };
+    const topics = filtered.map((t, i) => ({ ...t, no: String(i + 1).padStart(2, "0"), start: start(t) }));
+
+    const step = (label, st) => ({ label, op: st === "todo" ? 0.45 : 1, ring: st === "done" ? "var(--success)" : st === "active" ? "var(--brand)" : "var(--border-strong)", fill: st === "done" ? "var(--success)" : "transparent", mark: st === "done" ? "✓" : "", weight: st === "active" ? 700 : 500, dotInner: st === "active" });
+    const queueSteps = [step("Queued", "active"), step("Analyzing your essay", "todo"), step("Building your feedback", "todo")];
+    const analyzeSteps = [step("Queued", "done"), step("Analyzing your essay", "active"), step("Building your feedback", "todo")];
+
+    const checklist = this.checklistRaw.map((t, i) => { const done = !!this.state.checks[i]; return { text: t, mark: done ? "✓" : "", boxBorder: done ? "var(--brand)" : "var(--border-strong)", boxBg: done ? "var(--brand)" : "transparent", onClick: () => { const c = { ...this.state.checks }; c[i] = !c[i]; this.setState({ checks: c }); } }; });
+
+    const confMap = { low: 1, medium: 2, high: 3 };
+    const lvl = confMap[this.band.conf] || 2;
+    const confDots = [0, 1, 2].map((i) => i < lvl ? "var(--brand)" : "var(--brand-border)");
+
+    const pct = (b) => ((b - 4) / 5 * 100); // shared axis 4.0–9.0
+    const criteria = [...this.criteriaRaw].sort((a, b) => a.mid - b.mid).map((c, i) => {
+      const parts = c.range.split("\u2013").map(parseFloat);
+      const low = parts[0], high = parts[1];
+      const toTarget = +(7 - high).toFixed(1);
+      const gap = toTarget > 0 ? "+" + toTarget + " to 7.0" : "at target";
+      return { ...c, rank: i + 1, pillLeft: pct(low).toFixed(1) + "%", pillRight: pct(high).toFixed(1) + "%", pillWidth: (pct(high) - pct(low)).toFixed(1) + "%", gap, rowBg: c.blocker ? "var(--surface-inset)" : "transparent", delay: (i * 90) + "ms" };
+    });
+
+    const annotations = this.annotationsRaw.map((a, i) => {
+      const act = this.state.activeNote === i + 1;
+      const ty = this.annTypes[a.type] || this.annTypes.style;
+      return { ...a, n: i + 1, typeLabel: ty.label, accent: ty.text, onClick: () => this.setState({ activeNote: i + 1 }), bg: act ? ty.subtle : "var(--surface)", border: act ? ty.border : "var(--border)", pulse: act ? "wl-ring .6s var(--ease-out) forwards" : "none" }; });
+
+    return {
+      nav,
+      isCatalog: S === "catalog", isAttempt: S === "attempt", isQueue: S === "queue", isAnalyzing: S === "analyzing",
+      isResult: S === "result", isHistory: S === "history", isFailed: S === "failed", isPreview: S === "preview",
+      isLimit: S === "limit", isComing: S === "coming", isAdmin: S === "admin",
+      cat: this.state.cat, catSeg,
+      typeChips, topics, topicCount: filtered.length, topic: this.state.topic,
+      essay: this.state.essay, updateEssay: (e) => this.setState({ essay: e.target.value }),
+      wordCount: n, counterColor, counterMsg, submitDisabled, ringCirc, ringOffset,
+      timerOn: this.state.timerOn, timerOff: !this.state.timerOn, toggleTimer: () => this.setState({ timerOn: !this.state.timerOn }),
+      structure: [
+        { n: "1", title: "Introduction", hint: "Paraphrase the prompt, then state your position clearly.", line: true },
+        { n: "2", title: "Body 1", hint: "Your strongest reason + one specific example.", line: true },
+        { n: "3", title: "Body 2", hint: "A second reason, developed the same way.", line: true },
+        { n: "4", title: "Conclusion", hint: "Restate your position — no new ideas.", line: false }
+      ],
+      submit: () => this.startFlow(), retry: () => this.go("attempt"), tryAgain: () => this.go("attempt"),
+      goCatalog: () => this.go("catalog"), goResult: () => this.go("result"), goHistory: () => this.go("history"), goAttempt: () => this.go("attempt"),
+      queueSteps, analyzeSteps,
+      criteria, fixes: this.fixesRaw.map((f, i) => ({ n: i + 1, text: f, delay: (i * 80) + "ms" })),
+      blocker: this.blocker, band: this.band, bandLow: this.state.bandVal, confDots,
+      essayParas: this.segmentEssay(), annotations, annCount: this.annotationsRaw.length,
+      rewrite: this.rewrite, checklist, history: this.history,
+      ultraPerks: ["Unlimited essays from the whole Task 2 catalog", "A fresh estimated band + per-criterion plan every time", "Inline notes and a partial rewrite on each attempt"],
+      adminTierOpts: [{ value: "basic", label: "Basic" }, { value: "premium", label: "Premium" }, { value: "ultra", label: "Ultra" }],
+      adminCatOpts: [{ value: "academic", label: "Academic" }, { value: "general", label: "General" }],
+      adminCat: this.state.adminCat, adminTier: this.state.adminTier, adminPrompt: this.state.adminPrompt,
+      setAdminCat: (e) => this.setState({ adminCat: e.target.value }), setAdminTier: (e) => this.setState({ adminTier: e.target.value }), setAdminPrompt: (e) => this.setState({ adminPrompt: e.target.value })
+    };
+  }
+}
+</script>
+</body>
+</html>

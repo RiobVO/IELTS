@@ -1,0 +1,168 @@
+/* bando — Color (light-first, violet)
+ * LIGHT-FIRST. :root is the light theme (the product ships light). Brand is a
+ * confident violet; neutrals are cool graphite; the analytics spectrum
+ * (green→gold→red) stays clear of violet; reading surface stays warm paper.
+ * [data-theme="dark"] is the derived dark theme. Components reference the
+ * semantic aliases only. */
+
+:root {
+  /* ---- Brand: violet ---- */
+  --violet-700: oklch(0.50 0.205 292);
+  --violet-600: oklch(0.585 0.225 292);
+  --violet-500: oklch(0.655 0.215 290);
+  --violet-400: oklch(0.745 0.165 290);
+  --violet-300: oklch(0.825 0.110 290);
+  --violet-200: oklch(0.905 0.060 290);
+  --violet-100: oklch(0.955 0.030 290);
+
+  /* ---- Semantic hues ---- */
+  --green-600: oklch(0.605 0.150 158);
+  --green-500: oklch(0.745 0.165 156);
+  --green-200: oklch(0.93 0.070 156);
+  --gold-600:  oklch(0.70 0.140 80);
+  --gold-500:  oklch(0.815 0.155 85);
+  --gold-200:  oklch(0.94 0.075 88);
+  --red-600:   oklch(0.585 0.215 25);
+  --red-500:   oklch(0.665 0.225 25);
+  --red-200:   oklch(0.92 0.060 25);
+  --orange-500: oklch(0.735 0.175 55);
+  --orange-200: oklch(0.93 0.070 55);
+  --sky-500:   oklch(0.715 0.135 232);
+  --sky-200:   oklch(0.93 0.055 232);
+
+  /* ---- Graphite neutral ramp ---- */
+  --slate-950: oklch(0.205 0.012 280);
+  --slate-900: oklch(0.245 0.014 280);
+  --slate-850: oklch(0.285 0.016 282);
+  --slate-800: oklch(0.330 0.018 284);
+  --slate-700: oklch(0.420 0.018 285);
+  --slate-600: oklch(0.530 0.018 286);
+  --slate-500: oklch(0.640 0.016 288);
+  --slate-400: oklch(0.740 0.014 288);
+  --slate-300: oklch(0.840 0.010 288);
+  --slate-200: oklch(0.910 0.008 286);
+  --slate-150: oklch(0.948 0.006 285);
+  --slate-100: oklch(0.970 0.005 284);
+  --slate-50:  oklch(0.985 0.004 282);
+
+  /* ---- Reading surface (warm paper) ---- */
+  --paper-dark:  oklch(0.230 0.014 78);
+  --paper-light: oklch(0.988 0.014 92);
+
+  /* ===== Semantic aliases — LIGHT (default) ===== */
+  --bg-base:        oklch(0.975 0.006 286);
+  --bg-raised:      oklch(1 0 0);
+  --surface:        oklch(1 0 0);
+  --surface-raised: oklch(1 0 0);
+  --surface-hover:  var(--violet-100);
+  --surface-inset:  oklch(0.962 0.006 288);
+
+  --border-subtle:  oklch(0.935 0.006 288);
+  --border:         oklch(0.895 0.008 288);
+  --border-strong:  oklch(0.835 0.012 288);
+
+  --text-primary:   var(--slate-900);
+  --text-secondary: var(--slate-700);
+  --text-muted:     var(--slate-600);
+  --text-disabled:  var(--slate-400);
+  --text-on-brand:  oklch(0.99 0 0);
+
+  --brand:          var(--violet-600);
+  --brand-hover:    var(--violet-500);
+  --brand-active:   var(--violet-700);
+  --brand-edge:     var(--violet-700);
+  --brand-subtle:   var(--violet-100);
+  --brand-border:   var(--violet-300);
+  --text-link:      var(--violet-700);
+
+  --success:        var(--green-500);
+  --success-text:   var(--green-600);
+  --success-subtle: var(--green-200);
+  --success-edge:   var(--green-600);
+  --warn:           var(--gold-500);
+  --warn-text:      var(--gold-600);
+  --warn-subtle:    var(--gold-200);
+  --error:          var(--red-500);
+  --error-text:     var(--red-600);
+  --error-subtle:   var(--red-200);
+  --error-edge:     var(--red-600);
+  --neutral-edge:   var(--slate-300);
+
+  /* Fun accents */
+  --streak:         var(--orange-500);
+  --streak-subtle:  var(--orange-200);
+  --xp:             var(--gold-500);
+  --info:           var(--sky-500);
+  --info-subtle:    var(--sky-200);
+
+  --focus-ring:     var(--violet-600);
+  --ring:           0 0 0 4px color-mix(in oklab, var(--focus-ring) 32%, transparent);
+
+  /* Reading-specific */
+  --reading-surface: var(--paper-light);
+  --reading-text:    oklch(0.30 0.020 70);
+  --reading-muted:   oklch(0.50 0.020 70);
+  --reading-rule:    oklch(0.90 0.018 85);
+  --reading-mark:    color-mix(in oklab, var(--gold-500) 42%, white);
+  --reading-note:    color-mix(in oklab, var(--violet-500) 26%, white);
+
+  color-scheme: light;
+}
+
+/* ===== Semantic aliases — DARK (derived) ===== */
+[data-theme="dark"] {
+  --bg-base:        oklch(0.175 0.014 280);
+  --bg-raised:      oklch(0.215 0.016 282);
+  --surface:        oklch(0.245 0.018 282);
+  --surface-raised: oklch(0.290 0.019 284);
+  --surface-hover:  oklch(0.335 0.022 286);
+  --surface-inset:  oklch(0.200 0.015 280);
+
+  --border-subtle:  oklch(0.305 0.018 282);
+  --border:         oklch(0.355 0.020 284);
+  --border-strong:  oklch(0.180 0.014 280);
+
+  --text-primary:   oklch(0.965 0.006 286);
+  --text-secondary: oklch(0.810 0.012 288);
+  --text-muted:     oklch(0.660 0.016 288);
+  --text-disabled:  oklch(0.500 0.016 286);
+  --text-on-brand:  oklch(0.16 0.02 286);
+
+  --brand:          var(--violet-400);
+  --brand-hover:    var(--violet-300);
+  --brand-active:   var(--violet-500);
+  --brand-edge:     var(--violet-600);
+  --brand-subtle:   color-mix(in oklab, var(--violet-400) 22%, transparent);
+  --brand-border:   color-mix(in oklab, var(--violet-400) 48%, transparent);
+  --text-link:      var(--violet-300);
+
+  --success:        var(--green-500);
+  --success-text:   oklch(0.820 0.150 156);
+  --success-subtle: color-mix(in oklab, var(--green-500) 22%, transparent);
+  --success-edge:   var(--green-600);
+  --warn:           var(--gold-500);
+  --warn-text:      oklch(0.860 0.130 88);
+  --warn-subtle:    color-mix(in oklab, var(--gold-500) 22%, transparent);
+  --error:          var(--red-500);
+  --error-text:     oklch(0.760 0.170 25);
+  --error-subtle:   color-mix(in oklab, var(--red-500) 24%, transparent);
+  --error-edge:     var(--red-600);
+  --neutral-edge:   oklch(0.165 0.013 280);
+
+  --streak:         var(--orange-500);
+  --streak-subtle:  color-mix(in oklab, var(--orange-500) 24%, transparent);
+  --xp:             var(--gold-500);
+  --info:           var(--sky-500);
+  --info-subtle:    color-mix(in oklab, var(--sky-500) 22%, transparent);
+
+  --focus-ring:     var(--violet-400);
+
+  --reading-surface: var(--paper-dark);
+  --reading-text:    oklch(0.905 0.020 80);
+  --reading-muted:   oklch(0.685 0.018 80);
+  --reading-rule:    oklch(0.330 0.016 80);
+  --reading-mark:    color-mix(in oklab, var(--gold-500) 34%, transparent);
+  --reading-note:    color-mix(in oklab, var(--violet-400) 30%, transparent);
+
+  color-scheme: dark;
+}
