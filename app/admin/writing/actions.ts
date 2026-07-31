@@ -2,10 +2,24 @@
 
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { insertWritingTask } from "@/lib/writing/admin";
+import { deleteWritingTask, insertWritingTask, setTaskStatus } from "@/lib/writing/admin";
 import type { Tier } from "@/lib/tiers";
 
 const TIERS: readonly string[] = ["basic", "premium", "ultra"];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Read a well-formed topic id from the form, or bail to the panel with an error.
+ * Guards the per-row actions against a malformed/missing id reaching Postgres as a
+ * uuid cast (which would 500) — returns only after the format check passes.
+ */
+function readTaskId(formData: FormData): string {
+  const id = String(formData.get("id") ?? "");
+  if (!UUID_RE.test(id)) {
+    redirect(`/admin/writing?error=${encodeURIComponent("Unknown topic.")}`);
+  }
+  return id;
+}
 
 /**
  * Create a Writing Lab Task 2 topic. Owner-only (requireAdmin). "Publish topic"
@@ -26,4 +40,31 @@ export async function createWritingTask(formData: FormData) {
 
   await insertWritingTask({ prompt, category, tierRequired: tier, createdBy: admin.id, publish });
   redirect(`/admin/writing?created=${publish ? "published" : "draft"}`);
+}
+
+/** Owner-only. Make a draft topic live in the catalog. */
+export async function publishTask(formData: FormData) {
+  await requireAdmin();
+  const id = readTaskId(formData);
+  await setTaskStatus(id, "published");
+  redirect("/admin/writing?done=published");
+}
+
+/** Owner-only. Pull a topic out of the catalog back to draft — the safe "remove" for topics with submissions. */
+export async function unpublishTask(formData: FormData) {
+  await requireAdmin();
+  const id = readTaskId(formData);
+  await setTaskStatus(id, "draft");
+  redirect("/admin/writing?done=unpublished");
+}
+
+/** Owner-only. Hard-delete a topic — refused (→ unpublish) when a student has already submitted against it. */
+export async function removeTask(formData: FormData) {
+  await requireAdmin();
+  const id = readTaskId(formData);
+  const result = await deleteWritingTask(id);
+  if (!result.deleted) {
+    redirect(`/admin/writing?error=${encodeURIComponent("This topic has submissions — unpublish instead.")}`);
+  }
+  redirect("/admin/writing?done=deleted");
 }
