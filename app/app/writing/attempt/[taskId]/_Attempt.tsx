@@ -143,14 +143,18 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
               </button>
             )}
           </div>
-          <textarea
-            value={essay}
-            onChange={(e) => setEssay(e.target.value)}
-            placeholder="Start writing your response…"
-            style={S.textarea}
-            aria-label="Your essay"
-          />
-          <CoachTip text={essay} />
+          <div className="wa-editmain">
+            <textarea
+              value={essay}
+              onChange={(e) => setEssay(e.target.value)}
+              placeholder="Start writing your response…"
+              style={S.textarea}
+              aria-label="Your essay"
+            />
+            <div className="wa-coach">
+              <CoachTip text={essay} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -444,10 +448,18 @@ const CSS = `
 .wa-actionbar{flex-direction:column;gap:16px;align-items:stretch}
 .wa-back:hover{color:var(--text-primary)!important}
 .wa-timer:hover{background:var(--surface-hover)!important}
+/* Editor body: textarea + coach stacked on narrow/tablet, side-by-side on wide
+   (gated at 1024 so the textarea never gets cramped in the 880–1023 zone). */
+.wa-editmain{display:flex;flex-direction:column;gap:12px;min-width:0}
+.wa-coach{width:100%}
 @media (min-width:880px){
   .wa-wrap{padding:24px 28px 56px}
   .wa-grid{grid-template-columns:320px 1fr}
   .wa-actionbar{flex-direction:row;align-items:center;justify-content:space-between}
+}
+@media (min-width:1024px){
+  .wa-editmain{flex-direction:row;align-items:flex-start;gap:14px}
+  .wa-coach{width:280px;flex:none;position:sticky;top:88px}
 }
 /* Coach tip — colour morphs in place; entry/float/glow/spark are motion-gated. */
 .ct-card{transition:background .35s ease,border-color .35s ease}
