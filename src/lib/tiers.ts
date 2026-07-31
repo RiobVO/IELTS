@@ -17,6 +17,14 @@ const TIER_RANK: Record<Tier, number> = { basic: 0, premium: 1, ultra: 2 };
 export const BASIC_DAILY_LIMIT = 25;
 
 /**
+ * AI Writing (Task 2 feedback) is a paid feature and unlocks at Premium and up
+ * (pricing page: "AI Writing feedback" sits in Premium; Ultra adds human review +
+ * Speaking on top, still to come). Basic gets a single lifetime teaser preview so
+ * they taste the AI, then upgrade — see lifecycle.canEvaluate.
+ */
+export const WRITING_MIN_TIER: Tier = "premium";
+
+/**
  * The tier a profile is ACTUALLY entitled to right now. A premium/ultra profile
  * whose `premium_until` has passed counts as basic regardless of the stored tier
  * — the cron downgrade (§11) may lag, so gating must not trust a stale tier. A
