@@ -1,7 +1,7 @@
 import { TASK2_MIN_WORDS } from "../lifecycle";
 import type { EvaluateInput } from "./types";
 
-export const PROMPT_VERSION = "writing-task2-v2";
+export const PROMPT_VERSION = "writing-task2-v3";
 
 // Rubric-anchored prompt for IELTS Writing Task 2. Returns a band RANGE + confidence
 // + per-criterion verdicts tied to the essay, top-3 fixes, inline annotations, a
@@ -55,10 +55,14 @@ export function buildPrompt({ essay, taskPrompt, category, wordCount }: Evaluate
     "Then: overall band range + confidence (low|medium|high), top 3 fixes (most",
     "impactful first), short inline annotations quoting the essay — each tagged with a",
     "type: good (a strong move to reinforce), style (style/clarity), or grammar (a",
-    "grammar/accuracy slip) — a PARTIAL rewrite (the candidate's original thesis",
-    "verbatim as thesisOld, an improved thesis, one rewritten paragraph, and",
-    "weak-phrase replacements — do NOT rewrite the whole essay), and a next-attempt",
-    "checklist.",
+    "grammar/accuracy slip) — a PARTIAL rewrite (do NOT rewrite the whole essay), and a",
+    "next-attempt checklist. The rewrite has: thesisOld (the candidate's original thesis",
+    "verbatim) and thesis (an improved version); thesisMoves — 2–3 SHORT spans quoted",
+    "verbatim FROM `thesis`, each with a 2–4 word technique label (e.g. 'Concession',",
+    "'Precise modality', 'Abstraction'); paragraph (one rewritten body paragraph),",
+    "paragraphOld (the candidate's own version of THAT paragraph quoted verbatim from the",
+    "essay) and paragraphMoves — 2–3 SHORT technique labels naming what the rewrite",
+    "improved; and replacements — weak-phrase → stronger-phrase swaps.",
     "",
     "If the essay is too short or off-topic to judge, set confidence='low' and say so",
     "in the criteria notes rather than inventing a score.",

@@ -24,10 +24,19 @@ export const FeedbackSchema = z.object({
   topFixes: z.array(z.string().min(1)).min(1).max(3),
   annotations: z.array(z.object({ quote: z.string(), comment: z.string(), type: AnnotationType })),
   rewrite: z.object({
-    thesisOld: z.string(), // candidate's original thesis — shown struck as "YOURS"
+    thesisOld: z.string(), // candidate's original thesis — shown as "YOURS"
     thesis: z.string(), // the improved thesis — shown as "STRONGER"
     paragraph: z.string(),
     replacements: z.array(z.object({ from: z.string(), to: z.string() })),
+    // "Delta & technique" extras (prompt v3+). OPTIONAL so snapshots from earlier prompt
+    // versions — read in read.ts via a raw cast, no re-validation — stay valid; the UI
+    // (Rewrite.tsx) renders each block only when present. thesisMoves: spans quoted
+    // verbatim from `thesis`, highlighted + chip-labelled with the technique.
+    // paragraphMoves: technique labels shown as chips above the rewritten paragraph.
+    // paragraphOld: the candidate's original of that paragraph, for "show your original".
+    thesisMoves: z.array(z.object({ quote: z.string(), label: z.string() })).optional(),
+    paragraphMoves: z.array(z.string()).optional(),
+    paragraphOld: z.string().optional(),
   }),
   checklist: z.array(z.string().min(1)),
 });

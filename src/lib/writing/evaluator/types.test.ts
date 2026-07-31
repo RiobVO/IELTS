@@ -40,4 +40,16 @@ describe("FeedbackSchema", () => {
     void _omit;
     expect(FeedbackSchema.safeParse({ ...valid, rewrite: rewriteNoOld }).success).toBe(false);
   });
+  it("accepts the optional delta/technique rewrite fields when present", () => {
+    const rewrite = {
+      ...valid.rewrite,
+      thesisMoves: [{ quote: "Improved thesis", label: "Concession" }],
+      paragraphMoves: ["Topic sentence", "Formal register"],
+      paragraphOld: "The candidate's original paragraph.",
+    };
+    expect(FeedbackSchema.safeParse({ ...valid, rewrite }).success).toBe(true);
+  });
+  it("stays valid when the optional rewrite fields are absent (older snapshots)", () => {
+    expect(FeedbackSchema.safeParse(valid).success).toBe(true);
+  });
 });
