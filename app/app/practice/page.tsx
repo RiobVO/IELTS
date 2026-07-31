@@ -4,9 +4,9 @@ import { getHeaderData } from "@/lib/notifications/header-data";
 import { getPublishedTests } from "@/lib/content/published";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { writingEvalConfig } from "@/env";
-import { qtypeLabel, categoryLabel, READING_CATEGORIES, LISTENING_CATEGORIES } from "@/lib/labels";
+import { qtypeLabel, categoryLabel, QTYPE_LABELS, CATEGORY_LABELS, READING_CATEGORIES, LISTENING_CATEGORIES } from "@/lib/labels";
 import { AppShell } from "../_AppShell";
-import { PracticeCatalog, type HeroData, type PracticeTest, type FilterOption, type DrillWeakest } from "./_PracticeCatalog";
+import { PracticeCatalog, type HeroData, type PracticeTest, type FilterOption, type DrillWeakest, type InitialFilter } from "./_PracticeCatalog";
 
 export const dynamic = "force-dynamic";
 
@@ -48,8 +48,31 @@ function countAnswers(answers: Record<string, unknown> | null): number {
   ).length;
 }
 
-export default async function PracticePage() {
+/**
+ * Предвыбор фильтра из query (переход со старых каталогов /app/reading|listening,
+ * свёрнутых в redirect). Невалидные значения отбрасываются по каноничным enum'ам
+ * (@/lib/labels), поэтому мусорный q_type/category открывает хаб дефолтным, а не
+ * пустым. own-property check защищает от наследованных ключей (`?q_type=toString`).
+ */
+function buildInitialFilter(sp: { skill?: string; q_type?: string; category?: string }): InitialFilter {
+  const has = (m: Record<string, string>, v?: string) =>
+    !!v && Object.prototype.hasOwnProperty.call(m, v);
+  const skill: Section | null =
+    sp.skill === "reading" || sp.skill === "listening" ? sp.skill : null;
+  return {
+    skill,
+    types: has(QTYPE_LABELS, sp.q_type) ? [sp.q_type!] : [],
+    cats: has(CATEGORY_LABELS, sp.category) ? [sp.category!] : [],
+  };
+}
+
+export default async function PracticePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ skill?: string; q_type?: string; category?: string }>;
+}) {
   await requireUser();
+  const initialFilter = buildInitialFilter(await searchParams);
   const supabase = await createClient();
 
   // Профиль (тир) / submitted-попытки (слабый тип + best band) / in_progress
@@ -189,6 +212,7 @@ export default async function PracticePage() {
         targetBand={targetBand}
         bestBand={bestOverall > 0 ? bestOverall : null}
         writingEnabled={writingEvalConfig() !== null}
+        initialFilter={initialFilter}
       />
     </AppShell>
   );

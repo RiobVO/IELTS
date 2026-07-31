@@ -51,6 +51,14 @@ export interface HeroData {
 }
 export type DrillWeakest = { type: string; label: string; section: Section } | null;
 
+/** Предвыбор фильтра из query (redirect со старых каталогов): секция + тип/категория.
+ *  Значения уже провалидированы на сервере (page.tsx) против @/lib/labels. */
+export interface InitialFilter {
+  skill: Section | null;
+  types: string[];
+  cats: string[];
+}
+
 interface SectionVisual {
   tileBg: string;
   tileFg: string;
@@ -102,6 +110,7 @@ export function PracticeCatalog({
   targetBand,
   bestBand,
   writingEnabled = false,
+  initialFilter,
 }: {
   tests: PracticeTest[];
   filterCategories: FilterOption[];
@@ -116,11 +125,13 @@ export function PracticeCatalog({
   bestBand: number | null;
   /** Writing Lab live (WRITING_EVAL_MODEL set): card → /app/writing, not locked-panel. */
   writingEnabled?: boolean;
+  /** Предвыбор фильтра из query (переход со старого каталога). undefined = чистый хаб. */
+  initialFilter?: InitialFilter;
 }) {
   const router = useRouter();
-  const [selCats, setSelCats] = useState<string[]>([]);
-  const [selTypes, setSelTypes] = useState<string[]>([]);
-  const [skill, setSkill] = useState<Skill | null>(null);
+  const [selCats, setSelCats] = useState<string[]>(initialFilter?.cats ?? []);
+  const [selTypes, setSelTypes] = useState<string[]>(initialFilter?.types ?? []);
+  const [skill, setSkill] = useState<Skill | null>(initialFilter?.skill ?? null);
 
   const toggle = (set: (fn: (p: string[]) => string[]) => void) => (v: string) =>
     set((p) => (p.includes(v) ? p.filter((x) => x !== v) : [...p, v]));
