@@ -34,6 +34,7 @@ export async function AppShell({
 
   return (
     <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", background: "var(--bg-base)" }}>
+      <a href="#content" className="skip-link">Skip to content</a>
       <AppHeader
         active={active}
         streak={profile?.current_streak ?? 0}
