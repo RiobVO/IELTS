@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type CSSProperties } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Icon, type IconName } from "@/components/core/icons";
 import { Badge } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
@@ -100,6 +101,7 @@ export function PracticeCatalog({
   listeningMeta,
   targetBand,
   bestBand,
+  writingEnabled = false,
 }: {
   tests: PracticeTest[];
   filterCategories: FilterOption[];
@@ -112,7 +114,10 @@ export function PracticeCatalog({
   targetBand: number | null;
   /** Best single-test band so far (max R/L), or null if no tests submitted. */
   bestBand: number | null;
+  /** Writing Lab live (WRITING_EVAL_MODEL set): card → /app/writing, not locked-panel. */
+  writingEnabled?: boolean;
 }) {
+  const router = useRouter();
   const [selCats, setSelCats] = useState<string[]>([]);
   const [selTypes, setSelTypes] = useState<string[]>([]);
   const [skill, setSkill] = useState<Skill | null>(null);
@@ -204,16 +209,16 @@ export function PracticeCatalog({
         <SkillCard
           letter="W"
           name="Writing"
-          meta="Ultra plan"
-          muted
+          meta={writingEnabled ? "Live · Task 2" : "Ultra plan"}
+          muted={!writingEnabled}
           tileBg="var(--warn-subtle)"
           tileFg="var(--warn-text)"
-          badge={{ tone: "warn", text: "Soon" }}
-          onClick={() => selectSkill("writing")}
+          badge={writingEnabled ? { tone: "success", text: "Live" } : { tone: "warn", text: "Soon" }}
+          onClick={() => (writingEnabled ? router.push("/app/writing") : selectSkill("writing"))}
           bg={cardBg("writing", "var(--warn-subtle)")}
           bd={cardBd("writing", "var(--warn)")}
-          expanded={skill === "writing"}
-          controls="pc-locked-panel"
+          expanded={writingEnabled ? undefined : skill === "writing"}
+          controls={writingEnabled ? undefined : "pc-locked-panel"}
         />
         <SkillCard
           letter="S"
