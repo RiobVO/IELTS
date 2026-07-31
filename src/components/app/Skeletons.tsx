@@ -97,43 +97,6 @@ export function AppShellSkeleton({
   );
 }
 
-/** Контент-скелет каталога — общий для Reading и Listening (один _CatalogView). */
-export function CatalogSkeleton() {
-  return (
-    <div style={C.wrap}>
-      <Skeleton w={210} h={26} style={{ marginBottom: 8 }} />
-      <Skeleton w={330} h={14} style={{ marginBottom: 18 }} />
-
-      <div style={C.filter}>
-        <Skeleton w={120} h={18} style={{ marginBottom: 16 }} />
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {[84, 120, 96, 110, 70].map((w, i) => (
-            <Skeleton key={i} w={w} h={30} r="var(--radius-full)" />
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} style={C.card}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <Skeleton w={90} h={20} r="var(--radius-full)" />
-              <Skeleton w={48} h={14} style={{ marginLeft: "auto" }} />
-            </div>
-            <Skeleton w="58%" h={20} style={{ marginBottom: 14 }} />
-            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-              {[70, 90, 60].map((w, j) => (
-                <Skeleton key={j} w={w} h={18} r="var(--radius-full)" />
-              ))}
-            </div>
-            <Skeleton w={80} h={16} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /** Контент-скелет Practice Hub — заголовок, hero-полоса, сетка из 4 skill-карт.
     Сетка зеркалит .ph-grid страницы (1-up → 2-up на 640px), чтобы свап скелета на
     контент не давал layout-shift; брейкпоинт-колонки в классе, не inline. */
@@ -260,23 +223,4 @@ const H: Record<string, React.CSSProperties> = {
     borderRadius: "var(--radius-md)",
   },
   iconBtn: { width: 38, height: 38, borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", color: "var(--text-secondary)" },
-};
-
-const C: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 980, margin: "0 auto", padding: "var(--space-8) var(--space-6) var(--space-12)" },
-  filter: {
-    background: "var(--surface)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-xl)",
-    padding: "var(--space-5)",
-    boxShadow: "var(--shadow-sm)",
-    marginBottom: 18,
-  },
-  card: {
-    background: "var(--surface)",
-    border: "2px solid var(--border)",
-    borderRadius: "var(--radius-lg)",
-    padding: "var(--space-4)",
-    boxShadow: "var(--shadow-solid)",
-  },
 };

@@ -61,7 +61,7 @@ captured at submit and is locked the **same way** (RLS on, grants revoked) — `
 ## Exam architecture — TWO runners (in-progress migration)
 
 The catalog routes each test by `content_item.runner_html IS NOT NULL` (`has_runner`):
-`_CatalogView.tsx` → `examHref = has_runner ? /app/exam/${id} : /app/reading/${id}`.
+`app/app/practice/page.tsx` → `examHref = has_runner ? /app/exam/${id} : /app/reading/${id}`.
 
 1. **`/app/exam/[id]`** (NEW, target) — `app/app/exam/[id]/ExamFrame.tsx` (iframe) + `runner/route.ts`.
    Serves the sanitized `runner_html` (the test's original HTML) in an **opaque-origin sandbox**
