@@ -20,8 +20,13 @@ describe("buildPrompt", () => {
     expect(p).toMatch(/good.*style.*grammar/is);
     expect(p.toLowerCase()).toContain("original thesis");
   });
+  it("anchors the band scale and instructs use of the full range (anti-compression)", () => {
+    const p = buildPrompt(input);
+    expect(p.toUpperCase()).toContain("USE THE FULL");
+    for (const b of ["Band 9", "Band 8", "Band 7", "Band 6", "Band 5"]) expect(p).toContain(b);
+  });
   it("has a stable version", () => {
-    expect(PROMPT_VERSION).toBe("writing-task2-v1");
+    expect(PROMPT_VERSION).toBe("writing-task2-v2");
   });
   it("injects the word count and underlength instruction below 250 words", () => {
     const p = buildPrompt({ ...input, wordCount: 162 });
