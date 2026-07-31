@@ -501,7 +501,7 @@ const FLOW_CSS = `
 `;
 
 const S: Record<string, CSSProperties> = {
-  wrap: { maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
+  wrap: { maxWidth: 1360, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   back: { display: "inline-flex", alignItems: "center", gap: 7, alignSelf: "flex-start", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, cursor: "pointer", padding: 4, transition: "var(--transition-colors)" },
 
   grid: {},
