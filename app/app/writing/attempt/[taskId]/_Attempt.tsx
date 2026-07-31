@@ -1,0 +1,468 @@
+"use client";
+
+import { useEffect, useRef, useState, useTransition, type CSSProperties, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/core/Button";
+import { Icon, type IconName } from "@/components/core/icons";
+import { ExamTimer } from "@/components/exam/ExamTimer";
+import { wordCount, wordCountState, RING_CIRC } from "@/lib/writing/word-count";
+import { writingCategoryLabel } from "@/lib/writing/labels";
+import type { CatalogTask } from "@/lib/writing/read";
+import { createWritingSubmission, getSubmissionStatus } from "../../actions";
+
+type Phase = "edit" | "queued" | "analyzing" | "failed" | "preview_used" | "daily_cap" | "in_progress";
+
+const TIMER_TOTAL = 40 * 60;
+const POLL_MS = 2500;
+
+const STRUCTURE: { title: string; hint: string }[] = [
+  { title: "Introduction", hint: "Paraphrase the prompt and state your position in one clear sentence." },
+  { title: "Body 1", hint: "Your strongest reason — explain it, then prove it with one specific example." },
+  { title: "Body 2", hint: "A second reason or the other side — one idea per paragraph." },
+  { title: "Conclusion", hint: "Restate your position; add nothing new." },
+];
+
+export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: number }) {
+  const router = useRouter();
+  const [phase, setPhase] = useState<Phase>("edit");
+  const [essay, setEssay] = useState("");
+  const [timerOn, setTimerOn] = useState(false);
+  const [remaining, setRemaining] = useState(TIMER_TOTAL);
+  const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const wc = wordCount(essay);
+  const st = wordCountState(wc);
+
+  // Advisory timer — counts down while running; never auto-submits (spec: optional).
+  useEffect(() => {
+    if (!timerOn || phase !== "edit") return;
+    const id = setInterval(() => setRemaining((r) => Math.max(0, r - 1)), 1000);
+    return () => clearInterval(id);
+  }, [timerOn, phase]);
+
+  // Poll the async job while queued/analyzing. Re-kick/reaper live server-side.
+  useEffect(() => {
+    if ((phase !== "queued" && phase !== "analyzing") || !submissionId) return;
+    let alive = true;
+    const id = setInterval(async () => {
+      const res = await getSubmissionStatus(submissionId);
+      if (!alive) return;
+      if (!res || res.status === "failed") return setPhase("failed");
+      if (res.status === "completed") {
+        clearInterval(id);
+        router.push(`/app/writing/result/${submissionId}`);
+        return;
+      }
+      setPhase(res.status === "evaluating" ? "analyzing" : "queued");
+    }, POLL_MS);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [phase, submissionId, router]);
+
+  const submit = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await createWritingSubmission({ taskId: task.id, essay });
+      if (res.ok) {
+        setSubmissionId(res.submissionId);
+        setPhase("queued");
+        return;
+      }
+      switch (res.reason) {
+        case "preview_used":
+          return setPhase("preview_used");
+        case "daily_cap":
+          return setPhase("daily_cap");
+        case "in_progress":
+          return setPhase("in_progress");
+        case "not_configured":
+          return router.push("/app/practice");
+        default:
+          return setError("Please write between 20 and 1000 words.");
+      }
+    });
+  };
+
+  if (phase !== "edit") {
+    return <FlowScreen phase={phase} onRetry={submit} onBack={() => setPhase("edit")} />;
+  }
+
+  return (
+    <div className="wa-wrap" style={S.wrap}>
+      <style>{CSS}</style>
+
+      <button type="button" onClick={() => router.push("/app/writing")} style={S.back} className="wa-back">
+        <Icon name="arrow-left" size={16} strokeWidth={2.5} /> Back to catalog
+      </button>
+
+      <div className="wa-grid" style={S.grid}>
+        {/* Left rail */}
+        <div style={S.rail}>
+          <div style={S.promptCard}>
+            <div style={S.promptOver}>Task 2 · {writingCategoryLabel(task.category)}</div>
+            <p style={S.promptText}>{task.prompt}</p>
+            <p style={S.promptHelp}>Write at least 250 words. You have about 40 minutes.</p>
+          </div>
+
+          <div style={S.targetCard}>
+            <div style={S.targetTop}>Aiming for</div>
+            <div style={S.targetBand}>{targetBand.toFixed(1)}</div>
+            <p style={S.targetHelp}>Every fix in your report points at this band.</p>
+          </div>
+
+          <div style={S.structCard}>
+            <div style={S.structOver}>A solid Task 2 shape</div>
+            <div style={S.structList}>
+              {STRUCTURE.map((s, i) => (
+                <div key={s.title} style={S.structStep}>
+                  <span style={S.structNum}>{i + 1}</span>
+                  <div>
+                    <div style={S.structTitle}>{s.title}</div>
+                    <div style={S.structHint}>{s.hint}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right column */}
+        <div style={S.editor}>
+          <div style={S.editorHead}>
+            <h1 style={S.editorTitle}>Your essay</h1>
+            {timerOn ? (
+              <ExamTimer remainingSeconds={remaining} totalSeconds={TIMER_TOTAL} compact />
+            ) : (
+              <button type="button" onClick={() => setTimerOn(true)} style={S.timerBtn} className="wa-timer">
+                <Icon name="clock" size={16} strokeWidth={2.4} /> Start 40-min timer
+              </button>
+            )}
+          </div>
+          <textarea
+            value={essay}
+            onChange={(e) => setEssay(e.target.value)}
+            placeholder="Start writing your response…"
+            style={S.textarea}
+            aria-label="Your essay"
+          />
+        </div>
+      </div>
+
+      {/* Action bar */}
+      <div className="wa-actionbar" style={S.actionBar}>
+        <div style={S.ringRow}>
+          <WordRing count={wc} state={st} />
+          <div>
+            <div style={{ ...S.ringStatus, color: st.color }}>{st.message}</div>
+            <div style={S.ringMeta}>words · min 20 · max 1000</div>
+          </div>
+        </div>
+        <div style={S.actionRight}>
+          <Button size="lg" trailingIcon="arrow-right" disabled={!st.canSubmit || pending} loading={pending} onClick={submit}>
+            Get my feedback
+          </Button>
+          <div style={S.disclaimer}>
+            {error ?? "Estimated band range — not an official IELTS score."}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Word-count ring (r=44, stroke 9; rendered ~62px) ────────────────────── */
+function WordRing({ count, state }: { count: number; state: ReturnType<typeof wordCountState> }) {
+  return (
+    <svg width={62} height={62} viewBox="0 0 100 100" style={{ flex: "none" }} aria-hidden="true">
+      <circle cx={50} cy={50} r={44} fill="none" stroke="var(--surface-inset)" strokeWidth={9} />
+      <circle
+        cx={50}
+        cy={50}
+        r={44}
+        fill="none"
+        stroke={state.color}
+        strokeWidth={9}
+        strokeLinecap="round"
+        strokeDasharray={RING_CIRC}
+        strokeDashoffset={state.offset}
+        transform="rotate(-90 50 50)"
+        style={{ transition: "stroke-dashoffset var(--duration-base) var(--ease-standard), stroke var(--duration-base) var(--ease-standard)" }}
+      />
+      <text x={50} y={50} textAnchor="middle" dominantBaseline="central" fontFamily="var(--font-mono)" fontSize={28} fontWeight={600} fill="var(--text-primary)">
+        {count}
+      </text>
+    </svg>
+  );
+}
+
+/* ── Async / gating screens (queue, analyzing, failed, preview, cap) ──────── */
+function FlowScreen({ phase, onRetry, onBack }: { phase: Phase; onRetry: () => void; onBack: () => void }) {
+  const router = useRouter();
+  return (
+    <div style={S.centerWrap}>
+      <style>{FLOW_CSS}</style>
+      {phase === "queued" && (
+        <div style={S.centerCard}>
+          <div style={S.dots} aria-hidden="true">
+            <span style={S.dot} className="wl-dot1" />
+            <span style={S.dot} className="wl-dot2" />
+            <span style={S.dot} className="wl-dot3" />
+          </div>
+          <h1 style={S.centerH1}>You&apos;re in the queue</h1>
+          <p style={S.centerMono}>Holding your spot · est. wait a few seconds</p>
+          <StatusList active="queued" />
+          <p style={S.centerFoot}>You can leave this page — we&apos;ll keep your spot. Only one analysis runs at a time.</p>
+        </div>
+      )}
+
+      {phase === "analyzing" && (
+        <div style={S.centerCard}>
+          <LivingLogo />
+          <h1 style={S.centerH1}>Analyzing your essay…</h1>
+          <p style={S.centerMono}>Usually 10–40 seconds</p>
+          <div style={S.indetRail} aria-hidden="true">
+            <span style={S.indetFill} className="wl-bar" />
+          </div>
+          <StatusList active="analyzing" />
+        </div>
+      )}
+
+      {phase === "failed" && (
+        <CenteredState
+          icon="circle-x"
+          circle="var(--error-subtle)"
+          iconColor="var(--error-text)"
+          title="We couldn't finish your analysis"
+          body="Something went wrong on our side — not yours. Your essay is safe, and this attempt was not counted against your limit."
+        >
+          <Button onClick={onRetry}>Try analysis again</Button>
+          <Button variant="secondary" onClick={onBack}>Back to my essay</Button>
+        </CenteredState>
+      )}
+
+      {phase === "preview_used" && (
+        <CenteredState
+          icon="sparkles"
+          circle="var(--brand-subtle)"
+          iconColor="var(--text-link)"
+          title="That was your free analysis — nice start"
+          body="You've used your one free lifetime breakdown — and it's saved, so reread it any time. Ultra unlocks unlimited analyses."
+        >
+          <div style={S.perks}>
+            {["Unlimited Task 2 analyses", "A model rewrite of every weak paragraph", "Your full attempt history"].map((p) => (
+              <div key={p} style={S.perk}>
+                <Icon name="check" size={16} strokeWidth={2.6} style={{ color: "var(--success-text)" }} /> {p}
+              </div>
+            ))}
+          </div>
+          <Button trailingIcon="arrow-right" href="/app/upgrade">Upgrade to Ultra</Button>
+          <Button variant="ghost" onClick={() => router.push("/app/writing/history")}>Reread my feedback</Button>
+        </CenteredState>
+      )}
+
+      {phase === "daily_cap" && (
+        <CenteredState
+          icon="clock"
+          circle="var(--warn-subtle)"
+          iconColor="var(--warn-text)"
+          title="You've hit today's analysis limit"
+          body="You've used your generous daily allowance of essay analyses. It refreshes tomorrow — your past reports stay available."
+        >
+          <Button onClick={() => router.push("/app/writing/history")}>Review last feedback</Button>
+          <Button variant="secondary" onClick={() => router.push("/app/writing/history")}>Open history</Button>
+        </CenteredState>
+      )}
+
+      {phase === "in_progress" && (
+        <CenteredState
+          icon="clock"
+          circle="var(--surface-hover)"
+          iconColor="var(--text-secondary)"
+          title="An analysis is already running"
+          body="Only one analysis runs at a time. Hang on for it to finish — you'll find it in your history."
+        >
+          <Button onClick={() => router.push("/app/writing/history")}>Go to history</Button>
+          <Button variant="secondary" onClick={onBack}>Back to my essay</Button>
+        </CenteredState>
+      )}
+    </div>
+  );
+}
+
+function StatusList({ active }: { active: "queued" | "analyzing" }) {
+  const steps: { key: string; label: string }[] = [
+    { key: "queued", label: "Queued" },
+    { key: "analyzing", label: "Analyzing" },
+    { key: "building", label: "Building your report" },
+  ];
+  const order = ["queued", "analyzing", "building"];
+  const activeIdx = order.indexOf(active);
+  return (
+    <div style={S.statusList}>
+      {steps.map((s, i) => {
+        const done = i < activeIdx;
+        const isActive = i === activeIdx;
+        return (
+          <div key={s.key} style={S.statusItem}>
+            <span
+              style={{
+                ...S.statusDot,
+                background: done ? "var(--success)" : isActive ? "var(--brand)" : "var(--surface-inset)",
+                color: done ? "white" : "transparent",
+                boxShadow: isActive ? "0 0 0 4px var(--brand-subtle)" : "none",
+              }}
+            >
+              {done && <Icon name="check" size={12} strokeWidth={3} />}
+            </span>
+            <span style={{ ...S.statusLabel, color: done || isActive ? "var(--text-primary)" : "var(--text-muted)" }}>
+              {s.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LivingLogo() {
+  return (
+    <div style={S.logoWrap} aria-hidden="true">
+      <div style={S.logoBars} className="wl-levitate">
+        <span style={{ ...S.logoBar, width: "100%", background: "var(--brand)" }}>
+          <span style={S.sheen} className="wl-sheen" />
+        </span>
+        <span style={{ ...S.logoBar, width: "78%", background: "var(--violet-300)" }} />
+        <span style={{ ...S.logoBar, width: "56%", background: "var(--violet-200)" }} />
+      </div>
+    </div>
+  );
+}
+
+function CenteredState({
+  icon,
+  circle,
+  iconColor,
+  title,
+  body,
+  children,
+}: {
+  icon: IconName;
+  circle: string;
+  iconColor: string;
+  title: string;
+  body: string;
+  children: ReactNode;
+}) {
+  return (
+    <div style={S.centerCard}>
+      <span style={{ ...S.stateCircle, background: circle }} className="wl-pop">
+        <Icon name={icon} size={30} strokeWidth={2.2} style={{ color: iconColor }} />
+      </span>
+      <h1 style={S.centerH1}>{title}</h1>
+      <p style={S.centerBody}>{body}</p>
+      <div style={S.stateBtns}>{children}</div>
+    </div>
+  );
+}
+
+const CSS = `
+.wa-wrap{padding:20px 16px 40px}
+.wa-grid{display:grid;grid-template-columns:1fr;gap:18px;align-items:stretch}
+.wa-actionbar{flex-direction:column;gap:16px;align-items:stretch}
+.wa-back:hover{color:var(--text-primary)!important}
+.wa-timer:hover{background:var(--surface-hover)!important}
+@media (min-width:880px){
+  .wa-wrap{padding:24px 28px 56px}
+  .wa-grid{grid-template-columns:320px 1fr}
+  .wa-actionbar{flex-direction:row;align-items:center;justify-content:space-between}
+}
+`;
+
+const FLOW_CSS = `
+@keyframes wl-bar{0%{left:-40%}100%{left:100%}}
+@keyframes wl-levitate{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes wl-sheen{0%{transform:translateX(-130%)}55%,100%{transform:translateX(320%)}}
+@keyframes wl-pulse{0%,100%{opacity:.3;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
+@keyframes wl-pop{0%{transform:scale(.92)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
+.wl-dot1{animation:wl-pulse 1.2s var(--ease-in-out) infinite}
+.wl-dot2{animation:wl-pulse 1.2s var(--ease-in-out) .2s infinite}
+.wl-dot3{animation:wl-pulse 1.2s var(--ease-in-out) .4s infinite}
+.wl-bar{animation:wl-bar 1.1s var(--ease-in-out) infinite}
+.wl-levitate{animation:wl-levitate 3s var(--ease-in-out) infinite}
+.wl-sheen{animation:wl-sheen 2.6s var(--ease-in-out) infinite}
+.wl-pop{animation:wl-pop .5s var(--ease-spring)}
+@media (prefers-reduced-motion:reduce){
+  .wl-dot1,.wl-dot2,.wl-dot3,.wl-bar,.wl-levitate,.wl-sheen,.wl-pop{animation:none!important}
+}
+`;
+
+const S: Record<string, CSSProperties> = {
+  wrap: { maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
+  back: { display: "inline-flex", alignItems: "center", gap: 7, alignSelf: "flex-start", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, cursor: "pointer", padding: 4, transition: "var(--transition-colors)" },
+
+  grid: {},
+  rail: { display: "flex", flexDirection: "column", gap: 14 },
+  promptCard: { background: "var(--brand-subtle)", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-lg)", padding: 18 },
+  promptOver: { fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-link)", marginBottom: 8 },
+  promptText: { margin: 0, fontSize: 16, lineHeight: 1.5, fontWeight: 500, color: "var(--text-primary)" },
+  promptHelp: { margin: "10px 0 0", fontSize: 13, color: "var(--text-secondary)" },
+
+  targetCard: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 18 },
+  targetTop: { fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-muted)" },
+  targetBand: { fontFamily: "var(--font-mono)", fontSize: 34, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.1, marginTop: 4 },
+  targetHelp: { margin: "8px 0 0", fontSize: 13, color: "var(--text-secondary)" },
+
+  structCard: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 18, flex: 1 },
+  structOver: { fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 14 },
+  structList: { display: "flex", flexDirection: "column", gap: 14 },
+  structStep: { display: "flex", gap: 12, alignItems: "flex-start" },
+  structNum: { flex: "none", width: 26, height: 26, borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, display: "grid", placeItems: "center" },
+  structTitle: { fontSize: 14, fontWeight: 700, color: "var(--text-primary)" },
+  structHint: { fontSize: 12.5, lineHeight: 1.45, color: "var(--text-muted)", marginTop: 2 },
+
+  editor: { display: "flex", flexDirection: "column", gap: 12, minHeight: 0 },
+  editorHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  editorTitle: { margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" },
+  timerBtn: { display: "inline-flex", alignItems: "center", gap: 8, height: 40, padding: "0 14px", borderRadius: "var(--radius-full)", border: "2px solid var(--border)", background: "var(--surface)", color: "var(--text-secondary)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "var(--transition-colors)" },
+  textarea: { flex: 1, minHeight: 470, width: "100%", resize: "vertical", background: "var(--reading-surface)", color: "var(--reading-text)", fontFamily: "var(--font-reading)", fontSize: 17, lineHeight: 1.7, border: "2px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-solid)", padding: "18px 20px", outline: "none" },
+
+  actionBar: { display: "flex", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-solid)", padding: 18 },
+  ringRow: { display: "flex", alignItems: "center", gap: 16 },
+  ringStatus: { fontSize: 15, fontWeight: 700 },
+  ringMeta: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", marginTop: 2 },
+  actionRight: { display: "flex", flexDirection: "column", alignItems: "stretch", gap: 8 },
+  disclaimer: { fontSize: 12, color: "var(--text-muted)", textAlign: "center", maxWidth: 280 },
+
+  // Centered flow / gating screens
+  centerWrap: { maxWidth: 560, margin: "0 auto", padding: "48px 18px 64px", display: "flex", justifyContent: "center", fontFamily: "var(--font-ui)" },
+  centerCard: { width: "100%", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" },
+  centerH1: { margin: "20px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)", textWrap: "balance" },
+  centerMono: { fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-muted)", marginTop: 8 },
+  centerBody: { fontSize: 15, lineHeight: 1.55, color: "var(--text-secondary)", margin: "12px 0 0", maxWidth: "44ch" },
+  centerFoot: { fontSize: 13, lineHeight: 1.5, color: "var(--text-muted)", margin: "20px 0 0", maxWidth: "42ch" },
+
+  dots: { display: "flex", gap: 10, padding: 18, borderRadius: "var(--radius-full)", background: "var(--surface-hover)" },
+  dot: { width: 12, height: 12, borderRadius: "var(--radius-full)", background: "var(--brand)" },
+
+  indetRail: { position: "relative", height: 6, width: "100%", maxWidth: 320, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden", margin: "20px 0 0" },
+  indetFill: { position: "absolute", top: 0, bottom: 0, width: "40%", borderRadius: "var(--radius-full)", background: "var(--brand)" },
+
+  statusList: { display: "flex", flexDirection: "column", gap: 12, marginTop: 26, padding: "18px 20px", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", textAlign: "left", width: "100%", maxWidth: 340 },
+  statusItem: { display: "flex", alignItems: "center", gap: 12 },
+  statusDot: { flex: "none", width: 22, height: 22, borderRadius: "var(--radius-full)", display: "grid", placeItems: "center" },
+  statusLabel: { fontSize: 14, fontWeight: 600 },
+
+  logoWrap: { display: "grid", placeItems: "center", padding: 8 },
+  logoBars: { display: "flex", flexDirection: "column", gap: 9, width: 92 },
+  logoBar: { position: "relative", height: 16, borderRadius: "var(--radius-full)", overflow: "hidden" },
+  sheen: { position: "absolute", top: 0, bottom: 0, width: "40%", background: "linear-gradient(90deg, transparent, color-mix(in oklab, white 70%, transparent), transparent)" },
+
+  stateCircle: { width: 76, height: 76, borderRadius: "var(--radius-full)", display: "grid", placeItems: "center" },
+  stateBtns: { display: "flex", flexDirection: "column", gap: 10, marginTop: 24, width: "100%", maxWidth: 300, alignItems: "stretch" },
+  perks: { display: "flex", flexDirection: "column", gap: 10, margin: "22px 0 0", padding: "16px 18px", background: "var(--surface)", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-lg)", textAlign: "left", width: "100%", maxWidth: 340 },
+  perk: { display: "flex", alignItems: "center", gap: 10, fontSize: 14, fontWeight: 600, color: "var(--text-secondary)" },
+};
