@@ -69,10 +69,20 @@ function buildInitialFilter(sp: { skill?: string; q_type?: string; category?: st
 export default async function PracticePage({
   searchParams,
 }: {
-  searchParams: Promise<{ skill?: string; q_type?: string; category?: string }>;
+  searchParams: Promise<{
+    skill?: string;
+    q_type?: string;
+    category?: string;
+    limit?: string;
+    throttled?: string;
+  }>;
 }) {
   await requireUser();
-  const initialFilter = buildInitialFilter(await searchParams);
+  const sp = await searchParams;
+  const initialFilter = buildInitialFilter(sp);
+  // Почему отбросило в практику: дневной лимит Basic (access.ts) или throttle сабмита
+  // (reading/[id]/actions.ts). URL-driven, как раньше в каталоге.
+  const notice = sp.limit === "1" ? "limit" : sp.throttled === "1" ? "throttled" : null;
   const supabase = await createClient();
 
   // Профиль (тир) / submitted-попытки (слабый тип + best band) / in_progress
@@ -213,6 +223,7 @@ export default async function PracticePage({
         bestBand={bestOverall > 0 ? bestOverall : null}
         writingEnabled={writingEvalConfig() !== null}
         initialFilter={initialFilter}
+        notice={notice}
       />
     </AppShell>
   );

@@ -127,7 +127,7 @@ export async function submitAttempt(
     recentSubmits.map((r) => r.submittedAt),
     new Date(),
   );
-  if (exceedsSubmitRate(inWindow)) redirect("/app/reading?throttled=1");
+  if (exceedsSubmitRate(inWindow)) redirect("/app/practice?throttled=1");
 
   // Access gate (§4.8, defense-in-depth) — same enforcement as exam-start, fed by
   // the batched read so submit makes a single content_item round-trip.
