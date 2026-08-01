@@ -149,9 +149,9 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
           keeps the three segmented groups grouped and lets sort + count sit with search. */}
       <div className="wl-controls">
         <div className="wl-segrow">
-          <Segmented segments={PART_SEGMENTS} value={part} onChange={(v) => setPart(v as PartFilter)} label="Filter by task" />
-          <Segmented segments={SEGMENTS} value={cat} onChange={(v) => setCat(v as CatFilter)} label="Filter by category" />
-          <Segmented segments={DIFF_SEGMENTS} value={diff} onChange={(v) => setDiff(v as DiffFilter)} label="Filter by difficulty" />
+          <Segmented name="Task" segments={PART_SEGMENTS} value={part} onChange={(v) => setPart(v as PartFilter)} label="Filter by task" />
+          <Segmented name="Type" segments={SEGMENTS} value={cat} onChange={(v) => setCat(v as CatFilter)} label="Filter by category" />
+          <Segmented name="Level" segments={DIFF_SEGMENTS} value={diff} onChange={(v) => setDiff(v as DiffFilter)} label="Filter by difficulty" />
         </div>
         <div className="wl-searchrow">
           <Input
@@ -262,35 +262,42 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
   );
 }
 
-/** Pill segmented control (wl-seg) — shared by the task-part, category, and difficulty filters. */
+/** Pill segmented control (wl-seg) — shared by the task-part, category, and difficulty
+ *  filters. `name` is the visible group label (sits above the pills so it never adds
+ *  width on narrow screens); `label` is the screen-reader group name. */
 function Segmented({
   segments,
   value,
   onChange,
   label,
+  name,
 }: {
   segments: { value: string; label: string }[];
   value: string;
   onChange: (v: string) => void;
   label: string;
+  name: string;
 }) {
   return (
-    <div style={S.segment} role="group" aria-label={label}>
-      {segments.map((seg) => {
-        const active = value === seg.value;
-        return (
-          <button
-            key={seg.value}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(seg.value)}
-            className="wl-seg"
-            style={{ ...S.seg, ...(active ? S.segActive : null) }}
-          >
-            {seg.label}
-          </button>
-        );
-      })}
+    <div style={S.segGroup}>
+      <span style={S.segName}>{name}</span>
+      <div style={S.segment} role="group" aria-label={label}>
+        {segments.map((seg) => {
+          const active = value === seg.value;
+          return (
+            <button
+              key={seg.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(seg.value)}
+              className="wl-seg"
+              style={{ ...S.seg, ...(active ? S.segActive : null) }}
+            >
+              {seg.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -358,7 +365,10 @@ const PromptCard = memo(function PromptCard({ t, targetBand }: { t: CatalogTask;
           )}
         </div>
 
-        <h2 style={S.question}>{t.prompt}</h2>
+        {/* Not a heading: in a semantic <ul> of card-links the link text is the
+            accessible name and the list carries navigation; a heading per long-sentence
+            prompt only bloated screen-reader heading nav without aiding it. */}
+        <p style={S.question}>{t.prompt}</p>
 
         <div style={S.footer}>
           <div style={S.footerLeft}>
@@ -404,9 +414,10 @@ const CSS = `
 .wl-searchrow{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
 .wl-grid{display:grid;grid-template-columns:1fr;gap:16px;list-style:none;margin:0;padding:0}
 .wl-count{flex:none}
-/* Seg sizing lives in the class (not inline) so the breakpoint wins: smaller padding +
-   font on touch keeps the 4-up difficulty group ('Foundation') from clipping at 320px. */
-.wl-seg{min-height:44px;padding:0 12px;font-size:12px}
+/* Seg sizing lives in the class (not inline) so the breakpoint wins: tight padding +
+   12px font on touch keeps the 4-up Level group ('Foundation') comfortably inside a
+   320px viewport (~264px natural width vs 288px content box — ~24px headroom). */
+.wl-seg{min-height:44px;padding:0 9px;font-size:12px}
 .wl-seg:hover{color:var(--text-primary)!important}
 .wl-clear{color:var(--text-muted)}
 .wl-clear:hover{color:var(--text-primary)}
@@ -456,6 +467,8 @@ const S: Record<string, CSSProperties> = {
   targetVal: { fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 20, color: "var(--text-primary)" },
   targetHint: { fontSize: 12, color: "var(--text-muted)" },
 
+  segGroup: { display: "flex", flexDirection: "column", gap: 6, flex: "none" },
+  segName: { paddingLeft: 2, fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 600, letterSpacing: "0.01em", color: "var(--text-muted)" },
   segment: { display: "inline-flex", padding: 4, gap: 4, background: "var(--surface-inset)", borderRadius: 11, flex: "none" },
   seg: { appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, cursor: "pointer", transition: "var(--transition-colors)" },
   segActive: { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-xs)" },
