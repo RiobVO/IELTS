@@ -9,6 +9,8 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   loading?: boolean;
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
+  /** Optional node rendered after the input (e.g. a clear button). Non-breaking: omitted by default. */
+  trailing?: React.ReactNode;
   style?: React.CSSProperties;
   wrapStyle?: React.CSSProperties;
 }
@@ -19,6 +21,7 @@ export function Input({
   loading = false,
   disabled = false,
   size = "md",
+  trailing,
   style,
   wrapStyle,
   ...rest
@@ -80,6 +83,7 @@ export function Input({
         )}
         {...rest}
       />
+      {trailing}
     </div>
   );
 }
