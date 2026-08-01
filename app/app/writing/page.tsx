@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /**
  * Writing Lab catalog (`/app/writing`). Disabled-safe: with WRITING_EVAL_MODEL
  * unset the feature is off → redirect to Practice (the Soon/locked-panel there is
- * the coming-soon state). Otherwise list published Task 2 prompts owner-path.
+ * the coming-soon state). Otherwise list published prompts (Task 1 + Task 2) owner-path.
  */
 export default async function WritingCatalogPage() {
   await requireUser();
