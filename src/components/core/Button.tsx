@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useInteractive, sx, RING } from "./util";
 import { Icon, type IconName } from "./icons";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "success";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "success" | "inverse";
 export type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "style"> {
@@ -31,6 +31,9 @@ const SIZES = {
 function variant(v: ButtonVariant): { bg: string; fg: string; edge: string; inset: string | null; hover: string } {
   switch (v) {
     case "secondary": return { bg: "var(--surface)", fg: "var(--text-primary)", edge: "var(--neutral-edge)", inset: "var(--border-strong)", hover: "var(--surface-hover)" };
+    // Inverse: white surface + brand ink, for the 3D CTA sitting on a brand-filled
+    // panel (the practice hero) where primary's violet would vanish into the bg.
+    case "inverse":   return { bg: "var(--surface)", fg: "var(--brand)", edge: "color-mix(in oklab, black 18%, transparent)", inset: null, hover: "var(--surface-hover)" };
     case "ghost":     return { bg: "transparent", fg: "var(--text-secondary)", edge: "transparent", inset: null, hover: "var(--surface-hover)" };
     case "danger":    return { bg: "var(--error)", fg: "white", edge: "var(--error-edge)", inset: null, hover: "color-mix(in oklab, var(--error) 88%, white)" };
     case "success":   return { bg: "var(--success)", fg: "white", edge: "var(--success-edge)", inset: null, hover: "color-mix(in oklab, var(--success) 90%, white)" };
