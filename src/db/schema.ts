@@ -609,13 +609,22 @@ export const writingSubmissionStatus = pgEnum("writing_submission_status", [
   "failed",
 ]);
 export const writingConfidence = pgEnum("writing_confidence", ["low", "medium", "high"]);
+// task1 = chart/graph/diagram response (image-backed); task2 = essay. Defaulted to
+// task2 in SQL so legacy rows stay essays (migration 0026).
+export const writingTaskPart = pgEnum("writing_task_part", ["task1", "task2"]);
 
 export const writingTask = pgTable(
   "writing_task",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     category: writingCategory("category").notNull(),
+    // Task 1 vs Task 2 discriminator — routes the editor, the min-word floor and the
+    // evaluator prompt. NOT NULL DEFAULT 'task2' (migration 0026) backfills legacy rows.
+    taskPart: writingTaskPart("task_part").notNull().default("task2"),
     prompt: text("prompt").notNull(),
+    // Supabase Storage key of the Task 1 visual (NULL for Task 2). Not a secret — it's
+    // the prompt's chart — so served public-read, no answer_key-style lock.
+    imagePath: text("image_path"),
     // Catalog presentation metadata (migration 0025). Nullable — legacy rows
     // predate the backfill, the UI degrades to a neutral card. CHECK-pinned in SQL.
     topic: text("topic"),
