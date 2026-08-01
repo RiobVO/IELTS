@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { memo, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { Input } from "@/components/core/Input";
 import type { CatalogTask } from "@/lib/writing/read";
@@ -14,19 +14,20 @@ import {
 /**
  * WritingCatalog — клиентское тело каталога Writing Lab (handoff: Prompt Catalog).
  * Богатые карточки промтов: topic (цвет + иконка), difficulty-meter, текст вопроса,
- * type-tag, band-range, время. Фильтр по категории (All/Academic/General) + поиск по
- * тексту; сервер (`page.tsx`) передаёт уже опубликованные темы. Карточки с неполными
+ * type-tag, band-range, время. Фасетные фильтры (task / category / difficulty) + поиск +
+ * сортировка; сервер (`page.tsx`) передаёт уже опубликованные темы. Карточки с неполными
  * метаданными (legacy до бэкфилла) мягко деградируют в нейтральный вид.
  *
- * Типографика: цвет темы — намеренный визуальный якорь (остаётся 4× на карту), но
- * текстовые подписи (topic/type/difficulty) идут в `--font-ui` sentence-case ≥12px;
- * mono+caps оставлены только цифрам (band, минуты, счётчик) — читаемость для аудитории
- * не-носителей на телефоне. Помощь — tap-friendly `<details>`, не hover-tooltip.
+ * Цвет темы — намеренный визуальный якорь (4 носителя на карту), сами значения живут в
+ * `colors.css` как `--topic-*` токены. Текстовые подписи — UI-font sentence-case ≥12px;
+ * mono+caps оставлены цифрам. Помощь — tap-friendly `<details>`. Список фильтруется/сортируется
+ * в одном `useMemo`, карта обёрнута в `memo` — печать в поиске не перерисовывает всю сетку.
  */
 
 type CatFilter = "all" | "academic" | "general";
 type PartFilter = "all" | "task1" | "task2";
 type DiffFilter = "all" | "1" | "2" | "3";
+type Sort = "default" | "difficulty" | "band";
 
 const SEGMENTS: { value: CatFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -53,81 +54,45 @@ const MINUTES = 40;
 const EN_DASH = "–";
 
 /**
- * Topic palette (handoff §Design Tokens). The ONE sanctioned place for named hex:
- * the six brand-adjacent topic accents + their tints and hover-border tints, plus
- * the inline SVG glyph. Everything else in this file rides bando tokens.
- *
- * Two ink roles, on purpose: `color` is the bright accent for the decorative top
- * strip / hover-glow (no contrast duty); `ink` is the darkened same-hue tone used
- * for any TEXT or GLYPH (chip label, chip icon, arrow, meter fill). Each `ink`
- * clears WCAG AA 4.5:1 both on its own `tint` and on the white surface — the bright
- * accent alone failed AA as small text (e.g. food 2.69:1, culture 2.95:1).
+ * Topic glyphs (handoff §Design Tokens). Colours moved to `colors.css` as `--topic-*`
+ * tokens; only the inline SVG path stays here (it's geometry, not colour). Resolved by
+ * the topic key → `var(--topic-${key}-color|ink|tint|tint-border)`.
  */
-interface TopicVisual {
-  color: string;
-  ink: string;
-  tint: string;
-  tintBorder: string;
-  icon: string;
-}
-const TOPIC: Record<WritingTopic, TopicVisual> = {
-  society: {
-    color: "#6D5AE6",
-    ink: "#5A45D0",
-    tint: "#EEEBFC",
-    tintBorder: "#D8D1F7",
-    icon: "M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2 M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 20v-2a4 4 0 0 0-3-3.9 M16 3.1a4 4 0 0 1 0 7.8",
-  },
-  environment: {
-    color: "#1F9D6B",
-    ink: "#11774E",
-    tint: "#E4F4ED",
-    tintBorder: "#BFE6D5",
-    icon: "M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10Z M2 21c0-3 1.9-5.4 5.1-6",
-  },
-  crime: {
-    color: "#E0484D",
-    ink: "#C42E33",
-    tint: "#FBE9E9",
-    tintBorder: "#F4C9CB",
-    icon: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z",
-  },
-  technology: {
-    color: "#2F73E8",
-    ink: "#1F5BCB",
-    tint: "#E6EEFB",
-    tintBorder: "#C5D8F6",
-    icon: "M5 5h14v14H5z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M1 9h3 M1 15h3 M20 9h3 M20 15h3",
-  },
-  food: {
-    color: "#DB7A2B",
-    ink: "#9A5410",
-    tint: "#FAEEDF",
-    tintBorder: "#F0D6B4",
-    icon: "M4 2v6a2 2 0 0 0 4 0V2 M6 2v20 M18 2c-1.7 0-3 2-3 5v5h3 M18 2v20",
-  },
-  culture: {
-    color: "#0F9C92",
-    ink: "#0A6F68",
-    tint: "#E0F3F1",
-    tintBorder: "#B7E3DE",
-    icon: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M2 12h20 M12 2a14 14 0 0 1 0 20 14 14 0 0 1 0-20Z",
-  },
+const TOPIC_ICON: Record<WritingTopic, string> = {
+  society:
+    "M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2 M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 20v-2a4 4 0 0 0-3-3.9 M16 3.1a4 4 0 0 1 0 7.8",
+  environment: "M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10Z M2 21c0-3 1.9-5.4 5.1-6",
+  crime: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z",
+  technology:
+    "M5 5h14v14H5z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M1 9h3 M1 15h3 M20 9h3 M20 15h3",
+  food: "M4 2v6a2 2 0 0 0 4 0V2 M6 2v20 M18 2c-1.7 0-3 2-3 5v5h3 M18 2v20",
+  culture: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M2 12h20 M12 2a14 14 0 0 1 0 20 14 14 0 0 1 0-20Z",
 };
 
 export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; targetBand: number | null }) {
   const [cat, setCat] = useState<CatFilter>("all");
   const [part, setPart] = useState<PartFilter>("all");
   const [diff, setDiff] = useState<DiffFilter>("all");
+  const [sort, setSort] = useState<Sort>("default");
   const [q, setQ] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const query = q.trim().toLowerCase();
-  const filtered = tasks.filter(
-    (t) =>
-      (part === "all" || t.taskPart === part) &&
-      (cat === "all" || t.category === cat) &&
-      (diff === "all" || String(t.difficulty ?? "") === diff) &&
-      (!query || t.prompt.toLowerCase().includes(query)),
-  );
+
+  // Filter + sort in one memo so a search keystroke doesn't re-scan unless inputs change;
+  // paired with the memo()'d card it keeps typing cheap even as the catalog grows.
+  const visible = useMemo(() => {
+    const out = tasks.filter(
+      (t) =>
+        (part === "all" || t.taskPart === part) &&
+        (cat === "all" || t.category === cat) &&
+        (diff === "all" || String(t.difficulty ?? "") === diff) &&
+        (!query || t.prompt.toLowerCase().includes(query)),
+    );
+    if (sort === "difficulty") out.sort((a, b) => (a.difficulty ?? 9) - (b.difficulty ?? 9));
+    else if (sort === "band") out.sort((a, b) => (a.bandLow ?? 9) - (b.bandLow ?? 9));
+    return out; // "default" keeps the server order (newest first)
+  }, [tasks, part, cat, diff, query, sort]);
+
   const filtersActive = cat !== "all" || part !== "all" || diff !== "all" || q !== "";
   const clearFilters = () => {
     setCat("all");
@@ -135,18 +100,17 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
     setDiff("all");
     setQ("");
   };
+  const focusSearch = () => (document.getElementById("wl-search-input") as HTMLInputElement | null)?.focus();
 
-  // Power-user accelerator: "/" focuses search from anywhere on the page (skip when
-  // the user is already typing in a field). Escape-to-clear lives on the input itself.
+  // Power-user accelerator: "/" focuses search from anywhere (skip when already typing).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "/" || e.defaultPrevented) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
-      const search = document.getElementById("wl-search-input");
-      if (search) {
+      if (document.getElementById("wl-search-input")) {
         e.preventDefault();
-        (search as HTMLInputElement).focus();
+        focusSearch();
       }
     }
     document.addEventListener("keydown", onKey);
@@ -181,9 +145,8 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
         )}
       </header>
 
-      {/* Controls — facet filters on top, search + count below. Splitting the rows
-          keeps the three segmented groups grouped and lets the count sit with search
-          instead of orphaning when a single crowded row wraps. */}
+      {/* Controls — facet filters on top, search + sort + count below. Splitting the rows
+          keeps the three segmented groups grouped and lets sort + count sit with search. */}
       <div className="wl-controls">
         <div className="wl-segrow">
           <Segmented segments={PART_SEGMENTS} value={part} onChange={(v) => setPart(v as PartFilter)} label="Filter by task" />
@@ -197,6 +160,8 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
             placeholder="Search prompts"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             onKeyDown={(e) => {
               if (e.key === "Escape" && q) {
                 e.preventDefault();
@@ -207,26 +172,51 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
             aria-label="Search prompts"
             trailing={
               q ? (
-                <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="wl-clear" style={S.clear}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQ("");
+                    focusSearch(); // keep focus in the field so keyboard users aren't dropped to <body>
+                  }}
+                  aria-label="Clear search"
+                  className="wl-clear"
+                  style={S.clear}
+                >
                   <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor"
                     strokeWidth={2.4} strokeLinecap="round" aria-hidden="true">
                     <path d="M18 6 6 18 M6 6l12 12" />
                   </svg>
                 </button>
-              ) : (
+              ) : searchFocused ? null : (
                 <kbd className="wl-kbd" style={S.kbd} aria-hidden="true">/</kbd>
               )
             }
           />
+          <span style={S.sortWrap}>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as Sort)}
+              aria-label="Sort prompts"
+              className="wl-sort"
+              style={S.sort}
+            >
+              <option value="default">Recommended</option>
+              <option value="difficulty">By difficulty</option>
+              <option value="band">By band</option>
+            </select>
+            <svg style={S.sortChevron} width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
           <span className="wl-count" style={S.count}>
-            {filtered.length} prompts · timed practice
+            {visible.length} prompts · timed practice
           </span>
         </div>
       </div>
 
       {/* Help — progressive disclosure, collapsed by default. Decodes the page's
-          vocabulary for first-timers without taxing returning users (tap-friendly,
-          works on every device unlike a hover tooltip). */}
+          vocabulary for first-timers without taxing returning users (tap-friendly). */}
       <details className="wl-help" style={S.help}>
         <summary style={S.helpSummary}>
           <span style={S.helpQ} aria-hidden="true">?</span>
@@ -246,7 +236,7 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
       </details>
 
       {/* Grid */}
-      {filtered.length === 0 ? (
+      {visible.length === 0 ? (
         <div style={S.empty}>
           {tasks.length === 0 ? (
             "No prompts yet — check back soon."
@@ -261,7 +251,7 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
         </div>
       ) : (
         <ul className="wl-grid">
-          {filtered.map((t) => (
+          {visible.map((t) => (
             <li key={t.id} style={S.gridItem}>
               <PromptCard t={t} targetBand={targetBand} />
             </li>
@@ -272,7 +262,7 @@ export function WritingCatalog({ tasks, targetBand }: { tasks: CatalogTask[]; ta
   );
 }
 
-/** Pill segmented control (wl-seg) — shared by the task-part and category filters. */
+/** Pill segmented control (wl-seg) — shared by the task-part, category, and difficulty filters. */
 function Segmented({
   segments,
   value,
@@ -305,13 +295,15 @@ function Segmented({
   );
 }
 
-function PromptCard({ t, targetBand }: { t: CatalogTask; targetBand: number | null }) {
+// memo: with a stable `t` ref (from the server-sent array) and stable targetBand, a
+// search keystroke that only changes which cards are listed won't re-render the rest.
+const PromptCard = memo(function PromptCard({ t, targetBand }: { t: CatalogTask; targetBand: number | null }) {
   const isTask1 = t.taskPart === "task1";
-  const v = t.topic ? TOPIC[t.topic] : null;
-  const stripColor = v ? v.color : "var(--border-strong)";
-  const accentBg = v ? v.tint : "var(--surface-inset)";
-  const accentInk = v ? v.ink : "var(--text-muted)";
-  const hoverBorder = v ? v.tintBorder : "var(--border-strong)";
+  const topic = t.topic;
+  const stripColor = topic ? `var(--topic-${topic}-color)` : "var(--border-strong)";
+  const accentBg = topic ? `var(--topic-${topic}-tint)` : "var(--surface-inset)";
+  const accentInk = topic ? `var(--topic-${topic}-ink)` : "var(--text-muted)";
+  const hoverBorder = topic ? `var(--topic-${topic}-tint-border)` : "var(--border-strong)";
   const hasBand = t.bandLow != null && t.bandHigh != null;
   // "On target" when the user's target band sits inside this prompt's range — ties the
   // header Target pill to the cards (the core "name your level" principle, not decoration).
@@ -331,20 +323,16 @@ function PromptCard({ t, targetBand }: { t: CatalogTask; targetBand: number | nu
     <Link href={`/app/writing/attempt/${t.id}`} className="wl-card" style={cardStyle}>
       <span style={{ ...S.strip, background: stripColor }} />
       {isTask1 && t.imageUrl && (
-        <img
-          src={t.imageUrl}
-          alt="Task 1 chart preview"
-          loading="lazy"
-          decoding="async"
-          style={S.thumb}
-        />
+        // Decorative preview — the chart's data is presented on the attempt page, and the
+        // prompt heading already names the task, so empty alt avoids a meaningless announce.
+        <img src={t.imageUrl} alt="" loading="lazy" decoding="async" style={S.thumb} />
       )}
       <div style={S.body}>
         <div style={S.metaRow}>
-          {t.topic && v && (
-            <span style={{ ...S.chip, background: v.tint, color: v.ink }}>
-              <TopicGlyph d={v.icon} />
-              {writingTopicLabel[t.topic]}
+          {topic && (
+            <span style={{ ...S.chip, background: accentBg, color: accentInk }}>
+              <TopicGlyph d={TOPIC_ICON[topic]} />
+              {writingTopicLabel[topic]}
             </span>
           )}
           {t.difficulty && (
@@ -395,7 +383,7 @@ function PromptCard({ t, targetBand }: { t: CatalogTask; targetBand: number | nu
       </div>
     </Link>
   );
-}
+});
 
 function TopicGlyph({ d }: { d: string }) {
   return (
@@ -415,7 +403,7 @@ const CSS = `
 .wl-segrow{display:flex;flex-wrap:wrap;gap:10px}
 .wl-searchrow{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
 .wl-grid{display:grid;grid-template-columns:1fr;gap:16px;list-style:none;margin:0;padding:0}
-.wl-count{flex:none;margin-left:auto}
+.wl-count{flex:none}
 /* Seg sizing lives in the class (not inline) so the breakpoint wins: smaller padding +
    font on touch keeps the 4-up difficulty group ('Foundation') from clipping at 320px. */
 .wl-seg{min-height:44px;padding:0 12px;font-size:12px}
@@ -424,6 +412,8 @@ const CSS = `
 .wl-clear:hover{color:var(--text-primary)}
 /* The "/" hint only means something with a physical keyboard — hide it on touch. */
 @media (hover:none){.wl-kbd{display:none}}
+.wl-sort:hover{border-color:var(--border-strong)}
+.wl-sort:focus-visible{border-color:var(--brand)}
 .wl-clearall:hover{background:var(--surface-hover);border-color:var(--brand-border);color:var(--brand)}
 .wl-help summary{cursor:pointer}
 .wl-help summary::-webkit-details-marker{display:none}
@@ -471,10 +461,15 @@ const S: Record<string, CSSProperties> = {
   segActive: { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-xs)" },
   // Numeric meta → stays mono (sanctioned for numerals); bumped to 12 for legibility.
   count: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", flex: "none" },
-  // Search clear-X — pure affordance, neutral until hover.
-  clear: { appearance: "none", border: "none", background: "transparent", padding: 2, margin: 0, display: "grid", placeItems: "center", cursor: "pointer", flex: "none", borderRadius: "var(--radius-full)" },
+  // Search clear-X — generous 40px hit area (WCAG 2.5.8) around a 15px glyph, neutral until hover.
+  clear: { appearance: "none", border: "none", background: "transparent", width: 40, height: 40, padding: 0, display: "grid", placeItems: "center", cursor: "pointer", flex: "none", borderRadius: "var(--radius-full)" },
   // "/" hint — non-interactive cue that the key focuses search.
   kbd: { fontFamily: "var(--font-mono)", fontSize: 11, lineHeight: 1, color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 7px", background: "var(--surface-inset)", flex: "none" },
+
+  // Sort — native select (ordering ≠ filtering, so a distinct standard control is right).
+  sortWrap: { position: "relative", display: "inline-flex", alignItems: "center", flex: "none" },
+  sort: { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", height: 42, padding: "0 34px 0 13px", border: "2px solid var(--border)", borderRadius: "var(--radius-md)", background: "var(--surface-raised)", color: "var(--text-secondary)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "var(--transition-colors)" },
+  sortChevron: { position: "absolute", right: 12, pointerEvents: "none", color: "var(--text-muted)" },
 
   // Help disclosure — quiet, sits between the controls and the grid.
   help: { marginTop: -8 },
