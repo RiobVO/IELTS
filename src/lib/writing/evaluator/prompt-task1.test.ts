@@ -61,6 +61,11 @@ describe("buildTask1Prompt", () => {
     expect(buildTask1Prompt({ ...base, wordCount: 220 })).not.toContain("UNDER the 150-word minimum");
   });
 
+  it("forbids the model from counting words itself (length is a server fact)", () => {
+    const p = buildTask1Prompt({ ...base, wordCount: 220 }).toLowerCase();
+    expect(p).toContain("do not count or estimate the word count yourself");
+  });
+
   it("inserts $-bearing essay text literally (function replacement, not a $-pattern)", () => {
     const tricky = "Costs rose by $5 and then $& doubled — see $1.";
     const p = buildTask1Prompt({ ...base, essay: tricky });
@@ -68,6 +73,6 @@ describe("buildTask1Prompt", () => {
   });
 
   it("has a stable version", () => {
-    expect(TASK1_PROMPT_VERSION).toBe("writing-task1-v1");
+    expect(TASK1_PROMPT_VERSION).toBe("writing-task1-v2");
   });
 });
