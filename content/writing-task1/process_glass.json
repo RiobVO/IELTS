@@ -1,0 +1,19 @@
+{
+  "type": "process_diagram",
+  "title": "The process of recycling glass bottles",
+  "units": "stages (sequential)",
+  "stages": [
+    "Used glass collected",
+    "Sorted by colour",
+    "Washed & crushed",
+    "Melted at 1500°C",
+    "Moulded into new bottles"
+  ],
+  "key_features": [
+    "The process is linear with five stages, from collection to new bottles.",
+    "Glass is sorted by colour before being washed and crushed.",
+    "Melting occurs at 1500°C, the only stated temperature.",
+    "The final stage moulds the molten glass into new bottles."
+  ],
+  "prompt": "The diagram below shows how glass bottles are recycled. Summarise the information by selecting and reporting the main features, and make comparisons where relevant."
+}

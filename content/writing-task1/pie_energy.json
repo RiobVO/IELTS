@@ -1,0 +1,32 @@
+{
+  "type": "pie_chart",
+  "title": "Household energy sources, 2000 vs 2020 (%)",
+  "units": "share of household energy (%)",
+  "categories": [
+    "Gas",
+    "Electricity",
+    "Oil",
+    "Renewables"
+  ],
+  "series": {
+    "2000": [
+      45,
+      30,
+      20,
+      5
+    ],
+    "2020": [
+      30,
+      33,
+      12,
+      25
+    ]
+  },
+  "key_features": [
+    "Gas fell from the largest source (45%) to 30% over the period.",
+    "Renewables grew five-fold, from 5% to 25%.",
+    "Electricity rose modestly (30% to 33%) and became the largest source in 2020.",
+    "Oil roughly halved, from 20% to 12%."
+  ],
+  "prompt": "The two pie charts below show the sources of energy used by households in 2000 and 2020. Summarise the information by selecting and reporting the main features, and make comparisons where relevant."
+}

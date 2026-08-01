@@ -1,0 +1,44 @@
+{
+  "type": "table",
+  "title": "University enrolment by faculty, 2010 vs 2020",
+  "units": "share of total enrolment (%)",
+  "columns": [
+    "Faculty",
+    "2010 (%)",
+    "2020 (%)"
+  ],
+  "rows": [
+    [
+      "Engineering",
+      "24",
+      "31"
+    ],
+    [
+      "Business",
+      "30",
+      "27"
+    ],
+    [
+      "Arts",
+      "22",
+      "15"
+    ],
+    [
+      "Sciences",
+      "16",
+      "19"
+    ],
+    [
+      "Law",
+      "8",
+      "8"
+    ]
+  ],
+  "key_features": [
+    "Engineering overtook Business to become the largest faculty (24%→31%).",
+    "Business declined slightly (30%→27%) and fell to second.",
+    "Arts saw the steepest fall, from 22% to 15%.",
+    "Law was unchanged at 8% across the decade."
+  ],
+  "prompt": "The table below shows the percentage of university students enrolled in five faculties in 2010 and 2020. Summarise the information by selecting and reporting the main features, and make comparisons where relevant."
+}

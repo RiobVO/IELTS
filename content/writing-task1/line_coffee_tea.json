@@ -1,0 +1,34 @@
+{
+  "type": "line_graph",
+  "title": "Coffee and tea consumption in the UK, 2000–2020",
+  "units": "kg per person per year",
+  "x_axis": [
+    2000,
+    2005,
+    2010,
+    2015,
+    2020
+  ],
+  "series": {
+    "Coffee": [
+      1.5,
+      1.9,
+      2.3,
+      2.7,
+      3.0
+    ],
+    "Tea": [
+      2.8,
+      2.5,
+      2.1,
+      1.8,
+      1.6
+    ]
+  },
+  "key_features": [
+    "Coffee rose steadily from 1.5 to 3.0 kg over the period.",
+    "Tea fell steadily from 2.8 to 1.6 kg.",
+    "The two lines crossed around 2012, after which coffee overtook tea."
+  ],
+  "prompt": "The line graph below shows coffee and tea consumption per person in the UK between 2000 and 2020. Summarise the information by selecting and reporting the main features, and make comparisons where relevant."
+}
