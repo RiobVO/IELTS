@@ -38,4 +38,10 @@ describe("wordCountState", () => {
     expect(wordCountState(125).pct).toBeCloseTo(0.5, 5);
     expect(wordCountState(125).offset).toBeCloseTo(RING_CIRC * 0.5, 3);
   });
+  it("ref override (Task 1 = 150): ring fills full at 150, half at 75", () => {
+    expect(wordCountState(150, 150).pct).toBe(1);
+    expect(wordCountState(75, 150).pct).toBeCloseTo(0.5, 5);
+    // submit bounds (20..1000) are independent of ref — 150 words is still submittable
+    expect(wordCountState(150, 150).canSubmit).toBe(true);
+  });
 });

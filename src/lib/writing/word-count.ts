@@ -5,7 +5,7 @@ import { MIN_WORDS, MAX_WORDS } from "./lifecycle";
 export const RING_R = 44;
 export const RING_STROKE = 9;
 export const RING_CIRC = 2 * Math.PI * RING_R;
-const REF = 250; // target length at which the ring reads full
+const REF = 250; // default target length at which the ring reads full (Task 2)
 
 /** Whitespace-split token count, mirroring validateEssay on the server. 0 for blank. */
 export function wordCount(text: string): number {
@@ -24,11 +24,11 @@ export interface WordCountState {
 /**
  * UI state for the live word-count ring: status message, accent colour (token,
  * not hex), whether submit is allowed, and the SVG fill (pct + strokeDashoffset).
- * Submit bounds match the server gate (MIN_WORDS..MAX_WORDS); the ring still fills
- * toward REF so a 250-word essay reads full.
+ * Submit bounds match the server gate (MIN_WORDS..MAX_WORDS); the ring fills toward
+ * `ref` so the essay reads full at its part's minimum (250 for Task 2, 150 for Task 1).
  */
-export function wordCountState(n: number): WordCountState {
-  const pct = Math.max(0, Math.min(1, n / REF));
+export function wordCountState(n: number, ref: number = REF): WordCountState {
+  const pct = Math.max(0, Math.min(1, n / ref));
   const offset = RING_CIRC * (1 - pct);
   if (n === 0) return { message: "Start writing", color: "var(--text-muted)", canSubmit: false, pct, offset };
   if (n < MIN_WORDS)

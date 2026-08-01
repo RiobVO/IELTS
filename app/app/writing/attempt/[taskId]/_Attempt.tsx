@@ -13,28 +13,40 @@ import { createWritingSubmission, getSubmissionStatus } from "../../actions";
 
 type Phase = "edit" | "queued" | "analyzing" | "failed" | "preview_used" | "daily_cap" | "in_progress";
 
-const TIMER_TOTAL = 40 * 60;
 const POLL_MS = 2500;
 
+// Per-part shape, ring target, timer and min-word copy. Task 1 = chart description
+// (overview-first, 150 words, ~20 min); Task 2 = essay (position-first, 250, ~40 min).
 const STRUCTURE: { title: string; hint: string }[] = [
   { title: "Introduction", hint: "Paraphrase the prompt and state your position in one clear sentence." },
   { title: "Body 1", hint: "Your strongest reason — explain it, then prove it with one specific example." },
   { title: "Body 2", hint: "A second reason or the other side — one idea per paragraph." },
   { title: "Conclusion", hint: "Restate your position; add nothing new." },
 ];
+const TASK1_STRUCTURE: { title: string; hint: string }[] = [
+  { title: "Overview", hint: "One or two sentences on the main trend or overall pattern — no figures yet." },
+  { title: "Key features", hint: "Select the most significant points and report them with accurate figures." },
+  { title: "Comparisons", hint: "Group and compare — highest vs lowest, rising vs falling." },
+  { title: "Accuracy check", hint: "Every number and trend must match the visual. Add nothing that isn’t shown." },
+];
 
 export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: number }) {
   const router = useRouter();
+  const isTask1 = task.taskPart === "task1";
+  const timerTotal = (isTask1 ? 20 : 40) * 60;
+  const ringRef = isTask1 ? 150 : 250;
+  const structure = isTask1 ? TASK1_STRUCTURE : STRUCTURE;
+
   const [phase, setPhase] = useState<Phase>("edit");
   const [essay, setEssay] = useState("");
   const [timerOn, setTimerOn] = useState(false);
-  const [remaining, setRemaining] = useState(TIMER_TOTAL);
+  const [remaining, setRemaining] = useState(timerTotal);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const wc = wordCount(essay);
-  const st = wordCountState(wc);
+  const st = wordCountState(wc, ringRef);
 
   // Advisory timer — counts down while running; never auto-submits (spec: optional).
   useEffect(() => {
@@ -100,13 +112,25 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
         <Icon name="arrow-left" size={16} strokeWidth={2.5} /> Back to catalog
       </button>
 
-      <div className="wa-grid" style={S.grid}>
+      <div className="wa-grid" data-part={task.taskPart} style={S.grid}>
         {/* Left rail */}
         <div style={S.rail}>
+          {isTask1 && task.imageUrl && (
+            <figure style={S.chartCard}>
+              <div style={S.chartOver}>The visual for this task</div>
+              {/* The prompt text describes the chart; SR users get that as the text alternative. */}
+              <img src={task.imageUrl} alt="Chart for this Task 1 prompt" style={S.chartImg} />
+            </figure>
+          )}
+
           <div style={S.promptCard}>
-            <div style={S.promptOver}>Task 2 · {writingCategoryLabel(task.category)}</div>
+            <div style={S.promptOver}>{isTask1 ? "Task 1" : "Task 2"} · {writingCategoryLabel(task.category)}</div>
             <p style={S.promptText}>{task.prompt}</p>
-            <p style={S.promptHelp}>Write at least 250 words. You have about 40 minutes.</p>
+            <p style={S.promptHelp}>
+              {isTask1
+                ? "Write at least 150 words. You have about 20 minutes."
+                : "Write at least 250 words. You have about 40 minutes."}
+            </p>
           </div>
 
           <div style={S.targetCard}>
@@ -116,9 +140,9 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
           </div>
 
           <div style={S.structCard}>
-            <div style={S.structOver}>A solid Task 2 shape</div>
+            <div style={S.structOver}>A solid {isTask1 ? "Task 1" : "Task 2"} shape</div>
             <div style={S.structList}>
-              {STRUCTURE.map((s, i) => (
+              {structure.map((s, i) => (
                 <div key={s.title} style={S.structStep}>
                   <span style={S.structNum}>{i + 1}</span>
                   <div>
@@ -136,10 +160,10 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
           <div style={S.editorHead}>
             <h1 style={S.editorTitle}>Your essay</h1>
             {timerOn ? (
-              <ExamTimer remainingSeconds={remaining} totalSeconds={TIMER_TOTAL} compact />
+              <ExamTimer remainingSeconds={remaining} totalSeconds={timerTotal} compact />
             ) : (
               <button type="button" onClick={() => setTimerOn(true)} style={S.timerBtn} className="wa-timer">
-                <Icon name="clock" size={16} strokeWidth={2.4} /> Start 40-min timer
+                <Icon name="clock" size={16} strokeWidth={2.4} /> Start {isTask1 ? 20 : 40}-min timer
               </button>
             )}
           </div>
@@ -152,7 +176,7 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
               aria-label="Your essay"
             />
             <div className="wa-coach">
-              <CoachTip text={essay} />
+              <CoachTip text={essay} taskPart={task.taskPart} />
             </div>
           </div>
         </div>
@@ -233,8 +257,8 @@ const TONES: Record<NudgeTone, { bg: string; border: string; iconBg: string; acc
   },
 };
 
-function CoachTip({ text }: { text: string }) {
-  const nudge = nextNudge(text);
+function CoachTip({ text, taskPart }: { text: string; taskPart: "task1" | "task2" }) {
+  const nudge = nextNudge(text, taskPart);
   const tone = TONES[nudge.tone];
   const ready = nudge.id === "ready";
   return (
@@ -455,11 +479,19 @@ const CSS = `
 @media (min-width:880px){
   .wa-wrap{padding:24px 28px 56px}
   .wa-grid{grid-template-columns:280px 1fr}
+  /* Task 1: keep the chart full-width above the editor on tablet — a 280px chart is
+     too cramped to read; it splits only once there's room (≥1024). */
+  .wa-grid[data-part="task1"]{grid-template-columns:1fr}
   .wa-actionbar{flex-direction:row;align-items:center;justify-content:space-between}
 }
 @media (min-width:1024px){
   .wa-editmain{flex-direction:row;align-items:flex-start;gap:14px}
   .wa-coach{width:280px;flex:none;position:sticky;top:88px}
+  /* Task 1 split: chart-left / field-right. The editor column is narrower, so keep
+     its coach stacked under the textarea (no 280px sidebar that would cramp it). */
+  .wa-grid[data-part="task1"]{grid-template-columns:minmax(340px,1fr) 1fr;gap:22px}
+  .wa-grid[data-part="task1"] .wa-editmain{flex-direction:column}
+  .wa-grid[data-part="task1"] .wa-coach{width:100%;position:static}
 }
 /* Coach tip — colour morphs in place; entry/float/glow/spark are motion-gated. */
 .ct-card{transition:background .35s ease,border-color .35s ease}
@@ -506,6 +538,10 @@ const S: Record<string, CSSProperties> = {
 
   grid: {},
   rail: { display: "flex", flexDirection: "column", gap: 14 },
+  // Task 1 chart: white-backed so the (light) chart stays legible on any theme.
+  chartCard: { margin: 0, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 14, display: "flex", flexDirection: "column", gap: 10 },
+  chartOver: { fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-link)" },
+  chartImg: { width: "100%", height: "auto", display: "block", borderRadius: "var(--radius-md)", border: "1px solid var(--border-subtle)", background: "white" },
   promptCard: { background: "var(--brand-subtle)", border: "2px solid var(--brand-border)", borderRadius: "var(--radius-lg)", padding: 18 },
   promptOver: { fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-link)", marginBottom: 8 },
   promptText: { margin: 0, fontSize: 16, lineHeight: 1.5, fontWeight: 500, color: "var(--text-primary)" },
