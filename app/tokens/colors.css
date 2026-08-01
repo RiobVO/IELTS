@@ -105,6 +105,18 @@
   --focus-ring:     var(--violet-600);
   --ring:           0 0 0 4px color-mix(in oklab, var(--focus-ring) 32%, transparent);
 
+  /* ---- Writing Lab topic palette (catalog cards). Exact handoff hex, kept as
+     tokens so the one named-colour set lives with the rest of the system. Two ink
+     roles: `-color` is the bright accent (decorative strip/glow, no contrast duty);
+     `-ink` is the darkened same-hue tone for any TEXT/GLYPH — each clears WCAG AA
+     4.5:1 on both its own `-tint` and the white surface. ---- */
+  --topic-society-color: #6D5AE6;  --topic-society-ink: #5A45D0;  --topic-society-tint: #EEEBFC;  --topic-society-tint-border: #D8D1F7;
+  --topic-environment-color: #1F9D6B;  --topic-environment-ink: #11774E;  --topic-environment-tint: #E4F4ED;  --topic-environment-tint-border: #BFE6D5;
+  --topic-crime-color: #E0484D;  --topic-crime-ink: #C42E33;  --topic-crime-tint: #FBE9E9;  --topic-crime-tint-border: #F4C9CB;
+  --topic-technology-color: #2F73E8;  --topic-technology-ink: #1F5BCB;  --topic-technology-tint: #E6EEFB;  --topic-technology-tint-border: #C5D8F6;
+  --topic-food-color: #DB7A2B;  --topic-food-ink: #9A5410;  --topic-food-tint: #FAEEDF;  --topic-food-tint-border: #F0D6B4;
+  --topic-culture-color: #0F9C92;  --topic-culture-ink: #0A6F68;  --topic-culture-tint: #E0F3F1;  --topic-culture-tint-border: #B7E3DE;
+
   /* Reading-specific */
   --reading-surface: var(--paper-light);
   --reading-text:    oklch(0.30 0.020 70);
