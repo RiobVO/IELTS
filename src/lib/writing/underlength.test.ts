@@ -64,4 +64,21 @@ describe("withUnderlengthFlag", () => {
     expect(out.topFixes).toContain("fix one");
     expect(out.topFixes).toContain("fix two");
   });
+
+  describe("Task 1 floor (minWords = 150)", () => {
+    it("flags a sub-150 Task 1 response against the 150-word minimum", () => {
+      const out = withUnderlengthFlag(baseFeedback(), 120, 150);
+      expect(out.topFixes[0]).toMatch(/120 words/);
+      expect(out.topFixes[0]).toMatch(/150/);
+    });
+    it("leaves a 150-word Task 1 response untouched (150 is the minimum, not below it)", () => {
+      const fb = baseFeedback();
+      expect(withUnderlengthFlag(fb, 150, 150)).toEqual(fb);
+    });
+    it("does NOT flag a 200-word response as Task 1 (≥150) though it would as Task 2 (<250)", () => {
+      const fb = baseFeedback();
+      expect(withUnderlengthFlag(fb, 200, 150)).toEqual(fb); // Task 1: fine
+      expect(withUnderlengthFlag(fb, 200).topFixes[0]).toMatch(/200 words/); // Task 2 default: flagged
+    });
+  });
 });

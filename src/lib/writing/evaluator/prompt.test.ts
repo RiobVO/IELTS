@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildPrompt, PROMPT_VERSION } from "./prompt";
 
 describe("buildPrompt", () => {
-  const input = { essay: "My essay text.", taskPrompt: "Some agree...", category: "academic" as const, wordCount: 300 };
+  const input = { essay: "My essay text.", taskPrompt: "Some agree...", category: "academic" as const, taskPart: "task2" as const, wordCount: 300 };
   it("embeds the essay and task in delimited blocks", () => {
     const p = buildPrompt(input);
     expect(p).toContain("My essay text.");

@@ -41,14 +41,21 @@ export async function claimForEvaluation(submissionId: string): Promise<boolean>
   return rows.length === 1;
 }
 
-export async function loadSubmissionForEval(
-  submissionId: string,
-): Promise<{ essay: string; taskPrompt: string; category: "academic" | "general"; wordCount: number } | null> {
+export async function loadSubmissionForEval(submissionId: string): Promise<{
+  essay: string;
+  taskPrompt: string;
+  category: "academic" | "general";
+  taskPart: "task1" | "task2";
+  imagePath: string | null;
+  wordCount: number;
+} | null> {
   const [row] = await db
     .select({
       essay: writingSubmission.essayText,
       taskPrompt: writingTask.prompt,
       category: writingTask.category,
+      taskPart: writingTask.taskPart,
+      imagePath: writingTask.imagePath,
       wordCount: writingSubmission.wordCount,
     })
     .from(writingSubmission)

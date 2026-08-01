@@ -1,14 +1,27 @@
 import { readFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Calibration entry: a prompt + essay + human-assigned overall band (ground truth).
+// Task 1 entries add taskPart:"task1" and imagePath (PNG/JPEG/WebP relative to the
+// calibration file) so the benchmark feeds the same vision call as production.
 interface CalibrationEntry {
   taskPrompt: string;
   essay: string;
   category: "academic" | "general";
   trueBand: number;
+  taskPart?: "task1" | "task2";
+  imagePath?: string;
+}
+
+const IMG_MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" };
+
+/** Load a local chart file as the inline image bytes the evaluator expects. */
+async function loadImage(absPath: string): Promise<{ data: string; mimeType: string }> {
+  const ext = absPath.split(".").pop()?.toLowerCase() ?? "png";
+  const buf = await readFile(absPath);
+  return { data: buf.toString("base64"), mimeType: IMG_MIME[ext] ?? "image/png" };
 }
 
 export function bandMid(r: { bandLow: number; bandHigh: number }): number {
@@ -68,6 +81,7 @@ async function main() {
   const { wordCount } = await import("@/lib/writing/word-count");
 
   const set: CalibrationEntry[] = JSON.parse(await readFile(path, "utf8"));
+  const setDir = dirname(resolve(path)); // imagePath is relative to the calibration file
   // Candidate list from argv (comma-separated) or the single env model — same set runs
   // against every candidate for a fair head-to-head. evaluateWithGemini reads
   // WRITING_EVAL_MODEL lazily on each call, so swapping the env var here is enough.
@@ -86,7 +100,11 @@ async function main() {
     console.log(`── ${model} ──`);
     for (const e of set) {
       try {
-        const r = await withRetry(() => evaluator.evaluate({ essay: e.essay, taskPrompt: e.taskPrompt, category: e.category, wordCount: wordCount(e.essay) }));
+        const taskPart = e.taskPart ?? "task2";
+        const image = e.imagePath ? await loadImage(join(setDir, e.imagePath)) : undefined;
+        const r = await withRetry(() =>
+          evaluator.evaluate({ essay: e.essay, taskPrompt: e.taskPrompt, category: e.category, taskPart, wordCount: wordCount(e.essay), image }),
+        );
         schemaOk++;
         const predMid = bandMid(r.feedback);
         rows.push({ predMid, truth: e.trueBand });
