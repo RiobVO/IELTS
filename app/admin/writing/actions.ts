@@ -10,10 +10,33 @@ import {
   detectTaskType,
   detectTopic,
 } from "@/lib/writing/topic-meta";
+import { TASK1_IMAGE_MIME, uploadTask1Image } from "@/lib/writing/storage";
 import type { Tier } from "@/lib/tiers";
 
 const TIERS: readonly string[] = ["basic", "premium", "ultra"];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // mirrors the bucket's fileSizeLimit
+const MIME_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+
+/**
+ * Upload the Task 1 visual and return its Storage key, or redirect with an error
+ * when the file is missing/oversized/not a supported raster image. Task 1 is graded
+ * by COMPARING the essay to this image, so a Task 1 topic without one is rejected.
+ */
+async function uploadTaskImage(formData: FormData): Promise<string> {
+  const file = formData.get("image");
+  if (!(file instanceof File) || file.size === 0) {
+    redirect(`/admin/writing?error=${encodeURIComponent("Task 1 needs a chart image.")}`);
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    redirect(`/admin/writing?error=${encodeURIComponent("Image too large (max 3 MB).")}`);
+  }
+  const ext = MIME_EXT[file.type];
+  if (!ext || !(TASK1_IMAGE_MIME as readonly string[]).includes(file.type)) {
+    redirect(`/admin/writing?error=${encodeURIComponent("Image must be PNG, JPEG or WebP.")}`);
+  }
+  return uploadTask1Image(`${crypto.randomUUID()}.${ext}`, await file.arrayBuffer(), file.type);
+}
 
 /** Parse a band field to a 0–9 value at 0.5 resolution, or null when blank/invalid. */
 function parseBand(raw: FormDataEntryValue | null): number | null {
@@ -45,21 +68,32 @@ function readTaskId(formData: FormData): string {
 export async function createWritingTask(formData: FormData) {
   const admin = await requireAdmin();
   const prompt = String(formData.get("prompt") ?? "").trim();
-  const category = String(formData.get("category") ?? "");
   const tierRaw = String(formData.get("tier") ?? "ultra");
   const tier: Tier = TIERS.includes(tierRaw) ? (tierRaw as Tier) : "ultra";
   const publish = formData.get("intent") === "publish";
+  const taskPart = formData.get("task_part") === "task1" ? "task1" : "task2";
+  // Task 1 in this lab is Academic only (chart description); GT Task 1 letters are
+  // out of scope. Task 2 keeps the admin's category choice.
+  const categoryRaw = String(formData.get("category") ?? "");
+  const category = taskPart === "task1" ? "academic" : categoryRaw;
 
   if (!prompt || (category !== "academic" && category !== "general")) {
     redirect(`/admin/writing?error=${encodeURIComponent("A prompt and a valid category are required.")}`);
   }
 
+  // Upload the visual BEFORE the insert so a bad image fails fast (no orphan row).
+  // Task 2 carries no image.
+  const imagePath = taskPart === "task1" ? await uploadTaskImage(formData) : null;
+
   // "auto" runs the heuristic over the prompt text; an explicit value is stored as
-  // chosen; "" leaves the column null (the catalog renders a neutral card).
+  // chosen; "" leaves the column null (the catalog renders a neutral card). Topic
+  // heuristics are Task 2 stems — for Task 1 leave them unset unless explicitly chosen.
   const topicRaw = String(formData.get("topic") ?? "auto");
-  const topic = topicRaw === "auto" ? detectTopic(prompt) : coerceTopic(topicRaw);
+  const topic =
+    topicRaw === "auto" ? (taskPart === "task1" ? null : detectTopic(prompt)) : coerceTopic(topicRaw);
   const typeRaw = String(formData.get("task_type") ?? "auto");
-  const taskType = typeRaw === "auto" ? detectTaskType(prompt) : coerceTaskType(typeRaw);
+  const taskType =
+    typeRaw === "auto" ? (taskPart === "task1" ? null : detectTaskType(prompt)) : coerceTaskType(typeRaw);
   const difficulty = coerceDifficulty(formData.get("difficulty"));
   const bandLow = parseBand(formData.get("band_low"));
   const bandHigh = parseBand(formData.get("band_high"));
@@ -67,6 +101,8 @@ export async function createWritingTask(formData: FormData) {
   await insertWritingTask({
     prompt,
     category,
+    taskPart,
+    imagePath,
     topic,
     taskType,
     difficulty,
