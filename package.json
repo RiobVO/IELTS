@@ -11,6 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts up",
     "db:down": "tsx scripts/migrate.ts down --all",
+    "db:up:local": "tsx scripts/migrate.ts up --local",
+    "db:down:local": "tsx scripts/migrate.ts down --all --local",
     "db:status": "tsx scripts/migrate.ts status",
     "db:bootstrap": "tsx scripts/migrate.ts bootstrap",
     "docker:db": "docker compose up -d db",
