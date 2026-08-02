@@ -57,6 +57,47 @@ function assertSafeName(name: string): void {
   }
 }
 
+/**
+ * True if a Postgres connection string targets the local machine. Mirrors
+ * verify.ts's isLocalDb. An unparseable string is treated as NON-local so the
+ * destructive guard fails safe (refuse), never open.
+ */
+export function isLocalHost(connectionUrl: string): boolean {
+  try {
+    return ["localhost", "127.0.0.1", "::1"].includes(
+      new URL(connectionUrl).hostname,
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Guards the destructive `down` path. Reverting migrations against a non-local
+ * host (the real Supabase database) drops the public schema and is almost always
+ * an accident — so refuse unless the target is local OR the operator consciously
+ * sets ALLOW_REMOTE_MIGRATE=1. `up` is never guarded: applying migrations to
+ * production is a legitimate, non-destructive operation.
+ */
+export function assertLocalTarget(
+  connectionUrl: string,
+  allowRemote: boolean,
+): void {
+  if (allowRemote || isLocalHost(connectionUrl)) return;
+  let host: string;
+  try {
+    host = new URL(connectionUrl).hostname;
+  } catch {
+    host = "(unparseable connection string)";
+  }
+  throw new Error(
+    `Refusing to run db:down against a non-local host: ${host}. ` +
+      `down reverts ALL migrations and drops the public schema — never do this on ` +
+      `a real Supabase database. Point DIRECT_URL at a local Postgres, or set ` +
+      `ALLOW_REMOTE_MIGRATE=1 to override this consciously.`,
+  );
+}
+
 function readSql(name: string, dir: "up" | "down"): string {
   return readFileSync(join(MIGRATIONS_DIR, name, `${dir}.sql`), "utf8");
 }
@@ -133,6 +174,20 @@ if (invokedDirectly) {
 
   const cmd = process.argv[2] ?? "up";
   const all = process.argv.includes("--all");
+
+  // Destructive-path host guard: `down` reverts ALL migrations (drops the public
+  // schema). Refuse it against a non-local host unless ALLOW_REMOTE_MIGRATE=1 — the
+  // accidental remote `db:down` that wiped prod is exactly what this prevents. Runs
+  // before connecting; `up`/`status`/`bootstrap` are intentionally unguarded.
+  if (cmd === "down") {
+    try {
+      assertLocalTarget(url, process.env.ALLOW_REMOTE_MIGRATE === "1");
+    } catch (e) {
+      console.error(`\n${(e as Error).message}\n`);
+      process.exit(1);
+    }
+  }
+
   // prepare:false keeps this compatible with the Supabase connection pooler.
   const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
 
