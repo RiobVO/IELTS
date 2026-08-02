@@ -181,3 +181,16 @@ export function writingEvalConfig(): { apiKey: string; model: string } | null {
   if (!apiKey?.trim() || !model?.trim()) return null;
   return { apiKey: apiKey.trim(), model: model.trim() };
 }
+
+/**
+ * Speaking evaluator config (mirror of writingEvalConfig). Returns null unless BOTH
+ * GEMINI_API_KEY and SPEAKING_EVAL_MODEL are set — null hides the Speaking feature
+ * (the page redirects, like Writing). Separate model var: Speaking uses a different
+ * prompt/mode and is calibrated independently.
+ */
+export function speakingEvalConfig(): { apiKey: string; model: string } | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.SPEAKING_EVAL_MODEL;
+  if (!apiKey || !model) return null;
+  return { apiKey, model };
+}
