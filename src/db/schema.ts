@@ -765,6 +765,12 @@ export const speakingSubmission = pgTable("speaking_submission", {
 }, (t) => [
   index("speaking_submission_user_created_idx").on(t.userId, t.createdAt),
   index("speaking_submission_status_updated_idx").on(t.status, t.updatedAt),
+  // At most one active (uploading|pending|evaluating) submission per user — DB-level
+  // anti-farm guard behind createSpeakingSubmission's ON CONFLICT DO NOTHING (migration
+  // 0028; mirrors writing_submission_one_active_idx). 'uploading' holds a slot too.
+  uniqueIndex("speaking_submission_one_active_idx")
+    .on(t.userId)
+    .where(sql`${t.status} in ('uploading','pending','evaluating')`),
 ]);
 
 export const speakingFeedback = pgTable("speaking_feedback", {
