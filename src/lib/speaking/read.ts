@@ -1,7 +1,11 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { speakingTask } from "@/db/schema";
+import { speakingFeedback, speakingSubmission, speakingTask } from "@/db/schema";
 import type { Tier } from "@/lib/tiers";
+import type { Feedback } from "./evaluator/types";
+
+type SpeakingCriterion = Feedback["criteria"][number];
+type SpeakingAnnotation = Feedback["annotations"][number];
 
 // UI reads for Speaking Lab. Owner path (Drizzle) — same trust model as the Writing
 // reads and the rest of the Speaking backend (store.ts): ownership is enforced in
@@ -68,4 +72,63 @@ export async function loadPublishedTask(taskId: string): Promise<SpeakingCatalog
     .where(and(eq(speakingTask.id, taskId), eq(speakingTask.status, "published")))
     .limit(1);
   return row ? toCatalogTask(row) : null;
+}
+
+export interface SpeakingFeedbackResult {
+  submissionId: string;
+  taskPrompt: string;
+  createdAt: Date;
+  bandLow: number;
+  bandHigh: number;
+  confidence: "low" | "medium" | "high";
+  // Wiped to "" / [] when the user deletes the recording (verbatim speech is PII) —
+  // the band + criteria + drills stay. The UI swaps the transcript block to "removed".
+  transcript: string;
+  audioDeleted: boolean;
+  criteria: SpeakingCriterion[];
+  topFixes: string[];
+  annotations: SpeakingAnnotation[];
+  drills: string[];
+}
+
+/** Owner-scoped: only the submission's owner, only once feedback exists (completed). */
+export async function readFeedbackResult(
+  userId: string,
+  submissionId: string,
+): Promise<SpeakingFeedbackResult | null> {
+  const [row] = await db
+    .select({
+      submissionId: speakingFeedback.submissionId,
+      taskPrompt: speakingTask.prompt,
+      createdAt: speakingFeedback.createdAt,
+      bandLow: speakingFeedback.bandLow,
+      bandHigh: speakingFeedback.bandHigh,
+      confidence: speakingFeedback.confidence,
+      transcript: speakingFeedback.transcript,
+      audioDeletedAt: speakingSubmission.audioDeletedAt,
+      criteria: speakingFeedback.criteria,
+      topFixes: speakingFeedback.topFixes,
+      annotations: speakingFeedback.annotations,
+      drills: speakingFeedback.drills,
+    })
+    .from(speakingFeedback)
+    .innerJoin(speakingSubmission, eq(speakingSubmission.id, speakingFeedback.submissionId))
+    .innerJoin(speakingTask, eq(speakingTask.id, speakingSubmission.taskId))
+    .where(and(eq(speakingFeedback.submissionId, submissionId), eq(speakingSubmission.userId, userId)))
+    .limit(1);
+  if (!row) return null;
+  return {
+    submissionId: row.submissionId,
+    taskPrompt: row.taskPrompt,
+    createdAt: row.createdAt,
+    bandLow: Number(row.bandLow),
+    bandHigh: Number(row.bandHigh),
+    confidence: row.confidence,
+    transcript: row.transcript,
+    audioDeleted: row.audioDeletedAt != null,
+    criteria: row.criteria as SpeakingCriterion[],
+    topFixes: row.topFixes as string[],
+    annotations: row.annotations as SpeakingAnnotation[],
+    drills: row.drills as string[],
+  };
 }
