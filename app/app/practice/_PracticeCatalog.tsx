@@ -165,8 +165,17 @@ export function PracticeCatalog({
   const catalogRef = useRef<HTMLElement>(null);
   const listHeadRef = useRef<HTMLDivElement>(null);
   const revealCatalog = () => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    catalogRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    const el = catalogRef.current;
+    // Скроллим ТОЛЬКО когда каталог реально вне зоны видимости (ниже сгиба / выше
+    // вьюпорта) — не дёргаем мышиных юзеров, у которых список уже на экране.
+    if (el) {
+      const top = el.getBoundingClientRect().top;
+      if (top < 0 || top > window.innerHeight * 0.6) {
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+      }
+    }
+    // Фокус на заголовок — всегда (для скринридера); сам по себе не скроллит.
     listHeadRef.current?.focus({ preventScroll: true });
   };
 
@@ -411,9 +420,11 @@ export function PracticeCatalog({
             )}
           </div>
         </div>
-        {/* SR-анонс смены счёта результатов (визуально счёт уже в шапке списка) */}
+        {/* SR-анонс счёта И порядка сортировки (иначе тихая перестановка списка
+            незаметна скринридеру — счёт-то не меняется). */}
         <div aria-live="polite" style={S.srOnly}>
           {filtered.length} {filtered.length === 1 ? "test" : "tests"} shown
+          {sort === "short" ? ", sorted shortest first" : sort === "questions" ? ", sorted by most questions" : ""}
         </div>
       </section>
     </div>
