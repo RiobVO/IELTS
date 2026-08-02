@@ -181,6 +181,10 @@ export const profile = pgTable(
     // post-signup onboarding (capture display_name/region/target_band); the
     // dashboard redirects them to /app/onboarding until it is set.
     onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
+    // Biometric recording consent (Speaking Lab, migration 0027). NULL = no
+    // consent given; the server gates createSpeakingSubmission/upload on this
+    // being non-null (voice = biometrics). One timestamp; versioning is a non-goal.
+    recordingConsentAt: timestamp("recording_consent_at", { withTimezone: true }),
   },
   (t) => [
     index("profile_region_id_idx").on(t.regionId),
@@ -715,3 +719,87 @@ export const writingFeedbackDebug = pgTable(
   },
   (t) => [index("writing_feedback_debug_submission_idx").on(t.submissionId)],
 );
+
+// --- Speaking Lab (Phase 3, Part 2 MVP; migrations 0027/0028) ---
+// Five additive tables mirroring writing_*: types/precision verbatim so the SQL ↔
+// schema.ts lockstep can't drift. Voice = biometrics — see the migration header and
+// the storage policy in scripts/setup-speaking-storage.ts.
+
+export const speakingPart = pgEnum("speaking_part", ["part2"]);
+export const speakingTaskStatus = pgEnum("speaking_task_status", ["draft", "published"]);
+export const speakingSubmissionStatus = pgEnum("speaking_submission_status", [
+  "uploading", "pending", "evaluating", "completed", "failed",
+]);
+export const speakingConfidence = pgEnum("speaking_confidence", ["low", "medium", "high"]);
+export const speakingDeleteReason = pgEnum("speaking_delete_reason", ["user", "retention", "account"]);
+export const speakingAudioEventKind = pgEnum("speaking_audio_event_kind", [
+  "consent_given", "uploaded", "sent_to_provider",
+  "delete_requested", "deleted_user", "deleted_retention", "deleted_account", "consent_revoked",
+]);
+
+export const speakingTask = pgTable("speaking_task", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  part: speakingPart("part").notNull().default("part2"),
+  prompt: text("prompt").notNull(),
+  bullets: jsonb("bullets").notNull(),
+  closingPrompt: text("closing_prompt").notNull(),
+  prepSeconds: integer("prep_seconds").notNull().default(60),
+  maxSpeakSeconds: integer("max_speak_seconds").notNull().default(120),
+  tierRequired: userTier("tier_required").notNull().default("ultra"),
+  status: speakingTaskStatus("status").notNull().default("draft"),
+  createdBy: uuid("created_by").references(() => profile.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("speaking_task_status_idx").on(t.status)]);
+
+export const speakingSubmission = pgTable("speaking_submission", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => profile.id, { onDelete: "cascade" }),
+  taskId: uuid("task_id").notNull().references(() => speakingTask.id, { onDelete: "cascade" }),
+  audioPath: text("audio_path").notNull(),
+  status: speakingSubmissionStatus("status").notNull().default("uploading"),
+  deleteRequestedAt: timestamp("delete_requested_at", { withTimezone: true }),
+  audioDeletedAt: timestamp("audio_deleted_at", { withTimezone: true }),
+  audioDeletedReason: speakingDeleteReason("audio_deleted_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("speaking_submission_user_created_idx").on(t.userId, t.createdAt),
+  index("speaking_submission_status_updated_idx").on(t.status, t.updatedAt),
+]);
+
+export const speakingFeedback = pgTable("speaking_feedback", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  submissionId: uuid("submission_id").notNull().unique()
+    .references(() => speakingSubmission.id, { onDelete: "cascade" }),
+  bandLow: numeric("band_low", { precision: 2, scale: 1 }).notNull(),
+  bandHigh: numeric("band_high", { precision: 2, scale: 1 }).notNull(),
+  confidence: speakingConfidence("confidence").notNull(),
+  criteria: jsonb("criteria").notNull(),
+  transcript: text("transcript").notNull(),
+  annotations: jsonb("annotations").notNull(),
+  topFixes: jsonb("top_fixes").notNull(),
+  drills: jsonb("drills").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const speakingFeedbackDebug = pgTable("speaking_feedback_debug", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  submissionId: uuid("submission_id").notNull()
+    .references(() => speakingSubmission.id, { onDelete: "cascade" }),
+  rawOutput: text("raw_output").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("speaking_feedback_debug_submission_idx").on(t.submissionId)]);
+
+export const speakingAudioEvent = pgTable("speaking_audio_event", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  submissionId: uuid("submission_id").references(() => speakingSubmission.id, { onDelete: "set null" }),
+  userId: uuid("user_id").references(() => profile.id, { onDelete: "set null" }),
+  event: speakingAudioEventKind("event").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("speaking_audio_event_user_idx").on(t.userId, t.createdAt)]);
