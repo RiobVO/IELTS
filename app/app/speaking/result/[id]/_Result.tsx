@@ -44,6 +44,9 @@ export function SpeakingResult({
   // every successful eval (audioDeleted set on every completed result) but KEEPS the
   // transcript, so audioDeleted must NOT gate the annotated-transcript block here.
   const removed = data.transcript.trim() === "";
+  // In karaoke mode the player lives inside the transcript (synced highlight + seek), so
+  // the standalone top player is hidden to avoid two <audio> elements for one take.
+  const sync = audioUrl !== null && data.transcriptTimings.length > 0 && !removed;
 
   return (
     <div style={S.wrap}>
@@ -72,7 +75,7 @@ export function SpeakingResult({
       <TopFixes fixes={data.topFixes} />
       <CriteriaPlot rows={rows} targetBand={targetBand} />
 
-      {audioUrl && (
+      {audioUrl && !sync && (
         <section style={S.playerCard}>
           <div style={S.playerLabel}>
             <Icon name="play" size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} /> Your recording
@@ -88,6 +91,8 @@ export function SpeakingResult({
         submissionId={data.submissionId}
         transcript={data.transcript}
         annotations={data.annotations as SpeakAnno[]}
+        timings={data.transcriptTimings}
+        audioUrl={audioUrl}
         removed={removed}
       />
 
