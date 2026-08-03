@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
 import { speakingEvalConfig } from "@/env";
-import { listPublishedTasks } from "@/lib/speaking/read";
-import { completedCounts } from "@/lib/speaking/store";
+import { listPublishedTasks, listUserHistory } from "@/lib/speaking/read";
 import { effectiveTier, meetsTier, SPEAKING_MIN_TIER, type Tier } from "@/lib/tiers";
 import { AppShell } from "../_AppShell";
 import { SpeakingCatalog } from "./_Catalog";
@@ -27,15 +26,17 @@ export default async function SpeakingCatalogPage() {
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
     : "basic";
 
-  // Preview-spent only matters for non-Ultra; skip the count query for Ultra.
+  // Preview-spent only matters for non-Ultra; skip the history query for Ultra. For a
+  // non-Ultra user the lock state sells the upgrade with the band they actually earned,
+  // so we read history (exactly one completed attempt at the free cap) for that band.
   const isUltra = meetsTier(tier, SPEAKING_MIN_TIER);
-  const previewUsed = isUltra
-    ? false
-    : (await completedCounts(user.id, new Date())).lifetime >= 1;
+  const history = isUltra ? [] : await listUserHistory(user.id);
+  const previewUsed = history.length >= 1;
+  const lastBand = previewUsed ? { low: history[0].bandLow, high: history[0].bandHigh } : null;
 
   return (
     <AppShell active="practice">
-      <SpeakingCatalog tasks={tasks} isUltra={isUltra} previewUsed={previewUsed} />
+      <SpeakingCatalog tasks={tasks} isUltra={isUltra} previewUsed={previewUsed} lastBand={lastBand} />
     </AppShell>
   );
 }

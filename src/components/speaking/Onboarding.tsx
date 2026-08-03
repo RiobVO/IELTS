@@ -46,8 +46,7 @@ export function Onboarding() {
 
   return (
     <section style={S.card} aria-label="How Speaking Lab works">
-      <div style={S.overline}>Speaking · how it works</div>
-      <h3 style={S.h3}>Speak your answer, get a band</h3>
+      <h2 style={S.h3}>How it works</h2>
 
       <div className="sob-steps" style={S.steps}>
         <style>{CSS}</style>
@@ -79,9 +78,10 @@ const CSS = `
 `;
 
 const S: Record<string, CSSProperties> = {
-  card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 22, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
-  overline: { fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--text-link)" },
-  h3: { margin: "8px 0 18px", fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
+  card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-xs)", padding: 20, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
+  // Quiet section title — the page <h1> "Pick a cue card" is the dominant heading; this
+  // explainer sits below it and must not compete, so it stays at a modest label size.
+  h3: { margin: "0 0 16px", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--text-secondary)" },
   steps: { display: "grid", gap: 16 },
   step: { display: "flex", flexDirection: "column" },
   chip: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 12, background: "var(--brand-subtle)", marginBottom: 12 },
