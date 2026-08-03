@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { requireAdmin } from "@/lib/auth";
 import { Badge, type BadgeTone } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
+import { speakingDifficultyLabel } from "@/lib/speaking/catalog-meta";
 import { listAllTasks, type AdminSpeakingTaskRow } from "@/lib/speaking/admin";
 import { createSpeakingTask, publishSpeakingTask, removeSpeakingTask, unpublishSpeakingTask } from "./actions";
 
@@ -82,6 +83,14 @@ export default async function AdminSpeakingPage({
             style={{ ...S.input, marginBottom: 18 }}
           />
 
+          <label style={S.label} htmlFor="difficulty">Difficulty</label>
+          <select id="difficulty" name="difficulty" defaultValue="2" style={{ ...S.select, marginBottom: 18 }}>
+            <option value="">None</option>
+            <option value="1">Foundation</option>
+            <option value="2">Core</option>
+            <option value="3">Stretch</option>
+          </select>
+
           <div style={S.grid3}>
             <div>
               <label style={S.label} htmlFor="prep_seconds">Prep (seconds)</label>
@@ -153,6 +162,7 @@ function CueRow({ task }: { task: AdminSpeakingTaskRow }) {
         <div style={S.meta}>
           <Badge tone={statusTone}>{published ? "Published" : "Draft"}</Badge>
           <Badge tone="brand">Part 2</Badge>
+          {task.difficulty && <Badge tone="neutral">{speakingDifficultyLabel[task.difficulty]}</Badge>}
           <Badge tone="brand">{TIER_LABEL[task.tierRequired]}</Badge>
           <Badge tone="neutral">{`Prep ${fmtClock(task.prepSeconds)}`}</Badge>
           <Badge tone="neutral">{`Cap ${fmtClock(task.maxSpeakSeconds)}`}</Badge>

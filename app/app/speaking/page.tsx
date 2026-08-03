@@ -34,9 +34,19 @@ export default async function SpeakingCatalogPage() {
   const previewUsed = history.length >= 1;
   const lastBand = previewUsed ? { low: history[0].bandLow, high: history[0].bandHigh } : null;
 
+  // Target band powers the per-card "on target" hint (same profile source as Writing).
+  const rawTarget = (profile as { target_band?: string | number | null } | null)?.target_band;
+  const targetBand = rawTarget != null ? Number(rawTarget) : null;
+
   return (
     <AppShell active="practice">
-      <SpeakingCatalog tasks={tasks} isUltra={isUltra} previewUsed={previewUsed} lastBand={lastBand} />
+      <SpeakingCatalog
+        tasks={tasks}
+        isUltra={isUltra}
+        previewUsed={previewUsed}
+        lastBand={lastBand}
+        targetBand={targetBand}
+      />
     </AppShell>
   );
 }

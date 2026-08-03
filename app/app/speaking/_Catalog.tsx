@@ -5,26 +5,28 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/core/icons";
 import { Onboarding } from "@/components/speaking/Onboarding";
 import {
+  isOnTarget,
   SPEAKING_CATEGORIES,
+  SPEAKING_DIFFICULTIES,
   speakingCategoryLabel,
+  speakingDifficultyLabel,
   type SpeakingCategory,
 } from "@/lib/speaking/catalog-meta";
 import type { SpeakingCatalogTask } from "@/lib/speaking/read";
 
 /**
  * SpeakingCatalog — клиентское тело каталога Speaking Lab. Каждая карта = одна Part 2
- * cue-card с темой (Person/Place/Object/Experience/Activity/Media), выведенной из промта
- * (`catalog-meta.detectCategory`). Тема несёт цвет strip + чип + глиф — тот же визуальный
- * язык, что у Writing-каталога (палитра `--topic-*`, мягкая карта `--shadow-xs` + цветной
- * hover), чтобы два лаба ощущались одним продуктом. Free/premium до превью кликают в attempt;
- * после — карта ведёт на upgrade и явно помечена замком. Ultra без замка. Категория-фильтр
- * показывается только когда тем ≥2. Сетка/адаптив — в CSS-классах (инвариант), не inline.
+ * cue-card с темой (выведена из промта) и уровнем сложности (Foundation/Core/Stretch,
+ * человеко-заданный, метр круглыми точками). Тот же визуальный язык, что у Writing
+ * (палитра `--topic-*`, мягкая карта `--shadow-xs` + цветной hover, метр + Level-фильтр +
+ * «on target» по target-band). Free/premium до превью кликают в attempt; после — карта
+ * ведёт на upgrade и помечена замком. Ultra без замка. Фильтры/метр условны: показываются,
+ * только когда есть что различать. Сетка/адаптив — в CSS-классах (инвариант), не inline.
  */
 
 /** Тема → презентационная палитра (значения из `--topic-*`, переиспользованы ради цвета,
- *  не ради writing-семантики) + глиф. Лейблы — в `catalog-meta`. Crime-red не берём: на
- *  нейтральной корзине он читается как alert. "Experience" — catch-all детектора, поэтому
- *  ей даём графит (как Writing деградирует неизвестную тему), а не громкий цвет. */
+ *  не ради writing-семантики) + глиф. Crime-red не берём: на нейтральной корзине читается
+ *  как alert. "Experience" — catch-all детектора, поэтому графит, не громкий цвет. */
 const CAT_META: Record<SpeakingCategory, { color: string; ink: string; tint: string; tintBorder: string; icon: IconName }> = {
   person: { color: "var(--topic-society-color)", ink: "var(--topic-society-ink)", tint: "var(--topic-society-tint)", tintBorder: "var(--topic-society-tint-border)", icon: "users" },
   place: { color: "var(--topic-culture-color)", ink: "var(--topic-culture-ink)", tint: "var(--topic-culture-tint)", tintBorder: "var(--topic-culture-tint-border)", icon: "map-pin" },
@@ -45,22 +47,30 @@ export function SpeakingCatalog({
   isUltra,
   previewUsed,
   lastBand,
+  targetBand,
 }: {
   tasks: SpeakingCatalogTask[];
   isUltra: boolean;
   previewUsed: boolean;
   lastBand: { low: number; high: number } | null;
+  targetBand: number | null;
 }) {
   // Locked only for a non-Ultra user who has already spent the free preview.
   const locked = !isUltra && previewUsed;
 
-  const [cat, setCat] = useState<SpeakingCategory | "all">("all");
+  const [cat, setCat] = useState<string>("all");
+  const [lvl, setLvl] = useState<string>("all");
 
-  // Filter pills earn their place only when the set actually spans ≥2 themes; on a small
-  // single-theme catalog they'd be noise. Order follows the canonical category order.
-  const present = SPEAKING_CATEGORIES.filter((c) => tasks.some((t) => t.category === c));
-  const showFilter = present.length >= 2;
-  const visible = cat === "all" ? tasks : tasks.filter((t) => t.category === cat);
+  // Each filter earns its place only when the set spans ≥2 distinct values; on a small
+  // single-value catalog the pills would be noise. Order follows the canonical order.
+  const themes = SPEAKING_CATEGORIES.filter((c) => tasks.some((t) => t.category === c));
+  const levels = SPEAKING_DIFFICULTIES.filter((d) => tasks.some((t) => t.difficulty === d));
+  const showThemeFilter = themes.length >= 2;
+  const showLevelFilter = levels.length >= 2;
+
+  const visible = tasks.filter(
+    (t) => (cat === "all" || t.category === cat) && (lvl === "all" || String(t.difficulty) === lvl),
+  );
 
   return (
     <div className="sc-wrap" style={S.wrap}>
@@ -106,23 +116,26 @@ export function SpeakingCatalog({
       ) : (
         <>
           <div className="sc-controls">
-            {showFilter && (
-              <div style={S.segment} role="group" aria-label="Filter cue cards by theme">
-                {(["all", ...present] as const).map((value) => {
-                  const active = cat === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => setCat(value)}
-                      className="sc-seg"
-                      style={{ ...S.seg, ...(active ? S.segActive : null) }}
-                    >
-                      {value === "all" ? "All" : speakingCategoryLabel[value]}
-                    </button>
-                  );
-                })}
+            {(showThemeFilter || showLevelFilter) && (
+              <div className="sc-filters">
+                {showThemeFilter && (
+                  <Seg
+                    name="Theme"
+                    label="Filter cue cards by theme"
+                    value={cat}
+                    onChange={setCat}
+                    options={[{ value: "all", label: "All" }, ...themes.map((c) => ({ value: c, label: speakingCategoryLabel[c] }))]}
+                  />
+                )}
+                {showLevelFilter && (
+                  <Seg
+                    name="Level"
+                    label="Filter cue cards by level"
+                    value={lvl}
+                    onChange={setLvl}
+                    options={[{ value: "all", label: "Any" }, ...levels.map((d) => ({ value: String(d), label: speakingDifficultyLabel[d] }))]}
+                  />
+                )}
               </div>
             )}
             <span className="sc-count" style={S.count}>
@@ -133,7 +146,7 @@ export function SpeakingCatalog({
           <ul className="sc-grid">
             {visible.map((t) => (
               <li key={t.id} style={S.gridItem}>
-                <CueCard t={t} locked={locked} />
+                <CueCard t={t} locked={locked} targetBand={targetBand} />
               </li>
             ))}
           </ul>
@@ -143,9 +156,63 @@ export function SpeakingCatalog({
   );
 }
 
-function CueCard({ t, locked }: { t: SpeakingCatalogTask; locked: boolean }) {
+/** Labelled segmented filter — shared by Theme and Level so both read identically to the
+ *  Writing catalog. `name` sits above the pills (no extra width on narrow screens). */
+function Seg({
+  name,
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  name: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div style={S.segGroup}>
+      <span style={S.segName}>{name}</span>
+      <div style={S.segment} role="group" aria-label={label}>
+        {options.map((o) => {
+          const active = value === o.value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(o.value)}
+              className="sc-seg"
+              style={{ ...S.seg, ...(active ? S.segActive : null) }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Difficulty meter — round pips + label (the Speaking treatment; Writing uses bars). */
+function Meter({ d, ink, dim }: { d: 1 | 2 | 3; ink: string; dim: boolean }) {
+  return (
+    <span style={S.meter} role="img" aria-label={`Difficulty: ${speakingDifficultyLabel[d]} (${d} of 3)`}>
+      <span style={S.meterLabel}>{speakingDifficultyLabel[d]}</span>
+      <span style={S.dots} aria-hidden="true">
+        {[1, 2, 3].map((i) => (
+          <span key={i} style={{ ...S.dot, ...(i <= d ? { background: dim ? "var(--text-disabled)" : ink } : S.dotOff) }} />
+        ))}
+      </span>
+    </span>
+  );
+}
+
+function CueCard({ t, locked, targetBand }: { t: SpeakingCatalogTask; locked: boolean; targetBand: number | null }) {
   const m = CAT_META[t.category];
   const href = locked ? "/app/upgrade" : `/app/speaking/attempt/${t.id}`;
+  const showOnTarget = !locked && targetBand != null && t.difficulty != null && isOnTarget(t.difficulty, targetBand);
 
   // Locked cards must NOT pose as openable cue-cards: neutralise the theme glow, kill the
   // hover-lift (via the class), dim the prompt, and swap the "go" arrow for an explicit
@@ -171,11 +238,14 @@ function CueCard({ t, locked }: { t: SpeakingCatalogTask; locked: boolean }) {
             <Icon name={m.icon} size={13} strokeWidth={2.2} />
             {speakingCategoryLabel[t.category]}
           </span>
-          {locked && (
-            <span style={S.lockChip} aria-hidden="true">
-              <Icon name="lock" size={12} strokeWidth={2.4} /> Ultra
-            </span>
-          )}
+          <span style={S.metaRight}>
+            {t.difficulty != null && <Meter d={t.difficulty} ink={m.ink} dim={locked} />}
+            {locked && (
+              <span style={S.lockChip} aria-hidden="true">
+                <Icon name="lock" size={12} strokeWidth={2.4} /> Ultra
+              </span>
+            )}
+          </span>
         </div>
 
         <p style={{ ...S.prompt, ...(locked ? S.promptLocked : null) }}>{t.prompt}</p>
@@ -197,6 +267,7 @@ function CueCard({ t, locked }: { t: SpeakingCatalogTask; locked: boolean }) {
         <div style={S.footer}>
           <span style={S.timing}>
             {fmtClock(t.prepSeconds)} prep · up to {fmtClock(t.maxSpeakSeconds)}
+            {showOnTarget && <span style={S.onTarget}> · on target</span>}
           </span>
           {locked ? (
             <span style={S.upgrade}>
@@ -217,7 +288,8 @@ const CSS = `
 .sc-wrap{padding:24px 16px 56px}
 .sc-h1{font-size:30px}
 .sc-header{flex-direction:column;align-items:flex-start}
-.sc-controls{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+.sc-controls{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+.sc-filters{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end}
 .sc-grid{display:grid;grid-template-columns:1fr;gap:16px;list-style:none;margin:0;padding:0}
 .sc-seg{min-height:44px;padding:0 13px;font-size:13px}
 .sc-seg:hover{color:var(--text-primary)}
@@ -229,13 +301,11 @@ const CSS = `
 @media (min-width:680px){
   .sc-grid{grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
   .sc-header{flex-direction:row;align-items:flex-end;justify-content:space-between}
-  .sc-controls{flex-direction:row;align-items:center;justify-content:space-between}
+  .sc-controls{flex-direction:row;align-items:flex-end;justify-content:space-between}
 }
 @media (min-width:768px){
   .sc-wrap{padding:32px 28px 72px}
   .sc-h1{font-size:42px}
-  /* Desktop: the 44px touch target only matters on small screens; tighten to match
-     Writing's seg height there. */
   .sc-seg{min-height:38px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -259,8 +329,8 @@ const S: Record<string, CSSProperties> = {
 
   lockBanner: { display: "flex", gap: 10, alignItems: "flex-start", padding: "14px 16px", background: "var(--brand-subtle)", border: "1px solid var(--brand-border)", borderRadius: "var(--radius-md)", fontSize: 13.5, lineHeight: 1.5, color: "var(--text-secondary)" },
 
-  // Controls — theme filter (when ≥2 themes) + count. Mirrors the Writing catalog's
-  // segmented + count vocabulary so the two labs read as one system.
+  segGroup: { display: "flex", flexDirection: "column", gap: 6, flex: "none" },
+  segName: { paddingLeft: 2, fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 600, color: "var(--text-muted)" },
   segment: { display: "inline-flex", flexWrap: "wrap", padding: 4, gap: 4, background: "var(--surface-inset)", borderRadius: 11 },
   seg: { appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, cursor: "pointer", transition: "var(--transition-colors)" },
   segActive: { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-xs)" },
@@ -273,9 +343,16 @@ const S: Record<string, CSSProperties> = {
   strip: { display: "block", height: 5, width: "100%", flex: "none" },
   body: { padding: "20px 20px 16px", flex: 1, display: "flex", flexDirection: "column" },
 
-  metaRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 },
+  metaRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, minHeight: 26 },
+  metaRight: { display: "inline-flex", alignItems: "center", gap: 8, flex: "none" },
   cat: { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 8, padding: "5px 10px", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600, letterSpacing: "-0.005em" },
   lockChip: { display: "inline-flex", alignItems: "center", gap: 4, borderRadius: 7, padding: "3px 8px", border: "1px solid var(--border)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 700 },
+
+  meter: { display: "inline-flex", alignItems: "center", gap: 8, flex: "none" },
+  meterLabel: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 500, color: "var(--text-muted)" },
+  dots: { display: "inline-flex", gap: 5 },
+  dot: { width: 7, height: 7, borderRadius: "50%", flex: "none" },
+  dotOff: { background: "var(--surface-inset)", boxShadow: "inset 0 0 0 1px var(--border)" },
 
   prompt: { margin: "0 0 14px", fontSize: 18, fontWeight: 600, lineHeight: 1.4, letterSpacing: "-0.01em", color: "var(--text-primary)" },
   promptLocked: { color: "var(--text-muted)" },
@@ -288,6 +365,7 @@ const S: Record<string, CSSProperties> = {
 
   footer: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: "auto", borderTop: "1px solid var(--border-subtle)", paddingTop: 15 },
   timing: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" },
+  onTarget: { color: "var(--text-link)", fontWeight: 600 },
   arrow: { width: 36, height: 36, flex: "none", borderRadius: "var(--radius-full)", display: "grid", placeItems: "center" },
   upgrade: { display: "inline-flex", alignItems: "center", gap: 6, flex: "none", fontFamily: "var(--font-ui)", fontSize: 12.5, fontWeight: 700, color: "var(--text-link)" },
 };
