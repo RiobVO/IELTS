@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { speakingFeedback, speakingSubmission, speakingTask } from "@/db/schema";
 import type { Tier } from "@/lib/tiers";
+import { detectCategory, type SpeakingCategory } from "./catalog-meta";
 import type { Feedback } from "./evaluator/types";
 import type { TranscriptTiming } from "./transcript-align";
 
@@ -22,6 +23,9 @@ export interface SpeakingCatalogTask {
   prepSeconds: number;
   maxSpeakSeconds: number;
   tierRequired: Tier;
+  // Presentational Part 2 bucket derived from the prompt (no DB column) — gives the
+  // catalog cards a per-card identity + theme colour. See catalog-meta.ts.
+  category: SpeakingCategory;
 }
 
 const TASK_COLUMNS = {
@@ -53,6 +57,7 @@ function toCatalogTask(row: TaskRow): SpeakingCatalogTask {
     prepSeconds: row.prepSeconds,
     maxSpeakSeconds: row.maxSpeakSeconds,
     tierRequired: row.tierRequired,
+    category: detectCategory(row.prompt),
   };
 }
 
