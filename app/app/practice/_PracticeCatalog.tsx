@@ -7,7 +7,7 @@ import { Badge } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
 import { QuestionFilter } from "@/components/exam/QuestionFilter";
 import { CatalogNotice } from "@/components/app/CatalogNotice";
-import { qtypeLabel, categoryLabel } from "@/lib/labels";
+import { qtypeLabel, categoryLabel, qtypeDescription } from "@/lib/labels";
 import { setTargetBand } from "./actions";
 
 /** Valid IELTS targets — same scale the onboarding select offers. */
@@ -383,6 +383,9 @@ export function PracticeCatalog({
                 onClear={clearFilter}
               />
             </div>
+            {/* ESL-хелп: что значит каждый тип. Вне сворачиваемого тела — виден и на
+                мобиле при свёрнутом фильтре. Нативный <details> = a11y/тач без hover. */}
+            <QuestionTypeGlossary types={filterTypes} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* tabIndex -1: программный фокус при выборе скилла (SR озвучит заголовок) */}
@@ -723,6 +726,32 @@ function ComingItem({
   );
 }
 
+/* ── Question-type glossary (ESL help) — native <details>, lists catalog types ── */
+function QuestionTypeGlossary({ types }: { types: FilterOption[] }) {
+  if (types.length === 0) return null;
+  return (
+    <details className="pc-gloss">
+      <summary>
+        <Icon name="info" size={15} strokeWidth={2.5} style={{ color: "var(--text-link)" }} />
+        What do these question types mean?
+        <Icon name="chevron-down" size={15} strokeWidth={2.5} className="pc-gloss-chev" style={{ marginLeft: "auto" }} />
+      </summary>
+      <dl style={S.glossList}>
+        {types.map((t) => {
+          const desc = qtypeDescription(t.value);
+          if (!desc) return null;
+          return (
+            <div key={t.value}>
+              <dt style={S.glossTerm}>{t.label}</dt>
+              <dd style={S.glossDef}>{desc}</dd>
+            </div>
+          );
+        })}
+      </dl>
+    </details>
+  );
+}
+
 /* ── Test row ────────────────────────────────────────────────────────────── */
 function TestRow({ t }: { t: PracticeTest }) {
   const sec = SECTION[t.section];
@@ -840,6 +869,14 @@ const CSS = `
 .pc-drill:hover{border-color:var(--brand)!important}
 .pc-drill:active{transform:translateY(3px);box-shadow:none!important}
 .pc-drilllink:hover{text-decoration:underline}
+.pc-gloss{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-xs)}
+.pc-gloss>summary{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;cursor:pointer;list-style:none;font-family:var(--font-ui);font-size:13px;font-weight:700;color:var(--text-primary)}
+.pc-gloss>summary::-webkit-details-marker{display:none}
+.pc-gloss>summary:hover{background:var(--surface-hover);border-radius:var(--radius-md)}
+.pc-gloss>summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:var(--radius-md)}
+.pc-gloss-chev{transition:transform var(--duration-base) var(--ease-standard)}
+.pc-gloss[open] .pc-gloss-chev{transform:rotate(180deg)}
+@media (prefers-reduced-motion:reduce){.pc-gloss-chev{transition:none}}
 .pc-showall:hover{background:var(--surface-hover)!important;color:var(--text-primary)!important}
 .pc-goalselect:hover select{background:var(--surface-hover)}
 .pc-goalsaved{animation:pc-fade .18s var(--ease-out)}
@@ -939,6 +976,11 @@ const S: Record<string, CSSProperties> = {
   comingItem: { display: "inline-flex", alignItems: "center", gap: 10, minHeight: 48, padding: "8px 14px", borderRadius: "var(--radius-md)", border: "1.5px solid var(--border)", fontFamily: "var(--font-ui)", cursor: "pointer", transition: "var(--transition-colors)" },
   comingTile: { width: 30, height: 30, flex: "none", borderRadius: "var(--radius-sm)", display: "grid", placeItems: "center", fontSize: 14, fontWeight: 800 },
   comingName: { fontSize: 15, fontWeight: 700, color: "var(--text-primary)" },
+
+  // Question-type glossary (ESL help)
+  glossList: { margin: 0, padding: "6px 14px 14px", display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid var(--border-subtle)" },
+  glossTerm: { fontSize: 13, fontWeight: 700, color: "var(--text-primary)" },
+  glossDef: { margin: "2px 0 0", fontSize: 13, lineHeight: 1.5, color: "var(--text-secondary)" },
 
   // Catalog
   catalog: {},
