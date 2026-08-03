@@ -30,7 +30,11 @@ export function SpeakingResult({ data, targetBand }: { data: SpeakingFeedbackRes
     nextStep: c.nextStep,
     isBlocker: c === blocker,
   }));
-  const removed = data.transcript.trim() === "" || data.audioDeleted;
+  // The transcript is "removed" only when it was actually wiped — i.e. a user delete
+  // (deleteSpeakingRecording empties transcript). Retention deletes the AUDIO after
+  // every successful eval (audioDeleted set on every completed result) but KEEPS the
+  // transcript, so audioDeleted must NOT gate the annotated-transcript block here.
+  const removed = data.transcript.trim() === "";
 
   return (
     <div style={S.wrap}>
