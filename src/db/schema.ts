@@ -787,6 +787,9 @@ export const speakingFeedback = pgTable("speaking_feedback", {
   // (Whisper STT may be unconfigured) → defaults to [] = no sync, static transcript.
   // Wiped to [] on a user delete (verbatim speech = PII), same as `transcript`.
   transcriptTimings: jsonb("transcript_timings").notNull().default(sql`'[]'::jsonb`),
+  // "Say it stronger" (#1): [{original, improved}] band-7/8 upgrades of the candidate's
+  // own lines. [] on short/no-speech. `original` is verbatim speech → wiped on user delete.
+  rewrites: jsonb("rewrites").notNull().default(sql`'[]'::jsonb`),
   topFixes: jsonb("top_fixes").notNull(),
   drills: jsonb("drills").notNull(),
   provider: text("provider").notNull(),

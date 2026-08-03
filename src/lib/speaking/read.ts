@@ -7,6 +7,7 @@ import type { TranscriptTiming } from "./transcript-align";
 
 type SpeakingCriterion = Feedback["criteria"][number];
 type SpeakingAnnotation = Feedback["annotations"][number];
+type SpeakingRewrite = Feedback["rewrites"][number];
 
 // UI reads for Speaking Lab. Owner path (Drizzle) — same trust model as the Writing
 // reads and the rest of the Speaking backend (store.ts): ownership is enforced in
@@ -98,6 +99,9 @@ export interface SpeakingFeedbackResult {
   criteria: SpeakingCriterion[];
   topFixes: string[];
   annotations: SpeakingAnnotation[];
+  // "Say it stronger" pairs (#1). [] on short/no-speech or after a user delete (the
+  // `original` lines are verbatim speech = PII). The result page hides the block if empty.
+  rewrites: SpeakingRewrite[];
   drills: string[];
 }
 
@@ -121,6 +125,7 @@ export async function readFeedbackResult(
       criteria: speakingFeedback.criteria,
       topFixes: speakingFeedback.topFixes,
       annotations: speakingFeedback.annotations,
+      rewrites: speakingFeedback.rewrites,
       drills: speakingFeedback.drills,
     })
     .from(speakingFeedback)
@@ -142,6 +147,7 @@ export async function readFeedbackResult(
     criteria: row.criteria as SpeakingCriterion[],
     topFixes: row.topFixes as string[],
     annotations: row.annotations as SpeakingAnnotation[],
+    rewrites: (row.rewrites as SpeakingRewrite[] | null) ?? [],
     drills: row.drills as string[],
   };
 }
