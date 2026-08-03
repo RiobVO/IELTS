@@ -309,7 +309,17 @@ export function PracticeCatalog({
 
       {/* Live skills — фильтр-карты Reading/Listening (+ Writing когда ops-гейт открыт) */}
       <section>
-        <div style={S.skillHead}>Jump to a skill</div>
+        <div style={S.skillHeadWrap}>
+          <span style={S.skillHead}>Jump to a skill</span>
+          {/* Контекст-хелп: что значит BAND на картах. Только когда band реально есть —
+              новичков (всё «—») не грузим, их ведёт firstNote выше. */}
+          {(readingBand != null || listeningBand != null) && (
+            <span style={S.skillHint}>
+              <Icon name="info" size={13} strokeWidth={2.5} style={{ color: "var(--text-muted)", flex: "none" }} />
+              BAND is your best single test on each skill, not an official overall band.
+            </span>
+          )}
+        </div>
         <div className="pc-skills" style={cssVar({ "--live-cols": liveCols })}>
           <SkillCard
             skill="reading"
@@ -965,8 +975,10 @@ const S: Record<string, CSSProperties> = {
   rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
 
-  // Skills — sentence-case label (не uppercase-эйбрау)
-  skillHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 12 },
+  // Skills — sentence-case label (не uppercase-эйбрау) + опц. контекст-хелп про BAND
+  skillHeadWrap: { display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 },
+  skillHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)" },
+  skillHint: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, lineHeight: 1.4, fontWeight: 600, color: "var(--text-muted)" },
   filterToggle: { width: "100%", alignItems: "center", gap: 8, minHeight: 44, padding: "0 14px", marginBottom: 12, borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "var(--shadow-solid)" },
   skillCard: { display: "flex", flexDirection: "column", gap: 14, textAlign: "left", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow-solid)", padding: 18, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
   skillTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
