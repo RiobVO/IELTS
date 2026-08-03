@@ -111,7 +111,7 @@ export async function deleteSpeakingRecording(submissionId: string): Promise<{ o
     .where(eq(speakingSubmission.id, submissionId));
   await logAudioEvent(user.id, submissionId, "delete_requested");
   await deleteAudio(audioPath).catch(() => {});
-  await db.update(speakingFeedback).set({ transcript: "", annotations: [] })
+  await db.update(speakingFeedback).set({ transcript: "", annotations: [], transcriptTimings: [] })
     .where(eq(speakingFeedback.submissionId, submissionId));
   await markAudioDeleted(submissionId, user.id, "user");
   return { ok: true };
