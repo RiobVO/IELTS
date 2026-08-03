@@ -680,13 +680,14 @@ function SkillBand({ band, target, base, ink }: { band: number | null; target: n
         <span style={S.bandOver}>BAND</span>
         <span style={{ ...S.bandVal, color: ink }}>{band != null ? band.toFixed(1) : "—"}</span>
       </div>
+      {/* Target — единственный источник в goal-баре; на рейле оставляем только fill
+          (per-skill band), а target несём словами в aria-label для скринридера. */}
       <div
         style={S.bandTrack}
         role="img"
         aria-label={band != null ? `Best band ${band.toFixed(1)} of 9, target ${target.toFixed(1)}` : `No band yet, target ${target.toFixed(1)}`}
       >
         {band != null && <span style={{ ...S.bandFill, width: pct(band), background: base }} />}
-        <span style={{ ...S.bandTarget, left: pct(target) }} aria-hidden="true" />
       </div>
     </div>
   );
@@ -931,7 +932,6 @@ const S: Record<string, CSSProperties> = {
   bandVal: { fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 700 },
   bandTrack: { position: "relative", height: 7, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
   bandFill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: "var(--radius-full)" },
-  bandTarget: { position: "absolute", top: 0, bottom: 0, width: 2, background: "var(--text-primary)", opacity: 0.4, transform: "translateX(-1px)" },
 
   // Coming-soon strip (subordinated locked skills) — sentence-case label
   comingHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", margin: "0 0 12px" },
