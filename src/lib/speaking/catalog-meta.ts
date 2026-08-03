@@ -52,3 +52,37 @@ export const speakingCategoryLabel: Record<SpeakingCategory, string> = {
   activity: "Activity",
   media: "Media",
 };
+
+// ---- Difficulty (0031) — same Foundation/Core/Stretch scale as Writing, human-set ----
+
+export const SPEAKING_DIFFICULTIES = [1, 2, 3] as const;
+export type SpeakingDifficulty = (typeof SPEAKING_DIFFICULTIES)[number];
+
+export const speakingDifficultyLabel: Record<SpeakingDifficulty, string> = {
+  1: "Foundation",
+  2: "Core",
+  3: "Stretch",
+};
+
+/** Narrow a raw DB/form value to 1|2|3, else null (catalog hides the meter). */
+export function coerceDifficulty(v: unknown): SpeakingDifficulty | null {
+  const n = typeof v === "string" ? Number(v) : v;
+  return n === 1 || n === 2 || n === 3 ? (n as SpeakingDifficulty) : null;
+}
+
+/**
+ * Implied band window per level. IELTS doesn't grade a cue card (the band depends on
+ * the answer), so "on target" ties the user's target band to the cognitive demand of
+ * the card: a Foundation card suits a lower target, a Stretch card a higher one. Pure;
+ * the catalog highlights a card when the target sits inside its window.
+ */
+export const difficultyBand: Record<SpeakingDifficulty, readonly [number, number]> = {
+  1: [5.0, 6.0],
+  2: [6.0, 7.0],
+  3: [7.0, 8.5],
+};
+
+export function isOnTarget(difficulty: SpeakingDifficulty, targetBand: number): boolean {
+  const [lo, hi] = difficultyBand[difficulty];
+  return targetBand >= lo && targetBand <= hi;
+}

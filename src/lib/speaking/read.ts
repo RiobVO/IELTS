@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { speakingFeedback, speakingSubmission, speakingTask } from "@/db/schema";
 import type { Tier } from "@/lib/tiers";
-import { detectCategory, type SpeakingCategory } from "./catalog-meta";
+import { coerceDifficulty, detectCategory, type SpeakingCategory, type SpeakingDifficulty } from "./catalog-meta";
 import type { Feedback } from "./evaluator/types";
 import type { TranscriptTiming } from "./transcript-align";
 
@@ -26,6 +26,8 @@ export interface SpeakingCatalogTask {
   // Presentational Part 2 bucket derived from the prompt (no DB column) — gives the
   // catalog cards a per-card identity + theme colour. See catalog-meta.ts.
   category: SpeakingCategory;
+  // Human-set difficulty (0031); null until an admin assigns one → meter hidden.
+  difficulty: SpeakingDifficulty | null;
 }
 
 const TASK_COLUMNS = {
@@ -36,6 +38,7 @@ const TASK_COLUMNS = {
   prepSeconds: speakingTask.prepSeconds,
   maxSpeakSeconds: speakingTask.maxSpeakSeconds,
   tierRequired: speakingTask.tierRequired,
+  difficulty: speakingTask.difficulty,
 } as const;
 
 type TaskRow = {
@@ -46,6 +49,7 @@ type TaskRow = {
   prepSeconds: number;
   maxSpeakSeconds: number;
   tierRequired: Tier;
+  difficulty: number | null;
 };
 
 function toCatalogTask(row: TaskRow): SpeakingCatalogTask {
@@ -58,6 +62,7 @@ function toCatalogTask(row: TaskRow): SpeakingCatalogTask {
     maxSpeakSeconds: row.maxSpeakSeconds,
     tierRequired: row.tierRequired,
     category: detectCategory(row.prompt),
+    difficulty: coerceDifficulty(row.difficulty),
   };
 }
 

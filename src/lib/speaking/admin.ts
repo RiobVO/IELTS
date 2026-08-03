@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { speakingSubmission, speakingTask } from "@/db/schema";
+import { coerceDifficulty, type SpeakingDifficulty } from "./catalog-meta";
 import type { Tier } from "@/lib/tiers";
 
 // Admin reads/writes for Speaking Lab cue-cards. Owner path; the route gates with
@@ -14,6 +15,7 @@ export async function insertSpeakingTask(input: {
   prepSeconds: number;
   maxSpeakSeconds: number;
   tierRequired: Tier;
+  difficulty: SpeakingDifficulty | null;
   createdBy: string;
   publish: boolean;
 }): Promise<string> {
@@ -26,6 +28,7 @@ export async function insertSpeakingTask(input: {
       prepSeconds: input.prepSeconds,
       maxSpeakSeconds: input.maxSpeakSeconds,
       tierRequired: input.tierRequired,
+      difficulty: input.difficulty,
       status: input.publish ? "published" : "draft",
       createdBy: input.createdBy,
     })
@@ -41,6 +44,7 @@ export interface AdminSpeakingTaskRow {
   prepSeconds: number;
   maxSpeakSeconds: number;
   tierRequired: Tier;
+  difficulty: SpeakingDifficulty | null;
   status: "draft" | "published";
   createdAt: Date;
 }
@@ -56,6 +60,7 @@ export async function listAllTasks(): Promise<AdminSpeakingTaskRow[]> {
       prepSeconds: speakingTask.prepSeconds,
       maxSpeakSeconds: speakingTask.maxSpeakSeconds,
       tierRequired: speakingTask.tierRequired,
+      difficulty: speakingTask.difficulty,
       status: speakingTask.status,
       createdAt: speakingTask.createdAt,
     })
@@ -64,6 +69,7 @@ export async function listAllTasks(): Promise<AdminSpeakingTaskRow[]> {
   return rows.map((r) => ({
     ...r,
     bullets: Array.isArray(r.bullets) ? (r.bullets as string[]) : [],
+    difficulty: coerceDifficulty(r.difficulty),
   }));
 }
 
