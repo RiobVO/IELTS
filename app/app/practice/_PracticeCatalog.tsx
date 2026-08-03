@@ -220,14 +220,22 @@ export function PracticeCatalog({
       (selTypes.length === 0 || t.questionTypes.some((x) => selTypes.includes(x))),
   );
   const catalogLabel = skillSection ? `${cap(skillSection)} tests` : "All tests";
-  // Сортировка опциональна; default сохраняет порядок reading→listening.
-  const visible = sort === "default"
-    ? filtered
-    : [...filtered].sort((a, b) =>
-        sort === "short"
-          ? (a.durationMin ?? Infinity) - (b.durationMin ?? Infinity)
-          : b.questionCount - a.questionCount,
-      );
+  // Сортировка. «Recommended» (default) теперь честная: при известном слабом типе
+  // поднимает тесты с этим типом наверх (стабильно — V8 sort сохраняет порядок
+  // внутри групп), иначе исходный reading→listening. short/questions — явные.
+  const weakType = drillWeakest?.type ?? null;
+  const visible =
+    sort === "short"
+      ? [...filtered].sort((a, b) => (a.durationMin ?? Infinity) - (b.durationMin ?? Infinity))
+      : sort === "questions"
+        ? [...filtered].sort((a, b) => b.questionCount - a.questionCount)
+        : weakType
+          ? [...filtered].sort(
+              (a, b) =>
+                Number(b.questionTypes.includes(weakType)) -
+                Number(a.questionTypes.includes(weakType)),
+            )
+          : filtered;
 
   // Живые скиллы (фильтр-карты) vs «Coming soon» (locked-тизеры). Writing/Speaking
   // живут в обеих ролях по флагу ops-гейта: live → ссылка, иначе → coming-полоса.
@@ -258,7 +266,17 @@ export function PracticeCatalog({
         </div>
         <div className="pc-herocol">
           <HeroCard hero={hero} />
-          {drillWeakest ? (
+          {hero.kind === "recommended" ? (
+            // Hero УЖЕ ведёт к слабому типу (конкретный тест) → drill подчинён: тихая
+            // ссылка «все тесты этого типа», а не второй громкий 3D-чип-дубль.
+            drillWeakest && (
+              <button type="button" onClick={drill} style={S.drillLink} className="pc-drilllink">
+                See all {drillWeakest.label} tests
+                <Icon name="arrow-right" size={14} strokeWidth={2.5} />
+              </button>
+            )
+          ) : drillWeakest ? (
+            // Resume-hero (про «продолжить») → слабый тип — отдельная мысль, заметный чип.
             <button type="button" onClick={drill} style={S.drillChip} className="pc-drill">
               <Icon name="bar-chart" size={16} strokeWidth={2.5} />
               Practice your weakest type: {drillWeakest.label}
@@ -619,7 +637,8 @@ function SkillCard({
       {/* Нижний аффорданс — ссылка → Open, тоггл → Filter tests / Showing below. */}
       <div style={S.skillFoot}>
         {href ? (
-          <>Open {name} <Icon name="arrow-right" size={15} strokeWidth={2.5} /></>
+          // Диагональная стрелка = «уйдёшь со страницы» (live W/S — навигация, не фильтр).
+          <>Open {name} <Icon name="arrow-up-right" size={15} strokeWidth={2.5} /></>
         ) : pressed ? (
           <><Icon name="chevron-down" size={15} strokeWidth={2.5} /> Showing below</>
         ) : (
@@ -669,7 +688,6 @@ function SkillBand({ band, target, base, ink }: { band: number | null; target: n
         {band != null && <span style={{ ...S.bandFill, width: pct(band), background: base }} />}
         <span style={{ ...S.bandTarget, left: pct(target) }} aria-hidden="true" />
       </div>
-      <div style={S.bandCaption}>Target {target.toFixed(1)}</div>
     </div>
   );
 }
@@ -820,6 +838,7 @@ const CSS = `
 .pc-row:hover{transform:translateY(-2px);border-color:var(--brand-border)!important;box-shadow:var(--shadow-solid-lg)}
 .pc-drill:hover{border-color:var(--brand)!important}
 .pc-drill:active{transform:translateY(3px);box-shadow:none!important}
+.pc-drilllink:hover{text-decoration:underline}
 .pc-showall:hover{background:var(--surface-hover)!important;color:var(--text-primary)!important}
 .pc-goalselect:hover select{background:var(--surface-hover)}
 .pc-goalsaved{animation:pc-fade .18s var(--ease-out)}
@@ -867,6 +886,8 @@ const S: Record<string, CSSProperties> = {
   // и bando-кнопки (своя violet-кромка), но в брендовом тинте — это особый хук, не
   // дженерик-кнопка. min-height + перенос: длинный label не клипается на 320px.
   drillChip: { display: "inline-flex", alignItems: "center", gap: 8, minHeight: 44, padding: "8px 16px", marginBottom: 3, borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, lineHeight: 1.3, textAlign: "left", boxShadow: "0 3px 0 0 var(--brand-border)", cursor: "pointer", transition: "transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)" },
+  // Подчинённый weak-type CTA при hero=recommended: тихая текст-ссылка, не дубль-чип.
+  drillLink: { display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 44, padding: "4px 2px", background: "none", border: "none", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, textAlign: "left", cursor: "pointer" },
   firstNote: { display: "flex", alignItems: "flex-start", gap: 9, padding: "11px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.4, fontWeight: 600 },
 
   // Goal bar — target band + gap, inline-editable target select.
@@ -895,7 +916,7 @@ const S: Record<string, CSSProperties> = {
   // Skills — sentence-case label (не uppercase-эйбрау)
   skillHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 12 },
   filterToggle: { width: "100%", alignItems: "center", gap: 8, minHeight: 44, padding: "0 14px", marginBottom: 12, borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "var(--shadow-solid)" },
-  skillCard: { display: "flex", flexDirection: "column", gap: 14, textAlign: "left", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow-xs)", padding: 18, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
+  skillCard: { display: "flex", flexDirection: "column", gap: 14, textAlign: "left", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow-solid)", padding: 18, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
   skillTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
   skillTile: { width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 16, fontWeight: 800 },
   skillName: { fontSize: 18, fontWeight: 800, letterSpacing: "-0.015em", color: "var(--text-primary)" },
@@ -906,12 +927,11 @@ const S: Record<string, CSSProperties> = {
   // BAND block — best band on a 0–9 rail with a target marker.
   bandBlock: { display: "flex", flexDirection: "column", gap: 6 },
   bandRow: { display: "flex", alignItems: "baseline", justifyContent: "space-between" },
-  bandOver: { fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--text-muted)" },
+  bandOver: { fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--text-muted)" },
   bandVal: { fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 700 },
   bandTrack: { position: "relative", height: 7, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
   bandFill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: "var(--radius-full)" },
   bandTarget: { position: "absolute", top: 0, bottom: 0, width: 2, background: "var(--text-primary)", opacity: 0.4, transform: "translateX(-1px)" },
-  bandCaption: { fontSize: 11, color: "var(--text-muted)" },
 
   // Coming-soon strip (subordinated locked skills) — sentence-case label
   comingHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", margin: "0 0 12px" },
