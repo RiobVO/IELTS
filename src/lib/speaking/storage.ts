@@ -16,6 +16,19 @@ export async function signedUploadUrl(path: string): Promise<{ url: string; toke
   return { url: data.signedUrl, token: data.token };
 }
 
+/**
+ * Short-lived signed GET URL so the OWNER can replay their take on the result page
+ * (the bucket is private; the result read is already owner-scoped). Returns null if
+ * the object is gone (retention-reaped) so the caller simply renders no player —
+ * never a 500. Default TTL 1h covers a result session; a reload re-signs.
+ */
+export async function signedPlaybackUrl(path: string, expiresIn = 3600): Promise<string | null> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.storage.from(SPEAKING_BUCKET).createSignedUrl(path, expiresIn);
+  if (error || !data) return null;
+  return data.signedUrl;
+}
+
 /** Real object size (bytes) — the cost-guard truth, not the client's claim. */
 export async function audioSize(path: string): Promise<number | null> {
   const supabase = createServiceClient();

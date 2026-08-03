@@ -86,6 +86,10 @@ export interface SpeakingFeedbackResult {
   // successful eval window but KEEPS the transcript, so "removed" is gated on the
   // transcript being empty, never on audio deletion. The UI swaps to "removed".
   transcript: string;
+  // Storage key of the take while it still exists (null once audio is deleted — user
+  // delete or the 7-day retention reaper). The result page signs a short-lived GET URL
+  // from this so the owner can replay; null → no player. Never sent to the client.
+  audioPath: string | null;
   criteria: SpeakingCriterion[];
   topFixes: string[];
   annotations: SpeakingAnnotation[];
@@ -106,6 +110,8 @@ export async function readFeedbackResult(
       bandHigh: speakingFeedback.bandHigh,
       confidence: speakingFeedback.confidence,
       transcript: speakingFeedback.transcript,
+      audioPath: speakingSubmission.audioPath,
+      audioDeletedAt: speakingSubmission.audioDeletedAt,
       criteria: speakingFeedback.criteria,
       topFixes: speakingFeedback.topFixes,
       annotations: speakingFeedback.annotations,
@@ -125,6 +131,7 @@ export async function readFeedbackResult(
     bandHigh: Number(row.bandHigh),
     confidence: row.confidence,
     transcript: row.transcript,
+    audioPath: row.audioDeletedAt != null ? null : row.audioPath,
     criteria: row.criteria as SpeakingCriterion[],
     topFixes: row.topFixes as string[],
     annotations: row.annotations as SpeakingAnnotation[],

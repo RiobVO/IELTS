@@ -18,7 +18,16 @@ import { Transcript, type SpeakAnno } from "./_Transcript";
  * transcript is the one Speaking-specific block. The blocker + weakest-first order
  * are DERIVED here (lowest band midpoint), never extra model fields.
  */
-export function SpeakingResult({ data, targetBand }: { data: SpeakingFeedbackResult; targetBand: number }) {
+export function SpeakingResult({
+  data,
+  targetBand,
+  audioUrl,
+}: {
+  data: SpeakingFeedbackResult;
+  targetBand: number;
+  /** Short-lived signed playback URL while the take exists; null → no player. */
+  audioUrl: string | null;
+}) {
   const criteria = data.criteria;
   const blocker = criteria[blockerIndex(criteria)];
   const rows: PlotRow[] = sortWeakestFirst(criteria).map((c) => ({
@@ -62,6 +71,18 @@ export function SpeakingResult({ data, targetBand }: { data: SpeakingFeedbackRes
 
       <TopFixes fixes={data.topFixes} />
       <CriteriaPlot rows={rows} targetBand={targetBand} />
+
+      {audioUrl && (
+        <section style={S.playerCard}>
+          <div style={S.playerLabel}>
+            <Icon name="play" size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} /> Your recording
+          </div>
+          <audio controls src={audioUrl} style={{ width: "100%" }} />
+          <p style={S.playerNote}>
+            Replay your take to study it. It&apos;s kept privately for up to 7 days, then auto-deleted — or remove it now from the transcript below.
+          </p>
+        </section>
+      )}
 
       <Transcript
         submissionId={data.submissionId}
@@ -120,6 +141,11 @@ const S: Record<string, CSSProperties> = {
   historyPill: { flex: "none", display: "inline-flex", alignItems: "center", height: 38, padding: "0 16px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-secondary)", fontSize: 13, fontWeight: 700, textDecoration: "none", transition: "var(--transition-colors)" },
 
   h2: { margin: "0 0 12px", fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
+
+  playerCard: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 },
+  playerLabel: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 700, color: "var(--text-primary)" },
+  playerNote: { margin: 0, fontSize: 12.5, lineHeight: 1.5, color: "var(--text-muted)" },
+
   drillList: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 },
   drillItem: { display: "flex", gap: 10, alignItems: "flex-start", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", fontSize: 14, lineHeight: 1.5, color: "var(--text-secondary)" },
 
