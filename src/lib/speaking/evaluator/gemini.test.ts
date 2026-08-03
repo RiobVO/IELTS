@@ -35,7 +35,7 @@ describe("evaluateWithGemini (audio)", () => {
     });
     expect(r.feedback.criteria).toHaveLength(4);
     expect(r.provider).toBe("gemini");
-    expect(r.promptVersion).toBe("speaking-part2-v2");
+    expect(r.promptVersion).toBe("speaking-part2-v3");
     const arg = generateContent.mock.calls[0][0];
     expect(arg.contents[1].inlineData.mimeType).toBe("audio/webm");
   });
