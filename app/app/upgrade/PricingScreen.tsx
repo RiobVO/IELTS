@@ -23,52 +23,62 @@ interface PlanCardMeta {
   features: { t: string; on: boolean; hero?: boolean }[];
 }
 
-const CARDS: PlanCardMeta[] = [
-  {
-    id: "basic",
-    name: "Basic",
-    tagline: "Get started for free.",
-    cta: "Start free",
-    features: [
-      { t: "Unlimited Reading & Listening", on: true },
-      { t: "Per-type breakdown — what you miss", on: true },
-      { t: "Answer explanations & evidence", on: true },
-      { t: "League, badges & streaks", on: true },
-      { t: "Full 40-question mock tests + band", on: false },
-      { t: "AI Writing feedback", on: false },
-    ],
-  },
-  {
-    id: "premium",
-    name: "Premium",
-    tagline: "Sit full mocks. Know your real band.",
-    popular: true,
-    cta: "Upgrade to Premium",
-    features: [
-      { t: "Everything in Basic, free", on: true },
-      { t: "Full 40-question mock tests + real band", on: true, hero: true },
-      { t: "Sit it under real exam timing", on: true },
-      { t: "Drill any weak type on demand", on: true },
-      { t: "AI Writing feedback — Task 1 & 2", on: true, hero: true },
-      { t: "Priority new content", on: true },
-    ],
-  },
-  {
-    id: "ultra",
-    name: "Ultra",
-    tagline: "Everything, plus a human check.",
-    cta: "Upgrade to Ultra",
-    features: [
-      { t: "Everything in Premium", on: true },
-      { t: "AI Writing feedback — priority", on: true, hero: true },
-      { t: "Speaking + human review (coming)", on: true },
-      { t: "Monthly band-prediction report (coming)", on: true },
-      { t: "1:1 strategy call (quarterly)", on: true, hero: true },
-      { t: "Priority new content", on: true },
-      { t: "Cancel anytime", on: true },
-    ],
-  },
-];
+/**
+ * Plan cards. `speakingEnabled` is the SPEAKING_EVAL_MODEL ops-gate (mirror of the
+ * Writing gate): only when Speaking is actually reachable do we advertise the free
+ * preview ("1 free Speaking analysis to try") and drop the "(coming)" tag — so the
+ * pricing copy never promises a feature the user can't reach. Ships dormant until the
+ * env flips on at launch (calibration-gated), in the same deploy.
+ */
+function buildCards(speakingEnabled: boolean): PlanCardMeta[] {
+  return [
+    {
+      id: "basic",
+      name: "Basic",
+      tagline: "Get started for free.",
+      cta: "Start free",
+      features: [
+        { t: "Unlimited Reading & Listening", on: true },
+        { t: "Per-type breakdown — what you miss", on: true },
+        { t: "Answer explanations & evidence", on: true },
+        ...(speakingEnabled ? [{ t: "1 free Speaking analysis to try", on: true, hero: true }] : []),
+        { t: "League, badges & streaks", on: true },
+        { t: "Full 40-question mock tests + band", on: false },
+        { t: "AI Writing feedback", on: false },
+      ],
+    },
+    {
+      id: "premium",
+      name: "Premium",
+      tagline: "Sit full mocks. Know your real band.",
+      popular: true,
+      cta: "Upgrade to Premium",
+      features: [
+        { t: "Everything in Basic, free", on: true },
+        { t: "Full 40-question mock tests + real band", on: true, hero: true },
+        { t: "Sit it under real exam timing", on: true },
+        { t: "Drill any weak type on demand", on: true },
+        { t: "AI Writing feedback — Task 1 & 2", on: true, hero: true },
+        { t: "Priority new content", on: true },
+      ],
+    },
+    {
+      id: "ultra",
+      name: "Ultra",
+      tagline: "Everything, plus a human check.",
+      cta: "Upgrade to Ultra",
+      features: [
+        { t: "Everything in Premium", on: true },
+        { t: "AI Writing feedback — priority", on: true, hero: true },
+        { t: speakingEnabled ? "AI Speaking feedback — Part 2 long-turn" : "Speaking + human review (coming)", on: true, hero: speakingEnabled },
+        { t: "Monthly band-prediction report (coming)", on: true },
+        { t: "1:1 strategy call (quarterly)", on: true, hero: true },
+        { t: "Priority new content", on: true },
+        { t: "Cancel anytime", on: true },
+      ],
+    },
+  ];
+}
 
 const FAQ = [
   { q: "Can I cancel anytime?", a: "Yes, one click in your profile. Access stays until the end of your paid period." },
@@ -89,14 +99,19 @@ export default function PricingScreen({
   current,
   price,
   ctaHref,
+  speakingEnabled = false,
 }: {
   current: Tier;
   price: { premium: Price; ultra: Price };
   /** Guest mode (public /pricing): every CTA links here instead of starting a
    *  payment, and no plan is marked "current" — the visitor isn't logged in. */
   ctaHref?: string;
+  /** SPEAKING_EVAL_MODEL ops-gate — advertise the free Speaking preview only when
+   *  the feature is actually reachable (false until launch). */
+  speakingEnabled?: boolean;
 }) {
   const [annual, setAnnual] = useState(true);
+  const CARDS = buildCards(speakingEnabled);
 
   return (
     <div className="pricing-wrap" style={S.wrap}>
