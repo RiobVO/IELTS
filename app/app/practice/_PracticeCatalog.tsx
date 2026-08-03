@@ -118,8 +118,10 @@ export function PracticeCatalog({
   filterTypes,
   drillWeakest,
   hero,
-  readingMeta,
-  listeningMeta,
+  readingCount,
+  listeningCount,
+  readingBand,
+  listeningBand,
   targetBand,
   bestBand,
   writingEnabled = false,
@@ -132,8 +134,12 @@ export function PracticeCatalog({
   filterTypes: FilterOption[];
   drillWeakest: DrillWeakest;
   hero: HeroData;
-  readingMeta: string;
-  listeningMeta: string;
+  /** Count line per live skill, e.g. "12 tests". */
+  readingCount: string;
+  listeningCount: string;
+  /** User's best band on the skill (per-section best), or null with no attempts. */
+  readingBand: number | null;
+  listeningBand: number | null;
   /** Onboarding-set goal; editable inline. null only on the unset edge. */
   targetBand: number | null;
   /** Best single-test band so far (max R/L), or null if no tests submitted. */
@@ -223,10 +229,6 @@ export function PracticeCatalog({
           : b.questionCount - a.questionCount,
       );
 
-  // Подсветка выбранной skill-карты её цветом (фон-тинт + цветная рамка).
-  const cardBg = (k: Skill, c: string) => (skill === k ? c : "var(--surface)");
-  const cardBd = (k: Skill, c: string) => (skill === k ? c : "var(--border)");
-
   // Живые скиллы (фильтр-карты) vs «Coming soon» (locked-тизеры). Writing/Speaking
   // живут в обеих ролях по флагу ops-гейта: live → ссылка, иначе → coming-полоса.
   const liveCols = 2 + (writingEnabled ? 1 : 0) + (speakingEnabled ? 1 : 0);
@@ -277,54 +279,42 @@ export function PracticeCatalog({
         <div style={S.skillHead}>Jump to a skill</div>
         <div className="pc-skills" style={cssVar({ "--live-cols": liveCols })}>
           <SkillCard
-            letter="R"
+            skill="reading"
             name="Reading"
-            meta={readingMeta}
-            tileBg="var(--brand-subtle)"
-            tileFg="var(--text-link)"
-            badge={{ tone: "success", text: "Live" }}
+            count={readingCount}
+            band={readingBand}
+            targetBand={targetBand}
             onClick={() => selectSkill("reading")}
-            bg={cardBg("reading", "var(--brand-subtle)")}
-            bd={cardBd("reading", "var(--brand)")}
             pressed={skill === "reading"}
           />
           <SkillCard
-            letter="L"
+            skill="listening"
             name="Listening"
-            meta={listeningMeta}
-            tileBg="var(--info-subtle)"
-            tileFg="var(--info-text)"
-            badge={{ tone: "success", text: "Live" }}
+            count={listeningCount}
+            band={listeningBand}
+            targetBand={targetBand}
             onClick={() => selectSkill("listening")}
-            bg={cardBg("listening", "var(--info-subtle)")}
-            bd={cardBd("listening", "var(--info)")}
             pressed={skill === "listening"}
           />
           {writingEnabled && (
             // Live → настоящая навигация: ссылка (middle-click / новая вкладка, link-семантика).
             <SkillCard
-              letter="W"
+              skill="writing"
               name="Writing"
-              meta="Live · Task 2"
-              tileBg="var(--warn-subtle)"
-              tileFg="var(--warn-text)"
-              badge={{ tone: "success", text: "Live" }}
+              count="Task 1 & 2"
+              band={null}
+              targetBand={targetBand}
               href="/app/writing"
-              bg="var(--surface)"
-              bd="var(--border)"
             />
           )}
           {speakingEnabled && (
             <SkillCard
-              letter="S"
+              skill="speaking"
               name="Speaking"
-              meta="Live · Part 2"
-              tileBg="var(--success-subtle)"
-              tileFg="var(--success-text)"
-              badge={{ tone: "success", text: "Live" }}
+              count="Part 2 long-turn"
+              band={null}
+              targetBand={targetBand}
               href="/app/speaking"
-              bg="var(--surface)"
-              bd="var(--border)"
             />
           )}
         </div>
@@ -575,46 +565,59 @@ function HeroCard({ hero }: { hero: HeroData }) {
   );
 }
 
-/* ── Skill card (live Reading / Listening / Writing) ─────────────────────── */
+/* ── Skill card (live Reading / Listening / Writing / Speaking) ──────────────
+   Tactile bando tile: letter chip (soft fill / ink text) + Live pill, name +
+   count, a BAND block (the user's best band on a 0–9 rail with a target marker),
+   and the action affordance. Per-skill colour is the given oklch palette (base =
+   fill / ink = text / soft = chip bg) — applied inline, the bando tokens (surface,
+   border, text, success) stay var(--*). */
+type SkillKey = "reading" | "listening" | "writing" | "speaking";
+
+const SKILL_PALETTE: Record<SkillKey, { letter: string; base: string; soft: string; ink: string }> = {
+  reading: { letter: "R", base: "oklch(0.585 0.225 292)", soft: "oklch(0.955 0.030 290)", ink: "oklch(0.50 0.205 292)" },
+  listening: { letter: "L", base: "oklch(0.60 0.135 235)", soft: "oklch(0.93 0.055 232)", ink: "oklch(0.49 0.130 238)" },
+  writing: { letter: "W", base: "oklch(0.64 0.135 70)", soft: "oklch(0.94 0.075 85)", ink: "oklch(0.56 0.120 65)" },
+  speaking: { letter: "S", base: "oklch(0.585 0.150 158)", soft: "oklch(0.93 0.070 156)", ink: "oklch(0.49 0.130 160)" },
+};
+
 function SkillCard({
-  letter,
+  skill,
   name,
-  meta,
-  tileBg,
-  tileFg,
-  badge,
+  count,
+  band,
+  targetBand,
   onClick,
-  bg,
-  bd,
   href,
   pressed,
 }: {
-  letter: string;
+  skill: SkillKey;
   name: string;
-  meta: string;
-  tileBg: string;
-  tileFg: string;
-  badge: { tone: "success" | "warn"; text: string };
+  count: string;
+  /** User's best band on this skill, or null with no attempts yet. */
+  band: number | null;
+  /** Goal band; defaults to 7.0 when the user hasn't set one. */
+  targetBand: number | null;
   /** Тоггл-карты (Reading/Listening). Не задаётся для href-варианта. */
   onClick?: () => void;
-  bg: string;
-  bd: string;
-  /** Если задан — карта это ссылка-навигация (live Writing), а не тоггл. */
+  /** Если задан — карта это ссылка-навигация (live Writing/Speaking), а не тоггл. */
   href?: string;
   /** Reading/Listening — фильтр-тоггл (aria-pressed). */
   pressed?: boolean;
 }) {
+  const p = SKILL_PALETTE[skill];
   const inner = (
     <>
       <div style={S.skillTop}>
-        <span style={{ ...S.skillTile, background: tileBg, color: tileFg }}>{letter}</span>
-        <Badge tone={badge.tone}>{badge.text}</Badge>
+        <span style={{ ...S.skillTile, background: p.soft, color: p.ink }}>{p.letter}</span>
+        <Badge tone="success">Live</Badge>
       </div>
-      <div style={{ ...S.skillName, color: "var(--text-primary)" }}>{name}</div>
-      <div style={S.skillMeta}>{meta}</div>
-      {/* Нижний аффорданс — заполняет карту И делает явным действие: ссылка → Open,
-          тоггл → Filter tests / Showing below (в цвете самого скилла). */}
-      <div style={{ ...S.skillFoot, color: tileFg }}>
+      <div>
+        <div style={S.skillName}>{name}</div>
+        <div style={S.skillCount}>{count}</div>
+      </div>
+      <SkillBand band={band} target={targetBand ?? 7} base={p.base} ink={p.ink} />
+      {/* Нижний аффорданс — ссылка → Open, тоггл → Filter tests / Showing below. */}
+      <div style={S.skillFoot}>
         {href ? (
           <>Open {name} <Icon name="arrow-right" size={15} strokeWidth={2.5} /></>
         ) : pressed ? (
@@ -625,7 +628,12 @@ function SkillCard({
       </div>
     </>
   );
-  const style = { ...S.skillCard, background: bg, borderColor: bd };
+  // Selected filter-card keeps a subtle skill-tinted state; resting = surface/border.
+  const style = {
+    ...S.skillCard,
+    background: pressed ? p.soft : "var(--surface)",
+    borderColor: pressed ? p.base : "var(--border)",
+  };
 
   // Навигация → ссылка (link-семантика, middle-click / новая вкладка).
   if (href) {
@@ -636,15 +644,33 @@ function SkillCard({
     );
   }
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="pc-skillcard"
-      aria-pressed={pressed}
-      style={style}
-    >
+    <button type="button" onClick={onClick} className="pc-skillcard" aria-pressed={pressed} style={style}>
       {inner}
     </button>
+  );
+}
+
+/* BAND block — best band as a fill on a shared 0–9 rail with a target marker.
+   Reads colour-independently: the value + caption carry the number, the marker the
+   goal. No band yet → empty rail + "—". */
+function SkillBand({ band, target, base, ink }: { band: number | null; target: number; base: string; ink: string }) {
+  const pct = (v: number) => `${Math.max(0, Math.min(100, (v / 9) * 100))}%`;
+  return (
+    <div style={S.bandBlock}>
+      <div style={S.bandRow}>
+        <span style={S.bandOver}>BAND</span>
+        <span style={{ ...S.bandVal, color: ink }}>{band != null ? band.toFixed(1) : "—"}</span>
+      </div>
+      <div
+        style={S.bandTrack}
+        role="img"
+        aria-label={band != null ? `Best band ${band.toFixed(1)} of 9, target ${target.toFixed(1)}` : `No band yet, target ${target.toFixed(1)}`}
+      >
+        {band != null && <span style={{ ...S.bandFill, width: pct(band), background: base }} />}
+        <span style={{ ...S.bandTarget, left: pct(target) }} aria-hidden="true" />
+      </div>
+      <div style={S.bandCaption}>Target {target.toFixed(1)}</div>
+    </div>
   );
 }
 
@@ -869,13 +895,23 @@ const S: Record<string, CSSProperties> = {
   // Skills — sentence-case label (не uppercase-эйбрау)
   skillHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 12 },
   filterToggle: { width: "100%", alignItems: "center", gap: 8, minHeight: 44, padding: "0 14px", marginBottom: 12, borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "var(--shadow-solid)" },
-  skillCard: { display: "flex", flexDirection: "column", textAlign: "left", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
-  skillTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
-  skillTile: { width: 42, height: 42, borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", fontSize: 19, fontWeight: 800 },
-  skillName: { fontSize: 18, fontWeight: 800, letterSpacing: "-0.015em" },
-  skillMeta: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", marginTop: 4 },
+  skillCard: { display: "flex", flexDirection: "column", gap: 14, textAlign: "left", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow-xs)", padding: 18, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
+  skillTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
+  skillTile: { width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 16, fontWeight: 800 },
+  skillName: { fontSize: 18, fontWeight: 800, letterSpacing: "-0.015em", color: "var(--text-primary)" },
+  skillCount: { fontSize: 13, color: "var(--text-muted)", marginTop: 3 },
   // marginTop:auto прижимает футер к низу карты — заполняет пустую нижнюю зону.
-  skillFoot: { marginTop: "auto", paddingTop: 18, display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 800 },
+  skillFoot: { marginTop: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 600, color: "var(--text-link)" },
+
+  // BAND block — best band on a 0–9 rail with a target marker.
+  bandBlock: { display: "flex", flexDirection: "column", gap: 6 },
+  bandRow: { display: "flex", alignItems: "baseline", justifyContent: "space-between" },
+  bandOver: { fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--text-muted)" },
+  bandVal: { fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 700 },
+  bandTrack: { position: "relative", height: 7, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
+  bandFill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: "var(--radius-full)" },
+  bandTarget: { position: "absolute", top: 0, bottom: 0, width: 2, background: "var(--text-primary)", opacity: 0.4, transform: "translateX(-1px)" },
+  bandCaption: { fontSize: 11, color: "var(--text-muted)" },
 
   // Coming-soon strip (subordinated locked skills) — sentence-case label
   comingHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", margin: "0 0 12px" },
