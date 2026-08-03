@@ -783,6 +783,10 @@ export const speakingFeedback = pgTable("speaking_feedback", {
   criteria: jsonb("criteria").notNull(),
   transcript: text("transcript").notNull(),
   annotations: jsonb("annotations").notNull(),
+  // Sentence-level [{text, startSec}] for the transcript karaoke-sync (#3). Optional
+  // (Whisper STT may be unconfigured) → defaults to [] = no sync, static transcript.
+  // Wiped to [] on a user delete (verbatim speech = PII), same as `transcript`.
+  transcriptTimings: jsonb("transcript_timings").notNull().default(sql`'[]'::jsonb`),
   topFixes: jsonb("top_fixes").notNull(),
   drills: jsonb("drills").notNull(),
   provider: text("provider").notNull(),

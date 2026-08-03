@@ -4,6 +4,8 @@ import { isCronAuthorized } from "@/lib/cron-auth";
 import { getEvaluator } from "@/lib/speaking/evaluator";
 import { isUnderlength } from "@/lib/speaking/lifecycle";
 import { downloadAudio } from "@/lib/speaking/storage";
+import { transcribeTimings } from "@/lib/speaking/stt";
+import { alignTranscriptTimings, type TranscriptTiming } from "@/lib/speaking/transcript-align";
 import { logAudioEvent } from "@/lib/speaking/events";
 import {
   claimForEvaluation, loadSubmissionForEval, persistFeedback, markFailed,
@@ -45,7 +47,17 @@ export async function POST(request: Request) {
         ...result.feedback.topFixes,
       ].slice(0, 3);
     }
-    await persistFeedback(submissionId, result); // guarded: throws if reaped/delete-requested
+    // Karaoke-sync timings (#3): borrow Whisper's accurate word clocks and align them onto
+    // the Gemini verbatim transcript by sentence. Strictly optional — STT unconfigured or a
+    // transport error must NEVER fail the eval, so it degrades to [] (static transcript).
+    let timings: TranscriptTiming[] = [];
+    try {
+      const stt = await transcribeTimings(Buffer.from(audio.data, "base64"), audio.mimeType);
+      if (stt) timings = alignTranscriptTimings(result.feedback.transcript, stt.words, stt.duration);
+    } catch (e) {
+      console.error("speaking timings failed (non-fatal)", submissionId, e);
+    }
+    await persistFeedback(submissionId, result, timings); // guarded: throws if reaped/delete-requested
     // Audio is KEPT after a successful eval so the user can replay their take and work
     // on it. Cleanup is the 7-day retention reaper (cron) or an explicit user delete —
     // not an immediate drop here. Privacy: still a private bucket + consent + auto-expiry.
