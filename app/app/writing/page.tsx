@@ -5,7 +5,7 @@ import { listPublishedTasks } from "@/lib/writing/read";
 import { completedCounts } from "@/lib/writing/store";
 import { effectiveTier, meetsTier, WRITING_MIN_TIER, type Tier } from "@/lib/tiers";
 import { AppShell } from "../_AppShell";
-import { WritingCatalog } from "./_Catalog";
+import { WritingCatalog, type PreviewState } from "./_Catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -28,14 +28,17 @@ export default async function WritingCatalogPage() {
     : "basic";
   const hasPaid = meetsTier(tier, WRITING_MIN_TIER);
   const previewUsed = hasPaid ? false : (await completedCounts(user.id, new Date())).lifetime >= 1;
-  const locked = !hasPaid && previewUsed;
+  // Three states drive the catalog's tone: "paid" (no paywall), "available" (the one free
+  // analysis is unspent → signpost it up front so it isn't burned by accident), "spent"
+  // (the gate engages → upgrade framed as continuation, not a wall).
+  const preview: PreviewState = hasPaid ? "paid" : previewUsed ? "spent" : "available";
 
   const rawTarget = (profile as { target_band: string | number | null } | null)?.target_band;
   const targetBand = rawTarget != null ? Number(rawTarget) : null;
 
   return (
     <AppShell active="practice">
-      <WritingCatalog tasks={tasks} targetBand={targetBand} locked={locked} />
+      <WritingCatalog tasks={tasks} targetBand={targetBand} preview={preview} />
     </AppShell>
   );
 }
