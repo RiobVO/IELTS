@@ -31,6 +31,20 @@ export async function insertPendingSubmission(
   return rows[0]?.id ?? null;
 }
 
+// Pre-insert gate read (createWritingSubmission): the task must be published and the
+// user's tier must meet task.tier_required. Owner-path (RLS-bypassing) — the server
+// action is the trust boundary, not the catalog UI. Returns null when no task matches
+// the id (callers must screen the id with isUuid first so it can't 22P02 the query).
+export async function loadWritingTaskForSubmissionGate(
+  taskId: string,
+): Promise<{ status: "draft" | "published"; tierRequired: "basic" | "premium" | "ultra" } | null> {
+  const [row] = await db
+    .select({ status: writingTask.status, tierRequired: writingTask.tierRequired })
+    .from(writingTask)
+    .where(eq(writingTask.id, taskId));
+  return row ?? null;
+}
+
 // Atomic single-fire claim — only the pending→evaluating winner evaluates.
 export async function claimForEvaluation(submissionId: string): Promise<boolean> {
   const rows = await db

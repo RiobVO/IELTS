@@ -1,12 +1,14 @@
 "use server";
 
 import { getProfile, getUser } from "@/lib/auth";
-import { writingEvalConfig } from "@/env";
-import { effectiveTier, type Tier } from "@/lib/tiers";
+import { writingFeatureEnabled } from "@/env";
+import { isUuid } from "@/lib/uuid";
+import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { canEvaluate, validateEssay, isStuck, WRITING_STALE_MS } from "@/lib/writing/lifecycle";
 import {
   completedCounts,
   insertPendingSubmission,
+  loadWritingTaskForSubmissionGate,
   triggerEvaluate,
   readOwnSubmission,
   markFailed,
@@ -16,7 +18,15 @@ type CreateResult =
   | { ok: true; submissionId: string }
   | {
       ok: false;
-      reason: "auth" | "too_short" | "too_long" | "not_configured" | "preview_used" | "daily_cap" | "in_progress";
+      reason:
+        | "auth"
+        | "too_short"
+        | "too_long"
+        | "not_configured"
+        | "preview_used"
+        | "daily_cap"
+        | "in_progress"
+        | "unavailable";
     };
 
 export async function createWritingSubmission(input: { taskId: string; essay: string }): Promise<CreateResult> {
@@ -34,12 +44,23 @@ export async function createWritingSubmission(input: { taskId: string; essay: st
   const { lifetime, today } = await completedCounts(user.id, now);
 
   const gate = canEvaluate({
-    configured: writingEvalConfig() !== null,
+    configured: writingFeatureEnabled(),
     tier,
     lifetimeCompleted: lifetime,
     todayCompleted: today,
   });
   if (!gate.allowed) return { ok: false, reason: gate.reason };
+
+  // Task gate (defence in depth): the catalog only lists published tasks the user can
+  // open, but this action is POST-reachable directly. Screen the id first (so a
+  // malformed value never reaches the uuid column → 22P02), then re-check the task is
+  // published and the user's tier meets task.tier_required (canEvaluate only enforces
+  // the global WRITING_MIN_TIER). All failures collapse to one opaque reason.
+  if (!isUuid(input.taskId)) return { ok: false, reason: "unavailable" };
+  const task = await loadWritingTaskForSubmissionGate(input.taskId);
+  if (!task || task.status !== "published" || !meetsTier(tier, task.tierRequired)) {
+    return { ok: false, reason: "unavailable" };
+  }
 
   // 0024 one-active index: null = user already has a pending/evaluating submission.
   const submissionId = await insertPendingSubmission(user.id, input.taskId, input.essay.trim(), essay.wordCount);
