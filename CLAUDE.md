@@ -50,7 +50,17 @@ UTC-нед (суммарно R+L), Premium/Ultra безлимит; W/S плат�
 на `profile` первым действием (порядок локов profile→content_item). Trial-механика
 (`trial_claim`) вестигиальна — каталог открыт, tier-гейт её не триггерит.
 
-**Открыто:** контент-процесс W2-3 (BACKLOG — ритм пополнения + витрина «новое»),
+**Growth-волна 1 ЗАКРЫТА (2026-08-04, `706a73f..9d94e5d`, GROWTH_PLAN.md).** Виральный
+контур целиком: реферальная награда = +1 mock-старт/нед обоим (потолок +3,
+`profile.referral_cap_bonus`, 0058, читается под тем же row-lock, что кап); витрина
+«новое на этой неделе» + честная дата публикации (`content_item.published_at`, 0059);
+Inspera-копирайт и секция траектории на лендинге; публичная share-карточка
+`/s/<token>` с `next/og`-картинкой (0060, токен выдаётся владельцу СДАННОЙ попытки,
+гейт в WHERE) + починка потери `?ref=` через cookie; публичный Band Predictor
+`/predictor` (свой банк 10Q, ключи server-only, IP-троттл, результат в httpOnly-cookie
+переживает signup). Все три миграции применены на проде, живые смоуки зелёные.
+
+**Открыто:** контент-процесс W2-3 (BACKLOG — ритм пополнения),
 merchant-ключи (внешний гейт платежей → волна 0b), Listening-прогон после заливки аудио,
 два `?src=`-линка в посты каналов; парсинг-хвосты — drag-слоты для verbatim-practice
 (DnD-тесты сейчас корректно фоллбэчат в атомизированный вид), Dependabot moderate
@@ -239,6 +249,12 @@ Speaking). Tiers: Writing = Premium, Speaking = Ultra (sub-tier gets one preview
 - **Responsive invariant:** breakpoint-switched props (display/grid/width) live in CSS classes, never
   inline (inline beats media queries). Never reorder interactive DOM via CSS `order`/`display:contents`
   (WCAG 2.4.3/1.3.2 regression) — reorder the DOM.
+- **Files read via `process.cwd()` aren't traced into the lambda:** the share-card OG route
+  read its font with `path.join(process.cwd(), "app/_og/...")` — works locally (source tree
+  present), 500s on Vercel with `ENOENT /var/task/...` because the tracer only follows static
+  imports. Fix is an explicit `outputFileTracingIncludes` entry per route (`next.config.mjs`).
+  Class of bug that is invisible to `build`/`tsc` and to a local `next start` — only a prod
+  request shows it, so any new runtime file read needs a prod hit before it counts as done.
 - **External DOM mutations break React reconciliation:** Google Translate and similar browser
   extensions mutate the DOM outside React's control, throwing `NotFoundError: removeChild` —
   showed up in `error_log` (`source='client'`) and recurred for weeks before diagnosed. Fix is
