@@ -22,6 +22,7 @@ export const AnalyticsEvent = {
   ContentWaitlist: "content_waitlist",
   SprintSignup: "sprint_signup",
   CapHit: "cap_hit",
+  PredictorComplete: "predictor_complete",
 } as const;
 
 /** Свойства каждого события (ключ объекта = имя события в PostHog). */
@@ -95,6 +96,16 @@ export type EventProperties = {
     mode: "practice" | "mock";
     scope: "daily" | "weekly";
     check: "soft" | "authoritative";
+  };
+  /** Прохождение публичного Band Predictor (G1-6) — САМЫЙ верх воронки, до
+   *  регистрации. distinctId у гостя нет: capture идёт с якорем `guest:<ip>`
+   *  (тот же x-forwarded-for, что у throttle), чтобы не плодить персон-однодневок
+   *  со случайными id. `weak_type` — канон-слаг qtype или "" (идеальная проба). */
+  predictor_complete: {
+    correct: number;
+    total: number;
+    weak_type: string;
+    band_low: number;
   };
 };
 

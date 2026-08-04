@@ -512,6 +512,7 @@ export default function Home() {
             <span className="seal"><i></i><i></i><i></i></span>band<span className="o">o</span>
           </a>
           <div className="nav-links">
+            <a href="/predictor">Band predictor</a>
             <a href="/app/reading">Reading</a>
             <a href="/app/listening">Listening</a>
             <a href="#how">How it works</a>
@@ -526,6 +527,7 @@ export default function Home() {
           </div>
         </div>
         <div className="ndrawer" id="ndrawer">
+          <a href="/predictor">Band predictor</a>
           <a href="/app/reading">Reading</a>
           <a href="/app/listening">Listening</a>
           <a href="#how">How it works</a>
@@ -842,7 +844,7 @@ export default function Home() {
               <ul className="traj-pts">
                 <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Every mock plotted against your target</li>
                 <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>A projected band, not a pep talk</li>
-                <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Says «too early to call» when it is</li>
+                <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Says &ldquo;too early to call&rdquo; when it is</li>
               </ul>
               <a href="/auth" className="btn btn-v btn-lg">
                 Start your trajectory
@@ -911,10 +913,15 @@ export default function Home() {
               <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Real exam-format papers in the real Inspera-style screen</li>
               <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Server-graded band</li>
             </ul>
-            <a href="/auth" className="btn btn-v btn-lg">
-              Take a free test
-              <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-            </a>
+            <div className="cta-row" style={{ justifyContent: "center" }}>
+              <a href="/auth" className="btn btn-v btn-lg">
+                Take a free test
+                <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </a>
+              <a href="/predictor" className="btn btn-g btn-lg">
+                Not ready? Check your band in 10 min
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -929,6 +936,7 @@ export default function Home() {
           </div>
           <div>
             <h3 className="foot-h">Product</h3>
+            <a href="/predictor">Band predictor</a>
             <a href="/app/reading">Reading</a>
             <a href="/app/listening">Listening</a>
             <a href="/pricing">Pricing</a>

@@ -9,7 +9,10 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/app/", "/admin/", "/api/", "/auth/"],
+      // `/s/` — расшаренные band-карточки (G1-5): ссылку кидают конкретным людям,
+      // индексу она не нужна. Превью в мессенджерах это не мешает: краулеры
+      // Telegram/WhatsApp читают og-теги, а не robots-разрешение на индексацию.
+      disallow: ["/app/", "/admin/", "/api/", "/auth/", "/s/"],
     },
     ...(site ? { sitemap: `${site}/sitemap.xml` } : {}),
   };

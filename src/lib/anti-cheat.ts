@@ -121,6 +121,14 @@ export const AUTH_THROTTLE_LIMITS = {
   login: { windowSeconds: 10 * 60, max: 10 },
   reset: { windowSeconds: 10 * 60, max: 10 },
   resetEmail: { windowSeconds: 10 * 60, max: 3 },
+  /**
+   * Публичный Band Predictor (G1-6) — единственный грейдинг без аккаунта, поэтому
+   * ему нужен собственный потолок по IP. Щедрый: живой человек проходит пробу
+   * минут за десять, а за общим carrier-IP (UZ-мобильные операторы за CGNAT, см.
+   * SIGNUP_THROTTLE_MAX) их могут быть десятки одновременно — ложный отказ здесь
+   * дороже лишнего прогона. Отсекает автоматический перебор, не живую волну.
+   */
+  predictor: { windowSeconds: 10 * 60, max: 30 },
 } as const;
 
 export type AuthThrottleScope = keyof typeof AUTH_THROTTLE_LIMITS;
