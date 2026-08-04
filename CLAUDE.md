@@ -163,7 +163,7 @@ early).
 
 ## Status (compressed — detail in git / BRIEF §9 / SCHEMA_NOTES / BACKLOG)
 
-> Phase map: `0 → 1 → 2 (2A→2D) → launch hardening → [FROZEN] 3`. Each migration `000N` marks a
+> Phase map: `0 → 1 → 2 (2A→2D) → launch hardening → 3 (active, env-gated)`. Each migration `000N` marks a
 > sub-stage. All of the below is **done, on `main`, applied to Supabase** unless noted.
 
 - **✅ Phase 0** — schema + up/down migrations, dual DB access, `on_auth_user_created` trigger, local
@@ -204,11 +204,15 @@ early).
   idempotent submit; `getProfile`/`getUser` остаются `cache()`-wrapped. Замер — на prod через
   Server-Timing (из статичного checkout латентность не мерится).
 
-### 🧊 Phase 3 — AI Writing/Speaking (§4.10) — FROZEN, «coming soon», LAST
-Frozen 2026-06-15: audience-first; AI stays a marketing hook + Ultra upsell. NOT deleted — `topic`
-table + `topic_skill` enum remain stubs (core stays LLM-free per §4.2). On unfreeze the decisions are
-locked (async eval: store → API-route → poll; seeded topics + minimal admin form; soft daily cap for
-Ultra; Speaking input modality still open).
+### ✅ Phase 3 — AI Writing/Speaking (§4.10) — ACTIVE, env-gated
+Built and live behind an env flag. Runs on real `writing_task`/`speaking_task` tables (+ submission/
+feedback/feedback_debug, migrations 0023–0031) — the legacy `topic` table + `topic_skill` enum still
+exist but are unused. Async eval: store → internal secret-gated API-route → poll; Gemini Flash
+(audio-native for Speaking). Enabled ONLY when model+key+internal-secret+public-origin are all set
+(`writingFeatureEnabled`/`speakingFeatureEnabled`); otherwise the screens `redirect("/app/practice")`.
+Tiers: Writing = Premium, Speaking = Ultra (sub-tier gets one preview). Core R/L stays LLM-free (§4.2).
+Submit gate: task `published` + `meetsTier(user, task.tier_required)` + UUID screen (owner-path); raw
+output (`*_feedback_debug`) hard-locked (RLS + revoke; asserted by `npm run verify`).
 
 > Branch per phase, merge to `main` when a phase is done.
 
