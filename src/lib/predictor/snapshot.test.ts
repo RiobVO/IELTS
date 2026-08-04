@@ -22,7 +22,11 @@ describe("parsePredictorCookie", () => {
     expect(parsePredictorCookie("{not json")).toBeNull();
     expect(parsePredictorCookie("[]")).toBeNull();
     expect(parsePredictorCookie("null")).toBeNull();
-    expect(parsePredictorCookie("{}")).toBeNull();
+  });
+
+  it("пустой набор ответов — это проба без ответов, а НЕ отсутствие пробы", () => {
+    // Иначе отправивший форму вслепую терял свой нулевой результат на перезагрузке.
+    expect(parsePredictorCookie("{}")).toEqual({});
   });
 
   it("ключи не-номера и не-строковые значения отбрасываются", () => {
