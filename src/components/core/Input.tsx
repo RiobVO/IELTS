@@ -76,7 +76,9 @@ export function Input({
             background: "transparent",
             color: "var(--text-primary)",
             fontFamily: "var(--font-ui)",
-            fontSize: "var(--text-base)",
+            // 16px, не 15px (--text-base): ниже 16px iOS Safari авто-зумит вьюпорт
+            // при фокусе в поле — ломает раскладку на телефоне (основной сценарий).
+            fontSize: "var(--text-md)",
             boxShadow: "none",
           },
           style,
