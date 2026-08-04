@@ -184,6 +184,11 @@ export const profile = pgTable(
     referredBy: uuid("referred_by").references((): any => profile.id, {
       onDelete: "set null",
     }),
+    // Реферальный бонус к недельному капу mock-стартов (migration 0058, G1-1):
+    // +1 за каждого приглашённого, дошедшего до rated-первой попытки, обеим
+    // сторонам пары. Потолок держит приложение (REFERRAL_MOCK_BONUS_MAX), не
+    // констрейнт. Читается авторитетно под row-lock в startAttempt.
+    referralCapBonus: integer("referral_cap_bonus").notNull().default(0),
     hiddenFromLeaderboard: boolean("hidden_from_leaderboard")
       .notNull()
       .default(false),

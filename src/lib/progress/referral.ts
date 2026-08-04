@@ -19,6 +19,11 @@
  * RETURNING. Self-referral and invalid codes are already excluded upstream by
  * the signup trigger (no `registered` row is ever created for them).
  *
+ * G1-1 (growth-волна 1): награда — не только XP, но и +1 mock-старт/неделю обоим
+ * (`profile.referral_cap_bonus`, migration 0058, потолок REFERRAL_MOCK_BONUS_MAX).
+ * Кап читает это слагаемое авторитетно под тем же row-lock на profile
+ * (`startAttempt`), поэтому награда и гейт не могут разъехаться.
+ *
  * The claim and BOTH XP grants run in ONE transaction. Otherwise a crash between
  * the (already-committed) claim and the XP writes would leave status='rewarded'
  * with no XP — and the single-fire guard makes that unrecoverable on retry. The
@@ -33,6 +38,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { notification, profile, referral } from "@/db/schema";
 import { logError } from "@/lib/monitoring/log-error";
+import { REFERRAL_MOCK_BONUS_MAX } from "@/lib/tiers";
 
 /**
  * OAuth signup gap-fill (Google — Apple/Facebook not wired yet, BRIEF §12.1 п.3):
@@ -102,6 +108,13 @@ export async function linkOAuthReferral(
   }
 }
 
+/**
+ * Строка-описание выданной награды в `referral.reward` (аудит-след, не источник
+ * истины). G1-1: к прежним XP добавлен подъём недельного mock-капа — то, ради
+ * чего реферал вообще имеет смысл.
+ */
+export const REFERRAL_REWARD = "xp:inviter=100,invitee=50;mock_week:+1";
+
 export async function maybeRewardReferral(
   userId: string,
   rated: boolean,
@@ -121,7 +134,7 @@ export async function maybeRewardReferral(
       // UPDATE takes also serializes concurrent first-submits inside the txn.
       const claimed = await tx
         .update(referral)
-        .set({ status: "rewarded", reward: "xp:inviter=100,invitee=50" })
+        .set({ status: "rewarded", reward: REFERRAL_REWARD })
         .where(
           and(eq(referral.inviteeId, userId), eq(referral.status, "registered")),
         )
@@ -132,14 +145,29 @@ export async function maybeRewardReferral(
 
       // Grant XP via a SQL increment (read-modify-write in JS would race the
       // post-submit profile write that also touches xp). Inviter +100, invitee +50.
-      await tx
-        .update(profile)
-        .set({ xp: sql`${profile.xp} + 100` })
-        .where(eq(profile.id, claimed[0].inviterId));
-      await tx
-        .update(profile)
-        .set({ xp: sql`${profile.xp} + 50` })
-        .where(eq(profile.id, userId));
+      //
+      // G1-1: рядом с XP едет НАСТОЯЩАЯ награда — +1 mock-старт/неделю обоим
+      // (referral_cap_bonus, 0058). XP оставлен: он кормит лигу/бейджи, его снос был
+      // бы регрессией соседних механик. Инкремент — тем же SQL-выражением (не
+      // read-modify-write в JS), потолок LEAST прямо в SQL, чтобы конкурентная
+      // награда по другой паре не смогла перепрыгнуть его. Порядок апдейтов
+      // inviter → invitee фиксирован (см. deadlock-примечание в шапке).
+      const bumpBonus = sql`LEAST(${profile.referralCapBonus} + 1, ${REFERRAL_MOCK_BONUS_MAX}::int)`;
+      // Порядок апдейтов — по возрастанию id, а не «сначала inviter»: взаимные
+      // приглашения (A позвал B, B позвал A) — реальная пара строк, которую два
+      // одновременных сабмита захватили бы в противоположном порядке, то есть
+      // классическая deadlock-форма. Детерминированный глобальный порядок её
+      // исключает; на одиночной награде поведение не меняется.
+      const grants = [
+        { id: claimed[0].inviterId, xp: 100 },
+        { id: userId, xp: 50 },
+      ].sort((a, b) => (a.id < b.id ? -1 : 1));
+      for (const g of grants) {
+        await tx
+          .update(profile)
+          .set({ xp: sql`${profile.xp} + ${g.xp}`, referralCapBonus: bumpBonus })
+          .where(eq(profile.id, g.id));
+      }
 
       return claimed[0].inviterId;
     });
@@ -156,7 +184,7 @@ export async function maybeRewardReferral(
         type: "system",
         kind: "referral",
         title: "Referral activated",
-        body: "Your friend completed their first test — you earned +100 XP",
+        body: "Your friend completed their first test — you earned +1 mock test a week and +100 XP",
       });
     } catch (e) {
       await logError({
@@ -172,7 +200,7 @@ export async function maybeRewardReferral(
         type: "system",
         kind: "referral",
         title: "Welcome",
-        body: "You earned +50 XP for signing up via an invite",
+        body: "Signing up via an invite earned you +1 mock test a week and +50 XP",
       });
     } catch (e) {
       await logError({

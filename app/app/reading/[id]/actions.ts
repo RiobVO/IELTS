@@ -168,6 +168,9 @@ export async function submitAttempt(
     contentItemId,
     null,
     accessData.adminDraftBypass, // F4: admin-draft QA-прогон вне монетизации
+    // Кап на сабмите не проверяется (mode=null), но параметр обязателен —
+    // передаём честное значение из того же чтения profile.
+    accessData.referralCapBonus,
   );
 
   if (rows.length === 0) redirect(`/app/reading/${contentItemId}`);

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BASIC_PRACTICE_DAILY_LIMIT, BASIC_MOCK_WEEKLY_LIMIT } from "@/lib/tiers";
+import { BASIC_PRACTICE_DAILY_LIMIT } from "@/lib/tiers";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
 
@@ -20,12 +20,17 @@ import { Icon } from "@/components/core/icons";
 export function CatalogNotice({
   kind,
   dismissHref,
+  mockLimit,
 }: {
   kind: "limit-practice" | "limit-mock" | "throttled";
   dismissHref: string;
+  /** Эффективный недельный mock-кап юзера (база + реферальный бонус, G1-1) —
+   *  считает страница той же формулой, что и гейт. Копирайт обязан называть тот
+   *  лимит, по которому его реально отбило, иначе «2 a week» врёт приглашавшему. */
+  mockLimit: number;
 }) {
   const limit = kind === "limit-practice" || kind === "limit-mock";
-  const limitN = kind === "limit-practice" ? BASIC_PRACTICE_DAILY_LIMIT : BASIC_MOCK_WEEKLY_LIMIT;
+  const limitN = kind === "limit-practice" ? BASIC_PRACTICE_DAILY_LIMIT : mockLimit;
   const limitWord = kind === "limit-practice" ? "practice" : "mock";
   const limitPeriod = kind === "limit-practice" ? "day" : "week";
   // Exact UTC instant, not a relative "tomorrow"/"next week" — the cap window is
@@ -80,6 +85,17 @@ export function CatalogNotice({
           {limit
             ? `Basic includes ${limitN} ${limitWord} starts a ${limitPeriod} — ${limitReset}. ${otherWord} starts have their own ${otherPeriod} cap; go Premium for unlimited ${limitWord}.`
             : "You're starting tests too quickly. Give it a minute, then try again."}
+          {/* Второй, бесплатный выход из капа (G1-1): приглашение поднимает недельный
+              mock-лимит обоим. Показываем только на mock-капе — на practice награда
+              не действует, и обещать её там было бы враньём. */}
+          {kind === "limit-mock" && (
+            <>
+              {" "}
+              <Link href="/app/invite" style={{ color: "var(--text-link)", fontWeight: 700, textDecoration: "none" }}>
+                Or invite a friend — you both get +1 mock a week.
+              </Link>
+            </>
+          )}
         </div>
       </div>
       {limit && (
