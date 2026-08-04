@@ -25,13 +25,12 @@ export function safeNextPath(value: string | undefined | null): string {
     const c = value.charCodeAt(i);
     if (c === 0x5c || c <= 0x20 || c === 0x7f) return FALLBACK;
   }
-  // Возврат НА сам экран авторизации — не назначение: после успешного входа там
+  // Экран формы авторизации сам по себе — не назначение: после успешного входа там
   // делать нечего, зато `/auth?message=...` рисует произвольный текст на
-  // брендированном экране (замечание третьего раунда ревью). Отсекаем весь префикс,
-  // а не конкретный параметр: легитимного сценария «войти, чтобы попасть на /auth»
-  // не существует.
-  if (value === "/auth" || value.startsWith("/auth/") || value.startsWith("/auth?")) {
-    return FALLBACK;
-  }
+  // брендированном экране (замечание третьего раунда ревью). Отсекаем ТОЛЬКО его,
+  // не весь префикс: `/auth/update-password` — легитимная цель ссылки из письма
+  // сброса пароля (`redirectTo` в requestPasswordReset), и запрет подпутей сломал
+  // бы восстановление доступа.
+  if (value === "/auth" || value.startsWith("/auth?")) return FALLBACK;
   return value;
 }
