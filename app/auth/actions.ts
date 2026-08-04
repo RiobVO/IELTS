@@ -16,8 +16,11 @@ import { verifyTurnstile } from "@/lib/anti-bot/turnstile";
 import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
 
-function fail(message: string): never {
-  redirect(`/auth?error=${encodeURIComponent(message)}`);
+// На ошибке возвращаем в форму её режим + введённый email, чтобы восстановить ввод
+// (пароль НИКОГДА не отражаем). `mode` решает, какая форма откроется после redirect.
+function fail(message: string, extra?: Record<string, string>): never {
+  const params = new URLSearchParams({ error: message, ...extra });
+  redirect(`/auth?${params.toString()}`);
 }
 
 export async function signIn(formData: FormData) {
@@ -28,7 +31,7 @@ export async function signIn(formData: FormData) {
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) fail(error.message);
+  if (error) fail(error.message, { mode: "login", email });
 
   revalidatePath("/", "layout");
   redirect(next);
@@ -44,7 +47,7 @@ export async function signUp(formData: FormData) {
   // Cloudflare-injected hidden field.
   const captcha = String(formData.get("cf-turnstile-response") ?? "") || null;
   if (!(await verifyTurnstile(captcha))) {
-    fail("Could not verify you're human. Please try again.");
+    fail("Could not verify you're human. Please try again.", { mode: "signup", email });
   }
 
   // Signup velocity-cap (§11 anti-abuse): ограничиваем регистрации с одного IP в
@@ -62,7 +65,7 @@ export async function signUp(formData: FormData) {
       and(eq(signupThrottle.ipHash, ipHash), gte(signupThrottle.createdAt, since)),
     );
   if (exceedsSignupRate(recent?.n ?? 0)) {
-    fail("Too many sign-ups from your network. Please try again later.");
+    fail("Too many sign-ups from your network. Please try again later.", { mode: "signup", email });
   }
   await db.insert(signupThrottle).values({ ipHash });
 
@@ -75,7 +78,7 @@ export async function signUp(formData: FormData) {
     password,
     options: ref ? { data: { ref_code: ref } } : undefined,
   });
-  if (error) fail(error.message);
+  if (error) fail(error.message, { mode: "signup", email });
 
   // Регистрация — авторитетное серверное событие воронки (§11), РОВНО раз на нового
   // пользователя. При включённом email-подтверждении Supabase на повторную
