@@ -3,7 +3,7 @@
 import { getProfile, getUser } from "@/lib/auth";
 import { writingFeatureEnabled } from "@/env";
 import { isUuid } from "@/lib/uuid";
-import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
+import { effectiveTier, meetsTier, WRITING_MIN_TIER, type Tier } from "@/lib/tiers";
 import { canEvaluate, validateEssay, isStuck, WRITING_STALE_MS } from "@/lib/writing/lifecycle";
 import {
   completedCounts,
@@ -58,7 +58,10 @@ export async function createWritingSubmission(input: { taskId: string; essay: st
   // the global WRITING_MIN_TIER). All failures collapse to one opaque reason.
   if (!isUuid(input.taskId)) return { ok: false, reason: "unavailable" };
   const task = await loadWritingTaskForSubmissionGate(input.taskId);
-  if (!task || task.status !== "published" || !meetsTier(tier, task.tierRequired)) {
+  if (!task || task.status !== "published") return { ok: false, reason: "unavailable" };
+  // tier_required gates only at-tier users; sub-tier users are in the free-preview lane
+  // (canEvaluate allowed them above) and must not be blocked by the per-task tier.
+  if (meetsTier(tier, WRITING_MIN_TIER) && !meetsTier(tier, task.tierRequired)) {
     return { ok: false, reason: "unavailable" };
   }
 

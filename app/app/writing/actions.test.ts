@@ -80,6 +80,16 @@ describe("createWritingSubmission", () => {
     expect(await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") })).toEqual({ ok: true, submissionId: "sub1" });
     expect(trigger).toHaveBeenCalledWith("sub1");
   });
+
+  // #D: Writing min tier is Premium; Basic gets one lifetime teaser (canEvaluate gates it
+  // above). The per-task tier_required must NOT block that preview — only at-tier (premium+)
+  // users are checked against it. (Premium→ultra task still rejected above: #2 holds.)
+  it("allows a basic preview on a premium task (#D — preview revived)", async () => {
+    getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "basic", premium_until: null }); counts.mockResolvedValue({ lifetime: 0, today: 0 }); insert.mockResolvedValue("sub1");
+    loadTask.mockResolvedValue({ status: "published", tierRequired: "premium" });
+    expect(await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") })).toEqual({ ok: true, submissionId: "sub1" });
+    expect(insert).toHaveBeenCalled();
+  });
 });
 
 describe("getSubmissionStatus", () => {
