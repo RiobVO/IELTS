@@ -13,6 +13,7 @@
 import type { Metadata } from "next";
 import { PUBLIC_QUESTIONS, PREDICTOR_PASSAGES } from "@/lib/predictor/bank";
 import { getUser } from "@/lib/auth";
+import { toTeaser } from "@/lib/predictor/snapshot";
 import { readPredictorSnapshot } from "./actions";
 import PredictorScreen from "./PredictorScreen";
 
@@ -28,13 +29,18 @@ export default async function PredictorPage() {
   // Залогинен → показываем полный разбор сразу (он и есть награда за регистрацию);
   // гость видит тизер. Снимок живёт в cookie, поэтому переживает signup-круг.
   const [user, snapshot] = await Promise.all([getUser(), readPredictorSnapshot()]);
+  // Через ТУ ЖЕ проекцию, что и ответ действия (повторное ревью G1-6): иначе
+  // перезагрузка страницы отдавала бы гостю полный снимок из cookie в RSC-payload —
+  // гейт закрывался бы только на одном из двух путей, а слабый тип всё равно был бы
+  // виден в пропсах клиентского компонента.
+  const initialSnapshot = snapshot ? toTeaser(snapshot, !!user) : null;
 
   return (
     <div translate="no" className="notranslate">
       <PredictorScreen
         questions={PUBLIC_QUESTIONS}
         passages={PREDICTOR_PASSAGES}
-        initialSnapshot={snapshot}
+        initialSnapshot={initialSnapshot}
         authed={!!user}
       />
     </div>
