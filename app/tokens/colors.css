@@ -62,7 +62,11 @@
 
   --text-primary:   var(--slate-900);
   --text-secondary: var(--slate-700);
-  --text-muted:     var(--slate-600);
+  /* darkened from slate-600 (only 3.38:1 on white, 2.94:1 on violet-100 — failed AA
+     as normal text). L 0.525 clears 4.5:1 on every content surface: ≥5.4:1 on white,
+     ≥4.7:1 on the darkest (surface-hover / brand-subtle = violet-100). Stays lighter
+     than --text-secondary, so the primary/secondary/muted hierarchy holds. */
+  --text-muted:     oklch(0.525 0.017 287);
   --text-disabled:  var(--slate-400);
   --text-on-brand:  oklch(0.99 0 0);
 
