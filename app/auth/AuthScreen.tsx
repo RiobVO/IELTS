@@ -33,6 +33,40 @@ const LABEL_STYLE: CSSProperties = {
   marginBottom: 6,
 };
 
+const FIELD_ERROR_STYLE: CSSProperties = {
+  margin: "5px 0 0",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--text-xs)",
+  fontWeight: 600,
+  color: "var(--error-text)",
+};
+
+const EYE_BTN_STYLE: CSSProperties = {
+  display: "grid",
+  placeItems: "center",
+  border: "none",
+  background: "none",
+  padding: 0,
+  margin: 0,
+  cursor: "pointer",
+  color: "var(--text-muted)",
+};
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Известные сырые сообщения Supabase → человекочитаемые. Неизвестное (в т.ч. уже
+ *  дружелюбные кастомные строки из actions.ts) отдаём как есть — ничего не теряем. */
+function friendlyAuthError(raw: string): string {
+  const m = raw.toLowerCase();
+  if (m.includes("invalid login credentials")) return "That email and password don't match. Check them, or reset your password.";
+  if (m.includes("email not confirmed")) return "Confirm your email first — check your inbox for the link.";
+  if (m.includes("already registered") || m.includes("already been registered")) return "This email already has an account. Try logging in instead.";
+  if (m.includes("password should be at least")) return "Password must be at least 6 characters.";
+  if (m.includes("unable to validate email") || m.includes("invalid email")) return "Enter a valid email address.";
+  if (m.includes("rate limit") || m.includes("too many requests")) return "Too many attempts. Wait a moment and try again.";
+  return raw;
+}
+
 function GoogleG() {
   return (
     <svg width="17" height="17" viewBox="0 0 48 48">
@@ -44,42 +78,94 @@ function GoogleG() {
   );
 }
 
-/** Поле с постоянной подписью, связанной с инпутом по id (htmlFor) — чинит и recall
- *  (подпись не исчезает при вводе), и скринридер (программное имя поля). */
-function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+/** Поле с постоянной подписью (htmlFor — recall + скринридер) и опциональной
+ *  inline-ошибкой валидации под инпутом (role="alert", связана aria-describedby). */
+function Field({ id, label, error, children }: { id: string; label: string; error?: string | null; children: ReactNode }) {
   return (
     <div>
       <label htmlFor={id} style={LABEL_STYLE}>{label}</label>
       {children}
+      {error && <p id={`${id}-error`} role="alert" style={FIELD_ERROR_STYLE}>{error}</p>}
     </div>
   );
 }
 
-/** Пароль с toggle видимости (reveal) в trailing-слоте Input. */
-function PasswordInput({ id, autoComplete }: { id: string; autoComplete: "new-password" | "current-password" }) {
-  const [show, setShow] = useState(false);
+/** Email с лёгкой on-blur валидацией формата — фидбек до сабмита, не блокирующий.
+ *  onBlur вешаем на обёртку (React onBlur = всплывающий focusout), а не на Input:
+ *  общий Input разворачивает {...rest} после своего onBlur и перезатёр бы фокус-логику. */
+function EmailField({ id, autoFocus }: { id: string; autoFocus?: boolean }) {
+  const [err, setErr] = useState<string | null>(null);
   return (
-    <Input
-      id={id}
-      icon="lock"
-      name="password"
-      type={show ? "text" : "password"}
-      placeholder="At least 6 characters"
-      required
-      minLength={6}
-      autoComplete={autoComplete}
-      trailing={
-        <button
-          type="button"
-          onClick={() => setShow((s) => !s)}
-          aria-label={show ? "Hide password" : "Show password"}
-          aria-pressed={show}
-          style={{ display: "grid", placeItems: "center", border: "none", background: "none", padding: 0, margin: 0, cursor: "pointer", color: "var(--text-muted)" }}
-        >
-          <Icon name={show ? "eye-off" : "eye"} size={17} />
-        </button>
-      }
-    />
+    <Field id={id} label="Email" error={err}>
+      <div
+        onBlur={(e) => {
+          const t = e.target as HTMLElement;
+          if (t.tagName !== "INPUT") return;
+          const v = (t as HTMLInputElement).value.trim();
+          setErr(v && !EMAIL_RE.test(v) ? "Enter a valid email address." : null);
+        }}
+      >
+        <Input
+          id={id}
+          icon="mail"
+          name="email"
+          type="email"
+          placeholder="you@example.com"
+          required
+          autoComplete="email"
+          autoFocus={autoFocus}
+          invalid={!!err}
+          aria-describedby={err ? `${id}-error` : undefined}
+          onChange={() => err && setErr(null)}
+        />
+      </div>
+    </Field>
+  );
+}
+
+/** Пароль: reveal-toggle в trailing + on-blur проверка длины (только на регистрации —
+ *  для логина длину чужого существующего пароля не подсказываем). onBlur — на обёртке. */
+function PasswordField({ id, autoComplete }: { id: string; autoComplete: "new-password" | "current-password" }) {
+  const [show, setShow] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const checkLen = autoComplete === "new-password";
+  return (
+    <Field id={id} label="Password" error={err}>
+      <div
+        onBlur={(e) => {
+          if (!checkLen) return;
+          const t = e.target as HTMLElement;
+          if (t.tagName !== "INPUT") return;
+          const v = (t as HTMLInputElement).value;
+          setErr(v && v.length < 6 ? "At least 6 characters." : null);
+        }}
+      >
+        <Input
+          id={id}
+          icon="lock"
+          name="password"
+          type={show ? "text" : "password"}
+          placeholder="At least 6 characters"
+          required
+          minLength={6}
+          autoComplete={autoComplete}
+          invalid={!!err}
+          aria-describedby={err ? `${id}-error` : undefined}
+          onChange={() => err && setErr(null)}
+          trailing={
+            <button
+              type="button"
+              onClick={() => setShow((s) => !s)}
+              aria-label={show ? "Hide password" : "Show password"}
+              aria-pressed={show}
+              style={EYE_BTN_STYLE}
+            >
+              <Icon name={show ? "eye-off" : "eye"} size={17} />
+            </button>
+          }
+        />
+      </div>
+    </Field>
   );
 }
 
@@ -163,10 +249,10 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
               {(error || message || refCode) && (
                 <div className="auth-rise" style={{ animationDelay: "60ms", marginBottom: 12 }}>
                   {error && (
-                    <div style={{ background: "var(--error-subtle)", color: "var(--error-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>{error}</div>
+                    <div role="alert" style={{ background: "var(--error-subtle)", color: "var(--error-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>{friendlyAuthError(error)}</div>
                   )}
                   {message && (
-                    <div style={{ background: "var(--success-subtle)", color: "var(--success-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>{message}</div>
+                    <div role="status" style={{ background: "var(--success-subtle)", color: "var(--success-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>{message}</div>
                   )}
                   {refCode && (
                     <div style={{ background: "var(--brand-subtle)", color: "var(--text-link)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)" }}>Referral sign-up — you and your inviter both get a bonus.</div>
@@ -183,14 +269,10 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
                     </Field>
                   </div>
                   <div className="auth-rise" style={{ animationDelay: "160ms" }}>
-                    <Field id="signup-email" label="Email">
-                      <Input id="signup-email" icon="mail" name="email" type="email" placeholder="you@example.com" required autoComplete="email" />
-                    </Field>
+                    <EmailField id="signup-email" />
                   </div>
                   <div className="auth-rise" style={{ animationDelay: "230ms" }}>
-                    <Field id="signup-password" label="Password">
-                      <PasswordInput id="signup-password" autoComplete="new-password" />
-                    </Field>
+                    <PasswordField id="signup-password" autoComplete="new-password" />
                   </div>
                 </div>
                 {turnstileSiteKey && (
@@ -236,10 +318,10 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
               {(error || message || refCode) && (
                 <div className="auth-rise" style={{ animationDelay: "60ms", marginBottom: 12 }}>
                   {error && (
-                    <div style={{ background: "var(--error-subtle)", color: "var(--error-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>{error}</div>
+                    <div role="alert" style={{ background: "var(--error-subtle)", color: "var(--error-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>{friendlyAuthError(error)}</div>
                   )}
                   {message && (
-                    <div style={{ background: "var(--success-subtle)", color: "var(--success-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>{message}</div>
+                    <div role="status" style={{ background: "var(--success-subtle)", color: "var(--success-text)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)", marginBottom: 6 }}>{message}</div>
                   )}
                   {refCode && (
                     <div style={{ background: "var(--brand-subtle)", color: "var(--text-link)", padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontFamily: "var(--font-ui)" }}>Referral sign-up — you and your inviter both get a bonus.</div>
@@ -251,14 +333,10 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
                 <input type="hidden" name="next" value={next} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div className="auth-rise" style={{ animationDelay: "90ms" }}>
-                    <Field id="login-email" label="Email">
-                      <Input id="login-email" icon="mail" name="email" type="email" placeholder="you@example.com" required autoComplete="email" autoFocus />
-                    </Field>
+                    <EmailField id="login-email" autoFocus />
                   </div>
                   <div className="auth-rise" style={{ animationDelay: "160ms" }}>
-                    <Field id="login-password" label="Password">
-                      <PasswordInput id="login-password" autoComplete="current-password" />
-                    </Field>
+                    <PasswordField id="login-password" autoComplete="current-password" />
                   </div>
                 </div>
                 <div className="auth-rise" style={{ textAlign: "right", marginTop: 10, animationDelay: "260ms" }}>
@@ -293,7 +371,6 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
         <div className="auth-panel" style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: PANEL + "%", padding: 10, zIndex: 5, transform: `translateX(${signup ? PANEL_SHIFT : 0}%)`, transition: "transform .28s var(--ease-out)" }}>
           <div style={{ position: "relative", overflow: "hidden", height: "100%", background: "linear-gradient(165deg, var(--surface-premium), var(--surface-premium-deep))", borderRadius: "var(--radius-xl)", display: "flex", flexDirection: "column", justifyContent: "center", padding: "44px 40px", color: "var(--surface-premium-ink)" }}>
             <div aria-hidden="true" style={{ position: "absolute", top: -120, right: -90, width: 340, height: 340, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--brand) 55%, transparent), transparent 65%)", filter: "blur(36px)", opacity: 0.5 }} />
-            <div aria-hidden="true" style={{ position: "absolute", bottom: -110, left: -70, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--info) 45%, transparent), transparent 65%)", filter: "blur(40px)", opacity: 0.4 }} />
 
             <div style={{ position: "relative" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 28 }}>
@@ -307,6 +384,12 @@ export function AuthScreen({ error, message, refCode, next, turnstileSiteKey }: 
               <button onClick={() => setMode(signup ? "login" : "signup")} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 46, padding: "0 22px", borderRadius: "var(--radius-md)", border: "2px solid rgba(255,255,255,.5)", background: "transparent", color: "var(--surface-premium-ink)", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, cursor: "pointer" }}>
                 {signup ? "Log in" : "Create account"} <span aria-hidden="true">→</span>
               </button>
+            </div>
+
+            {/* Бренд-подпись — один осмысленный акцент вместо второго декоративного glow. */}
+            <div style={{ position: "absolute", left: 40, bottom: 30, display: "flex", alignItems: "center", gap: 9, fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "var(--tracking-tight)", color: "rgba(255,255,255,.5)" }}>
+              <span aria-hidden="true" style={{ width: 20, height: 1, background: "rgba(255,255,255,.32)" }} />
+              Stop guessing your band.
             </div>
           </div>
         </div>
