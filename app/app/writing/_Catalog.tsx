@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { DifficultyMeter } from "@/components/core/DifficultyMeter";
 import { Icon } from "@/components/core/icons";
 import { Input } from "@/components/core/Input";
 import type { CatalogTask } from "@/lib/writing/read";
@@ -380,25 +381,7 @@ const PromptCard = memo(function PromptCard({ t, targetBand, locked }: { t: Cata
             </span>
           ) : (
             t.difficulty && (
-              <div
-                style={S.meter}
-                role="img"
-                aria-label={`Difficulty: ${writingDifficultyLabel[t.difficulty]} (${t.difficulty} of 3)`}
-                title={`Difficulty: ${writingDifficultyLabel[t.difficulty]}`}
-              >
-                <span style={S.meterLabel}>{writingDifficultyLabel[t.difficulty]}</span>
-                <span style={S.meterTrack} aria-hidden="true">
-                  {[1, 2, 3].map((seg) => (
-                    <span
-                      key={seg}
-                      style={{
-                        ...S.meterSeg,
-                        background: seg <= t.difficulty! ? accentInk : "var(--surface-inset)",
-                      }}
-                    />
-                  ))}
-                </span>
-              </div>
+              <DifficultyMeter level={t.difficulty} label={writingDifficultyLabel[t.difficulty]} ink={accentInk} />
             )
           )}
         </div>
@@ -558,11 +541,6 @@ const S: Record<string, CSSProperties> = {
   // Topic label → font-ui, sentence-case, ≥12px (was mono-caps 11). Color stays.
   chip: { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 8, padding: "5px 10px", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600, letterSpacing: "-0.005em" },
 
-  meter: { display: "inline-flex", alignItems: "center", gap: 8, flex: "none" },
-  // Difficulty label → font-ui, sentence-case (was mono-caps 10.5).
-  meterLabel: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 500, color: "var(--text-muted)" },
-  meterTrack: { display: "inline-flex", gap: 4 },
-  meterSeg: { width: 14, height: 4, borderRadius: 99 },
 
   question: { margin: "0 0 16px", fontSize: 17, fontWeight: 500, lineHeight: 1.42, letterSpacing: "-0.005em", color: "var(--text-primary)", flex: 1 },
 

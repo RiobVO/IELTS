@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { DifficultyMeter } from "@/components/core/DifficultyMeter";
 import { Icon, type IconName } from "@/components/core/icons";
 import { Onboarding } from "@/components/speaking/Onboarding";
 import {
@@ -195,20 +196,6 @@ function Seg({
   );
 }
 
-/** Difficulty meter — round pips + label (the Speaking treatment; Writing uses bars). */
-function Meter({ d, ink, dim }: { d: 1 | 2 | 3; ink: string; dim: boolean }) {
-  return (
-    <span style={S.meter} role="img" aria-label={`Difficulty: ${speakingDifficultyLabel[d]} (${d} of 3)`}>
-      <span style={S.meterLabel}>{speakingDifficultyLabel[d]}</span>
-      <span style={S.dots} aria-hidden="true">
-        {[1, 2, 3].map((i) => (
-          <span key={i} style={{ ...S.dot, ...(i <= d ? { background: dim ? "var(--text-disabled)" : ink } : S.dotOff) }} />
-        ))}
-      </span>
-    </span>
-  );
-}
-
 function CueCard({ t, locked, targetBand }: { t: SpeakingCatalogTask; locked: boolean; targetBand: number | null }) {
   const m = CAT_META[t.category];
   const href = locked ? "/app/upgrade" : `/app/speaking/attempt/${t.id}`;
@@ -239,7 +226,9 @@ function CueCard({ t, locked, targetBand }: { t: SpeakingCatalogTask; locked: bo
             {speakingCategoryLabel[t.category]}
           </span>
           <span style={S.metaRight}>
-            {t.difficulty != null && <Meter d={t.difficulty} ink={m.ink} dim={locked} />}
+            {t.difficulty != null && (
+              <DifficultyMeter level={t.difficulty} label={speakingDifficultyLabel[t.difficulty]} ink={m.ink} dimmed={locked} />
+            )}
             {locked && (
               <span style={S.lockChip} aria-hidden="true">
                 <Icon name="lock" size={12} strokeWidth={2.4} /> Ultra
@@ -347,12 +336,6 @@ const S: Record<string, CSSProperties> = {
   metaRight: { display: "inline-flex", alignItems: "center", gap: 8, flex: "none" },
   cat: { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 8, padding: "5px 10px", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600, letterSpacing: "-0.005em" },
   lockChip: { display: "inline-flex", alignItems: "center", gap: 4, borderRadius: 7, padding: "3px 8px", border: "1px solid var(--border)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 700 },
-
-  meter: { display: "inline-flex", alignItems: "center", gap: 8, flex: "none" },
-  meterLabel: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 500, color: "var(--text-muted)" },
-  dots: { display: "inline-flex", gap: 5 },
-  dot: { width: 7, height: 7, borderRadius: "50%", flex: "none" },
-  dotOff: { background: "var(--surface-inset)", boxShadow: "inset 0 0 0 1px var(--border)" },
 
   prompt: { margin: "0 0 14px", fontSize: 18, fontWeight: 600, lineHeight: 1.4, letterSpacing: "-0.01em", color: "var(--text-primary)" },
   promptLocked: { color: "var(--text-muted)" },
