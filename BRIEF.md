@@ -222,8 +222,8 @@ HTML по ЕДИНОМУ шаблону (классы `tfng-`/`mcq-`/`inspera-`,
   internal-secret + публичный origin (`writingFeatureEnabled`/`speakingFeatureEnabled`);
   иначе экраны делают `redirect("/app/practice")`. Тиры: Writing = Premium,
   Speaking = Ultra (суб-tier получает 1 пробную оценку).
-- **Acceptance.** *Security:* submit-гейт = задача `published` + `meetsTier(user,
-  task.tier_required)` + UUID-screening (owner-path); raw-вывод (`*_feedback_debug`)
+- **Acceptance.** *Security:* submit-гейт = задача `published` (для всех) + `tier_required`
+  только для at-tier (суб-tier — free-preview lane) + UUID-screening (owner-path); raw-вывод (`*_feedback_debug`)
   hard-locked (RLS + revoke, проверяет `npm run verify`); фича доступна только при
   полном конфиге (model+key+secret+origin). *Payment:* грант тира — только через
   webhook (§4.8); дневной кап оценок ограничивает расход. *AI:* evaluator только через
