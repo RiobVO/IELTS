@@ -317,6 +317,10 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
 
               <form action={signUp}>
                 <input type="hidden" name="ref" value={refCode ?? ""} />
+                {/* Куда вернуть после регистрации. Раньше hidden-поле было только у
+                    формы входа, и вход из воронки (например `/predictor` с готовым
+                    разбором в cookie) после signup терял пункт назначения. */}
+                <input type="hidden" name="next" value={next} />
                 {/* Honeypot (#anti-bot): невидимая приманка. Живой юзер её не видит и
                     оставляет пустой; бот, автозаполняющий поля, попадётся (server:
                     isHoneypotTripped). Прячем clip-паттерном (1×1 + clip-path), а НЕ

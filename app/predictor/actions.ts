@@ -14,7 +14,9 @@
  * красивое число, которого не заслужил) — ни доступа, ни денег она не открывает.
  */
 import "server-only";
+import { createHash } from "node:crypto";
 import { cookies, headers } from "next/headers";
+import { getUser } from "@/lib/auth";
 import { captureServer } from "@/lib/analytics/server";
 import { checkIpThrottle } from "@/lib/anti-bot/ip-throttle";
 import { logError } from "@/lib/monitoring/log-error";
@@ -24,11 +26,22 @@ import {
   PREDICTOR_COOKIE_MAX_AGE_SECONDS,
   PREDICTOR_COOKIE_NAME,
   parsePredictorCookie,
+  toTeaser,
   type PredictorSnapshot,
+  type PredictorTeaserView,
 } from "@/lib/predictor/snapshot";
 
+/**
+ * Что уходит В БРАУЗЕР после проверки. Гостю НЕ отдаём название слабого типа
+ * (Codex-ревью G1-6, P2): UI обещает его «после регистрации», а раньше сервер клал
+ * `weakType` прямо в ответ — гейт воронки обходился одним взглядом в DevTools.
+ * Гостю едет только факт «слабый тип найден»; сам тип лежит в httpOnly-cookie,
+ * которую клиент не читает, и раскрывается серверным рендером уже залогиненному.
+ */
+export type PredictorTeaser = PredictorTeaserView;
+
 export type PredictorActionResult =
-  | { ok: true; snapshot: PredictorSnapshot }
+  | { ok: true; snapshot: PredictorTeaser }
   | { ok: false; reason: "throttled" | "failed" };
 
 export async function submitPredictor(
@@ -46,6 +59,10 @@ export async function submitPredictor(
       h: result.bandHigh,
     };
 
+    // Полный снимок (со слабым типом) живёт ТОЛЬКО в httpOnly-cookie; наружу его
+    // отдаём лишь тому, кто уже зарегистрирован.
+    const authed = !!(await getUser());
+
     const jar = await cookies();
     jar.set(PREDICTOR_COOKIE_NAME, JSON.stringify(snapshot), {
       maxAge: PREDICTOR_COOKIE_MAX_AGE_SECONDS,
@@ -58,7 +75,12 @@ export async function submitPredictor(
     // якорь запроса (тот же x-forwarded-for, что у throttle) вместо выдуманного id,
     // чтобы не плодить в PostHog персон-однодневок. best-effort.
     const h = await headers();
-    const anon = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    // Хешируем адрес перед отправкой (Codex-ревью, замечание по приватности): сырой
+    // IP как identity внешнего аналитика — лишние персональные данные у третьей
+    // стороны. Хеш стабилен в пределах адреса, значит воронка по-прежнему
+    // склеивается, но обратно в IP не разворачивается.
+    const anon = createHash("sha256").update(`predictor:${ip}`).digest("hex").slice(0, 24);
     await captureServer("predictor_complete", `guest:${anon}`, {
       correct: result.correct,
       total: result.total,
@@ -66,7 +88,7 @@ export async function submitPredictor(
       band_low: result.bandLow,
     });
 
-    return { ok: true, snapshot };
+    return { ok: true, snapshot: toTeaser(snapshot, authed) };
   } catch (e) {
     await logError({
       source: "server",

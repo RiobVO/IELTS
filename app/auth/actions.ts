@@ -66,6 +66,9 @@ export async function signUp(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const ref = String(formData.get("ref") ?? "").trim();
+  // Куда вести после регистрации. Нормализуем тем же open-redirect-гардом, что и
+  // вход; дефолт `/app` сохраняет прежнее поведение для обычной регистрации.
+  const next = safeNextPath(formData.get("next") as string | null);
 
   // Honeypot (§11 anti-bot, без внешних зависимостей): скрытое поле-приманка,
   // невидимое живому пользователю. Заполнено → это бот: молча имитируем успех
@@ -121,7 +124,9 @@ export async function signUp(formData: FormData) {
     email,
     password,
     options: {
-      ...(origin ? { emailRedirectTo: `${origin}/auth/callback` } : {}),
+      ...(origin
+        ? { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` }
+        : {}),
       ...(ref ? { data: { ref_code: ref } } : {}),
     },
   });
@@ -153,9 +158,10 @@ export async function signUp(formData: FormData) {
   // Confirm-email seam (fail-open, БЕЗ env-флага — авто-адаптация под тумблер
   // Supabase «Confirm email»). Исход различаем по наличию сессии в ответе signUp:
   if (data.session) {
-    // Тумблер ВЫКЛ (текущий прод): signUp вернул сессию — пользователь уже вошёл,
-    // cookies выставлены server-клиентом. Поведение БЕЗ ИЗМЕНЕНИЙ — тот же
-    // success-редирект, что и раньше.
+    // Тумблер ВЫКЛ: signUp вернул сессию — пользователь уже вошёл, cookies выставлены
+    // server-клиентом. Явно заданный `next` (вход из воронки) ведём по назначению;
+    // без него — прежний success-редирект, поведение обычной регистрации не меняется.
+    if (next !== "/app") redirect(next);
     redirect(
       `/auth?message=${encodeURIComponent("A confirmation email has been sent to your inbox.")}`,
     );

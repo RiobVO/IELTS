@@ -16,7 +16,7 @@ import { qtypeLabel } from "@/lib/labels";
 import { formatBandRange } from "@/lib/predictor/grade";
 import type { PublicQuestion } from "@/lib/predictor/bank";
 import type { PredictorSnapshot } from "@/lib/predictor/snapshot";
-import { submitPredictor } from "./actions";
+import { submitPredictor, type PredictorTeaser } from "./actions";
 
 type Stage = "intro" | "test" | "result";
 
@@ -33,7 +33,11 @@ export default function PredictorScreen({
 }) {
   const [stage, setStage] = useState<Stage>(initialSnapshot ? "result" : "intro");
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [snapshot, setSnapshot] = useState<PredictorSnapshot | null>(initialSnapshot);
+  const [snapshot, setSnapshot] = useState<PredictorTeaser | null>(
+    initialSnapshot
+      ? { ...initialSnapshot, hasWeak: initialSnapshot.w !== null }
+      : null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -182,7 +186,7 @@ function QuestionBlock({
   );
 }
 
-function Result({ snapshot, authed }: { snapshot: PredictorSnapshot; authed: boolean }) {
+function Result({ snapshot, authed }: { snapshot: PredictorTeaser; authed: boolean }) {
   const range = formatBandRange(snapshot.l, snapshot.h);
   return (
     <section style={{ textAlign: "center" }}>
@@ -225,10 +229,10 @@ function Result({ snapshot, authed }: { snapshot: PredictorSnapshot; authed: boo
       ) : (
         <div style={S.locked}>
           <div style={S.lockedKey}>
-            {snapshot.w ? "We found the type costing you marks" : "You answered every type correctly"}
+            {snapshot.hasWeak ? "We found the type costing you marks" : "You answered every type correctly"}
           </div>
           <p style={S.lockedText}>
-            {snapshot.w
+            {snapshot.hasWeak
               ? "Create a free account to see which type it is, get the full breakdown, and drill it straight away."
               : "Create a free account to sit a full 40-question mock and get a real band on the official scale."}
           </p>

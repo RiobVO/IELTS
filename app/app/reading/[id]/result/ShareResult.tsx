@@ -40,15 +40,32 @@ export function ShareResult({
   const onClick = async () => {
     if (pending) return;
     setPending(true);
+    // Вкладку открываем СИНХРОННО, внутри самого жеста (Codex-ревью G1-5, P1):
+    // после await transient user activation уже потеряна, и мобильный Safari со
+    // строгими popup-блокерами глушит окно — токен выдан, а для юзера «ничего не
+    // произошло». Открываем пустую вкладку сразу и дописываем в неё адрес, когда
+    // ссылка готова. Без `noopener` в open (иначе он вернёт null и писать некуда) —
+    // opener рвём вручную, tabnabbing закрыт тем же способом.
+    const tab = window.open("", "_blank");
+    if (tab) tab.opener = null;
+
     let url = `${location.origin}/?ref=${encodeURIComponent(refCode)}&src=share_link`;
     try {
       const cardUrl = await createShareLink(attemptId);
       if (cardUrl) url = cardUrl;
+    } catch {
+      // Recover: перк не удался — делимся прежней ссылкой на лендинг с реф-кодом.
+      // Раньше здесь был `finally` без `catch`, и reject транспорта уводил поток
+      // мимо шеринга целиком (та же ревью-находка).
     } finally {
       setPending(false);
     }
+
     const tg = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(headline)}`;
-    window.open(tg, "_blank", "noopener,noreferrer");
+    // Вкладку заблокировали (или её закрыли, пока ждали) — уходим в том же окне,
+    // чтобы кнопка не оказалась мёртвой.
+    if (tab && !tab.closed) tab.location.replace(tg);
+    else window.location.href = tg;
   };
 
   return (

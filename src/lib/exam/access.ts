@@ -20,7 +20,14 @@ import { db } from "@/db";
 import { attempt, contentItem, profile, trialClaim } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
 import { isAdminProfile } from "@/lib/auth";
-import { BASIC_PRACTICE_DAILY_LIMIT, effectiveTier, meetsTier, mockWeeklyLimit, type Tier } from "@/lib/tiers";
+import {
+  BASIC_PRACTICE_DAILY_LIMIT,
+  effectiveTier,
+  meetsTier,
+  mockWeeklyLimit,
+  REFERRAL_MOCK_BONUS_MAX,
+  type Tier,
+} from "@/lib/tiers";
 import { FULL_CATEGORIES, isFullCategory, trialAllows } from "./trial";
 
 /** Режим попытки (P0): серверная сущность, выбирается ДО создания attempt. */
@@ -71,9 +78,6 @@ export async function loadAccessData(
   tierRequired: Tier;
   category: string;
   bandScale: Record<string, number> | null;
-  /** Реферальный бонус к недельному mock-капу (0058, G1-1) — едет тем же чтением
-   *  profile, что и тир, чтобы submit-гейт не делал второй round-trip. */
-  referralCapBonus: number;
   /** true только когда юзер — admin И тест ещё не опубликован (F4). Сигнал для
    *  enforceAccess: QA-прогон черновика вне монетизации (тир/дневной кап
    *  неприменимы к тесту, который ещё не продаётся). Никогда true для студента
@@ -86,7 +90,6 @@ export async function loadAccessData(
         tier: profile.tier,
         premiumUntil: profile.premiumUntil,
         role: profile.role,
-        referralCapBonus: profile.referralCapBonus,
       })
       .from(profile)
       .where(eq(profile.id, userId)),
@@ -111,7 +114,6 @@ export async function loadAccessData(
     tierRequired: item.tierRequired,
     category: item.category,
     bandScale: (item.bandScale as Record<string, number> | null) ?? null,
-    referralCapBonus: prof.referralCapBonus ?? 0,
     adminDraftBypass: admin && item.status !== "published",
   };
 }
@@ -149,14 +151,6 @@ export async function enforceAccess(
    * для студента или опубликованного теста, поэтому обычный путь не меняется.
    */
   adminDraftBypass: boolean,
-  /**
-   * Реферальный бонус к недельному mock-капу (0058, G1-1). ОБЯЗАТЕЛЬНЫЙ параметр,
-   * без дефолта: дефолт `0` тихо занижал бы лимит у юзера с приглашёнными друзьями,
-   * и он получал бы ЛОЖНЫЙ отказ на честном старте — ровно та ошибка, которую
-   * забытый аргумент обязан ловить компилятором (тот же довод, что у userTier в
-   * startAttempt). Caller берёт значение из уже прочитанного profile.
-   */
-  referralCapBonus: number,
 ): Promise<void> {
   if (adminDraftBypass) return;
 
@@ -229,10 +223,15 @@ export async function enforceAccess(
             lt(attempt.startedAt, weekEnd),
           ),
         );
-      // Кап с реферальным бонусом (G1-1): база + приглашённые друзья, потолок в
-      // mockWeeklyLimit. Бонус приходит от caller'а из уже прочитанного profile —
-      // авторитетное значение всё равно перечитывается под row-lock в startAttempt.
-      if ((usage?.n ?? 0) >= mockWeeklyLimit(referralCapBonus)) {
+      // Soft-чек считает по МАКСИМАЛЬНО возможному лимиту (база + потолок бонуса),
+      // а не по фактическому бонусу юзера (Codex-ревью G1-1, P1). Фактический бонус
+      // caller читает из profile ДО этого места и БЕЗ блокировки, поэтому снапшот
+      // может отстать от параллельно закоммиченной награды — и тогда ранний чек
+      // отказал бы тому, кому авторитетная проверка под локом старт разрешила.
+      // Ложный отказ дороже пропущенной оптимизации: soft-чек остаётся ранним
+      // отсевом заведомо обречённых запросов (за пределом ЛЮБОГО бонуса), а
+      // решение принимает транзакционная проверка в startAttempt.
+      if ((usage?.n ?? 0) >= mockWeeklyLimit(REFERRAL_MOCK_BONUS_MAX)) {
         // cap_hit — зеркало practice-ветки выше (см. комментарий там).
         after(() => captureServer("cap_hit", userId, { mode: "mock", scope: "weekly", check: "soft" }));
         redirect("/app/practice?limit=mock");
