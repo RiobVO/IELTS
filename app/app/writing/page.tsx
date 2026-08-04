@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
-import { writingEvalConfig } from "@/env";
+import { writingFeatureEnabled } from "@/env";
 import { listPublishedTasks } from "@/lib/writing/read";
 import { completedCounts } from "@/lib/writing/store";
 import { effectiveTier, meetsTier, WRITING_MIN_TIER, type Tier } from "@/lib/tiers";
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function WritingCatalogPage() {
   const user = await requireUser();
-  if (writingEvalConfig() === null) redirect("/app/practice");
+  if (!writingFeatureEnabled()) redirect("/app/practice");
 
   const [profile, tasks] = await Promise.all([getProfile(), listPublishedTasks()]);
 

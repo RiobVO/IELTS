@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
-import { writingEvalConfig } from "@/env";
+import { writingFeatureEnabled } from "@/env";
 import { isUuid } from "@/lib/uuid";
 import { loadPublishedTask } from "@/lib/writing/read";
 import { AppShell } from "../../../_AppShell";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function AttemptPage({ params }: { params: Promise<{ taskId: string }> }) {
   await requireUser();
-  if (writingEvalConfig() === null) redirect("/app/practice");
+  if (!writingFeatureEnabled()) redirect("/app/practice");
 
   const { taskId } = await params;
   if (!isUuid(taskId)) notFound();

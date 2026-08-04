@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { getPublishedTests } from "@/lib/content/published";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
-import { writingEvalConfig, speakingEvalConfig } from "@/env";
+import { writingFeatureEnabled, speakingFeatureEnabled } from "@/env";
 import { qtypeLabel, categoryLabel, QTYPE_LABELS, CATEGORY_LABELS, READING_CATEGORIES, LISTENING_CATEGORIES } from "@/lib/labels";
 import { AppShell } from "../_AppShell";
 import { PracticeCatalog, type HeroData, type PracticeTest, type FilterOption, type DrillWeakest, type InitialFilter } from "./_PracticeCatalog";
@@ -239,8 +239,8 @@ export default async function PracticePage({
         listeningBand={bestBand.listening > 0 ? bestBand.listening : null}
         targetBand={targetBand}
         bestBand={bestOverall > 0 ? bestOverall : null}
-        writingEnabled={writingEvalConfig() !== null}
-        speakingEnabled={speakingEvalConfig() !== null}
+        writingEnabled={writingFeatureEnabled()}
+        speakingEnabled={speakingFeatureEnabled()}
         initialFilter={initialFilter}
         notice={notice}
       />

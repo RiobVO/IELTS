@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
-import { speakingEvalConfig } from "@/env";
+import { speakingFeatureEnabled } from "@/env";
 import { listUserHistory } from "@/lib/speaking/read";
 import { AppShell } from "../../_AppShell";
 import { SpeakingHistory } from "./_History";
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function SpeakingHistoryPage() {
   const user = await getUser();
   if (!user) redirect("/auth");
-  if (speakingEvalConfig() === null) redirect("/app/practice");
+  if (!speakingFeatureEnabled()) redirect("/app/practice");
 
   const rows = await listUserHistory(user.id);
 
