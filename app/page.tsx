@@ -355,72 +355,10 @@ export default function Home() {
       });
     })();
 
-    // ── Final-section canvas (particle field behind the closing CTA) ──
-    let finalAnimId: number | undefined;
-    (function () {
-      const cvRaw = document.getElementById("finalCanvas") as HTMLCanvasElement | null;
-      if (!cvRaw || reduce || !window.matchMedia("(min-width:768px)").matches) return;
-      const cv: HTMLCanvasElement = cvRaw;
-      const box = cv.parentElement!;
-      const ctx = cv.getContext("2d")!;
-      let W = 0, H = 0;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      interface Particle { x: number; y: number; ox: number; oy: number; vx: number; vy: number; s: number; v: boolean; }
-      interface BgParticle { x: number; y: number; vx: number; vy: number; s: number; a: number; ph: number; }
-      let parts: Particle[] = [], bg: BgParticle[] = [];
-      const mouse = { x: -9999, y: -9999, on: false };
-      const DENS = 0.00008, BGDENS = 0.00004, R = 150, RET = 0.07, DAMP = 0.9, REP = 1.1;
-      function rnd(a: number, b: number) { return Math.random() * (b - a) + a; }
-      function init() {
-        const n = Math.floor(W * H * DENS); parts = [];
-        for (let i = 0; i < n; i++) { const x = Math.random() * W, y = Math.random() * H; parts.push({ x, y, ox: x, oy: y, vx: 0, vy: 0, s: rnd(1, 2.4), v: Math.random() > 0.8 }); }
-        const m = Math.floor(W * H * BGDENS); bg = [];
-        for (let j = 0; j < m; j++) { bg.push({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - 0.5) * 0.16, vy: (Math.random() - 0.5) * 0.16, s: rnd(0.6, 1.4), a: rnd(0.1, 0.3), ph: Math.random() * 6.28 }); }
-      }
-      function resize() {
-        const r = box.getBoundingClientRect();
-        W = r.width; H = r.height;
-        cv.width = W * dpr; cv.height = H * dpr;
-        cv.style.width = W + "px"; cv.style.height = H + "px";
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        init();
-      }
-      function frame(t: number) {
-        ctx.clearRect(0, 0, W, H);
-        for (let i = 0; i < bg.length; i++) {
-          const p = bg[i]; p.x += p.vx; p.y += p.vy;
-          if (p.x < 0) p.x = W; if (p.x > W) p.x = 0; if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
-          const tw = Math.sin(t * 0.002 + p.ph) * 0.5 + 0.5;
-          ctx.globalAlpha = p.a * (0.3 + 0.7 * tw); ctx.fillStyle = "#fff";
-          ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, 6.283); ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-        for (let k = 0; k < parts.length; k++) {
-          const q = parts[k];
-          const dx = mouse.x - q.x, dy = mouse.y - q.y, d = Math.sqrt(dx * dx + dy * dy);
-          if (mouse.on && d < R && d > 0) { const f = (R - d) / R * REP; q.vx -= (dx / d) * f * 5; q.vy -= (dy / d) * f * 5; }
-          q.vx += (q.ox - q.x) * RET; q.vy += (q.oy - q.y) * RET; q.vx *= DAMP; q.vy *= DAMP; q.x += q.vx; q.y += q.vy;
-          const sp = Math.sqrt(q.vx * q.vx + q.vy * q.vy);
-          ctx.beginPath(); ctx.arc(q.x, q.y, q.s, 0, 6.283);
-          ctx.fillStyle = q.v ? "rgba(255,255,255," + Math.min(0.55 + sp * 0.12, 1) + ")" : "rgba(255,255,255," + Math.min(0.2 + sp * 0.08, 0.6) + ")";
-          ctx.fill();
-        }
-        finalAnimId = requestAnimationFrame(frame);
-      }
-      function onBoxMouseMove(e: MouseEvent) { const r = box.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; mouse.on = true; }
-      function onBoxMouseLeave() { mouse.on = false; mouse.x = -9999; mouse.y = -9999; }
-      box.addEventListener("mousemove", onBoxMouseMove);
-      box.addEventListener("mouseleave", onBoxMouseLeave);
-      window.addEventListener("resize", resize);
-      resize();
-      finalAnimId = requestAnimationFrame(frame);
-    })();
-
     // ── Cleanup ─────────────────────────────────────────────────────────────
     return () => {
       window.removeEventListener("scroll", onScroll);
       if (heroAnimId !== undefined) cancelAnimationFrame(heroAnimId);
-      if (finalAnimId !== undefined) cancelAnimationFrame(finalAnimId);
       if (tiltRaf !== undefined) cancelAnimationFrame(tiltRaf);
       cardObserver?.disconnect();
       revealObserver?.disconnect();
@@ -716,45 +654,20 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="pad" id="faq" style={{ paddingTop: 0 }}>
-        <div className="wrap">
-          <div className="sec-h cn rv" style={{ marginBottom: "32px" }}>
-            <span className="ek">Before you start</span>
-            <h2>Quick answers.</h2>
-          </div>
-          <div className="faq rv">
-            <details>
-              <summary>Is it really free?</summary>
-              <p>Yes. You can sit practice tests and see your full per-type breakdown without paying or adding a card. Paid plans add projected full-mock bands and AI Writing &amp; Speaking feedback.</p>
-            </details>
-            <details>
-              <summary>How accurate is the band it shows me?</summary>
-              <p>Full mocks are 40-question papers scored on the server against a locked answer key, then mapped to the official IELTS band scale. It is a projection to train against, not an official result.</p>
-            </details>
-            <details>
-              <summary>Which types does it cover?</summary>
-              <p>All 14 Reading and Listening question types. Every mock ranks them worst-first, so the one weakness dragging your band down is impossible to miss.</p>
-            </details>
-            <details>
-              <summary>Do I need to install anything?</summary>
-              <p>No. bando runs in the browser on your phone or laptop, in a computer-delivered exam layout with timer, navigator, highlight and notes.</p>
-            </details>
-          </div>
-        </div>
-      </section>
-
       <section className="pad" style={{ paddingTop: 0 }}>
         <div className="wrap">
-          <div className="final">
-            <canvas className="final-canvas" id="finalCanvas" aria-hidden="true"></canvas>
-            <span className="g"></span>
-            <h2>Stop guessing. See your weakest type.</h2>
-            <p>One free full mock. Your per-type breakdown in 20 minutes. Then drill the type that&apos;s costing you the band.</p>
-            <a href="/auth" className="btn btn-w btn-lg">
+          <div className="close">
+            <h2>Sit your first mock free.</h2>
+            <p>Your per-type breakdown in 20 minutes, and an honest band to train against.</p>
+            <ul className="close-pts">
+              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>No card</li>
+              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Real exam papers</li>
+              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Runs in your browser</li>
+            </ul>
+            <a href="/auth" className="btn btn-v btn-lg">
               Take a free test
               <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </a>
-            <div className="fnote">Free full mock · no card · built on real exam papers</div>
           </div>
         </div>
       </section>
