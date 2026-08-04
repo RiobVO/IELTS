@@ -2,7 +2,7 @@ import { getProfile, requireUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { effectiveTier, type Tier } from "@/lib/tiers";
 import { findPlan } from "@/lib/payments/plans";
-import { speakingEvalConfig } from "@/env";
+import { speakingFeatureEnabled } from "@/env";
 import { AppShell } from "../_AppShell";
 import PricingScreen from "./PricingScreen";
 
@@ -25,7 +25,7 @@ export default async function UpgradePage() {
 
   return (
     <AppShell active="pricing">
-      <PricingScreen current={current} price={price} speakingEnabled={speakingEvalConfig() !== null} />
+      <PricingScreen current={current} price={price} speakingEnabled={speakingFeatureEnabled()} />
     </AppShell>
   );
 }
