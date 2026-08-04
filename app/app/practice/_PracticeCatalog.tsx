@@ -60,8 +60,10 @@ export interface PracticeTest {
   done: string | null;
   /** questionTypes пересекается со слабейшими типами юзера (weakSpots из page.tsx). */
   isWeakType: boolean;
-  /** created_at моложе 7 дней (посчитано в page.tsx, не в кэше) — бейдж «New». */
+  /** published_at моложе 7 дней (посчитано в page.tsx, не в кэше) — бейдж «New». */
   isNew: boolean;
+  /** ISO-дата публикации — сортировка витрины «новое на этой неделе» (G1-2). */
+  publishedAt: string;
 }
 export interface HeroData {
   kind: "resume" | "recommended" | "first";
@@ -143,9 +145,13 @@ export function PracticeCatalog({
   initialFilter,
   notice,
   mockLimit,
+  newThisWeek,
   telegramChannelUrl,
 }: {
   tests: PracticeTest[];
+  /** Свежие (опубликованные за 7 дней) тесты для витрины, новейшие первыми.
+   *  Пустой массив = секция не рендерится (считает сервер, selectNewThisWeek). */
+  newThisWeek: PracticeTest[];
   filterCategories: FilterOption[];
   filterTypes: FilterOption[];
   drillWeakest: DrillWeakest;
@@ -401,6 +407,24 @@ export function PracticeCatalog({
           )}
         </div>
       </section>
+
+      {/* Новое на этой неделе (G1-2) — витрина пополнения каталога: причина вернуться
+          для тех, кто уже прошёл всё старое. Пусто → секции нет вовсе. */}
+      {newThisWeek.length > 0 && (
+        <section>
+          <div style={S.newHeadRow}>
+            <span style={S.skillHead}>New this week</span>
+            <span style={S.newHeadHint}>
+              {newThisWeek.length} test{newThisWeek.length === 1 ? "" : "s"} added
+            </span>
+          </div>
+          <div className="pc-new" style={S.newGrid}>
+            {newThisWeek.map((t) => (
+              <NewTestCard key={t.id} test={t} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Coming soon — НАД каталогом по решению пользователя (проект ещё демо, апселл
           наверху приемлем). Тап раскрывает детали неразрушающе (каталог ниже остаётся). */}
@@ -908,6 +932,31 @@ function TestRow({ t }: { t: PracticeTest }) {
   );
 }
 
+/* ── New-this-week card (витрина пополнения, G1-2) ────────────────────────
+   Компактнее строки каталога: секция + название + объём. Всё остальное (прогресс,
+   слабый тип) остаётся ниже, в самом каталоге — витрина отвечает на один вопрос
+   «что появилось нового», а не заменяет список. */
+function NewTestCard({ test }: { test: PracticeTest }) {
+  const sec = SECTION[test.section];
+  return (
+    <Link href={test.href} style={S.newCard} className="pc-new-card">
+      <span style={{ ...S.rowTile, background: sec.tileBg, color: sec.tileFg, width: 36, height: 36, flex: "none" }}>
+        <Icon name={sec.icon} size={18} strokeWidth={2.25} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <span className="pc-row-pill" style={{ ...S.rowPill, color: sec.tileFg, background: sec.tileBg }}>{sec.label}</span>
+          <Badge tone="success">New</Badge>
+        </div>
+        <div style={S.newCardTitle}>{test.title}</div>
+        <div style={S.rowMeta}>
+          {cat(test.category)} · {test.questionCount} Q{test.durationMin ? ` · ${test.durationMin}m` : ""}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 /* ── Catalog empty-state funnel (content-wipe, §12.3) ─────────────────────
    Whole catalog empty (not just a filter miss) — convert instead of dead-ending:
    honest "refreshing" framing, two soft CTAs (Telegram channel / waitlist), and
@@ -1052,6 +1101,8 @@ const CSS = `
 .pc-herocol{display:flex;flex-direction:column;gap:14px}
 .pc-skills{display:grid;grid-template-columns:1fr;gap:14px}
 .pc-coming{display:flex;flex-wrap:wrap;gap:12px}
+.pc-new{grid-template-columns:1fr}
+.pc-new-card:hover{transform:translateY(-2px);border-color:var(--brand-border)!important;box-shadow:var(--shadow-solid-lg)}
 .pc-catalog{display:grid;grid-template-columns:1fr;gap:20px;align-items:start}
 .pc-filter{position:static}
 .pc-locked{grid-template-columns:1fr}
@@ -1093,6 +1144,7 @@ const CSS = `
   .pc-skills{grid-template-columns:repeat(2,1fr);gap:16px}
   .pc-showall{height:28px}
   .pc-empty-cards{grid-template-columns:repeat(2,1fr)}
+  .pc-new{grid-template-columns:repeat(2,1fr)}
 }
 @media (min-width:768px){
   .pc-wrap{padding:32px 28px 72px}
@@ -1105,6 +1157,7 @@ const CSS = `
   .pc-skills{grid-template-columns:repeat(var(--live-cols,2),1fr)}
   .pc-catalog{grid-template-columns:300px 1fr;gap:24px}
   .pc-filter{position:sticky;top:88px}
+  .pc-new{grid-template-columns:repeat(4,1fr)}
 }
 @keyframes pc-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes pc-fade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
@@ -1162,6 +1215,13 @@ const S: Record<string, CSSProperties> = {
   skillHeadWrap: { display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 },
   skillHead: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)" },
   skillHint: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, lineHeight: 1.4, fontWeight: 600, color: "var(--text-muted)" },
+
+  // New this week (G1-2) — витрина пополнения над каталогом.
+  newHeadRow: { display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 12 },
+  newHeadHint: { fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--text-muted)" },
+  newGrid: { display: "grid", gap: 12 },
+  newCard: { display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", textDecoration: "none", color: "inherit", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
+  newCardTitle: { fontFamily: "var(--font-ui)", fontSize: 15, fontWeight: 700, color: "var(--text-primary)", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" },
   filterToggle: { width: "100%", alignItems: "center", gap: 8, minHeight: 44, padding: "0 14px", marginBottom: 12, borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "var(--shadow-solid)" },
   skillCard: { display: "flex", flexDirection: "column", gap: 14, textAlign: "left", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow-solid)", padding: 18, cursor: "pointer", fontFamily: "var(--font-ui)", transition: "transform var(--duration-base) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard)" },
   skillTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },

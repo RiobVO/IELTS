@@ -32,10 +32,14 @@ export const getPublishedTests = unstable_cache(
           // Флаг наличия очищенного раннера (iframe-обёртка) — НЕ тащим сам text
           // (~200КБ/тест) в кэш каталога; каталог только маршрутизирует по нему.
           has_runner: sql<boolean>`${contentItem.runnerHtml} IS NOT NULL`,
-          // Для бейджа «New» (F15) — сам расчёт «свежести» относительно now() в кэш
-          // не кладём (unstable_cache переживёт TTL/revalidate), считает вызывающая
-          // страница вне кэша.
+          // Для бейджа «New» (F15) и витрины «новое на этой неделе» (G1-2) — сам
+          // расчёт «свежести» относительно now() в кэш не кладём (unstable_cache
+          // переживёт TTL/revalidate), считает вызывающая страница вне кэша.
+          // Свежесть меряется датой ПУБЛИКАЦИИ (0059), а не импорта: черновик мог
+          // пролежать до ревью неделями. coalesce — страховка для строк, которых
+          // почему-либо не коснулся бэкфилл миграции.
           created_at: contentItem.createdAt,
+          published_at: sql<Date>`coalesce(${contentItem.publishedAt}, ${contentItem.createdAt})`,
         })
         .from(contentItem)
         .where(
@@ -56,6 +60,9 @@ export const getPublishedTests = unstable_cache(
     return items.map((it) => ({
       ...it,
       created_at: it.created_at.toISOString(),
+      // Тот же довод, что у created_at: на cache HIT unstable_cache гоняет результат
+      // через JSON, и Date всё равно вернулся бы строкой — сериализуем сами.
+      published_at: new Date(it.published_at).toISOString(),
       question_count: byId.get(it.id) ?? 0,
     }));
   },

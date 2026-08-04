@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
 import { db } from "@/db";
 import { answerKey, contentItem, passage, question } from "@/db/schema";
@@ -215,7 +215,17 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
     }
   }
 
-  await db.update(contentItem).set({ status: "published" }).where(eq(contentItem.id, id));
+  // published_at ставим ТОЛЬКО при первой публикации (coalesce): депубликация с
+  // последующим возвратом или переимпорт уже известного теста не должны снова
+  // помечать его «новинкой» в каталоге. Выражение — SQL, а не JS-Date: на прод-
+  // клиенте (pgbouncer, prepare:false) Date в raw-шаблоне роняет запрос.
+  await db
+    .update(contentItem)
+    .set({
+      status: "published",
+      publishedAt: sql`coalesce(${contentItem.publishedAt}, now())`,
+    })
+    .where(eq(contentItem.id, id));
   // Каталог (getPublishedTests, тег content_item) + per-test кэши exam/result
   // (getExamContent/getContentMeta несут content_item И content-<id>). content_item
   // сбрасывает набор каталога, content-<id> — точечно этот тест (W2-6).
