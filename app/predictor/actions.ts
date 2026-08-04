@@ -26,7 +26,9 @@ import {
   PREDICTOR_COOKIE_MAX_AGE_SECONDS,
   PREDICTOR_COOKIE_NAME,
   parsePredictorCookie,
+  serializePredictorCookie,
   toTeaser,
+  type PredictorAnswers,
   type PredictorSnapshot,
   type PredictorTeaserView,
 } from "@/lib/predictor/snapshot";
@@ -50,21 +52,16 @@ export async function submitPredictor(
   try {
     if (await checkIpThrottle("predictor")) return { ok: false, reason: "throttled" };
 
-    const result = gradePredictor(PREDICTOR_QUESTIONS, answers);
-    const snapshot: PredictorSnapshot = {
-      c: result.correct,
-      t: result.total,
-      w: result.weakType,
-      l: result.bandLow,
-      h: result.bandHigh,
-    };
+    const snapshot = gradeSnapshot(answers);
 
-    // Полный снимок (со слабым типом) живёт ТОЛЬКО в httpOnly-cookie; наружу его
-    // отдаём лишь тому, кто уже зарегистрирован.
+    // Слабый тип не покидает сервер для гостя ни одним каналом: в cookie уходят
+    // ОТВЕТЫ (их гость и так знает), а не вывод — иначе тип был бы виден в
+    // Set-Cookie/Application (третий раунд ревью). Смысл ответам придаёт сервер,
+    // у которого ключи.
     const authed = !!(await getUser());
 
     const jar = await cookies();
-    jar.set(PREDICTOR_COOKIE_NAME, JSON.stringify(snapshot), {
+    jar.set(PREDICTOR_COOKIE_NAME, serializePredictorCookie(answers), {
       maxAge: PREDICTOR_COOKIE_MAX_AGE_SECONDS,
       path: "/",
       sameSite: "lax",
@@ -82,10 +79,10 @@ export async function submitPredictor(
     // склеивается, но обратно в IP не разворачивается.
     const anon = createHash("sha256").update(`predictor:${ip}`).digest("hex").slice(0, 24);
     await captureServer("predictor_complete", `guest:${anon}`, {
-      correct: result.correct,
-      total: result.total,
-      weak_type: result.weakType ?? "",
-      band_low: result.bandLow,
+      correct: snapshot.c,
+      total: snapshot.t,
+      weak_type: snapshot.w ?? "",
+      band_low: snapshot.l,
     });
 
     return { ok: true, snapshot: toTeaser(snapshot, authed) };
@@ -100,8 +97,25 @@ export async function submitPredictor(
   }
 }
 
-/** Снимок последней пробы этого браузера (или null). Читает страница после signup. */
+/**
+ * Грейдинг ответов банком (ключи server-only) в форму снимка. Единая точка: и
+ * действие, и рендер страницы считают результат ОДИНАКОВО, поэтому «после
+ * регистрации» юзер видит ровно тот же вывод, что дала проба.
+ */
+function gradeSnapshot(answers: PredictorAnswers): PredictorSnapshot {
+  const result = gradePredictor(PREDICTOR_QUESTIONS, answers);
+  return {
+    c: result.correct,
+    t: result.total,
+    w: result.weakType,
+    l: result.bandLow,
+    h: result.bandHigh,
+  };
+}
+
+/** Снимок последней пробы этого браузера (или null): читаем ответы и грейдим их. */
 export async function readPredictorSnapshot(): Promise<PredictorSnapshot | null> {
   const jar = await cookies();
-  return parsePredictorCookie(jar.get(PREDICTOR_COOKIE_NAME)?.value);
+  const answers = parsePredictorCookie(jar.get(PREDICTOR_COOKIE_NAME)?.value);
+  return answers ? gradeSnapshot(answers) : null;
 }
