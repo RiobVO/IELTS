@@ -16,6 +16,7 @@ import { uploadAudio } from "@/lib/telegram/storage";
 import { importRunner } from "@/lib/import/runner/import-runner";
 import { setRunnerAudioSrc } from "@/lib/import/runner/sanitize-runner";
 import { RegradeRequiredError } from "@/lib/import/persist";
+import { publishReviewedContentItem } from "@/lib/content/publish";
 
 /**
  * Telegram-бот импорта контента (admin-канал, аналог /admin). Умеет:
@@ -248,8 +249,10 @@ async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
 
 /**
  * Публикация по нажатию inline-кнопки (callback_data = "publish:<id>"). Зеркалит
- * admin setStatus: owner-update статуса + revalidate тега каталога. id приходит
- * только от whitelisted-админа и параметризуется Drizzle — инъекции нет.
+ * admin setStatus через общий publishReviewedContentItem: публикует ТОЛЬКО после
+ * review (reviewed_at) — гейт ключа (BRIEF §4.2.1) обязан держаться и здесь, не только
+ * в /admin. Неотревьюенное отклоняется (review делается в /admin). id приходит только
+ * от whitelisted-админа и параметризуется Drizzle — инъекции нет.
  */
 async function handlePublish(cq: TgCallbackQuery): Promise<void> {
   const data = cq.data ?? "";
@@ -259,21 +262,21 @@ async function handlePublish(cq: TgCallbackQuery): Promise<void> {
   }
   const id = data.slice("publish:".length);
   try {
-    const updated = await db
-      .update(contentItem)
-      .set({ status: "published" })
-      .where(eq(contentItem.id, id))
-      .returning({ id: contentItem.id, title: contentItem.title });
-    if (updated.length === 0) {
-      await answerCallback(cq.id, "Тест не найден");
+    const res = await publishReviewedContentItem(id);
+    if (!res.ok) {
+      await answerCallback(
+        cq.id,
+        res.reason === "not_reviewed"
+          ? "Сначала подтверди ключ в /admin (review), затем публикуй."
+          : "Тест не найден",
+      );
       return;
     }
-    revalidateTag("content_item");
     await answerCallback(cq.id, "Опубликовано ✅");
     if (cq.message) {
       await sendMessage(
         cq.message.chat.id,
-        `📢 «${updated[0]!.title}» опубликован — виден ученикам в каталоге.`,
+        `📢 «${res.title}» опубликован — виден ученикам в каталоге.`,
       );
     }
   } catch (e) {
