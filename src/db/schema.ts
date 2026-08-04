@@ -360,6 +360,10 @@ export const attempt = pgTable(
     rawScore: integer("raw_score"),
     bandScore: numeric("band_score", { precision: 2, scale: 1 }),
     perTypeBreakdown: jsonb("per_type_breakdown"),
+    // Публичная share-карточка (migration 0060, G1-5). NULL = попыткой не делились.
+    // Выдаётся лениво владельцем сданной попытки; публичная страница /s/[token]
+    // читает по нему только band + слабейший тип + название теста.
+    shareToken: uuid("share_token"),
   },
   (t) => [
     // Partial over submitted: every hot attempt-by-user query filters
@@ -385,6 +389,11 @@ export const attempt = pgTable(
     // window) in exam/access.ts — NOT partial on status, the cap counts every
     // start, in_progress included (migration 0055).
     index("attempt_user_mode_started_idx").on(t.userId, t.mode, t.startedAt),
+    // Единственный публичный запрос share-карточки — WHERE share_token = $1
+    // (migration 0060). Partial: NULL-строки (почти все) индекс не раздувают.
+    uniqueIndex("attempt_share_token_key")
+      .on(t.shareToken)
+      .where(sql`${t.shareToken} IS NOT NULL`),
   ],
 );
 

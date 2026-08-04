@@ -283,7 +283,15 @@ function Hero({ data, onReview, onTypes }: { data: DebriefData; onReview: () => 
             <div className="rc-vd-actions">
               <Button onClick={onReview}>Review my misses →</Button>
               <Button variant="secondary" onClick={onTypes}>See where I stand</Button>
-              {data.share && <ShareResult refCode={data.share.refCode} headline={data.share.headline} variant="secondary" fullWidth={false} />}
+              {data.share && (
+                <ShareResult
+                  refCode={data.share.refCode}
+                  headline={data.share.headline}
+                  attemptId={data.attemptId}
+                  variant="secondary"
+                  fullWidth={false}
+                />
+              )}
             </div>
           </div>
         </div>
