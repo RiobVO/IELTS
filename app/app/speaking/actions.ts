@@ -4,13 +4,14 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { speakingSubmission, speakingFeedback, profile } from "@/db/schema";
 import { getUser, getProfile } from "@/lib/auth";
-import { effectiveTier, type Tier } from "@/lib/tiers";
-import { speakingEvalConfig } from "@/env";
+import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
+import { speakingFeatureEnabled } from "@/env";
+import { isUuid } from "@/lib/uuid";
 import { signedUploadUrl, audioSize, deleteAudio } from "@/lib/speaking/storage";
 import { logAudioEvent } from "@/lib/speaking/events";
 import {
   insertUploadingSubmission, markUploaded, triggerEvaluate, completedCounts,
-  readOwnSubmission, markFailed, markAudioDeleted,
+  loadSpeakingTaskForSubmissionGate, readOwnSubmission, markFailed, markAudioDeleted,
 } from "@/lib/speaking/store";
 import { canEvaluate, isStuck, SPEAKING_STALE_MS_DEFAULT } from "@/lib/speaking/lifecycle";
 
@@ -38,14 +39,24 @@ export async function createSpeakingSubmission(
   if (!profileRow?.recording_consent_at) return { error: "consent_required" };
 
   const now = new Date();
+  const tier: Tier = effectiveTier(profileRow as { tier: Tier; premium_until: string | Date | null });
   const { lifetime, today } = await completedCounts(user.id, now);
   const gate = canEvaluate({
-    configured: speakingEvalConfig() !== null,
-    tier: effectiveTier(profileRow as { tier: Tier; premium_until: string | Date | null }),
+    configured: speakingFeatureEnabled(),
+    tier,
     lifetimeCompleted: lifetime,
     todayCompleted: today,
   });
   if (!gate.allowed) return { error: gate.reason };
+
+  // Task gate (defence in depth): the catalog only lists published cue-cards, but this
+  // action is callable directly. Screen the id (avoid 22P02), then re-check published +
+  // tier (canEvaluate only enforces the global SPEAKING_MIN_TIER). Opaque single reason.
+  if (!isUuid(taskId)) return { error: "unavailable" };
+  const task = await loadSpeakingTaskForSubmissionGate(taskId);
+  if (!task || task.status !== "published" || !meetsTier(tier, task.tierRequired)) {
+    return { error: "unavailable" };
+  }
 
   const id = randomUUID();
   const path = `${user.id}/${id}.${ext}`;

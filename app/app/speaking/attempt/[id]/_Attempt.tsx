@@ -103,6 +103,7 @@ export function Attempt({ task, hasConsent }: { task: SpeakingCatalogTask; hasCo
       case "consent_required": return setConsented(false);
       case "unauthorized": return void router.push("/auth");
       case "too_large": return setSubmitError("That recording is too large — record a shorter take.");
+      case "unavailable": return void router.push("/app/speaking");
       default: return setStep("failed");
     }
   }
