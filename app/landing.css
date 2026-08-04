@@ -247,6 +247,24 @@ footer{padding:54px 0 42px;border-top:1px solid var(--line);margin-top:96px}
 .stnote{text-align:center;max-width:54ch;margin:22px auto 0;font-size:15px;color:var(--ink-2);line-height:1.6}
 .stnote b{color:var(--ink);font-weight:700}
 
+/* Trajectory (G1-4) — обещание прогноза band. Превью справа СТАТИЧНО: inline-SVG,
+   ноль JS, ноль анимации кривой (живой график живёт внутри /app/progress). */
+.traj{display:grid;grid-template-columns:1fr;gap:28px;align-items:center;max-width:1000px;margin-inline:auto}
+.traj-copy h2{font-size:clamp(1.9rem,3.4vw,2.7rem)}
+.traj-copy>p{font-size:17px;color:var(--ink-2);margin-top:16px;max-width:46ch}
+.traj-pts{list-style:none;display:flex;flex-direction:column;gap:10px;margin:22px 0 26px}
+.traj-pts li{display:flex;align-items:center;gap:9px;font-size:15px;font-weight:600;color:var(--ink)}
+.traj-pts .ci{width:18px;height:18px;flex:none;color:var(--green-d)}
+.traj-fig{position:relative;background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--sh-sm);padding:18px 16px 12px}
+.traj-fig svg{width:100%;height:auto}
+/* Подписи внутри SVG: шрифт задаём тут, а не presentation-атрибутом — var() в
+   атрибуте разрешается не во всех браузерах, и подписи молча падали бы на serif. */
+.traj-fig svg text{font-family:var(--mono)}
+.traj-cap{display:flex;align-items:baseline;gap:10px;padding:0 6px 8px}
+.traj-cap-k{font-size:13px;font-weight:700;color:var(--ink-3)}
+.traj-cap-v{font-family:var(--mono);font-size:26px;font-weight:800;color:var(--v2);letter-spacing:-.02em}
+@media(min-width:920px){.traj{grid-template-columns:1fr 1.05fr;gap:44px}}
+
 /* single closing block — light, no drenched box, visible without JS */
 .close{max-width:640px;margin:0 auto;text-align:center}
 .close h2{font-size:clamp(2rem,3.8vw,2.9rem)}
