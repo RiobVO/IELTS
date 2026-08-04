@@ -24,5 +24,7 @@ export function sx(...objs: Array<React.CSSProperties | false | null | undefined
   return Object.assign({}, ...objs.filter(Boolean));
 }
 
-/** Брендовый focus-ring как inline boxShadow (клавиатурный фокус). */
-export const RING = "0 0 0 3px color-mix(in oklab, var(--focus-ring) 55%, transparent)";
+/** Брендовый focus-ring как inline boxShadow. Единый источник — токен --ring
+ *  (двухслойный, ≥3:1); инлайн-стили ссылаются сюда, чтобы фокус совпадал с
+ *  глобальным :focus-visible и не расходился по значению. */
+export const RING = "var(--ring)";

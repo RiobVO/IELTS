@@ -107,7 +107,10 @@
   --info-subtle:    var(--sky-200);
 
   --focus-ring:     var(--violet-600);
-  --ring:           0 0 0 4px color-mix(in oklab, var(--focus-ring) 32%, transparent);
+  /* Two layers: a solid 2px core carries the ≥3:1 contrast (WCAG 2.4.11/1.4.11) —
+     a single translucent ring on white sat at ~1.6:1 and was easy to miss — plus a
+     soft halo for polish. Single source of truth: components reference it via RING. */
+  --ring:           0 0 0 2px var(--focus-ring), 0 0 0 5px color-mix(in oklab, var(--focus-ring) 26%, transparent);
 
   /* ---- Writing Lab topic palette (catalog cards). Exact handoff hex, kept as
      tokens so the one named-colour set lives with the rest of the system. Two ink
