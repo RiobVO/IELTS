@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { and, count, eq, gte, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   writingSubmission,
@@ -118,6 +118,24 @@ export async function markFailed(submissionId: string): Promise<void> {
     .update(writingSubmission)
     .set({ status: "failed", updatedAt: new Date() })
     .where(eq(writingSubmission.id, submissionId));
+}
+
+// Fail transient rows (pending|evaluating) older than staleBefore so the one-active
+// index (0024) unblocks. userId → reap-own-stale on create (returning user unblocks
+// immediately); no userId → the cron sweeper for users who left before the lazy
+// reaper in getSubmissionStatus could run. Returns how many rows were failed.
+export async function failStaleSubmissions(staleBefore: Date, userId?: string): Promise<number> {
+  const active = inArray(writingSubmission.status, ["pending", "evaluating"]);
+  const stale = lt(writingSubmission.updatedAt, staleBefore);
+  const where = userId
+    ? and(active, stale, eq(writingSubmission.userId, userId))
+    : and(active, stale);
+  const rows = await db
+    .update(writingSubmission)
+    .set({ status: "failed", updatedAt: new Date() })
+    .where(where)
+    .returning({ id: writingSubmission.id });
+  return rows.length;
 }
 
 export async function readOwnSubmission(
