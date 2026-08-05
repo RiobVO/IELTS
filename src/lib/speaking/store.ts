@@ -131,6 +131,19 @@ export async function markFailed(submissionId: string): Promise<void> {
     .where(eq(speakingSubmission.id, submissionId));
 }
 
+// A failed audio-object remove (user delete or retention reaper): keep the row
+// retryable — do NOT set audio_deleted_at — but bump the attempt count + record the
+// last error so the miss is observable (0032). The next reaper pass retries it.
+export async function markAudioDeleteFailed(submissionId: string, error: string): Promise<void> {
+  await db.update(speakingSubmission)
+    .set({
+      audioDeleteAttempts: sql`${speakingSubmission.audioDeleteAttempts} + 1`,
+      audioDeleteError: error.slice(0, 500),
+      updatedAt: new Date(),
+    })
+    .where(eq(speakingSubmission.id, submissionId));
+}
+
 // Mark audio gone after a successful eval (retention) or a user delete. Writes the
 // reason + audit event; the actual object removal happens in the caller (storage).
 export async function markAudioDeleted(

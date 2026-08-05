@@ -763,6 +763,10 @@ export const speakingSubmission = pgTable("speaking_submission", {
   deleteRequestedAt: timestamp("delete_requested_at", { withTimezone: true }),
   audioDeletedAt: timestamp("audio_deleted_at", { withTimezone: true }),
   audioDeletedReason: speakingDeleteReason("audio_deleted_reason"),
+  // Retention retry state (0032): a failed object remove keeps the row retryable
+  // (audio_deleted_at stays NULL) and records the attempt count + last error here.
+  audioDeleteAttempts: integer("audio_delete_attempts").notNull().default(0),
+  audioDeleteError: text("audio_delete_error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

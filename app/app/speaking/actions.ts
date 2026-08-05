@@ -12,6 +12,7 @@ import { logAudioEvent } from "@/lib/speaking/events";
 import {
   insertUploadingSubmission, markUploaded, triggerEvaluate, completedCounts,
   loadSpeakingTaskForSubmissionGate, readOwnSubmission, markFailed, markAudioDeleted,
+  markAudioDeleteFailed,
 } from "@/lib/speaking/store";
 import { canEvaluate, isStuck, SPEAKING_STALE_MS_DEFAULT } from "@/lib/speaking/lifecycle";
 
@@ -119,14 +120,24 @@ export async function deleteSpeakingRecording(submissionId: string): Promise<{ o
   const [{ audioPath }] = await db
     .select({ audioPath: speakingSubmission.audioPath })
     .from(speakingSubmission).where(eq(speakingSubmission.id, submissionId));
-  // Mark intent first (the eval guard reads delete_requested_at), then remove object
-  // + wipe the transcript (verbatim speech = PII) from feedback.
+  // Mark intent first (the eval guard reads delete_requested_at), then wipe the transcript
+  // (verbatim speech = PII) from feedback — a reliable DB op done regardless of storage.
   await db.update(speakingSubmission).set({ deleteRequestedAt: new Date(), updatedAt: new Date() })
     .where(eq(speakingSubmission.id, submissionId));
   await logAudioEvent(user.id, submissionId, "delete_requested");
-  await deleteAudio(audioPath).catch(() => {});
   await db.update(speakingFeedback).set({ transcript: "", annotations: [], transcriptTimings: [], rewrites: [] })
     .where(eq(speakingFeedback.submissionId, submissionId));
+  // Mark the AUDIO deleted ONLY after the object is actually gone. A failed remove used to
+  // be swallowed (empty catch) then marked deleted anyway → biometrics silently retained
+  // forever (#2). Now record the failure and stay retryable (audio_deleted_at NULL) so the
+  // reaper picks it up; report the honest result (the UI only shows "removed" on ok).
+  try {
+    await deleteAudio(audioPath);
+  } catch (e) {
+    await markAudioDeleteFailed(submissionId, String(e));
+    console.error("speaking audio delete failed (user)", submissionId, e);
+    return { ok: false };
+  }
   await markAudioDeleted(submissionId, user.id, "user");
   return { ok: true };
 }
