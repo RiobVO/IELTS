@@ -148,7 +148,9 @@ async function handleCallback(
   // в 64 байта лимита текст ответа не влезает, да и доверять содержимому кнопки,
   // пришедшему от клиента, незачем — индекс проверяется по серверному списку.
   const q = await pickDailyQuestionFor(userId, cb.contentItemId, cb.questionNumber);
-  const value = q?.options?.[cb.optionIndex];
+  // Грейдится `value` варианта, а не его подпись: у matching_headings ключ — «iii»,
+  // а на кнопке стоит текст заголовка.
+  const value = q?.options?.[cb.optionIndex]?.value;
   if (!value) return;
 
   await replyVerdict(token, chatId, userId, cb.contentItemId, cb.questionNumber, value);
