@@ -12,7 +12,7 @@ import { logAudioEvent } from "@/lib/speaking/events";
 import {
   insertUploadingSubmission, markUploaded, triggerEvaluate, completedCounts,
   loadSpeakingTaskForSubmissionGate, readOwnSubmission, markFailed, markAudioDeleted,
-  markAudioDeleteFailed,
+  markAudioDeleteFailed, failStaleSubmissions,
 } from "@/lib/speaking/store";
 import { canEvaluate, isStuck, SPEAKING_STALE_MS_DEFAULT } from "@/lib/speaking/lifecycle";
 
@@ -61,6 +61,11 @@ export async function createSpeakingSubmission(
   if (meetsTier(tier, SPEAKING_MIN_TIER) && !meetsTier(tier, task.tierRequired)) {
     return { error: "unavailable" };
   }
+
+  // Reap the user's OWN stale in-flight row first, so a lost upload / dead eval doesn't
+  // block a fresh attempt behind the one-active index (0028) until the daily reaper runs
+  // (~24h on Hobby). A genuinely fresh row is not stale → insert still yields conflict (#5).
+  await failStaleSubmissions(new Date(now.getTime() - staleMs), user.id);
 
   const id = randomUUID();
   const path = `${user.id}/${id}.${ext}`;
