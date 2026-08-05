@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 37; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040) + saved_word (P11 «Saved words», 0041) + mistake_review (SR, 0044) + sprint_signup (пилот-когорта, 0051) + preorder (early-bird, 0052) + trial_claim (P6 trial-lane guard, 0054)
+const APP_TABLE_COUNT = 38; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040) + saved_word (P11 «Saved words», 0041) + mistake_review (SR, 0044) + sprint_signup (пилот-когорта, 0051) + preorder (early-bird, 0052) + trial_claim (P6 trial-lane guard, 0054) + telegram_link (student bot, 0061)
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);
@@ -769,7 +769,9 @@ async function main() {
   // ЕСТЬ по дизайну (select_own TO authenticated), поэтому ассертим только RLS-on +
   // anon-deny — против регресса «RLS выключили» или «anon снова granted» (0024/0028;
   // vocab_progress — 0037, запись только owner-path, INSERT-lock проверяется ниже).
-  for (const t of ["writing_submission", "writing_feedback", "speaking_submission", "speaking_feedback", "vocab_progress", "mistake_resolution", "saved_word", "mistake_review", "sprint_signup", "preorder"] as const) {
+  // telegram_link (0061) в этом же списке: чат-связка держит хеш кода привязки, и
+  // anon-доступ к ней означал бы возможность перехватить чужие напоминания.
+  for (const t of ["writing_submission", "writing_feedback", "speaking_submission", "speaking_feedback", "vocab_progress", "mistake_resolution", "saved_word", "mistake_review", "sprint_signup", "preorder", "telegram_link"] as const) {
     const l = await tableLock(t);
     if (l.rlsEnabled && l.anonDenied)
       ok(`RLS — anon SELECT on ${t} denied (owner-read policy intact)`);

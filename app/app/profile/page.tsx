@@ -7,6 +7,9 @@ import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { leaderboardEntry } from "@/db/schema";
 import { getActiveBadges } from "@/lib/content/badges";
+import { studentBotConfig } from "@/env";
+import { getLinkStatus } from "@/lib/telegram/student/store";
+import { TelegramConnect } from "./TelegramConnect";
 import { effectiveTier, type Tier } from "@/lib/tiers";
 import { qtypeLabel } from "@/lib/labels";
 import { AppShell } from "../_AppShell";
@@ -86,6 +89,9 @@ export default async function ProfilePage() {
     rankRows,
     badgeData,
     { data: earnedData },
+    // getHeaderData() — прогрев кэша шапки, значение здесь не нужно (пропуск позиции).
+    ,
+    telegramStatus,
   ] = await Promise.all([
     supabase.from("attempt").select("id", { count: "exact", head: true }).eq("status", "submitted"),
     supabase
@@ -125,6 +131,8 @@ export default async function ProfilePage() {
     supabase.from("user_badge").select("badge_id,earned_at").eq("user_id", user.id),
     // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
     getHeaderData(),
+    // Состояние связки со студенческим ботом (G2-1) — owner-path, в общей пачке.
+    getLinkStatus(user.id),
   ]);
 
   const payments = (paymentData ?? []) as PaymentRow[];
@@ -136,6 +144,9 @@ export default async function ProfilePage() {
   const subLine = [regionName, memberSince ? `Member since ${memberSince}` : null].filter(Boolean).join(" · ");
   const streak = profile?.current_streak ?? 0;
   const rating = profile?.rating ?? 1000;
+  // Секция напоминаний показывается, только если бот вообще сконфигурирован.
+  const telegramAvailable = studentBotConfig()?.botUsername != null;
+  const telegramLinked = telegramStatus.linked;
   const globalRank = rankRows[0]?.rank ?? null;
 
   // Слабейший тип — агрегат per_type_breakdown по попыткам (тот же расчёт, что на дашборде).
@@ -329,6 +340,20 @@ export default async function ProfilePage() {
             </Button>
           </div>
         </div>
+
+        {/* Reminders (G2-1) — секция появляется только когда бот сконфигурирован:
+            обещать связку без токена значит вести человека в битую ссылку. */}
+        {telegramAvailable && (
+          <div style={S.quietCard}>
+            <div style={S.quietHead}><span className="pf-sub" style={S.sub}>Reminders</span></div>
+            <div style={S.quietFoot}>
+              <span style={S.quietNote}>
+                One question a day in Telegram, from the mistakes you haven&apos;t closed yet.
+              </span>
+              <TelegramConnect linked={telegramLinked} />
+            </div>
+          </div>
+        )}
 
         {/* Payment history — quiet */}
         <div style={S.quietCard}>
