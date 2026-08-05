@@ -8,15 +8,34 @@
  * окно, открытое вне жеста пользователя (ровно этот баг ловили в share-кнопке
  * волны 1). Вместо этого показываем настоящую ссылку — пользователь жмёт её сам.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
 import { connectTelegram, disconnectTelegram } from "./actions";
 
 export function TelegramConnect({ linked }: { linked: boolean }) {
+  const router = useRouter();
   const [deepLink, setDeepLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  // Связка происходит НЕ здесь, а в Telegram: сервер узнаёт о ней через вебхук, и
+  // вкладка об этом не уведомляется. Человек уходит нажать Start, возвращается — и
+  // видит прежнюю кнопку (кэш маршрута живёт до минуты), решая, что ничего не
+  // сработало. Поэтому при возврате на вкладку перечитываем состояние с сервера.
+  useEffect(() => {
+    if (linked || !deepLink) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [linked, deepLink, router]);
 
   const connect = async () => {
     if (pending) return;
@@ -62,7 +81,7 @@ export function TelegramConnect({ linked }: { linked: boolean }) {
         <a href={deepLink} target="_blank" rel="noopener noreferrer" style={S.link}>
           Open Telegram and tap Start →
         </a>
-        <span style={S.hint}>The link works for 15 minutes.</span>
+        <span style={S.hint}>Come back to this tab afterwards — it updates itself.</span>
       </div>
     );
   }
