@@ -18,6 +18,7 @@ import { after } from "next/server";
 import { and, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { attempt, contentItem, profile } from "@/db/schema";
+import { captureServer } from "@/lib/analytics/server";
 import { shouldRateAttempt } from "@/lib/anti-cheat";
 import { logError } from "@/lib/monitoring/log-error";
 import { createNotifications } from "@/lib/notifications/create";
@@ -55,6 +56,29 @@ function asDayString(v: string | Date | null): string | null {
   if (v == null) return null;
   if (v instanceof Date) return utcDay(v);
   return String(v).slice(0, 10);
+}
+
+/**
+ * Ретеншен-сигнал этого сабмита (G2-3), чистый: активность юзера уже вычислена под
+ * row-lock'ом выше, поэтому событие `day_active` не стоит ни одного лишнего запроса.
+ * `firstToday` — сегодня ещё не было активности, значит день засчитывается ровно раз.
+ * `daysSinceLast` — null для первого дня в жизни аккаунта, 1 для «вчера», N для
+ * возврата после паузы (returning). Битую дату трактуем как первый день: телеметрия
+ * не имеет права падать на данных, которые прогрессия уже приняла.
+ */
+export function dayActiveTelemetry(
+  last: string | null,
+  today: string,
+): { firstToday: boolean; daysSinceLast: number | null; returning: boolean } {
+  if (last === today) return { firstToday: false, daysSinceLast: 0, returning: false };
+  if (last == null) return { firstToday: true, daysSinceLast: null, returning: false };
+  const lastMs = Date.parse(`${last}T00:00:00.000Z`);
+  const todayMs = Date.parse(`${today}T00:00:00.000Z`);
+  if (!Number.isFinite(lastMs) || !Number.isFinite(todayMs)) {
+    return { firstToday: true, daysSinceLast: null, returning: false };
+  }
+  const days = Math.round((todayMs - lastMs) / 86_400_000);
+  return { firstToday: true, daysSinceLast: days, returning: days > 1 };
 }
 
 export async function applyPostSubmit(input: PostSubmitInput): Promise<{
@@ -190,7 +214,7 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
         })
         .where(eq(profile.id, input.userId));
 
-      return { rated, ratingDelta, newRating };
+      return { rated, ratingDelta, newRating, lastActivityDay: last, today, currentStreak };
     });
 
     if (!progression) {
@@ -227,8 +251,19 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
     // бросают; try/catch — страховка, т.к. after()-колбэк исполняется уже ВНЕ
     // общего guard'а applyPostSubmit.
     const rated = progression.rated;
+    const activity = dayActiveTelemetry(progression.lastActivityDay, progression.today);
     after(async () => {
       try {
+        // Ретеншен-событие (G2-3) — ровно раз в UTC-день, до остальной best-effort
+        // работы: оно дешёвое и не зависит от неё. Знать, ВЕРНУЛСЯ ли человек, важнее
+        // любого бейджа, а без этого события волна удержания измеряется на глаз.
+        if (activity.firstToday) {
+          await captureServer("day_active", input.userId, {
+            streak: progression.currentStreak,
+            days_since_last: activity.daysSinceLast,
+            returning: activity.returning,
+          });
+        }
         if (awardedBadges.length > 0) {
           await createNotifications(
             awardedBadges.map((b) => ({

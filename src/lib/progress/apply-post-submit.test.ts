@@ -28,7 +28,10 @@ vi.mock("@/db", () => ({
 // резолвиться; логику этих веток здесь не проверяем, только изолируем.
 vi.mock("./badges", () => ({ evaluateBadges: vi.fn(() => Promise.resolve([])) }));
 vi.mock("./referral", () => ({ maybeRewardReferral: vi.fn(() => Promise.resolve()) }));
-vi.mock("@/lib/notifications/create", () => ({ createNotifications: vi.fn(() => Promise.resolve()) }));
+vi.mock("@/lib/notifications/create", () => ({ createNotifications: vi.fn(() => Promise.resolve([])) }));
+// Ретеншен-событие (G2-3) шлётся из того же deferred-хвоста; @/env на импорте
+// требует боевых переменных, которых у юнита нет.
+vi.mock("@/lib/analytics/server", () => ({ captureServer: vi.fn() }));
 vi.mock("@/lib/monitoring/log-error", () => ({ logError: vi.fn(() => Promise.resolve()) }));
 // after() вне request-скоупа Next бросает; deferred-работу здесь не проверяем — no-op,
 // не вызывая колбэк (createNotifications/maybeRewardReferral остаются нетронутыми).

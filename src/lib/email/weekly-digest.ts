@@ -7,6 +7,7 @@ import { buildDigestEmail, type DigestStats } from "@/lib/email/digest-template"
 import { digestNeedsRetry, parseDigestClaimStats } from "@/lib/email/digest-retry";
 import { isoWeekKey } from "@/lib/email/iso-week";
 import { sendEmail } from "@/lib/email/send";
+import { captureServerBatch } from "@/lib/analytics/server";
 import { signUnsubscribeToken } from "@/lib/email/unsubscribe-token";
 import { getBandPlan } from "@/lib/progress/band-plan";
 
@@ -290,6 +291,10 @@ export async function runWeeklyDigest(
 
   let notified = 0;
   let sent = 0;
+  // Кому письмо РЕАЛЬНО ушло (первый заход + ретрай) — знаменатель открываемости
+  // (G2-3). Копим и шлём одним батчем в конце: per-user flush растянул бы рассылку
+  // на минуты, а Brevo-cap и лимит времени крона этого не переживут.
+  const delivered: string[] = [];
   let optedOut = 0;
   let emailsAttempted = 0; // реальные попытки sendEmail — бюджет ретрая (Brevo cap)
 
@@ -412,7 +417,10 @@ export async function runWeeklyDigest(
           avgBand: stats.avgBand,
           avgPercent: stats.avgPercent,
         }, claimed.id);
-        if (ok) sent += 1;
+        if (ok) {
+          sent += 1;
+          delivered.push(c.userId);
+        }
       } catch (e) {
         // Без PII: userId ок, email не логируем (гигиена, как в send.ts).
         console.error("runWeeklyDigest: per-user failure", {
@@ -472,7 +480,10 @@ export async function runWeeklyDigest(
       if (stats === null) continue; // кривой data — письмо не собрать, оставляем как есть
       try {
         const ok = await claimAndSend(cfg, ctx, { userId: r.userId, email: r.email, ...stats }, r.id);
-        if (ok) retried += 1;
+        if (ok) {
+          retried += 1;
+          delivered.push(r.userId);
+        }
       } catch (e) {
         console.error("runWeeklyDigest: retry failure", {
           userId: r.userId,
@@ -481,6 +492,14 @@ export async function runWeeklyDigest(
       }
     }
   }
+
+  await captureServerBatch(
+    "nudge_sent",
+    delivered.map((userId) => ({
+      distinctId: userId,
+      properties: { channel: "email" as const, kind: "weekly_digest" as const },
+    })),
+  );
 
   return { candidates: total, notified, sent, optedOut, capped, retried };
 }

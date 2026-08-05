@@ -29,13 +29,16 @@ export interface NewNotification {
  * уникальному индексу (user_id, dedup_key) — атомарная идемпотентность
  * периодических продюсеров (закрывает TOCTOU параллельных прогонов cron).
  *
- * Возвращает число РЕАЛЬНО вставленных строк (returning) — при дедупе оно меньше
- * числа кандидатов, и логи cron должны отражать факт, а не намерение.
+ * Возвращает user_id РЕАЛЬНО вставленных строк (returning) — при дедупе их меньше,
+ * чем кандидатов, и логи cron должны отражать факт, а не намерение. Именно список,
+ * а не счётчик: ретеншен-телеметрия (G2-3) шлёт `nudge_sent` только тем, кому
+ * уведомление действительно создано, иначе повторный прогон крона надувал бы
+ * знаменатель открываемости.
  */
 export async function createNotifications(
   items: NewNotification[],
-): Promise<number> {
-  if (items.length === 0) return 0;
+): Promise<string[]> {
+  if (items.length === 0) return [];
   try {
     const q = db.insert(notification).values(
       items.map((n) => ({
@@ -54,18 +57,18 @@ export async function createNotifications(
     const inserted = await (items.some((n) => n.dedupKey != null)
       ? q.onConflictDoNothing()
       : q
-    ).returning({ id: notification.id });
-    return inserted.length;
+    ).returning({ userId: notification.userId });
+    return inserted.map((r) => r.userId);
   } catch (e) {
     await logError({
       source: "server",
       message: `createNotifications failed: ${e instanceof Error ? e.message : String(e)}`,
       stack: e instanceof Error ? e.stack : null,
     });
-    return 0;
+    return [];
   }
 }
 
-export async function createNotification(item: NewNotification): Promise<number> {
+export async function createNotification(item: NewNotification): Promise<string[]> {
   return createNotifications([item]);
 }

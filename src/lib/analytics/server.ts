@@ -38,6 +38,33 @@ function getClient(): PostHog | null {
   return client;
 }
 
+/**
+ * Пакетный capture для рассылок (G2-3): одно событие на получателя, НО один flush
+ * на весь прогон. Через captureServer в цикле рассылка на 600 человек стоила бы 600
+ * последовательных flush'ей по FLUSH_TIMEOUT_MS — до 20 минут в кроне с лимитом 300с.
+ * Те же гарантии: no-op без ключа, никогда не бросает.
+ */
+export async function captureServerBatch<E extends AnalyticsEventName>(
+  event: E,
+  items: Array<{ distinctId: string; properties: EventProperties[E] }>,
+): Promise<void> {
+  if (items.length === 0) return;
+  try {
+    const c = getClient();
+    if (!c) return;
+    for (const item of items) {
+      c.capture({ distinctId: item.distinctId, event, properties: item.properties });
+    }
+    const flushed = c.flush().catch(() => {});
+    await Promise.race([
+      flushed,
+      new Promise<void>((resolve) => setTimeout(resolve, FLUSH_TIMEOUT_MS)),
+    ]);
+  } catch (e) {
+    console.error(`captureServerBatch(${event}) failed`, e);
+  }
+}
+
 export async function captureServer<E extends AnalyticsEventName>(
   event: E,
   distinctId: string,

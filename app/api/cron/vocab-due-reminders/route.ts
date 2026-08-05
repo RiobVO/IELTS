@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { and, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { notification, profile, vocabCard, vocabDeck, vocabProgress } from "@/db/schema";
+import { captureServerBatch } from "@/lib/analytics/server";
+import type { NudgeKind } from "@/lib/analytics/events";
 import { effectiveTier, meetsTier } from "@/lib/tiers";
 import { cronSecret } from "@/env";
 import { isCronAuthorized } from "@/lib/cron-auth";
@@ -106,7 +108,25 @@ async function createDueReminders(today: string): Promise<number> {
 
   // Возвращаем РЕАЛЬНО вставленное (returning), не число кандидатов: повторный
   // прогон в тот же день молча схлопывается дедупом и должен отчитаться нулём.
-  return createNotifications(items);
+  const notified = await createNotifications(items);
+  await sendNudgeTelemetry(notified, "vocab_due");
+  return notified.length;
+}
+
+/**
+ * Знаменатель открываемости напоминаний (G2-3): одно событие на РЕАЛЬНО созданное
+ * уведомление, один flush на весь прогон (captureServerBatch — иначе рассылка на
+ * сотни человек упёрлась бы в лимит времени крона). Best-effort: телеметрия не
+ * имеет права ронять рассылку.
+ */
+async function sendNudgeTelemetry(userIds: string[], kind: NudgeKind): Promise<void> {
+  await captureServerBatch(
+    "nudge_sent",
+    userIds.map((userId) => ({
+      distinctId: userId,
+      properties: { channel: "in_app" as const, kind },
+    })),
+  );
 }
 
 /**
@@ -135,7 +155,9 @@ async function createStreakReminders(today: string): Promise<number> {
   }));
 
   // Как в createDueReminders — факт вставки, не число кандидатов.
-  return createNotifications(items);
+  const notified = await createNotifications(items);
+  await sendNudgeTelemetry(notified, "streak");
+  return notified.length;
 }
 
 /**
