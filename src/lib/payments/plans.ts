@@ -75,6 +75,21 @@ export function validateEntitlement(row: {
 }
 
 /**
+ * Продление при оплате: складывать новый срок ПОВЕРХ остатка допустимо только когда
+ * тариф не меняется. При смене тарифа интервал обязан стартовать от now(), иначе
+ * остаток чужого тарифа даёт либо дешёвый апгрейд (Ultra поверх годового Premium =
+ * Ultra на ~13 мес за 1), либо потерю оплаченного (Premium поверх Ultra перезаписывает
+ * тариф и срок). Чистое решение (#8); сам интервал считает SQL now()/greatest/interval
+ * в applyCompletedPayment. NULL/basic currentTier никогда не совпадает с покупаемым.
+ */
+export function stacksOnExistingPeriod(
+  currentTier: string | null,
+  purchasedTier: string,
+): boolean {
+  return currentTier === purchasedTier;
+}
+
+/**
  * Срок жизни PENDING-чекаута. После него незавершённый платёж нельзя применить:
  * webhook переводит устаревший pending в `failed` и доступ НЕ выдаёт (см.
  * applyCompletedPayment). Это закрывает бессрочно-применимые abandoned-строки
