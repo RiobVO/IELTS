@@ -5,7 +5,7 @@ import { speakingSubmission } from "@/db/schema";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { cronSecret } from "@/env";
 import { deleteAudio } from "@/lib/speaking/storage";
-import { markAudioDeleted } from "@/lib/speaking/store";
+import { markAudioDeleted, markAudioDeleteFailed } from "@/lib/speaking/store";
 
 export const dynamic = "force-dynamic";
 const STALE_MS = Number(process.env.SPEAKING_STALE_MS ?? 120000);
@@ -41,9 +41,20 @@ export async function GET(request: Request) {
 
   // Dedup by id (a stuck row may also be retention-old → in both sets).
   const targets = [...new Map([...stuck, ...toClean].map((t) => [t.id, t])).values()];
+  let cleaned = 0;
   for (const t of targets) {
-    await deleteAudio(t.audioPath).catch((e) => console.error("reaper delete failed", t.id, e));
+    // Mark deleted ONLY after the object is actually gone. A failed remove used to be
+    // logged then marked deleted anyway → orphan biometrics past retention forever, never
+    // retried (next pass skips audio_deleted_at IS NOT NULL) (#6). Now keep it retryable.
+    try {
+      await deleteAudio(t.audioPath);
+    } catch (e) {
+      await markAudioDeleteFailed(t.id, String(e));
+      console.error("reaper delete failed", t.id, e);
+      continue;
+    }
     await markAudioDeleted(t.id, t.userId, "retention");
+    cleaned++;
   }
-  return NextResponse.json({ ok: true, failed: stuck.length, cleaned: targets.length }, { status: 200 });
+  return NextResponse.json({ ok: true, failed: stuck.length, cleaned }, { status: 200 });
 }
