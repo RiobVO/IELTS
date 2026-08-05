@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { contentItem, passage } from "@/db/schema";
 import { uploadAudio } from "@/lib/telegram/storage";
 import { parseRunner } from "./parse-runner";
+import { fetchExternalAudio } from "./safe-audio-fetch";
 import { sanitizeRunner, assertNoKeyLeak } from "./sanitize-runner";
 import { runnerBrandResidue } from "./skin-runner";
 import { persistTest } from "../persist";
@@ -31,9 +32,9 @@ export async function importRunner(
   // 2. Аудио (listening): скачать внешний mp3 → наш Storage → подменить src
   let audioUrl: string | undefined;
   if (parsed.section === "listening" && externalAudioSrc) {
-    const res = await fetch(externalAudioSrc);
-    if (!res.ok) throw new Error(`Audio fetch failed: ${res.status} ${externalAudioSrc}`);
-    const bytes = await res.arrayBuffer();
+    // SSRF-guarded fetch: raw src from third-party HTML → could point at an internal
+    // endpoint whose bytes would land in the PUBLIC bucket (see safe-audio-fetch.ts).
+    const bytes = await fetchExternalAudio(externalAudioSrc);
     audioUrl = await uploadAudio(`${contentItemId}.mp3`, bytes, "audio/mpeg");
     await db
       .update(passage)
