@@ -14,6 +14,7 @@ import { FULL_CATEGORIES } from "@/lib/exam/trial";
 import { computeBandPlan, type BandPlan, type BandPlanWeakType } from "@/lib/progress/band-plan";
 import { getExamCountdown, isInCurrentTzWeek, isSameTzDay, type ExamCountdown } from "@/lib/progress/exam-countdown";
 import { computeDailyPlan, getCatalogAvailability, getMistakesDueSummary, type DailyPlan, type DailyPlanItem } from "@/lib/progress/daily-plan";
+import { computeExamPlan, type ExamPlan } from "@/lib/progress/exam-plan";
 import { AppShell } from "./_AppShell";
 import { ExamDateEditor } from "./ExamDateEditor";
 import { HeroMotion, TiltCard, BandGauge } from "./_DashMotion";
@@ -280,6 +281,17 @@ export default async function Dashboard() {
     catalog: catalogAvailability,
   });
 
+  // Недельный ритм до даты экзамена (G2-2) — из УЖЕ посчитанных выше величин, без
+  // единого нового запроса. null = дата не задана / сегодня / прошла: в этих
+  // состояниях говорит countdown-карточка, а второй призыв рядом был бы дублем.
+  const examPlan = computeExamPlan({
+    daysUntilExam: examCountdown?.days ?? null,
+    hasAttempts,
+    weakest: weak[0] ?? null,
+    second: weak[1] ?? null,
+    mocksThisWeek,
+  });
+
   // Доля верных по ВСЕМ типам (не только top-5 weak-список) — для тёплой строки
   // нормализации, когда юзер реально буксует. Бренд candid, но не карающий: не
   // сыпать «worst / lose points» без поддержки в самый уязвимый момент
@@ -419,6 +431,10 @@ export default async function Dashboard() {
 
           {/* Exam-date countdown (BRIEF §12.3) — set at onboarding, editable here */}
           <ExamCountdownCard examDate={examDate} countdown={examCountdown} />
+
+          {/* Недельный ритм до экзамена (G2-2) — исполняет обещание пустого состояния
+              countdown-карточки: «shape your weekly plan around the time you have left» */}
+          {examPlan && <ExamRhythmCard plan={examPlan} />}
 
           {/* Plan to target band (W2-5) — дистанция + дрилл недели из bandPlan */}
           <PlanCard plan={bandPlan} hasAttempts={hasAttempts} />
@@ -784,6 +800,79 @@ function ExamCountdownCard({ examDate, countdown }: { examDate: string | null; c
         <ExamDateEditor initialDate={examDate} />
       </div>
       <div style={S.examDateLabel}>{dateLabel}</div>
+    </div>
+  );
+}
+
+/* Недельный ритм до экзамена (G2-2) — что делать НА ДИСТАНЦИИ, в отличие от
+   Today's plan («сегодня») и PlanCard («до target band»). Числа считает чистое ядро
+   computeExamPlan; здесь только рендер. Карточка не показывается вовсе, когда даты
+   нет / она сегодня / прошла — ядро возвращает null. */
+const RHYTHM_PHASE_LABEL: Record<ExamPlan["phase"], string> = {
+  base: "Building base",
+  ramp: "Ramping up",
+  final: "Final week",
+};
+
+function ExamRhythmCard({ plan }: { plan: ExamPlan }) {
+  const weeks = `${plan.weeksLeft} week${plan.weeksLeft === 1 ? "" : "s"} left`;
+
+  return (
+    <div style={{ ...S.card, ...S.rhythmCard }}>
+      <div style={S.rhythmHead}>
+        <div style={S.rhythmTitle}>{RHYTHM_PHASE_LABEL[plan.phase]}</div>
+        <span style={S.rhythmWeeks}>{weeks}</span>
+      </div>
+
+      {plan.needsCalibration ? (
+        <>
+          <p style={S.rhythmText}>
+            Sit one full mock first — it sets your band and shows which question types to spend
+            the time you have left on.
+          </p>
+          <Link href="/app/practice?category=full_reading" style={S.rhythmCta}>
+            Take a calibration mock
+            <Icon name="chevron-right" size={16} strokeWidth={2.2} />
+          </Link>
+        </>
+      ) : (
+        <>
+          <div style={S.rhythmRow}>
+            <span style={S.rhythmRowLabel}>Full mocks</span>
+            <span style={S.rhythmRowValue}>
+              {plan.mocksThisWeek}/{plan.rhythm.mocks} this week
+            </span>
+          </div>
+          <div style={S.rhythmRow}>
+            <span style={S.rhythmRowLabel}>Study days</span>
+            <span style={S.rhythmRowValue}>{plan.rhythm.studyDays} a week</span>
+          </div>
+
+          {plan.focus.length > 0 && (
+            <div style={S.rhythmFocus}>
+              <div style={S.rhythmFocusLabel}>
+                {plan.focus.length === 1 ? "Focus" : "Focus this week"}
+              </div>
+              {plan.focus.map((f) => (
+                <Link
+                  key={f.qtype}
+                  href={`/app/practice?q_type=${encodeURIComponent(f.qtype)}`}
+                  style={S.rhythmFocusRow}
+                >
+                  <span>{f.label}</span>
+                  <Icon name="chevron-right" size={15} strokeWidth={2.2} />
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <p style={S.rhythmText}>
+            {plan.restDayAhead
+              ? "Tomorrow is exam day — light review only today, then rest."
+              : `About ${plan.mocksTotalLeft} more full mock${plan.mocksTotalLeft === 1 ? "" : "s"} before the exam at this pace.`}
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -1189,6 +1278,20 @@ const S: Record<string, React.CSSProperties> = {
   todayRowLabelDone: { textDecoration: "line-through", color: "var(--text-muted)" },
   todayRowSub: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)", marginTop: 2 },
   todayEmptyNote: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", padding: "13px 0 2px", borderTop: "1px solid var(--border-subtle)" },
+
+  /* Weekly rhythm to exam day (G2-2) — rail card под countdown */
+  rhythmCard: { padding: 18, display: "flex", flexDirection: "column", gap: 10 },
+  rhythmHead: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 },
+  rhythmTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)" },
+  rhythmWeeks: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-secondary)", background: "var(--surface-inset)", borderRadius: "var(--radius-full)", padding: "3px 10px", whiteSpace: "nowrap" },
+  rhythmRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  rhythmRowLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
+  rhythmRowValue: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-primary)" },
+  rhythmFocus: { display: "flex", flexDirection: "column", gap: 6, paddingTop: 4, borderTop: "1px solid var(--border-subtle)" },
+  rhythmFocusLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
+  rhythmFocusRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--brand-active)", textDecoration: "none", background: "var(--brand-subtle)", borderRadius: "var(--radius-md)", padding: "9px 12px" },
+  rhythmText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.5, color: "var(--text-muted)", margin: 0 },
+  rhythmCta: { display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--brand-active)", textDecoration: "none" },
 
   /* Plan-to-target rail card */
   planCard: { padding: 18, display: "flex", flexDirection: "column", gap: 10 },
