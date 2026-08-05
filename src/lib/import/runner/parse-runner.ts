@@ -27,14 +27,19 @@ export function parseRunner(html: string): RunnerParseResult {
   return section === "listening" ? parseListeningRunner(html) : parseReadingRunner(html);
 }
 
-function mkQuestion(number: number, qtype: string, answer: ParsedAnswerKey): ParsedQuestion {
+function mkQuestion(
+  number: number,
+  qtype: string,
+  answer: ParsedAnswerKey,
+  groupKey: string | null = null,
+): ParsedQuestion {
   return {
     number,
     passageOrder: 1,
     qtype,
     promptHtml: "",
     options: null,
-    groupKey: null,
+    groupKey,
     evidenceRef: null,
     answer,
   };
@@ -47,12 +52,34 @@ function parseReadingRunner(html: string): RunnerParseResult {
   const types = extractData<Record<string, string>>(src, "questionTypes") ?? {};
   const expl = extractData<Record<string, string>>(src, "explanations") ?? {};
   const evid = extractData<Record<string, { para: string; snippet: string }>>(src, "evidence") ?? {};
+  // Reading "choose TWO/THREE": members share one correct letter-set, keyed by range
+  // in mcqGroups ({"8-12": {qs, correct}}) — same source convention parse-test.ts reads.
+  // Without this the members fell to exact/text_accept and set-grading was wrong (#7).
+  const mcqGroups = extractData<Record<string, { qs: number[]; correct: string[] }>>(src, "mcqGroups") ?? {};
+  const mcqByNum = new Map<number, { groupKey: string; correct: string[] }>();
+  for (const [groupKey, g] of Object.entries(mcqGroups)) {
+    for (const n of g?.qs ?? []) mcqByNum.set(n, { groupKey, correct: g.correct ?? [] });
+  }
   const bandScale = extractFunctionTable(src, "getBandFor40", 0, 40);
 
-  const numbers = Object.keys(correct).map(Number).sort((a, b) => a - b);
+  // Union: an mcq-multi member may live only in mcqGroups, not in correctAnswers.
+  const numbers = [...new Set([...Object.keys(correct).map(Number), ...mcqByNum.keys()])].sort(
+    (a, b) => a - b,
+  );
   const warnings: string[] = [];
   const questions = numbers.map((n) => {
     const k = String(n);
+    const grp = mcqByNum.get(n);
+    if (grp) {
+      // mcq-multi member: type unambiguous from the group; graded as a letter-set.
+      if (grp.correct.length === 0) warnings.push(`Q${n}: empty answer key`);
+      return mkQuestion(
+        n,
+        "mcq_multi",
+        { mode: "mcq_set", accept: grp.correct, explanation: expl[k] ?? null, evidence: evid[k] ?? null },
+        grp.groupKey,
+      );
+    }
     const answer: ParsedAnswerKey = accept[k]?.length
       ? { mode: "text_accept", accept: accept[k]!, explanation: expl[k] ?? null, evidence: evid[k] ?? null }
       : { mode: "exact", accept: [NORM(correct[k])], explanation: expl[k] ?? null, evidence: evid[k] ?? null };

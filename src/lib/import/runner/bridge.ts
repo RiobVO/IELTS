@@ -3,13 +3,40 @@
 // порядок проверок зеркалят эталонные getAnswer (reading) / getUserAnswer
 // (listening) — источник истины сбора ответов в самих файлах.
 
-// Reading getAnswer(q): drag-token → radio(checked) → text. value = буква / TRUE.. / текст.
+// Reading getAnswer(q): drag-token → checkbox-group(choose TWO/THREE) → radio → text.
+// multi (#7): checkboxes live in a [data-mcq-group] block (range "8-12" or list "4,5"),
+// NOT per-question. Every member q of the group reports the SAME full set of checked
+// letters (comma-joined) — grade.ts mcq_set compares the full set per member. Mirrors the
+// listening __multiFor pattern (covers both .mcq-block and .mc-question conventions).
 const READING_COLLECT = `
+function __readingMultiFor(q){
+  var groups = document.querySelectorAll('[data-mcq-group]');
+  for (var i = 0; i < groups.length; i++){
+    var raw = groups[i].getAttribute('data-mcq-group') || '';
+    var members = [];
+    if (raw.indexOf('-') !== -1){
+      var lo = parseInt(raw.split('-')[0], 10), hi = parseInt(raw.split('-')[1], 10);
+      for (var n = lo; n <= hi; n++) members.push(n);
+    } else {
+      members = raw.split(',').map(function(s){ return parseInt(s, 10); });
+    }
+    if (members.indexOf(q) !== -1){
+      return Array.prototype.slice.call(groups[i].querySelectorAll('input[type="checkbox"]'))
+        .filter(function(c){ return c.checked; })
+        .map(function(c){ return c.value; })
+        .sort()
+        .join(',');
+    }
+  }
+  return null;
+}
 function __collect(){
   var a = {};
   for (var q = 1; q <= 40; q++){
     var tok = document.querySelector('.dd-blank[data-q="'+q+'"] .drag-token');
     if (tok){ a[q] = tok.getAttribute('data-value') || ''; continue; }
+    var multi = __readingMultiFor(q);
+    if (multi !== null){ a[q] = multi; continue; }
     var radio = document.querySelector('input[name="q'+q+'"]:checked');
     if (radio){ a[q] = radio.value; continue; }
     var txt = document.querySelector('input.inspera-input-text[name="q'+q+'"]');
