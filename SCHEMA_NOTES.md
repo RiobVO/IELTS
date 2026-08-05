@@ -4,7 +4,7 @@ Ambiguities in BRIEF.md §5/§6.1 resolved while building the schema + migration
 The brief wins; where it was silent or self-conflicting, a sane choice was made
 and logged here. No tables were invented beyond what the brief implies.
 
-## Table count: 22 (Phase 1 shipped 13; +9 added in later phases)
+## Table count: 27 (Phase 1 shipped 13; +14 added in later phases)
 
 §5 enumerates 12 tables (`badge`/`user_badge` are two). The Phase-1 worked example
 expected **13 tables** — the 13th is **`notification`**, defined in **§11**
@@ -13,7 +13,7 @@ expected **13 tables** — the 13th is **`notification`**, defined in **§11**
 Phase-1 list (13): `region, profile, content_item, passage, question, answer_key,
 attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
 
-**Post-Phase additions (+9 → 22, in lockstep with `verify.ts` `APP_TABLE_COUNT = 22`):**
+**Post-Phase additions (+14 → 27, in lockstep with `verify.ts` `APP_TABLE_COUNT = 27`):**
 - `payment` — migration `0006_payments` (Phase 2D: tiers + payment lifecycle).
 - `annotation` — migration `0013_annotation` (reader highlights/notes, W2-1).
 - `leaderboard_snapshot` — migration `0014_leaderboard_snapshot` (rank-movement deltas).
@@ -25,8 +25,12 @@ attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
   — migration `0023_writing_lab` (Phase 3 Writing Lab: AI essay evaluation; the
   debug table is SERVER-ONLY, locked like `answer_key`). See the Phase 3 Writing
   section below.
+- `speaking_task`, `speaking_submission`, `speaking_feedback`, `speaking_feedback_debug`,
+  `speaking_audio_event` — migration `0027_speaking_lab` (Phase 3 Speaking Lab, Part 2:
+  audio evaluation; `speaking_feedback_debug` SERVER-ONLY, locked like `answer_key`;
+  `speaking_audio_event` = biometric audit trail).
 
-So `src/db/schema.ts` defines **22** `pgTable`s; `verify.ts` asserts the same count.
+So `src/db/schema.ts` defines **27** `pgTable`s; `verify.ts` asserts the same count.
 
 ## `user` → `profile`, keyed to `auth.users.id`
 
