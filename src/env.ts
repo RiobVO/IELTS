@@ -8,6 +8,11 @@ const REQUIRED = [
   "SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
   "DATABASE_URL",
+  // Browser auth pair — the @supabase/ssr clients read these via `!`
+  // (lib/supabase/{client,server,middleware}.ts). Kept in REQUIRED so a missing
+  // value fails fast at boot instead of a confusing runtime crash downstream.
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
 ] as const;
 
 type RequiredKey = (typeof REQUIRED)[number];

@@ -10,6 +10,8 @@ const REQUIRED_STUB = {
   SUPABASE_ANON_KEY: "anon",
   SUPABASE_SERVICE_ROLE_KEY: "svc",
   DATABASE_URL: "postgres://localhost/db",
+  NEXT_PUBLIC_SUPABASE_URL: "http://localhost",
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
 };
 
 describe("writingFeatureEnabled / speakingFeatureEnabled", () => {
