@@ -162,6 +162,7 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
 @keyframes tmarquee{to{transform:translateX(-50%)}}
 .qpill{flex:none;display:inline-flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:10px 18px;font-size:14.5px;font-weight:600;color:var(--ink);box-shadow:var(--sh-sm);white-space:nowrap}
 .qpill .qd{width:7px;height:7px;border-radius:50%;flex:none}
+.qpill.ask{background:var(--vsoft);color:var(--v2);border-color:rgba(129,112,234,.22);font-weight:700}
 
 .pain{background:linear-gradient(160deg,#F7F6FB,#F1F0F6);color:var(--ink);border:1px solid var(--line);border-radius:30px;padding:64px 54px;position:relative;overflow:hidden}
 .pain .glow{position:absolute;width:460px;height:460px;border-radius:50%;background:radial-gradient(circle,rgba(129,112,234,.10),transparent 65%);top:-160px;right:-90px;filter:blur(50px)}

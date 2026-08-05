@@ -580,6 +580,43 @@ export default function Home() {
               <span className="qpill"><span className="qd" style={{ background: "var(--amber)" }}></span>Multiple Choice (multi)</span>
             </div>
           </div>
+          <div className="tmarq-row">
+            <div className="tmarq-track rev" style={{ "--d": "64s" } as React.CSSProperties}>
+              <span className="qpill ask">Why am I stuck at 6.5?</span>
+              <span className="qpill ask">Where do I lose points?</span>
+              <span className="qpill ask">Which type costs me marks?</span>
+              <span className="qpill ask">How do I reach Band 7?</span>
+              <span className="qpill ask">Is it Matching Headings again?</span>
+              <span className="qpill ask">What should I drill next?</span>
+              <span className="qpill ask">Why did I miss those 4 marks?</span>
+              <span className="qpill ask">How do I stop guessing?</span>
+              <span className="qpill ask">Am I ready for test day?</span>
+              <span className="qpill ask">What&apos;s my weakest type?</span>
+              <span className="qpill ask">Why do I run out of time?</span>
+              <span className="qpill ask">How do I read faster?</span>
+              <span className="qpill ask">Is my band going up?</span>
+              <span className="qpill ask">What&apos;s costing me the visa?</span>
+              <span className="qpill ask">Which type do I keep failing?</span>
+              <span className="qpill ask">How close am I to my target?</span>
+              {/* duplicate set for seamless loop */}
+              <span className="qpill ask">Why am I stuck at 6.5?</span>
+              <span className="qpill ask">Where do I lose points?</span>
+              <span className="qpill ask">Which type costs me marks?</span>
+              <span className="qpill ask">How do I reach Band 7?</span>
+              <span className="qpill ask">Is it Matching Headings again?</span>
+              <span className="qpill ask">What should I drill next?</span>
+              <span className="qpill ask">Why did I miss those 4 marks?</span>
+              <span className="qpill ask">How do I stop guessing?</span>
+              <span className="qpill ask">Am I ready for test day?</span>
+              <span className="qpill ask">What&apos;s my weakest type?</span>
+              <span className="qpill ask">Why do I run out of time?</span>
+              <span className="qpill ask">How do I read faster?</span>
+              <span className="qpill ask">Is my band going up?</span>
+              <span className="qpill ask">What&apos;s costing me the visa?</span>
+              <span className="qpill ask">Which type do I keep failing?</span>
+              <span className="qpill ask">How close am I to my target?</span>
+            </div>
+          </div>
         </div>
       </section>
 
