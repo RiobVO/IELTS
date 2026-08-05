@@ -63,3 +63,40 @@ describe("writingFeatureEnabled / speakingFeatureEnabled", () => {
     expect(speakingFeatureEnabled()).toBe(true);
   });
 });
+
+// #14: cron-эндпоинты обязаны нормализовать секрет через cronSecret(), а не читать
+// raw `process.env.CRON_SECRET ?? null`. `??` ловит только undefined → при
+// CRON_SECRET="" в isCronAuthorized уходит "" (не null), want="Bearer " (7 байт) и
+// заголовок "Bearer " авторизуется = bypass. cronSecret() схлопывает ""/whitespace в
+// null → fail-closed (паритет с isCronAuthorized).
+describe("cronSecret — blank secret не даёт bypass", () => {
+  const saved = { ...process.env };
+  beforeEach(() => Object.assign(process.env, REQUIRED_STUB));
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it("нормализует пустую строку и whitespace в null (в отличие от raw ?? null)", async () => {
+    const { cronSecret } = await import("./env");
+    process.env.CRON_SECRET = "";
+    expect(cronSecret()).toBe(null);
+    process.env.CRON_SECRET = "   ";
+    expect(cronSecret()).toBe(null);
+  });
+
+  it("blank secret → isCronAuthorized fail-closed через cronSecret()", async () => {
+    const { cronSecret } = await import("./env");
+    const { isCronAuthorized } = await import("./lib/cron-auth");
+    process.env.CRON_SECRET = "";
+    // Старый путь (raw) авторизовал бы "Bearer " (7 байт == "Bearer ").
+    expect(isCronAuthorized("Bearer ", process.env.CRON_SECRET ?? null)).toBe(true);
+    // Фикс: через cronSecret() тот же заголовок отбивается.
+    expect(isCronAuthorized("Bearer ", cronSecret())).toBe(false);
+  });
+
+  it("возвращает заданный непустой секрет как есть", async () => {
+    const { cronSecret } = await import("./env");
+    process.env.CRON_SECRET = "s3cret";
+    expect(cronSecret()).toBe("s3cret");
+  });
+});

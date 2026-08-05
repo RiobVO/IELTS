@@ -3,6 +3,7 @@ import { and, inArray, lt, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { speakingSubmission } from "@/db/schema";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { cronSecret } from "@/env";
 import { deleteAudio } from "@/lib/speaking/storage";
 import { markAudioDeleted } from "@/lib/speaking/store";
 
@@ -11,7 +12,7 @@ const STALE_MS = Number(process.env.SPEAKING_STALE_MS ?? 120000);
 const RETENTION_DAYS = Number(process.env.SPEAKING_AUDIO_RETENTION_DAYS ?? 7);
 
 export async function GET(request: Request) {
-  if (!isCronAuthorized(request.headers.get("authorization"), process.env.CRON_SECRET ?? null)) {
+  if (!isCronAuthorized(request.headers.get("authorization"), cronSecret())) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
   const now = Date.now();
