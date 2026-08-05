@@ -26,3 +26,28 @@ export function vocabDueDedupKey(day: string): string {
 export function streakDedupKey(day: string): string {
   return `streak:${day}`;
 }
+
+/**
+ * Пороги тишины для реактивации (G2-4), в днях с последней активности. Два, а не
+ * один: первый ловит «закрутился и забыл», второй — тех, кого первый не поднял.
+ * Дальше не преследуем — третье письмо в пустоту читается как спам и стоит отписки.
+ */
+export const REACTIVATION_THRESHOLD_DAYS = [7, 14] as const;
+
+/** UTC yyyy-mm-dd ровно `days` дней назад от `day`. */
+export function shiftUtcDateStr(day: string, days: number): string {
+  const d = new Date(`${day}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return utcDateStr(d);
+}
+
+/**
+ * Ключ дедупа реактивации: одно на (user, порог, UTC-день прогона). Дата в ключе
+ * нужна, потому что письмо привязано к ЭПИЗОДУ тишины, а не к аккаунту: вернувшийся
+ * и снова пропавший человек должен получить напоминание опять. Однократность внутри
+ * эпизода даёт само условие отбора («последняя активность ровно N дней назад»
+ * наступает один раз), а ключ закрывает повторный прогон крона в тот же день.
+ */
+export function reactivationDedupKey(thresholdDays: number, day: string): string {
+  return `reactivation:${thresholdDays}:${day}`;
+}
