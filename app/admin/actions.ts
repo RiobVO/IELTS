@@ -90,6 +90,9 @@ export async function setStatus(formData: FormData) {
       if (res.reason === "empty_answer_key") {
         fail("Can't publish: a question has an empty answer key — fix the import first.");
       }
+      if (res.reason === "unresolved_question_type") {
+        fail("Can't publish: a question type didn't resolve (see the parser warnings) — fix the import first.");
+      }
       redirect("/admin"); // not_found
     }
   } else {
