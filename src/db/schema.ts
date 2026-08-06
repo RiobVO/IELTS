@@ -109,7 +109,6 @@ export const leaderboardPeriod = pgEnum("leaderboard_period", [
   "monthly",
   "all_time",
 ]);
-export const topicSkill = pgEnum("topic_skill", ["writing", "speaking"]);
 export const notificationType = pgEnum("notification_type", [
   "streak_reminder",
   "weekly_digest",
@@ -516,19 +515,6 @@ export const annotation = pgTable(
   },
   (t) => [index("annotation_user_content_idx").on(t.userId, t.contentItemId)],
 );
-
-/* -------------------------------------------------------------------------- */
-/* topic — Writing/Speaking stub (Phase 3)                                     */
-/* -------------------------------------------------------------------------- */
-export const topic = pgTable("topic", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  skill: topicSkill("skill").notNull(),
-  prompt: text("prompt").notNull(),
-  tierRequired: userTier("tier_required").notNull().default("basic"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
 
 /* -------------------------------------------------------------------------- */
 /* notification — reminders + weekly digest (BRIEF §11)                        */
