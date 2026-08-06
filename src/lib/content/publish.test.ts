@@ -95,4 +95,26 @@ describe("publishReviewedContentItem", () => {
     expect(res).toEqual({ ok: true, title: "Reading 1" });
     expect(update).toHaveBeenCalledOnce();
   });
+
+  it("publishes when a low-confidence source label merely contains 'unknown type' (no false barrier) (#13)", async () => {
+    // The raw source label — not our marker — happens to contain "unknown type" AND still
+    // resolves to a real canon type (…matching → matching_info), so grading is fine. The gate
+    // must key off the fallback suffix, not the bare substring; a broad substring match would
+    // falsely block this valid test (the exact false barrier variant B set out to avoid).
+    select
+      .mockReturnValueOnce(
+        selectChain([
+          {
+            reviewedAt: new Date(),
+            title: "Reading 1",
+            importWarnings: ['Q5: low-confidence type "unknown type matching" → matching_info'],
+          },
+        ]),
+      )
+      .mockReturnValueOnce(keysChain([{ accept: ["A"] }]));
+    update.mockReturnValue(updateChain());
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: true, title: "Reading 1" });
+    expect(update).toHaveBeenCalledOnce();
+  });
 });
