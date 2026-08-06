@@ -24,7 +24,7 @@ export function SpeakingResult({
   targetBand,
   audioUrl,
 }: {
-  data: SpeakingFeedbackResult;
+  data: Omit<SpeakingFeedbackResult, "audioPath">; // audioPath is server-only (#19)
   targetBand: number;
   /** Short-lived signed playback URL while the take exists; null → no player. */
   audioUrl: string | null;
