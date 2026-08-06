@@ -357,6 +357,20 @@ async function main() {
       );
   }
 
+  // 4d. leaderboard_entry is authenticated-only (#18, migration 0033): anon must not read
+  // user_id+rating via the REST endpoint, but logged-in users still see it (policy TO
+  // authenticated USING true). NOT a full lock — an authenticated client policy exists by
+  // design — so assert only RLS enabled + anon denied, guarding against a regress to the
+  // old anon-readable policy.
+  const lbLock = await tableLock("leaderboard_entry");
+  if (lbLock.rlsEnabled && lbLock.anonDenied)
+    ok("RLS — anon SELECT on leaderboard_entry denied");
+  else
+    fail(
+      `RLS — leaderboard_entry not anon-locked (rlsEnabled=${lbLock.rlsEnabled}, ` +
+        `anonDenied=${lbLock.anonDenied})`,
+    );
+
   // 5. auth trigger: a new auth.users row auto-creates a profile
   if (await profileAutoCreated())
     ok("auth trigger — profile auto-created on signup");
