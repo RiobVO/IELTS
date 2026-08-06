@@ -1,3 +1,4 @@
+import "server-only"; // owner (RLS-bypassing) client — never bundle into the browser
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { env } from "../env";
