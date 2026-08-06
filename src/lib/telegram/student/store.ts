@@ -132,19 +132,38 @@ export interface PendingQuestion {
   questionNumber: number;
 }
 
-/** Забирает ожидание ответа и СРАЗУ его снимает: одно сообщение — один вердикт. */
+/**
+ * Забирает ожидание ответа и СРАЗУ его снимает: одно сообщение — один вердикт.
+ *
+ * ЧИТАЕМ ДО ЗАПИСИ, а не через RETURNING. `UPDATE ... RETURNING` в PostgreSQL отдаёт
+ * значения ПОСЛЕ обновления — то есть ровно те NULL'ы, которые мы сюда и пишем.
+ * Первая версия так и делала: функция всегда возвращала null, бот считал каждое
+ * нажатие повторным, снимал кнопки и молчал (полвечера живой отладки, 2026-08-06).
+ *
+ * `SELECT ... FOR UPDATE` внутри транзакции сохраняет исходную гарантию: два
+ * одновременных нажатия сериализуются, и вердикт получает только первое.
+ */
 export async function takePendingQuestion(userId: string): Promise<PendingQuestion | null> {
-  const cleared = await db
-    .update(telegramLink)
-    .set({ pendingContentItemId: null, pendingQuestionNumber: null, pendingAskedAt: null })
-    .where(and(eq(telegramLink.userId, userId), isNotNull(telegramLink.pendingQuestionNumber)))
-    .returning({
-      contentItemId: telegramLink.pendingContentItemId,
-      questionNumber: telegramLink.pendingQuestionNumber,
-    });
-  const row = cleared[0];
-  if (!row?.contentItemId || row.questionNumber == null) return null;
-  return { contentItemId: row.contentItemId, questionNumber: row.questionNumber };
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        contentItemId: telegramLink.pendingContentItemId,
+        questionNumber: telegramLink.pendingQuestionNumber,
+      })
+      .from(telegramLink)
+      .where(eq(telegramLink.userId, userId))
+      .limit(1)
+      .for("update");
+
+    if (!row?.contentItemId || row.questionNumber == null) return null;
+
+    await tx
+      .update(telegramLink)
+      .set({ pendingContentItemId: null, pendingQuestionNumber: null, pendingAskedAt: null })
+      .where(eq(telegramLink.userId, userId));
+
+    return { contentItemId: row.contentItemId, questionNumber: row.questionNumber };
+  });
 }
 
 export interface NudgeTarget {
