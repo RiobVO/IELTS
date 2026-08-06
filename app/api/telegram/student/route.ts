@@ -7,6 +7,7 @@ import { answerStudentCallback, sendStudentMessage } from "@/lib/telegram/studen
 import { parseCommand, parseDailyQuestionCallback } from "@/lib/telegram/student/commands";
 import {
   checkDailyAnswer,
+  countDueMistakes,
   pickDailyQuestion,
   type DailyQuestion,
 } from "@/lib/telegram/student/daily-question";
@@ -110,11 +111,17 @@ async function handleMessage(token: string, chatId: number, text: string): Promi
   }
   if (command === "question") {
     const q = await pickDailyQuestion(userId);
-    if (!q) {
-      await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
+    if (q) {
+      await deliverQuestion(token, chatId, userId, q);
       return;
     }
-    await deliverQuestion(token, chatId, userId, q);
+    // Решаемого в чате нет — но, может, есть matching-задания, которым нужен пассаж.
+    const due = await countDueMistakes(userId);
+    await sendStudentMessage(
+      token,
+      chatId,
+      due > 0 ? msg.mistakesOnSiteMessage(due, mistakesUrl()) : msg.nothingDueMessage(practiceUrl()),
+    );
     return;
   }
 
