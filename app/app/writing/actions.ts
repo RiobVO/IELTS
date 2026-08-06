@@ -4,9 +4,17 @@ import { getProfile, getUser } from "@/lib/auth";
 import { writingFeatureEnabled } from "@/env";
 import { isUuid } from "@/lib/uuid";
 import { effectiveTier, meetsTier, WRITING_MIN_TIER, type Tier } from "@/lib/tiers";
-import { canEvaluate, validateEssay, isStuck, WRITING_STALE_MS } from "@/lib/writing/lifecycle";
+import {
+  canEvaluate,
+  validateEssay,
+  isStuck,
+  exceedsWritingRate,
+  WRITING_STALE_MS,
+  WRITING_RATE_WINDOW_SECONDS,
+} from "@/lib/writing/lifecycle";
 import {
   completedCounts,
+  countRecentSubmissions,
   insertPendingSubmission,
   loadWritingTaskForSubmissionGate,
   triggerEvaluate,
@@ -27,6 +35,7 @@ type CreateResult =
         | "preview_used"
         | "daily_cap"
         | "in_progress"
+        | "too_fast"
         | "unavailable";
     };
 
@@ -51,6 +60,16 @@ export async function createWritingSubmission(input: { taskId: string; essay: st
     todayCompleted: today,
   });
   if (!gate.allowed) return { ok: false, reason: gate.reason };
+
+  // Cost-amp throttle (#21): a failed eval leaves the preview/daily cap unspent, so a retry
+  // re-fires the paid Gemini call. Cap the submission rate (all statuses, incl. failed) over
+  // a short window — a real student never bursts this; a retry loop is bounded. Read before
+  // the insert so a burst is rejected without spending.
+  const recent = await countRecentSubmissions(
+    user.id,
+    new Date(now.getTime() - WRITING_RATE_WINDOW_SECONDS * 1000),
+  );
+  if (exceedsWritingRate(recent)) return { ok: false, reason: "too_fast" };
 
   // Task gate (defence in depth): the catalog only lists published tasks the user can
   // open, but this action is POST-reachable directly. Screen the id first (so a

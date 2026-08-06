@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 // Hoisted so the vi.mock factories (hoisted above) can reference these eagerly.
-const { getUser, getProfile, counts, insert, trigger, readOwn, markFailed, failStale, featureEnabled, loadTask } = vi.hoisted(() => ({
+const { getUser, getProfile, counts, recentCount, insert, trigger, readOwn, markFailed, failStale, featureEnabled, loadTask } = vi.hoisted(() => ({
   getUser: vi.fn(),
   getProfile: vi.fn(),
   counts: vi.fn(),
+  recentCount: vi.fn(),
   insert: vi.fn(),
   trigger: vi.fn(),
   readOwn: vi.fn(),
@@ -13,17 +14,18 @@ const { getUser, getProfile, counts, insert, trigger, readOwn, markFailed, failS
   loadTask: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ getUser, getProfile }));
-vi.mock("@/lib/writing/store", () => ({ completedCounts: counts, insertPendingSubmission: insert, triggerEvaluate: trigger, readOwnSubmission: readOwn, markFailed, failStaleSubmissions: failStale, loadWritingTaskForSubmissionGate: loadTask }));
+vi.mock("@/lib/writing/store", () => ({ completedCounts: counts, countRecentSubmissions: recentCount, insertPendingSubmission: insert, triggerEvaluate: trigger, readOwnSubmission: readOwn, markFailed, failStaleSubmissions: failStale, loadWritingTaskForSubmissionGate: loadTask }));
 vi.mock("@/env", () => ({ writingFeatureEnabled: featureEnabled }));
 import { createWritingSubmission, getSubmissionStatus } from "./actions";
-import { WRITING_STALE_MS } from "@/lib/writing/lifecycle";
+import { WRITING_STALE_MS, WRITING_RATE_MAX } from "@/lib/writing/lifecycle";
 
 const TASK = "11111111-1111-1111-1111-111111111111"; // a well-formed task id
 
 beforeEach(() => {
-  [getUser, getProfile, counts, insert, trigger, readOwn, markFailed, failStale, featureEnabled, loadTask].forEach((m) => m.mockReset());
+  [getUser, getProfile, counts, recentCount, insert, trigger, readOwn, markFailed, failStale, featureEnabled, loadTask].forEach((m) => m.mockReset());
   featureEnabled.mockReturnValue(true); // default: fully configured; #5 cases override
   failStale.mockResolvedValue(0); // default: nothing stale to reap
+  recentCount.mockResolvedValue(0); // default: under the rate cap; #21 case overrides
   loadTask.mockResolvedValue({ status: "published", tierRequired: "basic" }); // default: open task; #2 cases override
 });
 
@@ -46,6 +48,16 @@ describe("createWritingSubmission", () => {
     getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "ultra", premium_until: null }); counts.mockResolvedValue({ lifetime: 5, today: 0 }); insert.mockResolvedValue("sub1");
     expect(await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") })).toEqual({ ok: true, submissionId: "sub1" });
     expect(trigger).toHaveBeenCalledWith("sub1");
+  });
+
+  it("throttles a submission burst over the rate cap without insert (#21)", async () => {
+    // A failed eval doesn't spend the preview/cap, so cap the submission RATE to bound the
+    // paid Gemini retry loop. At/over the window cap → reject before any insert or trigger.
+    getUser.mockResolvedValue({ id: "u1" }); getProfile.mockResolvedValue({ tier: "ultra", premium_until: null }); counts.mockResolvedValue({ lifetime: 0, today: 0 });
+    recentCount.mockResolvedValue(WRITING_RATE_MAX); // window already at the cap
+    expect(await createWritingSubmission({ taskId: TASK, essay: Array(30).fill("w").join(" ") })).toEqual({ ok: false, reason: "too_fast" });
+    expect(insert).not.toHaveBeenCalled();
+    expect(trigger).not.toHaveBeenCalled();
   });
 
   it("reaps the user's own stale row BEFORE insert (#1)", async () => {

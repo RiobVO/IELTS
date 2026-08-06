@@ -17,6 +17,17 @@ export const WRITING_DAILY_CAP_PREMIUM = 5; // Premium: enough for a real studen
 export const WRITING_DAILY_CAP_ULTRA = 20; // Ultra: generous — effectively unlimited for a human
 export const WRITING_STALE_MS = 5 * 60 * 1000; // reap 'evaluating' older than this
 
+// Cost-amp guard (#21): a failed eval does NOT consume the preview/daily cap (only
+// 'completed' rows count), so a retry after a failure re-fires the paid Gemini call for
+// free. Throttle the submission RATE (all statuses, incl. failed) over a short window so a
+// retry loop can't amplify spend. A real student writes for minutes then submits once — the
+// threshold never touches them. Pure threshold; the COUNT lives in the store (indexed).
+export const WRITING_RATE_WINDOW_SECONDS = 60;
+export const WRITING_RATE_MAX = 5; // submissions per window per user; >= threshold → reject
+export function exceedsWritingRate(recentInWindow: number): boolean {
+  return recentInWindow >= WRITING_RATE_MAX;
+}
+
 export type EssayCheck =
   | { ok: true; wordCount: number }
   | { ok: false; reason: "too_short" | "too_long" };

@@ -3,8 +3,10 @@ import {
   canEvaluate,
   validateEssay,
   isStuck,
+  exceedsWritingRate,
   WRITING_DAILY_CAP_PREMIUM,
   WRITING_DAILY_CAP_ULTRA,
+  WRITING_RATE_MAX,
   WRITING_STALE_MS,
   MIN_WORDS,
   MAX_WORDS,
@@ -48,5 +50,13 @@ describe("isStuck", () => {
     const at = new Date("2026-06-25T12:00:00Z");
     expect(isStuck(at, new Date("2026-06-25T12:10:00Z"), WRITING_STALE_MS)).toBe(true);
     expect(isStuck(at, new Date("2026-06-25T12:01:00Z"), WRITING_STALE_MS)).toBe(false);
+  });
+});
+
+describe("exceedsWritingRate (#21 cost-amp throttle)", () => {
+  it("allows under the cap, rejects at/above it", () => {
+    expect(exceedsWritingRate(WRITING_RATE_MAX - 1)).toBe(false);
+    expect(exceedsWritingRate(WRITING_RATE_MAX)).toBe(true);
+    expect(exceedsWritingRate(WRITING_RATE_MAX + 1)).toBe(true);
   });
 });
