@@ -132,19 +132,43 @@ export interface PendingQuestion {
   questionNumber: number;
 }
 
-/** Забирает ожидание ответа и СРАЗУ его снимает: одно сообщение — один вердикт. */
+/**
+ * Забирает право ответить на заданный вопрос: возвращает его ОДИН раз и сразу
+ * снимает ожидание. Одно нажатие (или одно сообщение) — один вердикт; всё
+ * последующее получает null, поэтому правильный ответ нельзя вскрыть перебором
+ * кнопок.
+ *
+ * ЧИТАЕМ ДО ЗАПИСИ, а не через `UPDATE ... RETURNING`. RETURNING в PostgreSQL
+ * отдаёт значения ПОСЛЕ обновления — то есть ровно те NULL'ы, которые сюда и
+ * пишутся. Клейм из-за этого всегда возвращал пусто: бот считал каждый ответ
+ * повторным и молчал (полвечера живой отладки, 2026-08-06).
+ *
+ * `SELECT ... FOR UPDATE` внутри транзакции даёт ту же атомарность, что задумывал
+ * одиночный UPDATE: второй клейм ждёт коммита первого и читает уже пустую строку.
+ * Лок — по строке своего user_id, чужие чаты не сериализуются (важно для вечерней
+ * рассылки). Инвариант закреплён на реальном движке: test/db/telegram-pending.db.test.ts.
+ */
 export async function takePendingQuestion(userId: string): Promise<PendingQuestion | null> {
-  const cleared = await db
-    .update(telegramLink)
-    .set({ pendingContentItemId: null, pendingQuestionNumber: null, pendingAskedAt: null })
-    .where(and(eq(telegramLink.userId, userId), isNotNull(telegramLink.pendingQuestionNumber)))
-    .returning({
-      contentItemId: telegramLink.pendingContentItemId,
-      questionNumber: telegramLink.pendingQuestionNumber,
-    });
-  const row = cleared[0];
-  if (!row?.contentItemId || row.questionNumber == null) return null;
-  return { contentItemId: row.contentItemId, questionNumber: row.questionNumber };
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        contentItemId: telegramLink.pendingContentItemId,
+        questionNumber: telegramLink.pendingQuestionNumber,
+      })
+      .from(telegramLink)
+      .where(eq(telegramLink.userId, userId))
+      .limit(1)
+      .for("update");
+
+    if (!row?.contentItemId || row.questionNumber == null) return null;
+
+    await tx
+      .update(telegramLink)
+      .set({ pendingContentItemId: null, pendingQuestionNumber: null, pendingAskedAt: null })
+      .where(eq(telegramLink.userId, userId));
+
+    return { contentItemId: row.contentItemId, questionNumber: row.questionNumber };
+  });
 }
 
 export interface NudgeTarget {
