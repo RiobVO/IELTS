@@ -113,11 +113,20 @@ export async function persistFeedback(submissionId: string, r: EvaluateResult): 
   });
 }
 
+// Status-guarded (#16): only a still-transient row may be failed. Without the guard a
+// slow eval that just committed 'completed' could be overwritten completed→failed by a
+// racing reaper/poll — losing the feedback and undercounting the preview. Mirrors the
+// guarded flip in persistFeedback (WHERE status='evaluating').
 export async function markFailed(submissionId: string): Promise<void> {
   await db
     .update(writingSubmission)
     .set({ status: "failed", updatedAt: new Date() })
-    .where(eq(writingSubmission.id, submissionId));
+    .where(
+      and(
+        eq(writingSubmission.id, submissionId),
+        inArray(writingSubmission.status, ["pending", "evaluating"]),
+      ),
+    );
 }
 
 // Fail transient rows (pending|evaluating) older than staleBefore so the one-active
