@@ -8,6 +8,17 @@ import vm from "node:vm";
  * arbitrary code execution.
  */
 
+// vm's `timeout` bounds execution TIME but NOT heap: a poison literal/function could
+// allocate until the import process OOMs (#20). It's admin-only (import needs requireAdmin /
+// Telegram whitelist) with a global-free context, so it's self-DoS, not injection. A size
+// gate on the vm input is the proportional bound — it keeps the parse pipeline synchronous
+// (a worker with resourceLimits would force the whole parser async for a low-severity vector)
+// and needs no new dependency. Real IELTS literals are well under 4 MB; band functions are
+// tiny. Combined with the timeout (V8 interrupts an alloc loop at loop backedges) and the
+// caller's try/catch (a huge single string throws RangeError > max string length), this
+// closes the realistic OOM vectors.
+const MAX_VM_INPUT = 4 * 1024 * 1024; // 4 MB
+
 /** Find `const NAME = { ... }` and return the balanced-brace literal text. */
 export function extractObjectLiteral(src: string, name: string): string | null {
   const re = new RegExp(`(?:const|let|var)\\s+${name}\\s*=\\s*`);
@@ -42,6 +53,9 @@ export function extractObjectLiteral(src: string, name: string): string | null {
 
 /** Evaluate an object literal as pure data in an isolated, global-free context. */
 export function evalDataObject<T = unknown>(literal: string): T {
+  if (literal.length > MAX_VM_INPUT) {
+    throw new RangeError(`data literal too large (${literal.length} > ${MAX_VM_INPUT})`);
+  }
   return vm.runInNewContext(`(${literal})`, Object.create(null), {
     timeout: 1000,
   }) as T;
@@ -141,7 +155,7 @@ export function extractFunctionTable(
   max: number,
 ): Record<number, number> | null {
   const fnText = extractFunctionText(src, name);
-  if (fnText == null) return null;
+  if (fnText == null || fnText.length > MAX_VM_INPUT) return null;
   const harness = `${fnText}\n(function(){const t={};for(let r=${min};r<=${max};r++){const v=${name}(r);if(typeof v==='number')t[r]=v;}return t;})()`;
   try {
     const table = vm.runInNewContext(harness, Object.create(null), {

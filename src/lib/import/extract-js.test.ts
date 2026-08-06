@@ -40,6 +40,15 @@ describe("evalDataObject", () => {
     // в реальном модуле typeof process === "object"; в песочнице — "undefined"
     expect(evalDataObject("{ leaked: typeof process }")).toEqual({ leaked: "undefined" });
   });
+
+  it("отклоняет литерал сверх size-gate до vm (#20 — heap-cap)", () => {
+    // vm.timeout не ограничивает heap; аномально большой литерал бракуем ДО eval,
+    // чтобы poison-файл не уронил процесс импорта по памяти.
+    const huge = `{ "a": "${"x".repeat(4 * 1024 * 1024 + 1)}" }`;
+    expect(() => evalDataObject(huge)).toThrow(RangeError);
+    // extractData ловит throw и возвращает null (не роняет импорт)
+    expect(extractData(`const big = ${huge};`, "big")).toBeNull();
+  });
 });
 
 describe("extractData", () => {
@@ -78,6 +87,12 @@ describe("extractFunctionTable", () => {
   it("null, если функция не найдена или таблица пуста", () => {
     expect(extractFunctionTable("function f(){ return 1; }", "nope", 0, 5)).toBeNull();
     expect(extractFunctionTable(`function f(){ return "x"; }`, "f", 0, 3)).toBeNull(); // нет чисел
+  });
+
+  it("null, если тело функции сверх size-gate (#20 — heap-cap)", () => {
+    // Функция с гигантским телом бракуется ДО исполнения в vm (defense against OOM).
+    const bigBody = `function band(r){ const s = "${"y".repeat(4 * 1024 * 1024 + 1)}"; return r; }`;
+    expect(extractFunctionTable(bigBody, "band", 0, 3)).toBeNull();
   });
 
   it("изолирован: вычисление функции не может писать в реальный global", () => {
