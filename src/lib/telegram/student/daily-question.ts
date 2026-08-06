@@ -1,22 +1,33 @@
 import "server-only";
-import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { db } from "@/db";
-import { answerKey, contentItem, mistakeReview, question } from "@/db/schema";
+import { answerKey, contentItem, question } from "@/db/schema";
 import { gradeOne, type AnswerMode } from "@/lib/grading/grade";
+import { getOpenMistakes } from "@/lib/practice/mistakes";
 import { stripHtml } from "@/lib/result/debrief";
 
 /**
  * «Вопрос дня» студенческого бота (G2-1).
  *
- * ГЛАВНОЕ РЕШЕНИЕ: вопрос берётся ИЗ СОБСТВЕННЫХ ОШИБОК юзера (due-очередь
- * mistake_review), а не случайный из каталога. Причины две, и обе жёсткие:
+ * ГЛАВНОЕ РЕШЕНИЕ: вопрос берётся ИЗ СОБСТВЕННЫХ ОШИБОК юзера, а не случайный из
+ * каталога. Причины две, и обе жёсткие:
  *
  *  1. Анти-чит (§4.6). Вердикт по вопросу раскрывает правильный ответ. Для теста,
- *     который человек ещё НЕ проходил, это утечка ключа в мессенджер — то самое,
- *     что запрещено на всех остальных путях. Свою разобранную ошибку он уже видел
- *     в review-снимке, ничего нового бот ему не открывает.
+ *     который человек ещё НЕ сдавал, это утечка ключа в мессенджер — то самое,
+ *     что запрещено на всех остальных путях. По СВОЕЙ сданной попытке разбор с
+ *     ответами ему и так открыт на /result, бот не открывает ничего нового.
  *  2. Смысл. Цель волны — петля «ошибка → повторение → возврат». Случайный вопрос
  *     из каталога этой петли не образует, а сжигает свежий контент.
+ *
+ * ОТКУДА ОШИБКИ. Из сданных попыток (getOpenMistakes: деривация из attempt +
+ * attempt_review_snapshot), а НЕ из таблицы mistake_review. Раньше бот читал
+ * mistake_review напрямую — но она наполняется только когда человек РУКАМИ разбирает
+ * ошибки на сайте, и на проде в ней лежало 2 строки от одного юзера при 75 сданных
+ * попытках от двенадцати. Для всех, кроме одного, бот был пуст: писать новичку было
+ * не о чем ровно до того момента, как он сам дойдёт до экрана разбора. Теперь
+ * источник — сама попытка, а mistake_review остаётся тем, чем и была: SM-2-
+ * расписанием (getOpenMistakes учитывает его в isDue, поэтому повторённое на сайте
+ * бот не переспрашивает раньше срока).
  *
  * SM-2-расписание бот НЕ двигает намеренно: иначе он тихо съедал бы очередь
  * повторений, и на сайт возвращаться было бы незачем. Ответ в чате — это крючок,
@@ -69,59 +80,77 @@ export function parseOptions(raw: unknown): DailyQuestionOption[] | null {
 }
 
 /**
+ * Сколько просроченных ошибок вообще рассматриваем за один заход. Бот задаёт ОДИН
+ * вопрос, весь остальной список ему не нужен; потолок держит запрос за вопросами
+ * коротким, когда очередь длинная.
+ */
+const CANDIDATE_LIMIT = 20;
+
+const candidateKey = (contentItemId: string, questionNumber: number): string =>
+  `${contentItemId}:${questionNumber}`;
+
+/**
  * Самая просроченная неотработанная ошибка юзера — или null, если повторять нечего.
- * Anti-join mistake_resolution: закрытая «Mark learned» ошибка остаётся строкой в
- * mistake_review, и без вычета бот спрашивал бы то, что человек уже закрыл (та же
- * поправка, что в getMistakesDueSummary).
+ *
+ * getOpenMistakes уже делает всю содержательную часть: сводит сданные попытки с их
+ * review-снимком, перегрейживает тем же gradeOne, вычитает «Mark learned»-резолюции,
+ * дедупит по свежайшей попытке и сортирует due-первыми. Здесь остаётся выбрать из
+ * его кандидатов первого, к которому есть что показать: тест должен быть
+ * опубликован (ссылка «разобрать» из снятого вела бы в никуда), а у вопроса —
+ * непустая формулировка (в каталоге есть импорты, где prompt пуст, и такой вопрос
+ * пришёл бы в чат пустым сообщением).
  */
 export async function pickDailyQuestion(userId: string): Promise<DailyQuestion | null> {
-  const notResolved = sql`not exists (
-    select 1 from mistake_resolution mr
-    where mr.user_id = ${mistakeReview.userId}
-      and mr.content_item_id = ${mistakeReview.contentItemId}
-      and mr.question_number = ${mistakeReview.questionNumber}
-  )`;
+  const open = await getOpenMistakes(userId, { limit: CANDIDATE_LIMIT });
+  const candidates = open.filter((m) => m.isDue);
+  if (candidates.length === 0) return null;
 
-  const [row] = await db
+  // Один запрос на всех кандидатов, а не по запросу на каждого: их до двадцати, и
+  // цикл с await внутри превратил бы вечернюю рассылку в лестницу round-trip'ов.
+  const rows = await db
     .select({
-      contentItemId: mistakeReview.contentItemId,
-      questionNumber: mistakeReview.questionNumber,
-      qtype: mistakeReview.qtype,
+      contentItemId: question.contentItemId,
+      questionNumber: question.number,
+      qtype: question.qtype,
       promptHtml: question.promptHtml,
       options: question.options,
       testTitle: contentItem.title,
     })
-    .from(mistakeReview)
-    .innerJoin(contentItem, eq(contentItem.id, mistakeReview.contentItemId))
-    .innerJoin(
-      question,
-      and(
-        eq(question.contentItemId, mistakeReview.contentItemId),
-        eq(question.number, mistakeReview.questionNumber),
-      ),
-    )
+    .from(question)
+    .innerJoin(contentItem, eq(contentItem.id, question.contentItemId))
     .where(
       and(
-        eq(mistakeReview.userId, userId),
-        lte(mistakeReview.dueAt, sql`now()`),
-        // Снятый с публикации тест в боте не спрашиваем: ссылка «разобрать» из него
-        // привела бы в никуда.
         eq(contentItem.status, "published"),
-        notResolved,
+        or(
+          ...candidates.map((m) =>
+            and(
+              eq(question.contentItemId, m.contentItemId),
+              eq(question.number, m.questionNumber),
+            ),
+          ),
+        ),
       ),
-    )
-    .orderBy(asc(mistakeReview.dueAt))
-    .limit(1);
+    );
 
-  if (!row) return null;
-  return {
-    contentItemId: row.contentItemId,
-    questionNumber: row.questionNumber,
-    qtype: row.qtype,
-    prompt: stripHtml(row.promptHtml),
-    options: parseOptions(row.options),
-    testTitle: row.testTitle,
-  };
+  const byKey = new Map(rows.map((r) => [candidateKey(r.contentItemId, r.questionNumber), r]));
+
+  // Порядок кандидатов (due-первые, самые просроченные сверху) — авторитетный;
+  // берём первого, у которого нашлась пригодная строка вопроса.
+  for (const m of candidates) {
+    const row = byKey.get(candidateKey(m.contentItemId, m.questionNumber));
+    if (!row) continue;
+    const prompt = stripHtml(row.promptHtml).trim();
+    if (prompt === "") continue;
+    return {
+      contentItemId: row.contentItemId,
+      questionNumber: row.questionNumber,
+      qtype: row.qtype,
+      prompt,
+      options: parseOptions(row.options),
+      testTitle: row.testTitle,
+    };
+  }
+  return null;
 }
 
 export interface DailyVerdict {
