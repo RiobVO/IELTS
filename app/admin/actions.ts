@@ -87,6 +87,9 @@ export async function setStatus(formData: FormData) {
       if (res.reason === "not_reviewed") {
         fail("Approve the import (review the key) before publishing.");
       }
+      if (res.reason === "empty_answer_key") {
+        fail("Can't publish: a question has an empty answer key — fix the import first.");
+      }
       redirect("/admin"); // not_found
     }
   } else {

@@ -40,6 +40,8 @@ import { POST } from "./route";
 
 const ID = "11111111-1111-1111-1111-111111111111";
 const selectChain = (rows: unknown[]) => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve(rows) }) }) });
+// #17 answer-key gate query: .from().innerJoin().where()
+const keysChain = (rows: unknown[]) => ({ from: () => ({ innerJoin: () => ({ where: () => Promise.resolve(rows) }) }) });
 const updateChain = () => ({ set: () => ({ where: () => Promise.resolve(undefined) }) });
 const publishCallback = () =>
   new Request("http://x/api/telegram/webhook", {
@@ -69,8 +71,10 @@ describe("telegram publish gate (#1)", () => {
     expect(dbUpdate).not.toHaveBeenCalled(); // no status flip without review
   });
 
-  it("publishes a reviewed content item", async () => {
-    dbSelect.mockReturnValue(selectChain([{ reviewedAt: new Date(), title: "T" }]));
+  it("publishes a reviewed content item with non-empty keys", async () => {
+    dbSelect
+      .mockReturnValueOnce(selectChain([{ reviewedAt: new Date(), title: "T" }]))
+      .mockReturnValueOnce(keysChain([{ accept: ["A"] }])); // #17 gate: non-empty key
     dbUpdate.mockReturnValue(updateChain());
     await POST(publishCallback());
     expect(dbUpdate).not.toHaveBeenCalled();
