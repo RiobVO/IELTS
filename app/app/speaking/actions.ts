@@ -11,10 +11,13 @@ import { signedUploadUrl, audioSize, deleteAudio } from "@/lib/speaking/storage"
 import { logAudioEvent } from "@/lib/speaking/events";
 import {
   insertUploadingSubmission, markUploaded, triggerEvaluate, completedCounts,
-  loadSpeakingTaskForSubmissionGate, readOwnSubmission, markFailed, markAudioDeleted,
-  markAudioDeleteFailed, failStaleSubmissions,
+  countRecentSubmissions, loadSpeakingTaskForSubmissionGate, readOwnSubmission,
+  markFailed, markAudioDeleted, markAudioDeleteFailed, failStaleSubmissions,
 } from "@/lib/speaking/store";
-import { canEvaluate, isStuck, SPEAKING_STALE_MS_DEFAULT } from "@/lib/speaking/lifecycle";
+import {
+  canEvaluate, isStuck, exceedsSpeakingRate,
+  SPEAKING_STALE_MS_DEFAULT, SPEAKING_RATE_WINDOW_SECONDS,
+} from "@/lib/speaking/lifecycle";
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const staleMs = Number(process.env.SPEAKING_STALE_MS ?? SPEAKING_STALE_MS_DEFAULT);
@@ -49,6 +52,15 @@ export async function createSpeakingSubmission(
     todayCompleted: today,
   });
   if (!gate.allowed) return { error: gate.reason };
+
+  // Cost-amp throttle (N3, зеркало Writing #21): провал оценки не тратит preview/cap,
+  // поэтому цикл create→upload→fail крутил бы платные Gemini-AUDIO вызовы. Считаем
+  // ДО insert — burst отбивается без траты.
+  const recent = await countRecentSubmissions(
+    user.id,
+    new Date(now.getTime() - SPEAKING_RATE_WINDOW_SECONDS * 1000),
+  );
+  if (exceedsSpeakingRate(recent)) return { error: "too_fast" };
 
   // Task gate (defence in depth): the catalog only lists published cue-cards, but this
   // action is callable directly. Screen the id (avoid 22P02), then re-check published +
