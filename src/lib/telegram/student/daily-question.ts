@@ -87,6 +87,15 @@ export function parseOptions(raw: unknown): DailyQuestionOption[] | null {
  */
 const CANDIDATE_LIMIT = 50;
 
+/**
+ * Кап истории попыток для БОТА (site-экран разбора остаётся на общем потолке 300):
+ * вечерний крон зовёт pickDailyQuestion до 300 раз подряд, и полная история каждого
+ * получателя — главная статья его стоимости. Для «вопроса дня» хватает свежего окна:
+ * дедуп всё равно берёт новейшую попытку вопроса, а ошибка, живущая только в
+ * попытках старше 60 сдач, — не тот крючок, ради которого стоит платить за скан.
+ */
+const BOT_ATTEMPT_SCAN = 60;
+
 /** Итог выбора: что спросить и сколько ошибок ждёт повторения всего. */
 export interface DailyPick {
   /** Вопрос, который имеет смысл задать в чате; null — таких сейчас нет. */
@@ -140,7 +149,7 @@ export async function pickDailyQuestion(
   userId: string,
   now: Date = new Date(),
 ): Promise<DailyPick> {
-  const open = await getOpenMistakes(userId, { limit: CANDIDATE_LIMIT });
+  const open = await getOpenMistakes(userId, { limit: CANDIDATE_LIMIT, scanCap: BOT_ATTEMPT_SCAN });
   const due = open.filter((m) => m.isDue);
   if (due.length === 0) return { question: null, dueTotal: 0 };
   // Сдвиг по дню — иначе одна и та же ошибка приходила бы каждый вечер (rotateByDay).
