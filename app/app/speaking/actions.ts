@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { speakingSubmission, speakingFeedback, profile } from "@/db/schema";
+import { speakingSubmission, speakingFeedback, speakingFeedbackDebug, profile } from "@/db/schema";
 import { getUser, getProfile } from "@/lib/auth";
 import { effectiveTier, meetsTier, SPEAKING_MIN_TIER, type Tier } from "@/lib/tiers";
 import { speakingFeatureEnabled } from "@/env";
@@ -144,6 +144,11 @@ export async function deleteSpeakingRecording(submissionId: string): Promise<{ o
   await logAudioEvent(user.id, submissionId, "delete_requested");
   await db.update(speakingFeedback).set({ transcript: "", annotations: [], transcriptTimings: [], rewrites: [] })
     .where(eq(speakingFeedback.submissionId, submissionId));
+  // N6: raw_output в debug-строке несёт полный транскрипт (эхо речи = PII). Hard-lock
+  // (RLS+REVOKE) прячет её от клиента, но обещание «удалить запись» обязано чистить
+  // и её — до remove, чтобы текст ушёл даже при сбое storage.
+  await db.update(speakingFeedbackDebug).set({ rawOutput: "[redacted: user delete]" })
+    .where(eq(speakingFeedbackDebug.submissionId, submissionId));
   // Mark the AUDIO deleted ONLY after the object is actually gone. A failed remove used to
   // be swallowed (empty catch) then marked deleted anyway → biometrics silently retained
   // forever (#2). Now record the failure and stay retryable (audio_deleted_at NULL) so the
