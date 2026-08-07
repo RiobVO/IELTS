@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { QuestionHtml, parseDropOptions } from "./QuestionHtml";
+import { QuestionHtml, parseDropOptions, parseRangeMembers } from "./QuestionHtml";
 
 // React 19 в тесте требует явного флага act-окружения.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -24,6 +24,7 @@ function mount(html: string, onAnswer: (n: number, v: string) => void) {
         answers: {},
         onAnswer,
         onToggle: () => {},
+        onRangeToggle: () => {},
         fallback: createElement("div", null, "FALLBACK"),
       }),
     );
@@ -46,6 +47,7 @@ function mountWith(
         answers: {},
         onAnswer: () => {},
         onToggle: () => {},
+        onRangeToggle: () => {},
         fallback: createElement("div", null, "FALLBACK"),
         ...extra,
       }),
@@ -150,6 +152,69 @@ describe("QuestionHtml — choose-TWO group-anchor", () => {
     expect(seen).toEqual([23, 24]);
     expect(container.textContent).toContain("AFF-23");
     expect(container.textContent).toContain("AFF-24");
+  });
+});
+
+// range-checkbox (choose-TWO с ПО-ВОПРОСНЫМИ ключами, Volume 6): checked-стейт галочки
+// выводится из значений ВСЕХ членов (буквы розданы позиционно), клик отдаёт
+// onRangeToggle(members, letter) — раздача живёт в ExamRunner (rangeGroupToggle).
+describe("QuestionHtml — range-checkbox (по-вопросные ключи)", () => {
+  const rangeHtml =
+    `<div class="question" id="question-25-26"><div class="mcq-checkbox-group">` +
+    `<label><span class="q-slot" data-q="25" data-qtype="range-checkbox" data-members="25,26" data-value="A"></span>A</label>` +
+    `<label><span class="q-slot" data-q="25" data-qtype="range-checkbox" data-members="25,26" data-value="B"></span>B</label>` +
+    `<label><span class="q-slot" data-q="25" data-qtype="range-checkbox" data-members="25,26" data-value="E"></span>E</label>` +
+    `</div><span class="q-slot" data-q="26" data-qtype="group-anchor"></span></div>`;
+
+  it("клик отдаёт onRangeToggle с отсортированными членами и буквой", () => {
+    const onRangeToggle = vi.fn();
+    const container = mountWith(rangeHtml, { onRangeToggle });
+    const boxes = container.querySelectorAll<HTMLButtonElement>('[role="checkbox"]');
+    expect(boxes).toHaveLength(3);
+    act(() => boxes[2].click());
+    expect(onRangeToggle).toHaveBeenCalledWith([25, 26], "E");
+  });
+
+  it("checked выводится из ПО-ВОПРОСНЫХ значений членов (25:'B', 26:'E')", () => {
+    const container = mountWith(rangeHtml, { answers: { "25": "B", "26": "E" } });
+    const boxes = Array.from(container.querySelectorAll('[role="checkbox"]'));
+    expect(boxes.map((b) => b.getAttribute("aria-checked"))).toEqual(["false", "true", "true"]);
+  });
+
+  it("аффордансы монтируются для обоих членов (25 через слоты, 26 через anchor)", () => {
+    const seen: number[] = [];
+    const container = mountWith(rangeHtml, {
+      renderAffordances: (n: number) => {
+        seen.push(n);
+        return createElement("div", { className: "aff", key: n }, `AFF-${n}`);
+      },
+    });
+    expect(seen.sort()).toEqual([25, 26]);
+    expect(container.textContent).toContain("AFF-25");
+    expect(container.textContent).toContain("AFF-26");
+  });
+
+  it("битые data-members → инертный плейсхолдер, панель не падает", () => {
+    const broken =
+      `<div class="question"><span class="q-slot" data-q="25" data-qtype="range-checkbox" data-members="25" data-value="A"></span></div>`;
+    const container = mountWith(broken, {});
+    expect(container.querySelector('[role="checkbox"]')).toBeNull();
+    expect(container.querySelector(".q-drop-broken")).toBeTruthy();
+    expect(container.textContent).not.toContain("FALLBACK");
+  });
+});
+
+describe("parseRangeMembers", () => {
+  it("валидная пара → отсортированные номера", () => {
+    expect(parseRangeMembers("25,26")).toEqual([25, 26]);
+    expect(parseRangeMembers("26,25")).toEqual([25, 26]);
+  });
+  it("undefined / один номер / мусор / дубликаты / не-положительные → null", () => {
+    expect(parseRangeMembers(undefined)).toBeNull();
+    expect(parseRangeMembers("25")).toBeNull();
+    expect(parseRangeMembers("a,b")).toBeNull();
+    expect(parseRangeMembers("25,25")).toBeNull();
+    expect(parseRangeMembers("0,-1")).toBeNull();
   });
 });
 

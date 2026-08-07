@@ -17,7 +17,7 @@ import { reportClientError } from "@/lib/monitoring/report-client-error";
 import { isNextRedirectError } from "@/lib/exam/is-redirect-error";
 import { isAnswered } from "@/lib/exam/is-answered";
 import { parseConfidenceMap, type ConfidenceLevel } from "@/lib/practice/confidence-calibration";
-import { bridgeLettersFor, groupMembers, readingGroupToggle, toggleGroupLetter } from "@/lib/exam/listening-multi";
+import { bridgeLettersFor, groupMembers, rangeGroupToggle, readingGroupToggle, toggleGroupLetter } from "@/lib/exam/listening-multi";
 
 interface Question {
   id: string;
@@ -636,6 +636,24 @@ export default function ExamRunner({
       dropVerdict(n);
     },
     [dropVerdict, listeningSection, questions],
+  );
+  // range-checkbox (choose-TWO с ПО-ВОПРОСНЫМИ ключами, verbatim-панель): клик по
+  // галочке группы пере-раздаёт отмеченные буквы по членам позиционно — зеркало моста
+  // __readingRangeMultiFor (rangeGroupToggle). Каждый член хранит ОДНУ букву (string),
+  // сервер грейдит её обычным по-вопросным ключом — submit/checkAnswer трансформаций
+  // не требуют. null (клик сверх ёмкости группы) → no-op: визуальный checked-стейт
+  // выводится из значений членов, «лишняя» галочка всё равно не удержалась бы.
+  const rangeToggle = useCallback(
+    (members: number[], letter: string) => {
+      const dist = rangeGroupToggle(answersRef.current, members, letter);
+      if (!dist) return;
+      const out = { ...answersRef.current };
+      for (const m of members) out[String(m)] = dist[m] ?? "";
+      answersRef.current = out;
+      setAnswers(out);
+      for (const m of members) dropVerdict(m);
+    },
+    [dropVerdict],
   );
   const flag = useCallback((n: number) => setFlags((f) => ({ ...f, [String(n)]: !f[String(n)] })), []);
 
@@ -1421,6 +1439,7 @@ export default function ExamRunner({
                   answers={answers}
                   onAnswer={set}
                   onToggle={toggle}
+                  onRangeToggle={rangeToggle}
                   fallback={questionList}
                   renderAffordances={isPractice ? renderAffordances : undefined}
                 />
@@ -1475,6 +1494,7 @@ export default function ExamRunner({
                   answers={answers}
                   onAnswer={set}
                   onToggle={toggle}
+                  onRangeToggle={rangeToggle}
                   fallback={questionList}
                   // Practice → аффордансы монтируются в verbatim-панель; mock → undefined
                   // (verbatim без Check/Reveal, поведение не меняется).

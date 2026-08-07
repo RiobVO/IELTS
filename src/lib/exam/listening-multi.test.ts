@@ -5,6 +5,7 @@ import {
   bridgeLetterFor,
   bridgeLettersFor,
   groupMembers,
+  rangeGroupToggle,
   readingGroupToggle,
   toggleGroupLetter,
   unionChosen,
@@ -146,6 +147,37 @@ describe("readingGroupToggle (reading choose-TWO — полный набор, Н
   it("пустой/legacy string член → union как одиночная буква", () => {
     expect(readingGroupToggle({ "23": "", "24": undefined }, [23, 24], "A")).toEqual(["A"]);
     expect(readingGroupToggle({ "23": "A", "24": [] }, [23, 24], "E")).toEqual(["A", "E"]);
+  });
+});
+
+describe("rangeGroupToggle (reading choose-TWO с по-вопросными ключами — позиционная раздача)", () => {
+  it("две буквы раздаются отсортированными по отсортированным номерам (зеркало __readingRangeMultiFor)", () => {
+    // Клик E при уже выбранной B: набор {B,E} → 25:'B', 26:'E' — как ключи источника.
+    expect(rangeGroupToggle({ "25": "B", "26": "" }, [25, 26], "E")).toEqual({ 25: "B", 26: "E" });
+  });
+
+  it("порядок кликов роли не играет: E затем B даёт ту же раздачу", () => {
+    expect(rangeGroupToggle({ "25": "E", "26": "" }, [25, 26], "B")).toEqual({ 25: "B", 26: "E" });
+  });
+
+  it("одна буква — первый член получает её, второй пуст", () => {
+    expect(rangeGroupToggle({}, [25, 26], "E")).toEqual({ 25: "E", 26: "" });
+  });
+
+  it("снятие буквы пере-раздаёт остаток", () => {
+    expect(rangeGroupToggle({ "25": "B", "26": "E" }, [25, 26], "B")).toEqual({ 25: "E", 26: "" });
+  });
+
+  it("клик сверх ёмкости группы → null (вызывающий игнорирует)", () => {
+    expect(rangeGroupToggle({ "25": "B", "26": "E" }, [25, 26], "A")).toBeNull();
+  });
+
+  it("несортированные номера членов сортируются перед раздачей", () => {
+    expect(rangeGroupToggle({ "26": "E" }, [26, 25], "B")).toEqual({ 25: "B", 26: "E" });
+  });
+
+  it("массив-значение члена (дивергентный/legacy стейт) участвует через union", () => {
+    expect(rangeGroupToggle({ "25": ["B"], "26": [] }, [25, 26], "E")).toEqual({ 25: "B", 26: "E" });
   });
 });
 

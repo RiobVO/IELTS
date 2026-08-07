@@ -111,6 +111,32 @@ export function readingGroupToggle(
 }
 
 /**
+ * READING choose-TWO с ПО-ВОПРОСНЫМИ ключами (третья форма, Volume 6: чекбокс-группа
+ * `.mcq-checkbox-group`, номера — диапазоном в id блока, ключи 25:'B', 26:'E' — НЕ
+ * общий mcq_set). Тоггл буквы в едином наборе группы + позиционная раздача по
+ * членам — зеркало моста `__readingRangeMultiFor` (bridge.ts): отсортированные
+ * отмеченные буквы по отсортированным номерам, «NB Your answers may be given in any
+ * order» выполняется раздачей, а не ключом. Набор больше ёмкости группы → null
+ * (вызывающий игнорирует клик): mock молча грейдит первые N сортированных, но в
+ * verbatim-панели «лишняя» галочка визуально не удержалась бы (checked-стейт
+ * выводится из по-вопросных значений) — блокировка честнее тихой потери.
+ */
+export function rangeGroupToggle(
+  valuesByNumber: Record<string, string | string[] | undefined>,
+  memberNumbers: number[],
+  letter: string,
+): Record<number, string> | null {
+  const members = [...memberNumbers].sort((a, b) => a - b);
+  const next = toggleGroupLetter(valuesByNumber, members, letter);
+  if (next.length > members.length) return null;
+  const out: Record<number, string> = {};
+  members.forEach((n, i) => {
+    out[n] = next[i] ?? "";
+  });
+  return out;
+}
+
+/**
  * Номера членов choose-TWO/THREE группы по groupKey, отсортированные по возрастанию
  * (порядок, в котором мост раздаёт буквы по позиции). Члены группы — все вопросы
  * теста с ТЕМ ЖЕ group_key (в данных группы вида "11-12" номера соседние, но берём

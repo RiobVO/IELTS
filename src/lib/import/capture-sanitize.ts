@@ -59,7 +59,7 @@ const CLASS_LEAK_TOKENS = new Set(
  * очищенного видимого текста и легитимны.
  */
 const ANSWER_VALUE_RE = /correct\s*answer|answer\s*[:=]|solution/i;
-const SYNTH_SLOT_ATTRS = new Set(["data-q", "data-qtype", "data-value", "data-options"]);
+const SYNTH_SLOT_ATTRS = new Set(["data-q", "data-qtype", "data-value", "data-options", "data-members"]);
 
 /**
  * Fail-closed детектор утечки ключа в захваченной панели: возвращает первый найденный
