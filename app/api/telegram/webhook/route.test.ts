@@ -61,6 +61,7 @@ async function flushAfterTasks(): Promise<void> {
 beforeEach(() => {
   [dbSelect, dbUpdate, answerCallback, sendMessage].forEach((m) => m.mockReset());
   afterTasks.length = 0;
+  vi.unstubAllEnvs(); // reset the prod-env stub between tests (#4 guard)
 });
 
 describe("telegram publish gate (#1)", () => {
@@ -80,5 +81,24 @@ describe("telegram publish gate (#1)", () => {
     expect(dbUpdate).not.toHaveBeenCalled();
     await flushAfterTasks();
     expect(dbUpdate).toHaveBeenCalledOnce();
+  });
+});
+
+describe("prod webhook secret guard (#4)", () => {
+  // telegramConfig mock has webhookSecret: null. In production that must fail closed —
+  // otherwise a forged callback_query (from.id in the JSON) could reach handlePublish.
+  it("refuses in production when no webhook secret is set (fail closed)", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    const res = await POST(publishCallback());
+    expect(res.status).toBe(401);
+    await flushAfterTasks();
+    expect(dbUpdate).not.toHaveBeenCalled(); // never reached handlePublish
+  });
+
+  it("processes normally outside production even without a secret (local dev)", async () => {
+    // NODE_ENV=test, no VERCEL_ENV → isProduction() false → guard skipped, publish gate runs
+    dbSelect.mockReturnValue(selectChain([{ reviewedAt: null, title: "T" }]));
+    const res = await POST(publishCallback());
+    expect(res.status).toBe(200);
   });
 });
