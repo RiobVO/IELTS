@@ -19,7 +19,7 @@ export default async function OpengraphImage() {
   // Файл лежит в репо и грузится relative-фетчем (edge runtime, fs недоступен) — без
   // рантайм-похода на серверы Google Fonts, поэтому не хрупко и работает офлайн.
   const fontData = await fetch(
-    new URL("./_og/plus-jakarta-sans-extrabold.ttf", import.meta.url)
+    new URL("./_og/manrope-extrabold.ttf", import.meta.url)
   ).then((res) => res.arrayBuffer());
 
   return new ImageResponse(
@@ -54,7 +54,7 @@ export default async function OpengraphImage() {
             letterSpacing: -1.5,
             lineHeight: 1.15,
             textAlign: "center",
-            fontFamily: "Plus Jakarta Sans",
+            fontFamily: "Manrope",
           }}
         >
           <div style={{ display: "flex" }}>Get the band</div>
@@ -65,7 +65,7 @@ export default async function OpengraphImage() {
     {
       ...size,
       fonts: [
-        { name: "Plus Jakarta Sans", data: fontData, weight: 800, style: "normal" },
+        { name: "Manrope", data: fontData, weight: 800, style: "normal" },
       ],
     }
   );

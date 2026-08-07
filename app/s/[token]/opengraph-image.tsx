@@ -30,7 +30,7 @@ const MARK_ACCENT = "#8B5CF6";
 async function loadFont(): Promise<ArrayBuffer | null> {
   try {
     const file = await readFile(
-      path.join(process.cwd(), "app", "_og", "plus-jakarta-sans-extrabold.ttf"),
+      path.join(process.cwd(), "app", "_og", "manrope-extrabold.ttf"),
     );
     return file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer;
   } catch (e) {
@@ -55,9 +55,9 @@ export default async function ShareOgImage({
   const { token } = await params;
   const [card, fontData] = await Promise.all([loadShareCard(token), loadFont()]);
   const fonts = fontData
-    ? [{ name: "Plus Jakarta Sans", data: fontData, weight: 800 as const, style: "normal" as const }]
+    ? [{ name: "Manrope", data: fontData, weight: 800 as const, style: "normal" as const }]
     : undefined;
-  const fontFamily = fontData ? "Plus Jakarta Sans" : undefined;
+  const fontFamily = fontData ? "Manrope" : undefined;
 
   // Невалидный/отозванный токен: отдаём нейтральную брендовую плашку, а не 404 —
   // «битая картинка» в чате выглядит как сломанный продукт.
