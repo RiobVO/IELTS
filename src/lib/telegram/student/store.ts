@@ -127,6 +127,14 @@ export async function setPendingQuestion(
     .where(eq(telegramLink.userId, userId));
 }
 
+/** Снимает ожидание ответа: вопрос не доставлен, ждать на него нечего. */
+export async function clearPendingQuestion(userId: string): Promise<void> {
+  await db
+    .update(telegramLink)
+    .set({ pendingContentItemId: null, pendingQuestionNumber: null, pendingAskedAt: null })
+    .where(eq(telegramLink.userId, userId));
+}
+
 export interface PendingQuestion {
   contentItemId: string;
   questionNumber: number;

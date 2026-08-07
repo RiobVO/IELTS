@@ -8,7 +8,7 @@ vi.mock("server-only", () => ({}));
 // deliver.ts тянет @/env (publicSiteUrl) — чистым функциям он не нужен, а на импорте
 // env валидирует боевые переменные, которых у юнита нет.
 vi.mock("@/env", () => ({ publicSiteUrl: () => null }));
-import { parseOptions } from "./daily-question";
+import { parseOptions, rotateByDay } from "./daily-question";
 import { buttonLabel } from "./deliver";
 
 describe("parseOptions", () => {
@@ -69,5 +69,42 @@ describe("buttonLabel", () => {
     const label = buttonLabel("iv", "x".repeat(200));
     expect(label.length).toBeLessThanOrEqual(60);
     expect(label.endsWith("…")).toBe(true);
+  });
+});
+
+// Ротация очереди по дню. Ответ в чате не двигает SM-2, а порядок кандидатов
+// детерминирован — без сдвига самая просроченная ошибка приходила бы каждый вечер
+// одна и та же (ревью 2026-08-07).
+describe("rotateByDay", () => {
+  const day = (iso: string) => new Date(iso);
+  const items = ["a", "b", "c", "d"];
+
+  it("соседние дни дают разные первые вопросы", () => {
+    const first = (d: string) => rotateByDay(items, day(d))[0];
+    expect(first("2026-08-07T14:00:00Z")).not.toBe(first("2026-08-08T14:00:00Z"));
+  });
+
+  it("в пределах одних суток порядок один и тот же", () => {
+    expect(rotateByDay(items, day("2026-08-07T00:05:00Z"))).toEqual(
+      rotateByDay(items, day("2026-08-07T23:55:00Z")),
+    );
+  });
+
+  it("ничего не теряет и не дублирует", () => {
+    const out = rotateByDay(items, day("2026-08-09T12:00:00Z"));
+    expect([...out].sort()).toEqual([...items].sort());
+    expect(out).toHaveLength(items.length);
+  });
+
+  it("за цикл длиной в список каждый элемент побывает первым", () => {
+    const firsts = new Set(
+      ["07", "08", "09", "10"].map((d) => rotateByDay(items, day(`2026-08-${d}T12:00:00Z`))[0]),
+    );
+    expect(firsts.size).toBe(items.length);
+  });
+
+  it("пустой список и один элемент не ломаются", () => {
+    expect(rotateByDay([], day("2026-08-07T12:00:00Z"))).toEqual([]);
+    expect(rotateByDay(["only"], day("2026-08-07T12:00:00Z"))).toEqual(["only"]);
   });
 });
