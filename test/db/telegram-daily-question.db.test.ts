@@ -37,7 +37,12 @@ interface SeededTest {
 
 /** Опубликованный тест с одним вопросом и ключом. */
 async function seedTest(
-  opts: { status?: "draft" | "published"; prompt?: string; accept?: string } = {},
+  opts: {
+    status?: "draft" | "published";
+    prompt?: string;
+    accept?: string;
+    qtype?: string;
+  } = {},
 ): Promise<SeededTest> {
   seq++;
   const [item] = await sql<{ id: string }[]>`
@@ -50,7 +55,7 @@ async function seedTest(
     VALUES (${item!.id}, 1, '<p>body</p>') RETURNING id`;
   const [q] = await sql<{ id: string }[]>`
     INSERT INTO question (content_item_id, passage_id, number, qtype, prompt_html, "order")
-    VALUES (${item!.id}, ${p!.id}, 1, 'tfng',
+    VALUES (${item!.id}, ${p!.id}, 1, ${opts.qtype ?? "tfng"}::question_type,
             ${opts.prompt ?? "<p>The bird is a symbol of the nation.</p>"}, 1)
     RETURNING id`;
   await sql`
@@ -67,7 +72,7 @@ async function seedTest(
 async function seedWrongAttempt(
   userId: string,
   t: SeededTest,
-  opts: { accept?: string; submittedAt?: string } = {},
+  opts: { accept?: string; submittedAt?: string; qtype?: string } = {},
 ): Promise<void> {
   const [a] = await sql<{ id: string }[]>`
     INSERT INTO attempt (user_id, content_item_id, mode, status, started_at, submitted_at, answers)
@@ -79,7 +84,12 @@ async function seedWrongAttempt(
     INSERT INTO attempt_review_snapshot (attempt_id, snapshot)
     VALUES (${a!.id}, ${sql.json({
       questions: [
-        { number: 1, qtype: "tfng", mode: "exact", accept: [opts.accept ?? "TRUE"] },
+        {
+          number: 1,
+          qtype: opts.qtype ?? "tfng",
+          mode: "exact",
+          accept: [opts.accept ?? "TRUE"],
+        },
       ],
     })})`;
 }
@@ -99,13 +109,25 @@ describe("pickDailyQuestion — источник вопроса", () => {
     const t = await seedTest();
     await seedWrongAttempt(userId, t);
 
-    const q = await pickDailyQuestion(userId);
+    const { question, dueTotal } = await pickDailyQuestion(userId);
 
-    expect(q).not.toBeNull();
-    expect(q!.contentItemId).toBe(t.contentItemId);
-    expect(q!.questionNumber).toBe(1);
-    expect(q!.prompt).toBe("The bird is a symbol of the nation.");
-    expect(q!.options).toBeNull();
+    expect(question).not.toBeNull();
+    expect(question!.contentItemId).toBe(t.contentItemId);
+    expect(question!.questionNumber).toBe(1);
+    expect(question!.prompt).toBe("The bird is a symbol of the nation.");
+    expect(question!.options).toBeNull();
+    expect(dueTotal).toBe(1);
+  });
+
+  it("нерешаемый в чате тип не спрашивается, но и не прячется: due-счётчик его видит", async () => {
+    const userId = await seedUser();
+    const t = await seedTest({ qtype: "matching_headings", prompt: "<p>Paragraph A</p>" });
+    await seedWrongAttempt(userId, t, { qtype: "matching_headings" });
+
+    const { question, dueTotal } = await pickDailyQuestion(userId);
+
+    expect(question).toBeNull();
+    expect(dueTotal).toBe(1); // повод написать «это на сайте» вместо молчания
   });
 
   it("верный ответ вопросом дня не становится", async () => {
@@ -113,7 +135,7 @@ describe("pickDailyQuestion — источник вопроса", () => {
     const t = await seedTest({ accept: "FALSE" }); // попытка отвечает FALSE
     await seedWrongAttempt(userId, t, { accept: "FALSE" });
 
-    expect(await pickDailyQuestion(userId)).toBeNull();
+    expect((await pickDailyQuestion(userId)).question).toBeNull();
   });
 
   it("чужие ошибки не спрашиваются", async () => {
@@ -122,7 +144,7 @@ describe("pickDailyQuestion — источник вопроса", () => {
     const t = await seedTest();
     await seedWrongAttempt(owner, t);
 
-    expect(await pickDailyQuestion(stranger)).toBeNull();
+    expect((await pickDailyQuestion(stranger)).question).toBeNull();
   });
 
   it("снятый с публикации тест не спрашивается", async () => {
@@ -130,7 +152,7 @@ describe("pickDailyQuestion — источник вопроса", () => {
     const t = await seedTest({ status: "draft" });
     await seedWrongAttempt(userId, t);
 
-    expect(await pickDailyQuestion(userId)).toBeNull();
+    expect((await pickDailyQuestion(userId)).question).toBeNull();
   });
 
   it("вопрос с пустой формулировкой не уходит в чат", async () => {
@@ -138,7 +160,7 @@ describe("pickDailyQuestion — источник вопроса", () => {
     const t = await seedTest({ prompt: "<p></p>" });
     await seedWrongAttempt(userId, t);
 
-    expect(await pickDailyQuestion(userId)).toBeNull();
+    expect((await pickDailyQuestion(userId)).question).toBeNull();
   });
 
   it("отработанную ошибку («Mark learned») не переспрашивает", async () => {
@@ -150,7 +172,7 @@ describe("pickDailyQuestion — источник вопроса", () => {
         (user_id, content_item_id, question_number, qtype, resolved_at)
       VALUES (${userId}, ${t.contentItemId}, 1, 'tfng', now())`;
 
-    expect(await pickDailyQuestion(userId)).toBeNull();
+    expect((await pickDailyQuestion(userId)).question).toBeNull();
   });
 
   it("SM-2 остаётся главным по срокам: запланированное на будущее не спрашивается", async () => {
@@ -164,7 +186,7 @@ describe("pickDailyQuestion — источник вопроса", () => {
          last_reviewed_at)
       VALUES (${userId}, ${t.contentItemId}, 1, 'tfng', now() + interval '3 days', 3, now())`;
 
-    expect(await pickDailyQuestion(userId)).toBeNull();
+    expect((await pickDailyQuestion(userId)).question).toBeNull();
   });
 
   it("просроченное по SM-2 спрашивается", async () => {
@@ -178,6 +200,6 @@ describe("pickDailyQuestion — источник вопроса", () => {
       VALUES (${userId}, ${t.contentItemId}, 1, 'tfng', now() - interval '1 day', 3,
               '2026-01-02T00:00:00Z')`;
 
-    expect(await pickDailyQuestion(userId)).not.toBeNull();
+    expect((await pickDailyQuestion(userId)).question).not.toBeNull();
   });
 });
