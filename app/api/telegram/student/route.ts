@@ -3,12 +3,16 @@ import { studentBotConfig } from "@/env";
 import { captureServer } from "@/lib/analytics/server";
 import { logError } from "@/lib/monitoring/log-error";
 import { webhookSecretValid } from "@/lib/telegram/auth";
-import { answerStudentCallback, sendStudentMessage } from "@/lib/telegram/student/client";
+import {
+  answerStudentCallback,
+  clearInlineKeyboard,
+  sendStudentMessage,
+} from "@/lib/telegram/student/client";
 import { parseCommand, parseDailyQuestionCallback } from "@/lib/telegram/student/commands";
 import {
   checkDailyAnswer,
+  loadQuestionOptions,
   pickDailyQuestion,
-  type DailyQuestion,
 } from "@/lib/telegram/student/daily-question";
 import { deliverQuestion, mistakesUrl, practiceUrl } from "@/lib/telegram/student/deliver";
 import { parseStartPayload } from "@/lib/telegram/student/link-code";
@@ -43,7 +47,7 @@ interface TgUpdate {
   callback_query?: {
     id: string;
     data?: string;
-    message?: { chat: { id: number } };
+    message?: { chat: { id: number }; message_id?: number };
   };
 }
 
@@ -64,6 +68,14 @@ async function replyVerdict(
 ): Promise<void> {
   const verdict = await checkDailyAnswer(contentItemId, questionNumber, value);
   if (!verdict) {
+    // Ключа больше нет (тест переимпортировали/удалили). Человек ответил и обязан
+    // получить хоть что-то, а причина — попасть в лог, а не в пустоту.
+    await logError({
+      source: "server",
+      message: "student bot: no answer key for the answered question",
+      userId,
+      context: { op: "replyVerdict", contentItemId, questionNumber },
+    });
     await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
     return;
   }
@@ -139,47 +151,63 @@ async function handleCallback(
   token: string,
   callbackId: string,
   chatId: number,
+  messageId: number | null,
   data: string,
 ): Promise<void> {
-  await answerStudentCallback(token, callbackId);
-
   const userId = await findUserByChat(chatId);
   if (!userId) {
+    await answerStudentCallback(token, callbackId);
     await sendStudentMessage(token, chatId, msg.notLinkedMessage());
     return;
   }
 
   const cb = parseDailyQuestionCallback(data);
-  if (!cb) return; // не наша кнопка — молча игнорируем
+  if (!cb) {
+    await answerStudentCallback(token, callbackId); // не наша кнопка — молча гасим часики
+    return;
+  }
 
-  // Значение варианта восстанавливаем из САМОГО вопроса, а не из callback_data:
-  // в 64 байта лимита текст ответа не влезает, да и доверять содержимому кнопки,
-  // пришедшему от клиента, незачем — индекс проверяется по серверному списку.
-  const q = await pickDailyQuestionFor(userId, cb.contentItemId, cb.questionNumber);
+  // ПЕРВОЕ нажатие побеждает. Заявка на ответ атомарна (SELECT ... FOR UPDATE), и
+  // берётся ТОЛЬКО на тот вопрос, по которому нажали, — поэтому ни повтор по тем же
+  // кнопкам, ни тап по вчерашнему сообщению вердикта уже не дают. Без этого
+  // правильный ответ вскрывался перебором: три нажатия — три вердикта.
+  const claimed = await takePendingQuestion(userId, {
+    contentItemId: cb.contentItemId,
+    questionNumber: cb.questionNumber,
+  });
+  if (!claimed) {
+    await answerStudentCallback(token, callbackId, "Already answered");
+    if (messageId != null) await clearInlineKeyboard(token, chatId, messageId);
+    return;
+  }
+
   // Грейдится `value` варианта, а не его подпись: у matching_headings ключ — «iii»,
   // а на кнопке стоит текст заголовка.
-  const value = q?.options?.[cb.optionIndex]?.value;
-  if (!value) return;
+  const options = await loadQuestionOptions(cb.contentItemId, cb.questionNumber);
+  const value = options?.[cb.optionIndex]?.value;
+  await answerStudentCallback(token, callbackId);
+  if (messageId != null) await clearInlineKeyboard(token, chatId, messageId);
+
+  if (!value) {
+    // Молчание тут выглядит как «бот проглотил ответ»: человек нажал, кнопки
+    // исчезли, вердикта нет. Пишем причину и говорим об этом вслух.
+    await logError({
+      source: "server",
+      message: "student bot: callback without a resolvable option",
+      userId,
+      context: {
+        op: "handleCallback",
+        contentItemId: cb.contentItemId,
+        questionNumber: cb.questionNumber,
+        optionIndex: cb.optionIndex,
+        optionsCount: options?.length ?? null,
+      },
+    });
+    await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
+    return;
+  }
 
   await replyVerdict(token, chatId, userId, cb.contentItemId, cb.questionNumber, value);
-}
-
-/** Вопрос из очереди юзера по (тест, номер) — гарантия, что кнопка относится к его
- *  собственной ошибке, а не к произвольному вопросу каталога, подставленному руками. */
-async function pickDailyQuestionFor(
-  userId: string,
-  contentItemId: string,
-  questionNumber: number,
-): Promise<DailyQuestion | null> {
-  const { question } = await pickDailyQuestion(userId);
-  if (
-    question &&
-    question.contentItemId === contentItemId &&
-    question.questionNumber === questionNumber
-  ) {
-    return question;
-  }
-  return null;
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -210,6 +238,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         cfg.token,
         update.callback_query.id,
         update.callback_query.message.chat.id,
+        update.callback_query.message.message_id ?? null,
         update.callback_query.data ?? "",
       );
     }

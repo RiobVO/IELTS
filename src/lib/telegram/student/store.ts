@@ -147,8 +147,16 @@ export interface PendingQuestion {
  * одиночный UPDATE: второй клейм ждёт коммита первого и читает уже пустую строку.
  * Лок — по строке своего user_id, чужие чаты не сериализуются (важно для вечерней
  * рассылки). Инвариант закреплён на реальном движке: test/db/telegram-pending.db.test.ts.
+ *
+ * `expected` — для нажатий на кнопку: забрать вопрос ТОЛЬКО если нажали именно на
+ * него. Без этой проверки тап по старому сообщению (вчерашний вопрос всё ещё висит
+ * в переписке с живыми кнопками) списывал бы право ответить на СЕГОДНЯШНИЙ. Текст
+ * без ожидания вопроса — просто текст, поэтому свободный ввод зовёт без `expected`.
  */
-export async function takePendingQuestion(userId: string): Promise<PendingQuestion | null> {
+export async function takePendingQuestion(
+  userId: string,
+  expected?: { contentItemId: string; questionNumber: number },
+): Promise<PendingQuestion | null> {
   return db.transaction(async (tx) => {
     const [row] = await tx
       .select({
@@ -161,6 +169,13 @@ export async function takePendingQuestion(userId: string): Promise<PendingQuesti
       .for("update");
 
     if (!row?.contentItemId || row.questionNumber == null) return null;
+    if (
+      expected &&
+      (expected.contentItemId !== row.contentItemId ||
+        expected.questionNumber !== row.questionNumber)
+    ) {
+      return null; // ждём ответ на другой вопрос — этот клейм не наш, ожидание не трогаем
+    }
 
     await tx
       .update(telegramLink)
