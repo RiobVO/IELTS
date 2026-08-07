@@ -689,3 +689,95 @@ describe("Inspera golden fixture — parseFullReading (committed file)", () => {
     }
   });
 });
+
+// Третья форма «choose TWO letters», найденная на проде (Volume 6 Test 3, диагностика
+// 2026-08-07): чекбокс-группа .mcq-checkbox-group, а номера вопросов живут ТОЛЬКО в id
+// охватывающего блока диапазоном («question-25-26»). Двух известных парсеру форм
+// (.mcq-block .mcq-multi и .mc-question[data-mcq-group]) здесь нет, и оба номера
+// пропадали из атомизации целиком — а по строгому гейту mergeAtomization это роняло
+// атомизацию ВСЕГО теста: 40 вопросов оставались без practice-вида из-за двух.
+const CHECKBOX_RANGE_HTML = `<!doctype html><html><head><title>Full Reading - Checkbox range</title></head>
+<body>
+  <section class="passage-section" data-part="1">
+    <div class="sectionRubric"><h2>Reading Passage 1</h2></div>
+    <div class="passage-content"><p>Body one.</p></div>
+  </section>
+  <section class="passage-section" data-part="2">
+    <div class="sectionRubric"><h2>Reading Passage 2</h2></div>
+    <div class="passage-content"><p>Body two.</p></div>
+  </section>
+
+  <div class="questions-section" data-part="1">
+    <div class="tfng-question" id="question-1">
+      <p class="tfng-statement-text">Statement one.</p>
+      <label><input type="radio" name="q1" value="TRUE">True</label>
+      <label><input type="radio" name="q1" value="FALSE">False</label>
+    </div>
+  </div>
+
+  <div class="questions-section" data-part="2">
+    <div class="question" id="question-2-3">
+      <div class="question-rubric">
+        <h3>Questions 2-3</h3>
+        <p>Choose <strong>TWO</strong> letters, <strong>A-E</strong>.</p>
+        <p>Write the correct letters in boxes <strong>2</strong> and <strong>3</strong> on your answer sheet.</p>
+        <p><span style="font-style:italic;">NB Your answers may be given in any order.</span></p>
+        <p>Which <strong>TWO</strong> things does the writer state about George Cayley?</p>
+      </div>
+      <div class="question-content">
+        <div class="mcq-checkbox-group">
+          <label class="mcq-checkbox-row"><input type="checkbox" name="mcq-2-3" value="A"><span class="opt-text"><strong>A</strong> He made a lot of money.</span></label>
+          <label class="mcq-checkbox-row"><input type="checkbox" name="mcq-2-3" value="B"><span class="opt-text"><strong>B</strong> He understood engines early.</span></label>
+          <label class="mcq-checkbox-row"><input type="checkbox" name="mcq-2-3" value="E"><span class="opt-text"><strong>E</strong> He reached conclusions by testing.</span></label>
+        </div>
+        <div class="analysis" data-analysis="2">Q2 &amp; 3 &mdash; <strong>B</strong> and <strong>E</strong>.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const correctAnswers = { 1:'TRUE', 2:'B', 3:'E' };
+    const questionTypes = { 1:'True/False/Not Given', 2:'Multiple Choice', 3:'Multiple Choice' };
+    function getBand(s){ return s >= 39 ? 9 : 5; }
+  </script>
+</body></html>`;
+
+describe("parseFullReading — choose TWO с номерами в id-диапазоне", () => {
+  let t: Awaited<ReturnType<typeof parseTest>>;
+  beforeAll(async () => {
+    t = await parseTest(CHECKBOX_RANGE_HTML);
+  });
+  const q = (n: number) => t.questions.find((x) => x.number === n)!;
+
+  it("оба номера диапазона попадают в разбор", () => {
+    expect(t.questions.map((x) => x.number).sort((a, b) => a - b)).toEqual([1, 2, 3]);
+  });
+
+  it("формулировка — сам вопрос, а не инструкция «write the correct letters»", () => {
+    expect(q(2).promptHtml).toContain("George Cayley");
+    expect(q(2).promptHtml).not.toMatch(/answer sheet/i);
+    expect(q(3).promptHtml).toBe(q(2).promptHtml);
+  });
+
+  it("варианты берутся из чекбоксов и одинаковы у обоих номеров", () => {
+    expect(q(2).options?.map((o) => o.value)).toEqual(["A", "B", "E"]);
+    expect(q(2).options?.[0]?.label).toContain("He made a lot of money");
+    expect(q(3).options?.map((o) => o.value)).toEqual(["A", "B", "E"]);
+  });
+
+  it("ключ и тип идут обычным путём — по номеру, как в источнике", () => {
+    expect(q(2).answer).toMatchObject({ accept: ["B"] });
+    expect(q(3).answer).toMatchObject({ accept: ["E"] });
+    expect(q(2).qtype).toBe("mcq_single");
+  });
+
+  it("вопрос привязан к своему пассажу", () => {
+    expect(q(2).passageOrder).toBe(2);
+    expect(q(3).passageOrder).toBe(2);
+  });
+
+  it("захват вопрос-панели не тащит .analysis с ответом", () => {
+    const captured = t.passages.map((p) => p.questionsHtml ?? "").join("\n");
+    expect(captured).not.toMatch(/analysis/i);
+  });
+});
