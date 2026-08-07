@@ -4,7 +4,7 @@ Ambiguities in BRIEF.md §5/§6.1 resolved while building the schema + migration
 The brief wins; where it was silent or self-conflicting, a sane choice was made
 and logged here. No tables were invented beyond what the brief implies.
 
-## Table count: 27 (Phase 1 shipped 13; +14 added in later phases)
+## Table count: 28 (Phase 1 shipped 13; +15 added in later phases)
 
 §5 enumerates 12 tables (`badge`/`user_badge` are two). The Phase-1 worked example
 expected **13 tables** — the 13th is **`notification`**, defined in **§11**
@@ -13,7 +13,7 @@ expected **13 tables** — the 13th is **`notification`**, defined in **§11**
 Phase-1 list (13): `region, profile, content_item, passage, question, answer_key,
 attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
 
-**Post-Phase additions (+14 → 27, in lockstep with `verify.ts` `APP_TABLE_COUNT = 27`):**
+**Post-Phase additions (+15 → 28, in lockstep with `verify.ts` `APP_TABLE_COUNT = 28`):**
 - `payment` — migration `0006_payments` (Phase 2D: tiers + payment lifecycle).
 - `annotation` — migration `0013_annotation` (reader highlights/notes, W2-1).
 - `leaderboard_snapshot` — migration `0014_leaderboard_snapshot` (rank-movement deltas).
@@ -29,9 +29,12 @@ attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
   `speaking_audio_event` — migration `0027_speaking_lab` (Phase 3 Speaking Lab, Part 2:
   audio evaluation; `speaking_feedback_debug` SERVER-ONLY, locked like `answer_key`;
   `speaking_audio_event` = biometric audit trail).
+- `error_log` — migration `0034_error_log` (self-hosted error monitoring; SERVER-ONLY,
+  RLS + grants revoked like `signup_throttle`; written by `logError()` — client-error
+  endpoint + explicit server catch, read owner-path by `/admin/errors`).
 
-The DB has **27** tables (`verify.ts` `APP_TABLE_COUNT = 27` asserts the migrated count).
-`src/db/schema.ts` types **26** of them: the legacy `topic` table (migration `0000`, Phase 1)
+The DB has **28** tables (`verify.ts` `APP_TABLE_COUNT = 28` asserts the migrated count).
+`src/db/schema.ts` types **27** of them: the legacy `topic` table (migration `0000`, Phase 1)
 is unused since Phase 3 moved to `writing_task`/`speaking_task`, so its Drizzle export +
 `topic_skill` enum were dropped as dead code (#26) while the empty table lingers in the DB
 (no destructive drop). Re-add a typed export only if `topic` is ever revived.
@@ -97,7 +100,9 @@ Schema changes from the CLAUDE_AUDIT.md closure batch (findings detail there):
 RLS-protected (not just `answer_key`). Phase-1 baseline policies (the then-13
 tables; later tables carry their own RLS in their migrations — see Phase 2D
 `payment`, `0013_annotation`, `0014_leaderboard_snapshot`):
-- public read: `region`, `badge`, `topic`, `leaderboard_entry`;
+- public read (anon): `region`, `badge`, `topic`;
+- authenticated-only read: `leaderboard_entry` (was anon-public; locked to `authenticated`
+  by migration `0033`, #18 — the app reads it owner-path, so anon lost nothing);
 - published-only read: `content_item`, `passage`, `question`;
 - owner-only: `profile`, `attempt`, `user_badge`, `referral`, `notification`;
 - `answer_key`: locked (above).
@@ -117,11 +122,12 @@ RLS. Policies use `auth.uid()` (Supabase-provided; locally stubbed).
   per-band_type tables). Resolved per §5 (the v1 data-model authority): a `jsonb`
   column on the content row — the band scale rides with the test it grades, and
   band is shown only for Full tests (§11). No separate band-scale tables created.
-- **Leaderboard anti-cheat (§4.6)**: `leaderboard_entry` has an open
-  `USING (true)` read policy (ranks are public). `hidden_from_leaderboard` is NOT
-  enforced at the RLS layer — the (Phase 2) precompute job is the gatekeeper and
-  must exclude hidden profiles before writing rows. Documented as a job invariant
-  rather than baked into the policy (the leaderboard surface is Phase 2).
+- **Leaderboard anti-cheat (§4.6)**: `leaderboard_entry` read policy is
+  `USING (true)` but scoped **`TO authenticated`** (migration `0033`, #18 — was
+  `TO anon, authenticated`; anon exposed uuid+rating via REST, and the app reads it
+  owner-path so anon access was pure attack surface). `hidden_from_leaderboard` is NOT
+  enforced at the RLS layer — the precompute job is the gatekeeper and must exclude
+  hidden profiles before writing rows. `verify` asserts anon SELECT is now denied.
 - **`user_badge`**: composite PK `(user_id, badge_id)`; `earned_at` is a column
   (§5's "earned_at (PK составной)" reads as "composite PK", with earned_at stored).
 - **`target_band` / `band_score`**: `numeric(2,1)` (one decimal, 0.0–9.0 band scale).
@@ -505,3 +511,56 @@ set and reports schema-validity + band-accuracy (±0.5). Pure metrics
   user-facing promise — UX always shows range + confidence). Until then the var stays
   blank and **Writing Lab stays disabled in product**. Tests are fully mocked
   (`vi.mock("@google/genai")`), so this plan is unblocked by the missing set.
+
+## 0033 — leaderboard_entry locked to authenticated (audit #18)
+
+`leaderboard_entry` was readable by `anon` via the Supabase REST endpoint
+(`/rest/v1/leaderboard_entry?select=*`), exposing `user_id` (uuid) + `rating` of every
+non-hidden profile. The app never used that path — every leaderboard read is owner-path
+(Drizzle, RLS-bypassing) under `requireUser` (`leaderboard/page.tsx`, `app/page.tsx`,
+`profile/page.tsx`, the recompute/snapshot jobs) — so anon was pure attack surface. `0033`
+drops + recreates the policy as `FOR SELECT TO authenticated USING (true)` and `REVOKE
+SELECT … FROM anon` (Postgres can't `ALTER` a policy's role list). `authenticated` keeps its
+grant (leaderboard stays visible to logged-in users by design); `hidden_from_leaderboard`
+is still enforced by the precompute job. `verify` gained a positive assertion — anon SELECT
+on `leaderboard_entry` denied (RLS on + anon denied; not a full lock, an authenticated policy
+exists by design). Applied to Supabase; prod REST probe returns 401/42501.
+
+## 0034 — error_log: self-hosted error monitoring (§11)
+
+Own error sink so prod errors are visible in-app without an external service (Sentry stays
+an optional no-op, one DSN away). **Additive** table `error_log` (bumps `APP_TABLE_COUNT`
+27 → 28). SERVER-ONLY, hard-locked like `signup_throttle`: RLS on, `REVOKE ALL FROM anon,
+authenticated, PUBLIC`, no client policy — stack traces + urls may carry internal detail
+(`verify` asserts anon SELECT denied). Columns: `source` (`server|client`), `message`,
+`stack`, `url`, `user_id` (nullable, `ON DELETE SET NULL` — client crashes may be pre-auth),
+`context` (jsonb), `created_at` (indexed for the admin list).
+
+- **`logError()`** (`src/lib/monitoring/log-error.ts`) writes a structured `console.error`
+  (→ Vercel Runtime Logs, always) **and** an `error_log` row; it never throws or recurses
+  (a failed DB write just logs to console) and strips the URL query (ref/OAuth code) + caps
+  field lengths. Called from **nodejs code paths only**.
+- **Client crashes** → `app/global-error.tsx` POSTs to `/api/monitoring/client-error`
+  (body cap + a global rate-limit backstop so the public endpoint can't bloat the table),
+  which persists them. This closes the real gap: client errors were invisible without a
+  Sentry DSN.
+- **`instrumentation.onRequestError` stays Sentry-only.** That module also bundles for the
+  **edge** runtime (no `net`), so importing `@/db` (postgres) there via `logError` 500'd the
+  whole app — caught by the `verify` health check. Server errors still land in Vercel logs;
+  `logError` is invoked from route handlers / server actions where a durable record is wanted.
+- **`/admin/errors`** — owner-only (`requireAdmin`) view of the latest server+client errors.
+
+Applied to Supabase (additive, applied before the code push to avoid a deploy-window break);
+prod REST probe on `error_log` returns 401/42501.
+
+## Anti-bot: signup honeypot (no external dependency)
+
+Complements the fail-open Turnstile seam + the per-IP signup velocity cap (`0022`) with a
+zero-dependency honeypot — no schema change. The signup form (`AuthScreen.tsx`) carries a
+hidden decoy field (`name="website"`, offscreen — NOT `display:none`, which some bots skip —
+plus `aria-hidden` + `tabIndex=-1` + no label, so screen readers and Tab navigation never
+touch it). `signUp` (`app/auth/actions.ts`) checks it via the pure `isHoneypotTripped()`
+(`anti-cheat.ts`): non-empty ⇒ a bot ⇒ silently fake success (redirect to the same
+"confirmation sent" message, no account created, DB untouched, trap not revealed). Runs
+first — cheaper than the Turnstile/throttle checks and works with zero keys, so Turnstile is
+now optional rather than the only signup defense.
