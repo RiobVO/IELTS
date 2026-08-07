@@ -51,3 +51,6 @@ npm-debug.log*
 /.claude/
 # impeccable critique snapshots — local design-review archive, not shipped source
 /.impeccable/
+
+# QA-партии импорта: исходные HTML с ключами ответов — не для гита
+.qa-import/
