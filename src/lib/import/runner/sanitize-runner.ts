@@ -10,7 +10,9 @@ export interface SanitizeOpts {
   audioUrl?: string;
 }
 
-const READING_KEYS = ["correctAnswers", "acceptableAnswers", "explanations", "evidence", "questionTypes"];
+// mcqGroups несёт correct-набор букв (#7) — буквы короче 3 символов бэкстоп
+// пропускает, поэтому объект обязан вырезаться целиком (N1).
+const READING_KEYS = ["correctAnswers", "acceptableAnswers", "mcqGroups", "explanations", "evidence", "questionTypes"];
 // listening evidence.text перефразирует/содержит ответ — вырезаем его тоже (иначе утечка).
 const LISTENING_KEYS = ["KEY", "QTYPE", "evidence"];
 
@@ -95,13 +97,56 @@ const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  * или UI-строке ('strong, even…') в кавычки-как-целый-литерал не попадает — ложного
  * срабатывания нет. Fixed-choice (TRUE/FALSE/YES/NO/буквы/числа) пропускаем — они
  * видимы в опциях, их «утечка» не выдаёт правильный вариант.
+ *
+ * Пропуски (короткие/числа/fixed-choice) безопасны ТОЛЬКО пока ключ лежит в
+ * распознанных объектах — их вырезает sanitizeRunner. Поэтому два структурных
+ * слоя до пословной проверки (N1, AUDIT_2026-07-02): (1) известные key-объекты
+ * секции обязаны быть пустыми литералами (ловит регресс списка и дубль-декларацию —
+ * blankObject бьёт только первую); (2) любой НЕраспознанный объект, похожий на
+ * карту «номер вопроса → значение», роняет импорт — ключ под чужим именем
+ * (новый источник) иначе прошёл бы молча через пропуск коротких/чисел.
  */
+const MIN_NUMERIC_KEYS = 4; // реальные key-map ≥7 записей; ниже — не карта ответов
+// Ключ-«номер вопроса»: 1-3 цифры или диапазон "8-12", в кавычках или без.
+// Кавычка требует пары ДО двоеточия — иначе время в строках ("12:30") ложно матчится.
+const NUM_KEY_RE = /(?:^|[{,\s])(?:(["'])\d{1,3}(?:-\d{1,3})?\1|\d{1,3})\s*:/g;
+
 export function assertNoKeyLeak(out: string, parsed: ParsedTest): void {
   const $ = cheerio.load(out);
   const script = $("script:not([src])")
     .map((_, el) => $(el).html() ?? "")
     .get()
     .join("\n");
+
+  const known = parsed.section === "reading" ? READING_KEYS : LISTENING_KEYS;
+
+  // Слой 1: каждый известный key-объект — пустой литерал во ВСЕХ декларациях.
+  for (const name of known) {
+    const declRe = new RegExp(`(?:const|let|var)\\s+${name}\\s*=\\s*\\{`, "g");
+    let m: RegExpExecArray | null;
+    while ((m = declRe.exec(script)) !== null) {
+      const lit = extractObjectLiteral(script.slice(m.index), name);
+      if (lit && lit.replace(/\s/g, "") !== "{}") {
+        throw new Error(`Key leak: object "${name}" survived sanitization in runner_html script`);
+      }
+    }
+  }
+
+  // Слой 2: нераспознанные объекты-карты с числовыми ключами.
+  const anyDeclRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\{/g;
+  let dm: RegExpExecArray | null;
+  while ((dm = anyDeclRe.exec(script)) !== null) {
+    const name = dm[1]!;
+    if (known.includes(name)) continue; // слой 1 уже проверил
+    const lit = extractObjectLiteral(script.slice(dm.index), name);
+    if (!lit) continue;
+    const numericKeys = lit.match(NUM_KEY_RE)?.length ?? 0;
+    if (numericKeys >= MIN_NUMERIC_KEYS) {
+      throw new Error(
+        `Key leak: unrecognized numeric key-map "${name}" (${numericKeys} keys) in runner_html script`,
+      );
+    }
+  }
 
   for (const q of parsed.questions) {
     for (const a of q.answer.accept) {
