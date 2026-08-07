@@ -21,8 +21,19 @@ import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 
-const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
+// Полный listening-mp3 (30-40 мин на 128kbps) ≈ 30-40 МБ — прежний cap 30 МБ резал
+// легитимные файлы (handoff 2026-07-02). Таймауты раздельные: 20с до заголовков
+// (connect+redirect), но тело качается дольше — archive.org отдаёт ~0.5-2 МБ/с,
+// 30-40 МБ не влезали в единый 20с-таймаут (второй слой того же handoff-фейла).
+const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
 const TIMEOUT_MS = 20_000;
+// 180с: archive.org троттлит поток (~0.2-1 МБ/с наблюдаемо); 28-40 МБ должны
+// успевать и на медленном линке. Vercel Fluid (ON) допускает до 300с на функцию.
+const BODY_TIMEOUT_MS = 180_000;
+// archive.org/download (основной источник listening-аудио) всегда отвечает 302 на
+// ia*.archive.org — глухой отказ от редиректов ронял каждый listening-импорт.
+// Следуем ограниченно; КАЖДЫЙ хоп проходит полную SSRF-валидацию + пиннинг.
+const MAX_REDIRECTS = 3;
 
 function ipv4Octets(ip: string): number[] | null {
   const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
@@ -87,19 +98,21 @@ function pinnedLookup(addrs: LookupAddress[]) {
   };
 }
 
-/** Fetch external audio with SSRF + size + type guards. Throws on any violation. */
-export async function fetchExternalAudio(rawUrl: string): Promise<ArrayBuffer> {
+function parseHttpUrl(raw: string): URL {
   let url: URL;
   try {
-    url = new URL(rawUrl);
+    url = new URL(raw);
   } catch {
-    throw new Error(`Audio src is not a valid URL: ${rawUrl}`);
+    throw new Error(`Audio src is not a valid URL: ${raw}`);
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(`Audio src must be http(s), got ${url.protocol}`);
   }
+  return url;
+}
 
-  // Resolve the host and refuse if it (or ANY resolved address) is non-public.
+/** Резолв хоста; отказ, если ЛЮБОЙ из адресов непубличный. Вызывается на каждый хоп. */
+async function resolvePublicAddrs(url: URL): Promise<LookupAddress[]> {
   const host = url.hostname.replace(/^\[|\]$/g, ""); // strip IPv6 brackets
   const family = isIP(host);
   const resolved: LookupAddress[] = family !== 0
@@ -111,15 +124,25 @@ export async function fetchExternalAudio(rawUrl: string): Promise<ArrayBuffer> {
       throw new Error(`Audio host resolves to a non-public address (SSRF blocked): ${host} -> ${a.address}`);
     }
   }
+  return resolved;
+}
 
+type HopOutcome = { kind: "redirect"; location: string } | { kind: "body"; buf: ArrayBuffer };
+
+/** Один pinned-запрос: 3xx+Location наверх (валидация хопа — у вызывающего), 2xx — тело. */
+function requestHop(url: URL, resolved: LookupAddress[]): Promise<HopOutcome> {
   const doRequest = url.protocol === "https:" ? httpsRequest : httpRequest;
   let timer: NodeJS.Timeout | undefined;
-  const body = new Promise<ArrayBuffer>((resolve, reject) => {
+  const hop = new Promise<HopOutcome>((resolve, reject) => {
     const req = doRequest(url, { lookup: pinnedLookup(resolved) }, (res) => {
       const status = res.statusCode ?? 0;
       if (status >= 300 && status < 400) {
+        const location = res.headers["location"];
         res.resume();
-        return reject(new Error(`Audio fetch redirect refused (${status}): ${url}`));
+        if (typeof location === "string" && location) {
+          return resolve({ kind: "redirect", location });
+        }
+        return reject(new Error(`Audio fetch redirect without Location (${status}): ${url}`));
       }
       if (status < 200 || status >= 300) {
         res.resume();
@@ -135,6 +158,13 @@ export async function fetchExternalAudio(rawUrl: string): Promise<ArrayBuffer> {
         res.resume();
         return reject(new Error(`Audio exceeds ${MAX_AUDIO_BYTES} bytes (declared ${declared})`));
       }
+      // Заголовки пришли, статус 2xx — переключаем жёсткий 20с-таймаут на body-таймаут:
+      // скачивание 30-40 МБ с archive.org занимает десятки секунд и больше.
+      clearTimeout(timer);
+      timer = setTimeout(
+        () => req.destroy(new Error(`Audio body timed out after ${BODY_TIMEOUT_MS}ms`)),
+        BODY_TIMEOUT_MS,
+      );
       const chunks: Buffer[] = [];
       let total = 0;
       res.on("data", (c: Buffer) => {
@@ -149,14 +179,28 @@ export async function fetchExternalAudio(rawUrl: string): Promise<ArrayBuffer> {
         const buf = Buffer.concat(chunks);
         const out = new ArrayBuffer(buf.byteLength);
         new Uint8Array(out).set(buf);
-        resolve(out);
+        resolve({ kind: "body", buf: out });
       });
       res.on("error", reject);
     });
     req.on("error", reject);
-    // Жёсткий общий таймаут (не idle): медленный дриппинг тоже обрывается.
+    // Жёсткий per-hop таймаут (не idle): медленный дриппинг тоже обрывается.
     timer = setTimeout(() => req.destroy(new Error(`Audio fetch timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS);
     req.end();
   });
-  return body.finally(() => clearTimeout(timer));
+  return hop.finally(() => clearTimeout(timer));
+}
+
+/** Fetch external audio with SSRF + size + type guards. Throws on any violation. */
+export async function fetchExternalAudio(rawUrl: string): Promise<ArrayBuffer> {
+  let url = parseHttpUrl(rawUrl);
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const resolved = await resolvePublicAddrs(url);
+    const out = await requestHop(url, resolved);
+    if (out.kind === "body") return out.buf;
+    // Location может быть относительным; новый URL проходит тот же полный цикл
+    // (протокол → резолв → isPublicIp → pinned connect) на следующей итерации.
+    url = parseHttpUrl(new URL(out.location, url).toString());
+  }
+  throw new Error(`Audio fetch exceeded ${MAX_REDIRECTS} redirects: ${rawUrl}`);
 }
