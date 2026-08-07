@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, inArray, lt, isNull } from "drizzle-orm";
+import { and, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { db } from "@/db";
 import { speakingSubmission } from "@/db/schema";
 import { isCronAuthorized } from "@/lib/cron-auth";
@@ -26,17 +26,29 @@ export async function GET(request: Request) {
       inArray(speakingSubmission.status, ["uploading", "pending", "evaluating"]),
       lt(speakingSubmission.updatedAt, staleBefore),
     ))
-    .returning({ id: speakingSubmission.id, audioPath: speakingSubmission.audioPath, userId: speakingSubmission.userId });
+    .returning({
+      id: speakingSubmission.id, audioPath: speakingSubmission.audioPath,
+      userId: speakingSubmission.userId, deleteRequestedAt: speakingSubmission.deleteRequestedAt,
+    });
 
   // (2) Delete orphan/retention audio: rows whose audio still exists but is either
   // just-failed-stuck above, or completed older than retention (defensive — eval
   // already deletes on success), or a stale 'uploading' orphan object.
+  // N5: провалившийся явный delete (delete_requested_at установлен) и любой
+  // зафиксированный сбой remove (audio_delete_error) чистятся СЛЕДУЮЩИМ проходом,
+  // без ожидания retention — биометрия, которую юзер просил удалить, не должна
+  // жить до 7 суток из-за одного сбоя storage.
   const toClean = await db.select({
-      id: speakingSubmission.id, audioPath: speakingSubmission.audioPath, userId: speakingSubmission.userId,
+      id: speakingSubmission.id, audioPath: speakingSubmission.audioPath,
+      userId: speakingSubmission.userId, deleteRequestedAt: speakingSubmission.deleteRequestedAt,
     }).from(speakingSubmission)
     .where(and(
       isNull(speakingSubmission.audioDeletedAt),
-      lt(speakingSubmission.createdAt, retentionBefore),
+      or(
+        lt(speakingSubmission.createdAt, retentionBefore),
+        isNotNull(speakingSubmission.deleteRequestedAt),
+        isNotNull(speakingSubmission.audioDeleteError),
+      ),
     ));
 
   // Dedup by id (a stuck row may also be retention-old → in both sets).
@@ -53,7 +65,8 @@ export async function GET(request: Request) {
       console.error("reaper delete failed", t.id, e);
       continue;
     }
-    await markAudioDeleted(t.id, t.userId, "retention");
+    // Честная причина в аудит-событии: доделанный user-delete ≠ retention.
+    await markAudioDeleted(t.id, t.userId, t.deleteRequestedAt ? "user" : "retention");
     cleaned++;
   }
   return NextResponse.json({ ok: true, failed: stuck.length, cleaned }, { status: 200 });

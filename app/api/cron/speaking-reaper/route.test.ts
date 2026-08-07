@@ -56,4 +56,20 @@ describe("speaking-reaper GET (#6)", () => {
     expect(markDeleteFailed).not.toHaveBeenCalled();
     expect(body.cleaned).toBe(1);
   });
+
+  // N5: строка с проваленным user-delete (delete_requested_at установлен,
+  // audio_deleted_at NULL) должна чиститься СЛЕДУЮЩИМ проходом с честной причиной
+  // "user", а не ждать retention (7 суток) как обычная retention-строка.
+  it("delete-requested строка чистится с reason user, не retention", async () => {
+    dbSelect.mockReturnValue({
+      from: () => ({
+        where: () => Promise.resolve([{ ...ROW, deleteRequestedAt: new Date() }]),
+      }),
+    });
+    deleteAudioFn.mockResolvedValue(undefined);
+    const res = await GET(authed());
+    const body = await res.json();
+    expect(markDeleted).toHaveBeenCalledWith("s1", "u1", "user");
+    expect(body.cleaned).toBe(1);
+  });
 });
