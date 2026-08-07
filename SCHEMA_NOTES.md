@@ -103,7 +103,12 @@ tables; later tables carry their own RLS in their migrations — see Phase 2D
 - public read (anon): `region`, `badge`, `topic`;
 - authenticated-only read: `leaderboard_entry` (was anon-public; locked to `authenticated`
   by migration `0033`, #18 — the app reads it owner-path, so anon lost nothing);
-- published-only read: `content_item`, `passage`, `question`;
+- published-only read: `content_item`, `passage`, `question`. For `content_item`
+  the SELECT grant is **column-level** since `0035` (N1/N9, AUDIT_2026-07-02):
+  `runner_html` + service columns (`source_file_path`, `import_warnings`,
+  `reviewed_at`, `created_by`) are revoked from anon/authenticated — every app
+  read of those goes owner-path (Drizzle); new columns are born unreadable until
+  granted explicitly. Asserted by `npm run verify` (columnLock);
 - owner-only: `profile`, `attempt`, `user_badge`, `referral`, `notification`;
 - `answer_key`: locked (above).
 Admin writes and grading run through `service_role` (server-side), which bypasses

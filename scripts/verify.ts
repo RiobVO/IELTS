@@ -135,6 +135,42 @@ async function tableLock(table: string): Promise<{
 }
 
 /**
+ * Column-level lock (0035): anon обязан получать 42501 на закрытых колонках,
+ * при этом открытые каталожные колонки остаются читаемыми — строки фильтрует
+ * RLS-политика, колонки — column-grants; держать должны ОБА слоя.
+ */
+async function columnLock(
+  table: string,
+  locked: string[],
+  open: string[],
+): Promise<{ lockedDenied: boolean; openAllowed: boolean; leaked: string[] }> {
+  const leaked: string[] = [];
+  for (const col of locked) {
+    let denied = false;
+    try {
+      await sql.begin(async (tx) => {
+        await tx.unsafe("SET LOCAL ROLE anon");
+        await tx.unsafe(`SELECT ${col} FROM ${table} LIMIT 1`);
+      });
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      denied = err?.code === "42501" || /permission denied/i.test(String(err?.message ?? e));
+    }
+    if (!denied) leaked.push(col);
+  }
+  let openAllowed = true;
+  try {
+    await sql.begin(async (tx) => {
+      await tx.unsafe("SET LOCAL ROLE anon");
+      await tx.unsafe(`SELECT ${open.join(", ")} FROM ${table} LIMIT 1`);
+    });
+  } catch {
+    openAllowed = false;
+  }
+  return { lockedDenied: leaked.length === 0, openAllowed, leaked };
+}
+
+/**
  * Inserts a fake auth user and checks the 0002 trigger auto-creates a matching
  * profile with the expected defaults (role=student, tier=basic, referral_code),
  * then cleans up (cascade removes the profile).
@@ -381,6 +417,23 @@ async function main() {
     fail(
       `RLS — error_log not fully locked (rlsEnabled=${elLock.rlsEnabled}, ` +
         `noClientPolicy=${elLock.noClientPolicy}, anonDenied=${elLock.anonDenied})`,
+    );
+
+  // 4f. content_item column-lock (N1/N9, 0035): runner_html защищён от утечки ключей
+  // только import-time санитайзером, поэтому сама колонка (плюс служебные
+  // source_file_path/import_warnings/reviewed_at/created_by) отрезана от клиентских
+  // ролей грантами; каталожные колонки при этом остаются читаемыми.
+  const ciLock = await columnLock(
+    "content_item",
+    ["runner_html", "source_file_path", "import_warnings", "reviewed_at", "created_by"],
+    ["id", "title", "category", "duration_seconds", "tier_required", "status"],
+  );
+  if (ciLock.lockedDenied && ciLock.openAllowed)
+    ok("grants — anon SELECT on content_item.runner_html/service columns denied; catalog columns readable");
+  else
+    fail(
+      `grants — content_item column-lock broken (leaked=[${ciLock.leaked.join(", ")}], ` +
+        `openAllowed=${ciLock.openAllowed})`,
     );
 
   // 5. auth trigger: a new auth.users row auto-creates a profile
