@@ -290,6 +290,20 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
 
               <form action={signUp}>
                 <input type="hidden" name="ref" value={refCode ?? ""} />
+                {/* Honeypot (#anti-bot): невидимая приманка. Живой юзер её не видит и
+                    оставляет пустой; бот, автозаполняющий поля, попадётся (server:
+                    isHoneypotTripped). Offscreen, НЕ display:none (часть ботов такое
+                    пропускает); aria-hidden + tabIndex=-1 + без label → скринридер и
+                    Tab-навигация её не касаются (a11y). */}
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  defaultValue=""
+                  style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
+                />
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div className="auth-rise">
                     <Field id="signup-name" label="Name">

@@ -5,6 +5,7 @@ import {
   countSubmitsInWindow,
   exceedsSignupRate,
   exceedsSubmitRate,
+  isHoneypotTripped,
   isTooFastToRate,
   MIN_RATED_SECONDS_PER_QUESTION,
   SIGNUP_THROTTLE_MAX,
@@ -86,5 +87,18 @@ describe("isTooFastToRate", () => {
 
   it("нет вопросов (total 0) → НЕ too fast (нет делителя, не наказываем)", () => {
     expect(isTooFastToRate(0, 0)).toBe(false);
+  });
+});
+
+describe("isHoneypotTripped", () => {
+  it("пустое / отсутствующее поле → не бот (живой юзер приманку не трогает)", () => {
+    expect(isHoneypotTripped("")).toBe(false);
+    expect(isHoneypotTripped("   ")).toBe(false); // whitespace = пусто
+    expect(isHoneypotTripped(undefined)).toBe(false);
+    expect(isHoneypotTripped(null)).toBe(false);
+  });
+  it("непустое значение → бот (автозаполнил скрытое поле)", () => {
+    expect(isHoneypotTripped("http://spam.example")).toBe(true);
+    expect(isHoneypotTripped("x")).toBe(true);
   });
 });
