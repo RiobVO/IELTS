@@ -4,9 +4,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 // чужого API не барьер. Мокаем @/env (конфиг) и global fetch (стрим-тело).
 vi.mock("@/env", () => ({
   telegramConfig: () => ({ token: "t", adminIds: [1], webhookSecret: null }),
+  publicSiteUrl: () => "https://site.test",
 }));
 
-import { downloadFileBytes, downloadFileText } from "./client";
+import { downloadFileBytes, downloadFileText, sendUploadResult } from "./client";
 
 const savedFetch = globalThis.fetch;
 afterEach(() => {
@@ -52,5 +53,21 @@ describe("telegram download size-cap (N12)", () => {
       resWithStream([new TextEncoder().encode("<html>ok</html>")]),
     );
     expect(await downloadFileText("f")).toBe("<html>ok</html>");
+  });
+});
+
+// Цикл «каталог с телефона»: review-гейт шлёт в /admin, поэтому сообщение об
+// аплоаде несёт прямую ссылку с якорем на тест, не только кнопку публикации.
+describe("sendUploadResult", () => {
+  it("даёт кнопку публикации + url-кнопку review с якорем теста", async () => {
+    const f = vi.fn().mockResolvedValue({ json: async () => ({ ok: true, result: {} }) });
+    globalThis.fetch = f;
+    await sendUploadResult(7, "text", "cid-1");
+    const body = JSON.parse((f.mock.calls[0]![1] as { body: string }).body) as {
+      reply_markup: { inline_keyboard: Array<Array<{ callback_data?: string; url?: string }>> };
+    };
+    const buttons = body.reply_markup.inline_keyboard.flat();
+    expect(buttons.some((b) => b.callback_data === "publish:cid-1")).toBe(true);
+    expect(buttons.some((b) => b.url === "https://site.test/admin#cid-1")).toBe(true);
   });
 });

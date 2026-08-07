@@ -76,7 +76,8 @@ export default async function AdminPage({
               const reviewed = it.reviewedAt != null;
               const isDraft = it.status !== "published";
               return (
-                <li key={it.id} style={S.row}>
+                // id-якорь: телеграм-бот шлёт ссылку /admin#<uuid> на review конкретного теста
+                <li key={it.id} id={it.id} style={S.row}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={S.rowTitle}>{it.title}</div>
                     <div style={S.meta}>
