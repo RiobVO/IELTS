@@ -147,6 +147,10 @@ export function captureQuestions(
     const $group = $(el);
     // Блок с data-mcq-group обработан общим набором выше (им занимается __readingMultiFor).
     if ($group.closest("[data-mcq-group]").length > 0) return;
+    // Вложенная range-группа — структура неоднозначна (зеркало гейта mcq-block):
+    // find() внешней проглотил бы чекбоксы внутренней, и та молча исчезла бы из
+    // захвата, пройдя coverage как «одна большая группа» (Codex-ревью 2026-08-07).
+    if ($group.find(".mcq-checkbox-group").length > 0) { rangeBad = true; return; }
     const boxes = $group.find("input[type='checkbox']").toArray();
     if (boxes.length === 0) return;
     let token = $(boxes[0]).attr("name") ?? "";

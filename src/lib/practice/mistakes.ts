@@ -87,14 +87,19 @@ export async function getOpenMistakes(
         // получателей, разница в байтах на порядок. CASE-гейт по jsonb_typeof: у
         // битого/нестандартного снапшота (questions не массив) jsonb_array_elements
         // упал бы ошибкой запроса — отдаём пустой список, как readSnapshotQuestions.
+        // ORDER BY ordinality: без него порядок jsonb_agg формально не определён, а
+        // деривация обязана видеть вопросы В ПОРЯДКЕ исходного массива — иначе при
+        // равном due-приоритете limit/offset могли бы вернуть другой вопрос
+        // (Codex-ревью 2026-08-07: эквивалентность должна быть доказуемой, не эмпирической).
         snapshot: sql<unknown>`jsonb_build_object('questions', case
           when jsonb_typeof(${attemptReviewSnapshot.snapshot}->'questions') = 'array' then coalesce((
             select jsonb_agg(jsonb_build_object(
               'number', q.value->'number',
               'qtype',  q.value->'qtype',
               'mode',   q.value->'mode',
-              'accept', q.value->'accept'))
-            from jsonb_array_elements(${attemptReviewSnapshot.snapshot}->'questions') as q(value)
+              'accept', q.value->'accept') order by q.idx)
+            from jsonb_array_elements(${attemptReviewSnapshot.snapshot}->'questions')
+              with ordinality as q(value, idx)
           ), '[]'::jsonb)
           else '[]'::jsonb
         end)`,

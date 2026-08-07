@@ -544,6 +544,17 @@ describe("captureQuestions — choose-TWO третьей формы (.mcq-checkb
       ]);
       expect(out).toBe("");
     });
+    it("вложенная range-группа внутри range-группы — структура неоднозначна", () => {
+      // Внешний find() проглотил бы чекбоксы внутренней группы, и та молча исчезла
+      // бы из захвата, пройдя coverage как «одна большая группа» (Codex-ревью).
+      const block =
+        `<div class="question" id="question-25-26"><div class="mcq-checkbox-group">` +
+        `<label><input type="checkbox" name="mcq-25-26" value="A"></label>` +
+        `<div class="mcq-checkbox-group">` +
+        `<label><input type="checkbox" name="mcq-25-26" value="B"></label>` +
+        `</div></div></div>`;
+      expect(captureQuestions([block])).toBe("");
+    });
     it("чекбокс с по-вопросной адресацией (name=qN) внутри распознанной range-группы", () => {
       // Токен диапазона — из id блока (name первого чекбокса цифр не несёт), а второй
       // чекбокс адресован по-вопросно: смешанная адресация = битый источник.
