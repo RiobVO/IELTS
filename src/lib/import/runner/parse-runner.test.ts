@@ -35,6 +35,25 @@ describe("parseRunner — reading", () => {
   });
 });
 
+// QA 2026-07-02: источник Vol7/Mock хранит варианты в acceptableVariants (не
+// acceptableAnswers) — без него варианты терялись (вопрос падал в exact), а
+// невырезанный объект ронял импорт на анти-утечке.
+describe("parseRunner — acceptableVariants (альтернативное имя)", () => {
+  const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>
+var correctAnswers = {"1":"raindrops","2":"TRUE"};
+const acceptableVariants = { 1: ['raindrops','raindrop'] };
+</script></body></html>`;
+  const r = parseRunner(html);
+  it("варианты из acceptableVariants → text_accept", () => {
+    const q1 = r.parsed.questions.find((q) => q.number === 1)!;
+    expect(q1.answer.mode).toBe("text_accept");
+    expect(q1.answer.accept).toEqual(["raindrops", "raindrop"]);
+    const q2 = r.parsed.questions.find((q) => q.number === 2)!;
+    expect(q2.answer.mode).toBe("exact");
+  });
+});
+
 // #7: Reading "choose TWO/THREE" — mcqGroups keys the members as one mcq_set so the
 // letter-set is graded correctly. Member 4,5 live ONLY in mcqGroups (not correctAnswers)
 // to prove the union pulls them in. Previously they fell to exact/text_accept (wrong grade).

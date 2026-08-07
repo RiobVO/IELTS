@@ -48,7 +48,12 @@ function mkQuestion(
 function parseReadingRunner(html: string): RunnerParseResult {
   const src = scriptText(html);
   const correct = extractData<Record<string, string>>(src, "correctAnswers") ?? {};
-  const accept = extractData<Record<string, string[]>>(src, "acceptableAnswers") ?? {};
+  // Варианты живут под двумя именами: acceptableAnswers (основной источник) и
+  // acceptableVariants (Vol7/Mock, QA 2026-07-02). Оба — {номер: [варианты]}.
+  const accept: Record<string, string[]> = {
+    ...(extractData<Record<string, string[]>>(src, "acceptableAnswers") ?? {}),
+    ...(extractData<Record<string, string[]>>(src, "acceptableVariants") ?? {}),
+  };
   const types = extractData<Record<string, string>>(src, "questionTypes") ?? {};
   const expl = extractData<Record<string, string>>(src, "explanations") ?? {};
   const evid = extractData<Record<string, { para: string; snippet: string }>>(src, "evidence") ?? {};
