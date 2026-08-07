@@ -92,23 +92,61 @@ export async function getFilePath(fileId: string): Promise<string> {
   return result.file_path;
 }
 
+// N12: Bot API сам не отдаёт файлы больше ~20 МБ, но полагаться на чужой лимит
+// нельзя (прокси/изменение API) — явный стриминговый cap вместо чтения всего тела
+// в память (admin-only канал, так что вектор — self-DoS, не атака).
+const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+
+async function readBodyCapped(res: Response, max: number): Promise<ArrayBuffer> {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > max) {
+    throw new Error(`telegram download exceeds ${max} bytes (declared ${declared})`);
+  }
+  const reader = res.body?.getReader();
+  if (!reader) {
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength > max) throw new Error(`telegram download exceeds ${max} bytes`);
+    return buf;
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel();
+      throw new Error(`telegram download exceeds ${max} bytes`);
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.byteLength;
+  }
+  return out.buffer;
+}
+
 /**
  * Скачать файл по file_path как текст (HTML-тест). Bot API качает файлы до ~20 МБ
- * — HTML-тесты сильно меньше. Бросает при ошибке HTTP.
+ * — HTML-тесты сильно меньше. Бросает при ошибке HTTP или превышении cap.
  */
 export async function downloadFileText(filePath: string): Promise<string> {
   const cfg = telegramConfig();
   if (!cfg) throw new Error("telegram: not configured");
   const res = await fetch(`${API}/file/bot${cfg.token}/${filePath}`);
   if (!res.ok) throw new Error(`telegram download failed: ${res.status}`);
-  return res.text();
+  return new TextDecoder().decode(await readBodyCapped(res, MAX_DOWNLOAD_BYTES));
 }
 
-/** Скачать файл по file_path как байты (mp3-аудио). Бросает при ошибке HTTP. */
+/** Скачать файл по file_path как байты (mp3-аудио). Бросает при ошибке HTTP/cap. */
 export async function downloadFileBytes(filePath: string): Promise<ArrayBuffer> {
   const cfg = telegramConfig();
   if (!cfg) throw new Error("telegram: not configured");
   const res = await fetch(`${API}/file/bot${cfg.token}/${filePath}`);
   if (!res.ok) throw new Error(`telegram download failed: ${res.status}`);
-  return res.arrayBuffer();
+  return readBodyCapped(res, MAX_DOWNLOAD_BYTES);
 }
