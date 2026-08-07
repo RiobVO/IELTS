@@ -16,6 +16,10 @@ export interface SanitizeOpts {
 const READING_KEYS = ["correctAnswers", "acceptableAnswers", "acceptableVariants", "mcqGroups", "explanations", "evidence", "questionTypes"];
 // listening evidence.text перефразирует/содержит ответ — вырезаем его тоже (иначе утечка).
 const LISTENING_KEYS = ["KEY", "QTYPE", "evidence"];
+// Вырезаем ОБЪЕДИНЕНИЕ независимо от секции: listening-файлы встречаются с ключом в
+// reading-контейнерах (Listening Mock, QA 2026-07-02) — пер-секционный список пропускал
+// их целиком. blankObject на отсутствующем имени — no-op, обратной цены нет.
+const ALL_KEYS = [...new Set([...READING_KEYS, ...LISTENING_KEYS])];
 
 /** Подменяет первый `<audio ... src="...">` на наш Storage URL (listening). */
 export function setRunnerAudioSrc(html: string, url: string): string {
@@ -47,8 +51,7 @@ export function sanitizeRunner(html: string, opts: SanitizeOpts): string {
   let out = html;
 
   // 1. Вырезать ключи + band-функции
-  const keys = opts.section === "reading" ? READING_KEYS : LISTENING_KEYS;
-  for (const name of keys) out = blankObject(out, name);
+  for (const name of ALL_KEYS) out = blankObject(out, name);
   for (const fn of ["band", "getBand", "getBandFor40"]) out = blankFunction(out, fn);
 
   // 2. Подменить audio src (listening)
@@ -121,7 +124,7 @@ export function assertNoKeyLeak(out: string, parsed: ParsedTest): void {
     .get()
     .join("\n");
 
-  const known = parsed.section === "reading" ? READING_KEYS : LISTENING_KEYS;
+  const known = ALL_KEYS;
 
   // Слой 1: каждый известный key-объект — пустой литерал во ВСЕХ декларациях.
   for (const name of known) {

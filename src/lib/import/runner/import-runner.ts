@@ -23,6 +23,11 @@ export async function importRunner(
   opts: { sourceFilePath?: string; createdBy?: string },
 ): Promise<ImportRunnerResult> {
   const { parsed, externalAudioSrc } = parseRunner(html);
+  // Пустой парс = ключ-контейнеры этого источника не распознаны. Отказ честнее
+  // молчаливого 0-вопросного драфта (бот покажет причину админу).
+  if (parsed.questions.length === 0) {
+    throw new Error("no questions parsed — unrecognized key container(s) in this source; extend the parser");
+  }
 
   // Mint the id up front so the fallible work (audio fetch/upload + sanitize + anti-leak)
   // runs BEFORE the DB write. persistTest is then a single all-or-nothing commit — a
