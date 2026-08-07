@@ -38,12 +38,21 @@ beforeEach(() => {
 });
 
 describe("importRunner atomicity (#12)", () => {
-  it("НЕ вызывает persist при сбое audio-fetch (нет полу-драфта)", async () => {
+  // Handoff 2026-07-02: сбой фетча внешнего mp3 ронял ВЕСЬ импорт (каждый C21
+  // Listening). Новая спека — деградация: тест сохраняется БЕЗ аудио (draft),
+  // warning оседает в import_warnings, mp3 привязывается отдельным файлом.
+  // Атомарность (#12) не тронута: persist по-прежнему один и после anti-leak.
+  it("сбой audio-fetch деградирует: persist БЕЗ аудио + warning, hasAudio=false", async () => {
     parseRunner.mockReturnValue({ parsed: listeningParsed(), externalAudioSrc: "http://cdn/x.mp3" });
-    fetchAudio.mockRejectedValue(new Error("SSRF blocked"));
-    await expect(importRunner("<html/>", {})).rejects.toThrow(/SSRF blocked/);
+    fetchAudio.mockRejectedValue(new Error("redirect refused"));
+    const res = await importRunner("<html/>", {});
     expect(uploadAudio).not.toHaveBeenCalled();
-    expect(persist).not.toHaveBeenCalled();
+    expect(persist).toHaveBeenCalledTimes(1);
+    const [parsedArg] = persist.mock.calls[0] as [{ warnings: string[]; passages: Array<{ audioPath: string | null }> }];
+    expect(parsedArg.warnings.some((w) => /audio/i.test(w) && /redirect refused/.test(w))).toBe(true);
+    expect(parsedArg.passages[0]!.audioPath).toBeNull();
+    expect(res.hasAudio).toBe(false);
+    expect(res.warnings).toBe(1);
   });
 
   it("НЕ вызывает persist при провале anti-leak", async () => {
