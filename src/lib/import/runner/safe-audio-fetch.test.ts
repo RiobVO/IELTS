@@ -1,9 +1,14 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { EventEmitter } from "node:events";
 
 // #3 SSRF: the <audio src> comes from third-party HTML and lands in a PUBLIC bucket.
 // isPublicIp is the core guard; fetchExternalAudio wires it + scheme/type/size checks.
-const { lookupFn } = vi.hoisted(() => ({ lookupFn: vi.fn() }));
+// N2: соединение обязано идти на ПРОВАЛИДИРОВАННЫЕ адреса (pinned lookup), а не на
+// повторный системный резолв — иначе low-TTL домен ребайндится между проверкой и fetch.
+const { lookupFn, requestMock } = vi.hoisted(() => ({ lookupFn: vi.fn(), requestMock: vi.fn() }));
 vi.mock("node:dns/promises", () => ({ lookup: lookupFn }));
+vi.mock("node:http", () => ({ request: requestMock }));
+vi.mock("node:https", () => ({ request: requestMock }));
 
 import { isPublicIp, fetchExternalAudio } from "./safe-audio-fetch";
 
@@ -44,21 +49,39 @@ describe("isPublicIp", () => {
 });
 
 describe("fetchExternalAudio", () => {
-  const savedFetch = globalThis.fetch;
-  beforeEach(() => lookupFn.mockReset());
-  afterEach(() => { globalThis.fetch = savedFetch; });
-
-  const mockFetch = (fn: unknown) => { globalThis.fetch = fn as typeof fetch; };
-  const res = (init: { ok?: boolean; status?: number; ct?: string; len?: string; bytes?: Uint8Array }) => ({
-    ok: init.ok ?? true,
-    status: init.status ?? 200,
-    headers: new Headers({
-      ...(init.ct ? { "content-type": init.ct } : {}),
-      ...(init.len ? { "content-length": init.len } : {}),
-    }),
-    body: null,
-    arrayBuffer: async () => (init.bytes ?? new Uint8Array([1, 2, 3, 4])).buffer,
+  beforeEach(() => {
+    lookupFn.mockReset();
+    requestMock.mockReset();
   });
+
+  /** Фейковый node:http(s).request: req-эмиттер + res-эмиттер с заданным ответом. */
+  const arm = (init: { status?: number; ct?: string; len?: string; bytes?: number[] }) => {
+    requestMock.mockImplementation((_url: unknown, _opts: unknown, cb: (r: unknown) => void) => {
+      const req = Object.assign(new EventEmitter(), {
+        end: () => {
+          queueMicrotask(() => {
+            const res = Object.assign(new EventEmitter(), {
+              statusCode: init.status ?? 200,
+              headers: {
+                ...(init.ct ? { "content-type": init.ct } : {}),
+                ...(init.len ? { "content-length": init.len } : {}),
+              },
+              resume: () => {},
+            });
+            cb(res);
+            queueMicrotask(() => {
+              res.emit("data", Buffer.from(init.bytes ?? [1, 2, 3, 4]));
+              res.emit("end");
+            });
+          });
+        },
+        destroy(this: EventEmitter, err?: Error) {
+          if (err) this.emit("error", err);
+        },
+      });
+      return req;
+    });
+  };
 
   it("rejects a non-http(s) scheme before any network call", async () => {
     await expect(fetchExternalAudio("file:///etc/passwd")).rejects.toThrow(/http\(s\)/);
@@ -67,10 +90,9 @@ describe("fetchExternalAudio", () => {
 
   it("blocks a host that resolves to a private IP (SSRF)", async () => {
     lookupFn.mockResolvedValue([{ address: "169.254.169.254", family: 4 }]);
-    const f = vi.fn();
-    mockFetch(f);
+    arm({ ct: "audio/mpeg" });
     await expect(fetchExternalAudio("http://evil.example/audio.mp3")).rejects.toThrow(/SSRF blocked/);
-    expect(f).not.toHaveBeenCalled(); // never reached the fetch
+    expect(requestMock).not.toHaveBeenCalled(); // never reached the request
   });
 
   it("blocks an IP-literal host in a private range without DNS", async () => {
@@ -80,20 +102,47 @@ describe("fetchExternalAudio", () => {
 
   it("rejects a non-audio content-type", async () => {
     lookupFn.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
-    mockFetch(vi.fn().mockResolvedValue(res({ ct: "text/html" })));
+    arm({ ct: "text/html" });
     await expect(fetchExternalAudio("http://cdn.example/x.mp3")).rejects.toThrow(/not audio/);
   });
 
   it("rejects an oversized declared content-length", async () => {
     lookupFn.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
-    mockFetch(vi.fn().mockResolvedValue(res({ ct: "audio/mpeg", len: String(40 * 1024 * 1024) })));
+    arm({ ct: "audio/mpeg", len: String(40 * 1024 * 1024) });
     await expect(fetchExternalAudio("http://cdn.example/x.mp3")).rejects.toThrow(/exceeds/);
+  });
+
+  it("отклоняет редирект (public→internal bounce не следуем)", async () => {
+    lookupFn.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+    arm({ status: 302 });
+    await expect(fetchExternalAudio("http://cdn.example/x.mp3")).rejects.toThrow(/redirect/i);
   });
 
   it("returns bytes on a valid public audio response", async () => {
     lookupFn.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
-    mockFetch(vi.fn().mockResolvedValue(res({ ct: "audio/mpeg", bytes: new Uint8Array([9, 9, 9]) })));
+    arm({ ct: "audio/mpeg", bytes: [9, 9, 9] });
     const buf = await fetchExternalAudio("http://cdn.example/x.mp3");
     expect(new Uint8Array(buf)).toEqual(new Uint8Array([9, 9, 9]));
+  });
+
+  it("пиннит соединение на провалидированные адреса (DNS-rebinding, N2)", async () => {
+    lookupFn.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+    arm({ ct: "audio/mpeg", bytes: [1] });
+    await fetchExternalAudio("http://cdn.example/x.mp3");
+
+    const opts = requestMock.mock.calls[0]![1] as {
+      lookup?: (h: string, o: object, cb: (e: unknown, a: unknown, f?: number) => void) => void;
+    };
+    expect(typeof opts.lookup).toBe("function");
+
+    // Симуляция ребайнда: системный DNS теперь отдал бы metadata-IP, но
+    // pinned lookup обязан вернуть адрес, провалидированный ДО соединения,
+    // не обращаясь к DNS вообще.
+    lookupFn.mockResolvedValue([{ address: "169.254.169.254", family: 4 }]);
+    lookupFn.mockClear();
+    const cb = vi.fn();
+    opts.lookup!("cdn.example", {}, cb);
+    expect(cb).toHaveBeenCalledWith(null, "93.184.216.34", 4);
+    expect(lookupFn).not.toHaveBeenCalled();
   });
 });

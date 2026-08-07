@@ -8,8 +8,17 @@
  * (blocks metadata IP, loopback, RFC1918, CGNAT, link-local, ULA, multicast, reserved);
  * redirects are refused (no public→internal bounce); a request timeout; a streaming
  * size cap; and a content-type check. SERVER-ONLY (uses node:dns / node:net).
+ *
+ * N2 (AUDIT_2026-07-02): резолв и соединение — ОДИН lookup. fetch() делал бы свой
+ * повторный резолв после валидации, и low-TTL домен успевал бы ребайндиться на
+ * внутренний адрес (TOCTOU). Поэтому запрос идёт через node:http(s) с pinned
+ * lookup: сокет коннектится строго на проверенные адреса; TLS SNI/cert остаются
+ * на исходный hostname (host в URL не подменяется).
  */
 import { lookup } from "node:dns/promises";
+import type { LookupAddress } from "node:dns";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 
 const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
@@ -66,33 +75,16 @@ export function isPublicIp(ip: string): boolean {
   return false;
 }
 
-async function readCapped(res: Response, max: number): Promise<ArrayBuffer> {
-  const reader = res.body?.getReader();
-  if (!reader) {
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength > max) throw new Error(`Audio exceeds ${max} bytes`);
-    return buf;
-  }
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    total += value.byteLength;
-    if (total > max) {
-      await reader.cancel();
-      throw new Error(`Audio exceeds ${max} bytes`);
-    }
-    chunks.push(value);
-  }
-  const out = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) {
-    out.set(c, off);
-    off += c.byteLength;
-  }
-  return out.buffer;
+/** Lookup-замена для net/tls: отдаёт ТОЛЬКО провалидированные адреса, DNS не зовёт. */
+function pinnedLookup(addrs: LookupAddress[]) {
+  return (
+    _hostname: string,
+    options: { all?: boolean },
+    cb: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void,
+  ): void => {
+    if (options.all) cb(null, addrs);
+    else cb(null, addrs[0]!.address, addrs[0]!.family);
+  };
 }
 
 /** Fetch external audio with SSRF + size + type guards. Throws on any violation. */
@@ -109,31 +101,62 @@ export async function fetchExternalAudio(rawUrl: string): Promise<ArrayBuffer> {
 
   // Resolve the host and refuse if it (or ANY resolved address) is non-public.
   const host = url.hostname.replace(/^\[|\]$/g, ""); // strip IPv6 brackets
-  const addrs = isIP(host) !== 0
-    ? [host]
-    : (await lookup(host, { all: true })).map((a) => a.address);
-  if (!addrs.length) throw new Error(`Audio host does not resolve: ${host}`);
-  for (const a of addrs) {
-    if (!isPublicIp(a)) {
-      throw new Error(`Audio host resolves to a non-public address (SSRF blocked): ${host} -> ${a}`);
+  const family = isIP(host);
+  const resolved: LookupAddress[] = family !== 0
+    ? [{ address: host, family }]
+    : await lookup(host, { all: true });
+  if (!resolved.length) throw new Error(`Audio host does not resolve: ${host}`);
+  for (const a of resolved) {
+    if (!isPublicIp(a.address)) {
+      throw new Error(`Audio host resolves to a non-public address (SSRF blocked): ${host} -> ${a.address}`);
     }
   }
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(url, { signal: ctrl.signal, redirect: "error" });
-    if (!res.ok) throw new Error(`Audio fetch failed: ${res.status} ${url}`);
-    const ct = (res.headers.get("content-type") ?? "").toLowerCase();
-    if (!ct.startsWith("audio/") && !ct.startsWith("application/octet-stream")) {
-      throw new Error(`Audio src is not audio (content-type: ${ct || "none"})`);
-    }
-    const declared = Number(res.headers.get("content-length"));
-    if (Number.isFinite(declared) && declared > MAX_AUDIO_BYTES) {
-      throw new Error(`Audio exceeds ${MAX_AUDIO_BYTES} bytes (declared ${declared})`);
-    }
-    return await readCapped(res, MAX_AUDIO_BYTES);
-  } finally {
-    clearTimeout(timer);
-  }
+  const doRequest = url.protocol === "https:" ? httpsRequest : httpRequest;
+  let timer: NodeJS.Timeout | undefined;
+  const body = new Promise<ArrayBuffer>((resolve, reject) => {
+    const req = doRequest(url, { lookup: pinnedLookup(resolved) }, (res) => {
+      const status = res.statusCode ?? 0;
+      if (status >= 300 && status < 400) {
+        res.resume();
+        return reject(new Error(`Audio fetch redirect refused (${status}): ${url}`));
+      }
+      if (status < 200 || status >= 300) {
+        res.resume();
+        return reject(new Error(`Audio fetch failed: ${status} ${url}`));
+      }
+      const ct = String(res.headers["content-type"] ?? "").toLowerCase();
+      if (!ct.startsWith("audio/") && !ct.startsWith("application/octet-stream")) {
+        res.resume();
+        return reject(new Error(`Audio src is not audio (content-type: ${ct || "none"})`));
+      }
+      const declared = Number(res.headers["content-length"]);
+      if (Number.isFinite(declared) && declared > MAX_AUDIO_BYTES) {
+        res.resume();
+        return reject(new Error(`Audio exceeds ${MAX_AUDIO_BYTES} bytes (declared ${declared})`));
+      }
+      const chunks: Buffer[] = [];
+      let total = 0;
+      res.on("data", (c: Buffer) => {
+        total += c.byteLength;
+        if (total > MAX_AUDIO_BYTES) {
+          req.destroy(new Error(`Audio exceeds ${MAX_AUDIO_BYTES} bytes`));
+          return;
+        }
+        chunks.push(c);
+      });
+      res.on("end", () => {
+        const buf = Buffer.concat(chunks);
+        const out = new ArrayBuffer(buf.byteLength);
+        new Uint8Array(out).set(buf);
+        resolve(out);
+      });
+      res.on("error", reject);
+    });
+    req.on("error", reject);
+    // Жёсткий общий таймаут (не idle): медленный дриппинг тоже обрывается.
+    timer = setTimeout(() => req.destroy(new Error(`Audio fetch timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS);
+    req.end();
+  });
+  return body.finally(() => clearTimeout(timer));
 }
