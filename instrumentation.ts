@@ -14,4 +14,9 @@ export async function register() {
   }
 }
 
+// onRequestError идёт в Sentry (no-op без DSN). НЕ пишем отсюда в свой error_log: этот
+// модуль бандлится и под edge-рантайм, где нет `net` — импорт @/db (postgres) через
+// logError уронил бы весь инстанс (health 500). Server-ошибки и так видны в Vercel Runtime
+// Logs (console.error); наш self-hosted sink наполняют client-краши (client-error endpoint)
+// и явные logError-вызовы из nodejs-кода (server actions / route handlers).
 export const onRequestError = Sentry.captureRequestError;
