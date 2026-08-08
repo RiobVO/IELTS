@@ -62,21 +62,21 @@ nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 80%,
 .pill{display:inline-flex;align-items:center;gap:9px;background:#fff;color:var(--v2);font-weight:700;font-size:13.5px;padding:8px 15px;border-radius:99px;box-shadow:var(--sh-sm);border:1px solid var(--line)}
 .pill .ico{width:15px;height:15px}
 h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
-.hl{display:inline-block;opacity:0;transform:translateY(26px);animation:rise .8s var(--ease) forwards}
+.hl{display:inline-block}
 @keyframes rise{to{opacity:1;transform:none}}
-.lede{font-size:18.5px;color:var(--ink-2);max-width:35ch;margin:22px 0 0;opacity:0;transform:translateY(20px);animation:rise .8s var(--ease) .35s forwards}.lede b{color:var(--ink);font-weight:700}
-.bandsel{margin-top:24px;display:flex;flex-wrap:wrap;align-items:center;gap:13px;opacity:0;transform:translateY(20px);animation:rise .8s var(--ease) .45s forwards}
+.lede{font-size:18.5px;color:var(--ink-2);max-width:35ch;margin:22px 0 0}.lede b{color:var(--ink);font-weight:700}
+.bandsel{margin-top:24px;display:flex;flex-wrap:wrap;align-items:center;gap:13px}
 .bandsel .bl{font-weight:700;font-size:15px}
 .bpills{display:inline-flex;gap:4px;background:#fff;border:1px solid var(--line);border-radius:99px;padding:4px;box-shadow:var(--sh-sm)}
 .bp{font-family:var(--sans);font-weight:700;font-size:14px;border:0;background:transparent;color:var(--ink-2);padding:8px 15px;border-radius:99px;cursor:pointer;transition:color .2s}
 .bp.on{background:var(--v2);color:#fff}
 .bres{flex-basis:100%;font-size:15px;color:var(--ink-2)}.bres b{color:var(--v2);font-weight:700}.bres b .dim{color:var(--vb)}
-.cta-row{display:flex;gap:14px;margin:30px 0 36px;flex-wrap:wrap;opacity:0;transform:translateY(20px);animation:rise .8s var(--ease) .55s forwards}
-.micro{margin-top:6px;font-size:14.5px;color:var(--ink-3);font-weight:500;opacity:0;transform:translateY(18px);animation:rise .8s var(--ease) .65s forwards}
+.cta-row{display:flex;gap:14px;margin:30px 0 36px;flex-wrap:wrap}
+.micro{margin-top:6px;font-size:14.5px;color:var(--ink-3);font-weight:500}
 .micro b{color:var(--v2);font-weight:700}
 
 /* breakdown card */
-.scene{position:relative;perspective:1300px;opacity:0;transform:translateY(24px);animation:rise .9s var(--ease) .4s forwards}
+.scene{position:relative;perspective:1300px}
 .targ{display:flex;align-items:center;gap:12px;margin:14px 0 2px}
 .targ .tlab{font-size:12px;color:var(--ink-3);font-weight:600;white-space:nowrap}
 .targ .tbar{flex:1;height:6px;border-radius:99px;background:#EFEDF7;overflow:hidden}
@@ -85,13 +85,11 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
 .card{position:relative;z-index:2;background:var(--card);border:1px solid var(--line);border-radius:24px;box-shadow:var(--sh);padding:26px 28px;transition:transform .25s var(--ease),box-shadow .45s var(--ease);transform-style:preserve-3d;will-change:transform}
 .card.flash{box-shadow:0 0 0 4px var(--vtint),0 28px 64px -24px rgba(129,112,234,.55)}
 @keyframes numpop{0%{transform:scale(1.22)}100%{transform:scale(1)}}
-.bscore .v.pop{animation:numpop .5s var(--ease);transform-origin:left center}
 .card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px}
 .bscore .k{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
 .bscore .v{font-size:46px;font-weight:800;color:var(--v);line-height:1;margin-top:2px;font-variant-numeric:tabular-nums;transition:color .3s}
 .ptag{display:inline-flex;align-items:center;gap:7px;background:var(--vsoft);color:var(--v2);font-weight:600;font-size:12px;padding:6px 12px;border-radius:99px}
-.ptag .dot{width:6px;height:6px;border-radius:50%;background:var(--v);box-shadow:0 0 8px var(--v);animation:blink 1.8s infinite}
-@keyframes blink{50%{opacity:.35}}
+.ptag .dot{width:6px;height:6px;border-radius:50%;background:var(--v);box-shadow:0 0 8px var(--v)}
 .wlp{font-weight:700;font-size:14px;margin:14px 0 6px;color:var(--ink-2)}
 .bar{margin:15px 0 0}
 .bar-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
@@ -177,7 +175,6 @@ a.bar:hover{background:var(--vtint)}
 .qgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:8px}
 .q{aspect-ratio:1;border-radius:7px;display:grid;place-content:center;transition:transform .4s var(--ease),opacity .35s,background .3s}
 .q span{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--ink)}
-.q.pre{transform:scale(.6);opacity:0}
 .q.dim{opacity:.3}
 .q:hover{transform:scale(1.14)}
 .q:focus-visible{outline-color:var(--ink)}
@@ -186,14 +183,13 @@ a.bar:hover{background:var(--vtint)}
 .lg:hover{color:var(--v2)}
 .lg i{width:9px;height:9px;border-radius:3px;flex:none}
 .stamp{position:absolute;right:-12px;bottom:-14px;transform:rotate(-9deg);font-weight:800;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-d);border:3px solid var(--green-d);border-radius:10px;padding:7px 14px;background:rgba(255,255,255,.88);box-shadow:var(--sh-sm);transition:transform .35s cubic-bezier(.34,1.3,.5,1),opacity .25s}
-.stamp:not(.in){transform:rotate(12deg) scale(2.2);opacity:0}
 .stamp small{display:block;font-size:8.5px;letter-spacing:.08em;font-weight:700}
 .sheet-stats{display:flex;gap:14px 44px;flex-wrap:wrap;justify-content:center;margin-top:28px}
 .sst{text-align:center}
 .sst .n{font-weight:800;font-size:clamp(1.9rem,4vw,2.6rem);line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
 .sst .n.acc,.sst .acc{color:var(--v2)}
 .sst .l{font-size:12.5px;color:var(--ink-3);font-weight:600;margin-top:6px;max-width:24ch}
-@media(max-width:640px){.sheet{padding:20px 18px}.qgrid{grid-template-columns:repeat(8,1fr);gap:6px}.q span{font-size:8px}.stamp{right:-6px;bottom:-10px;font-size:13px;padding:6px 11px}}
+@media(max-width:640px){.sheet{padding:20px 18px}.qgrid{grid-template-columns:repeat(8,1fr);gap:6px}.q span{font-size:8px}.stamp{right:-6px;bottom:-10px;font-size:13px;padding:6px 11px}.tmarq{-webkit-mask:none;mask:none}.tmarq-track{animation:none;flex-wrap:wrap;justify-content:center;padding-right:0}.tmarq-track .qpill:nth-child(n+9){display:none}}
 
 .types{columns:2;column-gap:56px;margin-top:8px}
 .tfilter{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 24px}
@@ -255,6 +251,22 @@ footer{padding:54px 0 42px;border-top:1px solid var(--line);margin-top:96px}
 /* touch-friendly hit targets on coarse pointers */
 @media(pointer:coarse){.bp,.tf{min-height:44px;display:inline-flex;align-items:center}}
 
-.rv{opacity:0;transform:translateY(28px);transition:opacity .8s var(--ease),transform .8s var(--ease)}.rv.in{opacity:1;transform:none}
+.rv.in{opacity:1;transform:none}
 @media (max-width:920px){.hero-grid,.vs,.foot{grid-template-columns:1fr}.types{columns:1}.nav-links{display:none}.hero{padding:50px 0 64px}.pad{padding:68px 0}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important}.hl,.lede,.bandsel,.cta-row,.micro,.scene{opacity:1;transform:none}.rv{opacity:1;transform:none}.fill{transition:none}.hero-canvas{display:none}.tbar i{transition:none}.tmarq-track{animation:none}.ndrawer{transition:none}.q,.stamp{transition:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}html{scroll-behavior:auto}.fill,.targ .tbar i{transition:none}.hero-canvas{display:none}.ndrawer{transition:none}.q,.stamp{transition:none}}
+
+/* Стартовые состояния входных анимаций — только когда motion разрешён.
+   Default (reduced-motion / JS-off / headless) — контент видим сразу. */
+@media (prefers-reduced-motion: no-preference){
+  .hero .pill{opacity:0;animation:rise .8s var(--ease) forwards}
+  .hl{opacity:0;transform:translateY(26px);animation:rise .8s var(--ease) forwards}
+  .lede{opacity:0;transform:translateY(20px);animation:rise .8s var(--ease) .35s forwards}
+  .bandsel{opacity:0;transform:translateY(20px);animation:rise .8s var(--ease) .45s forwards}
+  .cta-row{opacity:0;transform:translateY(20px);animation:rise .8s var(--ease) .55s forwards}
+  .micro{opacity:0;transform:translateY(18px);animation:rise .8s var(--ease) .65s forwards}
+  .scene{opacity:0;transform:translateY(24px);animation:rise .9s var(--ease) .4s forwards}
+  .q.pre{transform:scale(.6);opacity:0}
+  .stamp:not(.in){transform:rotate(12deg) scale(2.2);opacity:0}
+  .bscore .v.pop{animation:numpop .5s var(--ease);transform-origin:left center}
+  .rv{opacity:0;transform:translateY(28px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
+}
