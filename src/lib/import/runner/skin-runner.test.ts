@@ -98,6 +98,46 @@ describe("skinRunnerBrand", () => {
     const plain = "<!doctype html><html><head></head><body><p>hi</p></body></html>";
     expect(skinRunnerBrand(plain)).toBe(plain);
   });
+
+  // CDI-источник (QA 2026-07-02): вордмарк — span.ielts-logo (не span.logo), канал —
+  // тот же a.brand-telegram. Ранний return по нераспознанной шапке не пускал даже
+  // готовую очистку канала.
+  it("CDI-шапка: ielts-logo → bando, канал срезан", () => {
+    const cdi = `<!doctype html><html><head><title>R</title></head><body>
+<header class="header"><div class="header__logo"><div class="brand">
+<span class="ielts-logo" aria-label="IELTS">IELTS</span>
+<a class="brand-telegram" href="https://t.me/CD_materialss" target="_blank" title="Join"><i class="fa-brands fa-telegram"></i></a>
+</div></div></header></body></html>`;
+    const r = skinRunnerBrand(cdi);
+    expect(r).not.toMatch(/t\.me\//i);
+    expect(r).not.toContain("brand-telegram");
+    expect(r).toContain("bando-brand");
+    expect(r).not.toContain("ielts-logo");
+  });
+
+  // ReadinMarathons/Mock-вариант: вордмарк — <div class="ielts-logo">, канал —
+  // a.telegram-link (режется href-регэкспом).
+  it("div.ielts-logo → bando (вордмарк не обязан быть span)", () => {
+    const rm = `<!doctype html><html><head><title>R</title></head><body>
+<header class="header"><div class="header__logo">
+<div class="ielts-logo">IELTS</div>
+<a class="telegram-link" href="https://t.me/ReadinMarathons" target="_blank"><i class="fab fa-telegram"></i></a>
+</div></header></body></html>`;
+    const r = skinRunnerBrand(rm);
+    expect(r).not.toMatch(/t\.me\//i);
+    expect(r).toContain("bando-brand");
+    expect(r).not.toContain("ielts-logo");
+    expect(r).not.toContain("header__logo>IELTS"); // header__logo-обёртка не тронута
+  });
+
+  it("чужой t.me режется ДАЖЕ при нераспознанной шапке (трафик ≠ вёрстка)", () => {
+    const newSource =
+      '<html><head></head><body><div class="topbar">' +
+      '<a href="https://t.me/SomeNewChannel">join</a></div></body></html>';
+    const r = skinRunnerBrand(newSource);
+    expect(r).not.toMatch(/t\.me\//i);
+    expect(r).not.toContain("SomeNewChannel");
+  });
 });
 
 describe("runnerBrandResidue (import-time guard)", () => {
@@ -110,12 +150,19 @@ describe("runnerBrandResidue (import-time guard)", () => {
     expect(runnerBrandResidue("<html><head></head><body><p>hi</p></body></html>")).toEqual([]);
   });
 
-  it("флагует чужой t.me, если шапка из НОВОГО источника не распознана", () => {
+  // После развязки трафик-очистки от вёрстки t.me срезается всегда → residue по
+  // нему пуст; residue-детектор остаётся страховкой на ВЫЖИВШИЙ после очистки мусор.
+  it("не флагует t.me на нераспознанной шапке — он уже срезан очисткой", () => {
     const newSource =
       '<html><head></head><body><div class="topbar">' +
       '<a href="https://t.me/SomeNewChannel">join</a></div></body></html>';
-    const issues = runnerBrandResidue(newSource);
-    expect(issues.length).toBeGreaterThan(0);
-    expect(issues.join(" ")).toContain("t.me/SomeNewChannel");
+    expect(runnerBrandResidue(newSource)).toEqual([]);
+  });
+
+  it("чисто на CDI-шапке (ielts-logo распознан)", () => {
+    const cdi = `<html><head></head><body><div class="brand">
+<span class="ielts-logo">IELTS</span>
+<a class="brand-telegram" href="https://t.me/CD_materialss">tg</a></div></body></html>`;
+    expect(runnerBrandResidue(cdi)).toEqual([]);
   });
 });
