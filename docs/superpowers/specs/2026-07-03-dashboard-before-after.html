@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bando · дашборд /app — до/после</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* ── семантические токены приложения (копия из app/tokens/colors.css) ───── */
+:root{
+  --bg-base:oklch(0.975 0.006 286);--surface:#fff;--surface-inset:oklch(0.962 0.006 288);
+  --border-subtle:oklch(0.935 0.006 288);--border:oklch(0.895 0.008 288);
+  --text-primary:oklch(0.245 0.014 280);--text-secondary:oklch(0.420 0.018 285);
+  --text-muted:oklch(0.525 0.017 287);--text-disabled:oklch(0.740 0.014 288);
+  --brand:oklch(0.585 0.225 292);--brand-active:oklch(0.50 0.205 292);
+  --brand-subtle:oklch(0.955 0.030 290);--brand-border:oklch(0.825 0.110 290);
+  --success:oklch(0.745 0.165 156);--success-text:oklch(0.500 0.145 158);--success-subtle:oklch(0.93 0.070 156);
+  --warn-text:oklch(0.520 0.120 65);--warn-subtle:oklch(0.94 0.075 88);
+  --error-text:oklch(0.505 0.205 25);--error-subtle:oklch(0.92 0.060 25);
+  --streak:oklch(0.560 0.160 42);--slate-900:oklch(0.245 0.014 280);
+  --font-ui:"Plus Jakarta Sans",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  --ease:cubic-bezier(.22,.9,.27,1);
+  --sh-sm:0 1px 2px rgba(25,21,41,.05),0 2px 8px -2px rgba(25,21,41,.06);
+  --sh-md:0 10px 30px -12px rgba(45,32,110,.22);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg-base);color:var(--text-primary);font-family:var(--font-ui);font-size:16px;line-height:1.6;padding-bottom:120px}
+a{color:inherit;text-decoration:none}
+h1,h2,h3{font-weight:800;letter-spacing:-.02em;line-height:1.15;text-wrap:balance}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+
+/* ── каркас превью ──────────────────────────────────────────────────────── */
+.phead{padding:50px 0 8px}
+.phead h1{font-size:clamp(1.7rem,4vw,2.5rem)}
+.phead h1 em{font-style:normal;color:var(--brand)}
+.phead p{color:var(--text-secondary);max-width:76ch;margin-top:12px;font-size:15px}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
+.toc a{font-size:12.5px;font-weight:700;background:#fff;border:1px solid var(--border);border-radius:99px;padding:7px 13px;box-shadow:var(--sh-sm);color:var(--text-secondary);transition:color .2s,border-color .2s}
+.toc a:hover{color:var(--brand);border-color:var(--brand-border)}
+.sec{padding:42px 0 4px}
+.sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.sec-head h2{font-size:clamp(1.25rem,2.5vw,1.7rem)}
+.pbadge{font-size:10.5px;font-weight:800;letter-spacing:.05em;border-radius:7px;padding:4px 9px;text-transform:uppercase;flex:none}
+.pbadge.p1{background:var(--warn-subtle);color:var(--warn-text)}
+.pbadge.p2{background:var(--brand-subtle);color:var(--brand-active)}
+.pbadge.p3{background:var(--surface-inset);color:var(--text-muted)}
+.pbadge.bonus{background:var(--success-subtle);color:var(--success-text)}
+.sec p.why{color:var(--text-secondary);max-width:82ch;font-size:14.5px;margin-bottom:20px}
+.sec p.why b{color:var(--text-primary)}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch}
+@media(max-width:940px){.duo{grid-template-columns:1fr}}
+.pane{position:relative;background:#fff;border:1px solid var(--border);border-radius:18px;box-shadow:var(--sh-sm);padding:52px 20px 20px;overflow:hidden}
+.pane.bad{border-color:oklch(0.85 0.08 25)}
+.pane.good{border-color:oklch(0.82 0.09 156)}
+.tag{position:absolute;top:13px;left:15px;font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;border-radius:7px;padding:5px 10px}
+.pane.bad .tag{background:var(--error-subtle);color:var(--error-text)}
+.pane.good .tag{background:var(--success-subtle);color:var(--success-text)}
+.pane .note{margin-top:14px;padding-top:11px;border-top:1px dashed var(--border-subtle);font-size:12.5px;color:var(--text-muted);line-height:1.5}
+.pane .note b{color:var(--text-secondary)}
+code{font-family:var(--font-mono);font-size:12px;background:var(--surface-inset);border-radius:5px;padding:1px 5px}
+.footnote{margin-top:56px;padding-top:18px;border-top:1px solid var(--border);font-size:13.5px;color:var(--text-secondary);line-height:1.7}
+.footnote b{color:var(--text-primary)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,140%);opacity:0;pointer-events:none;background:var(--slate-900);color:#fff;font-size:13.5px;font-weight:600;padding:12px 18px;border-radius:12px;box-shadow:var(--sh-md);transition:transform .3s var(--ease),opacity .3s;z-index:99;max-width:92vw}
+.toast.show{transform:translate(-50%,0);opacity:1}
+
+/* ── куски настоящего дашборда ──────────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--sh-sm)}
+.focus{border-radius:18px;position:relative;overflow:hidden;color:#fff;padding:24px;background:radial-gradient(620px 420px at 92% -12%,rgba(255,255,255,.13),transparent 58%),linear-gradient(150deg,oklch(0.50 0.205 292),oklch(0.42 0.19 292))}
+.focus .eyeb{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;color:rgba(255,255,255,.92)}
+.focus h3{font-size:27px;font-weight:900;letter-spacing:-.03em;color:#fff;margin-top:11px}
+.focus p{font-size:13.5px;line-height:1.55;color:rgba(255,255,255,.85);margin-top:9px;max-width:400px}
+.fp-head{display:flex;align-items:baseline;justify-content:space-between;max-width:360px;margin:18px 0 7px}
+.fp-lab{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.85)}
+.fp-val{font-family:var(--font-mono);font-size:15px;font-weight:600;color:#fff}
+.ftrack{height:9px;border-radius:99px;background:rgba(255,255,255,.25);overflow:hidden;max-width:360px}
+.ffill{height:100%;background:#fff;border-radius:99px}
+.fbtn{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--brand-active);font-weight:700;font-size:14px;border-radius:12px;padding:11px 18px;margin-top:20px;box-shadow:0 6px 18px -6px rgba(0,0,0,.35);border:0;cursor:pointer;font-family:var(--font-ui)}
+.sect{padding:18px 20px}
+.sect h4{font-size:16px;font-weight:800;letter-spacing:-.01em}
+.sect .lead{font-size:12.5px;color:var(--text-muted);margin:2px 0 10px}
+.badge-err{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;background:var(--error-subtle);color:var(--error-text);border-radius:7px;padding:3px 8px}
+.loss{display:flex;align-items:center;gap:13px;padding:11px 0;border-top:1px solid var(--border-subtle)}
+.loss .rank{width:24px;height:24px;flex:none;border-radius:7px;display:grid;place-items:center;font-family:var(--font-mono);font-size:11px;font-weight:600;background:var(--surface-inset);color:var(--text-muted)}
+.loss .rank.worst{background:var(--error-subtle);color:var(--error-text)}
+.loss .body{flex:1;min-width:0}
+.loss .nm{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.loss .tr{height:8px;background:var(--surface-inset);border-radius:99px;overflow:hidden;margin-top:6px}
+.loss .tr i{display:block;height:100%;border-radius:99px}
+.loss .sc{font-family:var(--font-mono);font-size:12.5px;font-weight:600;color:var(--text-secondary);min-width:42px;text-align:right}
+.loss .pts{font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--text-muted);background:var(--surface-inset);border-radius:99px;padding:3px 8px;min-width:54px;text-align:center}
+.loss .ch{color:var(--text-disabled);flex:none;font-weight:700}
+.bandc{display:flex;align-items:center;gap:26px;padding:20px 24px}
+.bandc .lab{font-size:13px;font-weight:700;color:var(--text-secondary)}
+.bandc .num{font-family:var(--font-mono);font-size:46px;font-weight:600;line-height:1;letter-spacing:-.02em}
+.bandc .tgt{font-size:12.5px;font-weight:700;color:var(--text-muted)}
+.bandc .tgt b{font-family:var(--font-mono);color:var(--brand);font-weight:600}
+.bscale{position:relative;height:12px;border-radius:99px;background:var(--surface-inset);background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(100%/9 - 1px),var(--border) calc(100%/9 - 1px),var(--border) calc(100%/9))}
+.bscale .fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:linear-gradient(90deg,oklch(0.50 0.205 292),oklch(0.585 0.225 292))}
+.bscale .tick{position:absolute;top:-5px;width:4px;height:22px;border-radius:3px;background:var(--text-primary)}
+.bscale .tick.mile{background:var(--brand);height:18px;top:-3px}
+.bleg{display:flex;justify-content:space-between;margin-top:7px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)}
+.weekc{display:flex;align-items:center;gap:16px;padding:13px 18px;flex-wrap:wrap}
+.flame{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:color-mix(in oklab,var(--streak) 15%,#fff);color:var(--streak);font-size:19px}
+.wnum{font-family:var(--font-mono);font-size:24px;font-weight:600;line-height:1}
+.wsub{font-size:11.5px;font-weight:600;color:var(--text-muted);margin-top:2px}
+.wdots{display:flex;gap:6px;flex:1;min-width:150px;max-width:260px;align-items:flex-end}
+.wd{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px}
+.wd i{width:100%;border-radius:7px;background:var(--surface-inset);display:block}
+.wd small{font-size:9px;color:var(--text-muted);font-weight:600}
+.league{display:flex;align-items:center;gap:9px;padding:7px 11px;border-radius:11px;background:var(--surface-inset);font-size:13px;font-weight:600;color:var(--text-secondary)}
+.league b{font-family:var(--font-mono);color:var(--text-primary)}
+.wcta{margin-left:auto;background:var(--brand);color:#fff;font-weight:700;font-size:13.5px;border-radius:11px;padding:10px 16px;border:0;cursor:pointer;font-family:var(--font-ui)}
+.trow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-subtle)}
+.trow .ic{width:36px;height:36px;flex:none;border-radius:10px;display:grid;place-items:center;background:var(--brand-subtle);color:var(--brand);font-size:16px}
+.trow .tt{font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow .mt{font-size:11.5px;color:var(--text-muted);margin-top:1px}
+.trow .bd{font-family:var(--font-mono);font-size:10.5px;font-weight:600;background:var(--brand-subtle);color:var(--brand-active);border-radius:99px;padding:3px 9px;flex:none}
+.trow .sc{font-family:var(--font-mono);font-size:13.5px;font-weight:600;min-width:52px;text-align:right}
+.chip{font-size:10px;font-weight:800;border-radius:7px;padding:3px 8px;flex:none}
+.chip.weak{background:var(--error-subtle);color:var(--error-text)}
+.chip.up{background:var(--success-subtle);color:var(--success-text)}
+.chip.rev{background:var(--surface-inset);color:var(--text-muted)}
+.milepill{display:inline-flex;align-items:center;gap:7px;background:var(--brand-subtle);color:var(--brand-active);font-size:12px;font-weight:700;border-radius:99px;padding:5px 12px}
+.spark{display:inline-flex;gap:3px;align-items:flex-end;height:22px}
+.spark i{width:6px;border-radius:2px;background:rgba(255,255,255,.4)}
+.spark i.on{background:#fff}
+/* wireframe-схемы layout */
+.wire{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.screen{width:330px;background:var(--bg-base);border:1px solid var(--border);border-radius:14px;padding:12px;flex:none}
+.screen .cap{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);text-align:center;margin-bottom:9px}
+.blk{border-radius:9px;margin-bottom:8px;padding:8px 10px;font-size:10.5px;font-weight:700;color:var(--text-secondary);border:1px solid var(--border);background:#fff}
+.blk.hero{background:linear-gradient(150deg,oklch(0.50 0.205 292),oklch(0.42 0.19 292));color:#fff;border:0}
+.blk.dim{color:var(--text-muted);background:var(--surface-inset);border-color:transparent}
+.cols{display:grid;grid-template-columns:1.9fr 1fr;gap:8px}
+.plan-step{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid rgba(255,255,255,.18);cursor:pointer}
+.plan-step .cb{width:22px;height:22px;flex:none;border-radius:8px;border:2px solid rgba(255,255,255,.5);display:grid;place-items:center;color:transparent;font-size:13px;transition:background .2s,color .2s}
+.plan-step.done .cb{background:#fff;color:var(--brand-active);border-color:#fff}
+.plan-step .pt{flex:1;font-size:13.5px;font-weight:700;color:#fff}
+.plan-step.done .pt{opacity:.55;text-decoration:line-through}
+.plan-step .pm{font-family:var(--font-mono);font-size:11px;color:rgba(255,255,255,.7)}
+.btn-sw{font-family:var(--font-ui);font-weight:700;font-size:12px;border:1px solid var(--border);background:#fff;color:var(--text-secondary);padding:7px 13px;border-radius:99px;cursor:pointer}
+.btn-sw.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+</style>
+</head>
+<body>
+
+<header class="phead">
+  <div class="wrap">
+    <h1>Дашборд /app — <em>до / после</em></h1>
+    <p>Разбор по коду (<code>app/app/page.tsx</code>) и твоему скриншоту (ultra-test: band 2, всё по нулям — самый важный кейс, так выглядит каждый новичок). База у дашборда крепкая — тут не «переделать всё», а 8 адресных ударов + один бонус-концепт. «До» везде — точная копия прода.</p>
+    <div class="toc">
+      <a href="#d1">1 · Дубль диагноза</a>
+      <a href="#d2">2 · «6.0 band to go» → веха</a>
+      <a href="#d3">3 · Пустой бар в hero</a>
+      <a href="#d4">4 · Recent tests → действие</a>
+      <a href="#d5">5 · Один primary CTA</a>
+      <a href="#d6">6 · Week-полоса</a>
+      <a href="#d7">7 · Layout ≥1024</a>
+      <a href="#d8">8 · Мелочи</a>
+      <a href="#d9">9 · Бонус: Today's plan</a>
+    </div>
+  </div>
+</header>
+
+<!-- ══ 1. Дубль диагноза ═══════════════════════════════════════════════════ -->
+<section class="sec" id="d1">
+  <div class="wrap">
+    <div class="sec-head"><span class="pbadge p1">P1 · иерархия</span><h2>Hero и строка №1 — один и тот же диагноз дважды</h2></div>
+    <p class="why">«Today's focus: Matching Information · 0/15 · Fix this weakness» и сразу под ним «Where you lose points» со строкой №1 «Matching Information · 0/15 · 15 missed» — <b>одна и та же информация и один и тот же deep-link два раза в одном вьюпорте</b>. Экран тратит своё самое дорогое место на повтор. Фикс: hero «поглощает» строку №1, список начинается со №2 под заголовком «Next up» — плюс в hero появляется место для приза (сколько band вернёт закрытие типа).</p>
+    <div class="duo">
+      <div class="pane bad">
+        <span class="tag">До · диагноз ×2</span>
+        <div class="focus">
+          <span class="eyeb">◎ Today's focus</span>
+          <h3>Matching Information</h3>
+          <p>Your weakest type so far — closing it is the single fastest move toward your band.</p>
+          <div class="fp-head"><span class="fp-lab">Accuracy</span><span class="fp-val">0 / 15</span></div>
+          <div class="ftrack"><div class="ffill" style="width:0"></div></div>
+          <button class="fbtn">Fix this weakness →</button>
+        </div>
+        <div class="sect card" style="margin-top:12px">
+          <div style="display:flex;align-items:center;gap:10px"><h4>Where you lose points</h4><span class="badge-err">Worst first</span></div>
+          <p class="lead">Closing your weakest types is the fastest route to your 8.</p>
+          <div class="loss"><span class="rank worst">1</span><div class="body"><div class="nm">Matching Information</div><div class="tr"><i style="width:0;background:var(--brand)"></i></div></div><span class="sc">0 / 15</span><span class="pts">15 missed</span><span class="ch">›</span></div>
+          <div class="loss"><span class="rank">2</span><div class="body"><div class="nm">Matching Features</div><div class="tr"><i style="width:0;background:var(--brand-border)"></i></div></div><span class="sc">0 / 5</span><span class="pts">5 missed</span><span class="ch">›</span></div>
+        </div>
+        <p class="note"><b>Факт из кода:</b> <code>FocusCard weakest</code> и <code>LossRow idx=0</code> строятся из одного и того же <code>weak[0]</code> и ведут на один URL.</p>
+      </div>
+      <div class="pane good">
+        <span class="tag">После · hero = строка №1, список = Next up</span>
+        <div class="focus">
+          <span class="eyeb">◎ Today's focus · worst of 5</span>
+          <h3>Matching Information</h3>
+          <p>15 answers mapped, 0 right — this single type is holding the most points.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+            <span class="milepill" style="background:rgba(255,255,255,.16);color:#fff">≈ +0.5 band if fixed</span>
+            <span class="milepill" style="background:rgba(255,255,255,.16);color:#fff">~10 min drill</span>
+          </div>
+          <button class="fbtn">Fix this weakness →</button>
+        </div>
+        <div class="sect card" style="margin-top:12px">
+          <div style="display:flex;align-items:center;gap:10px"><h4>Next up</h4><span style="font-size:11px;color:var(--text-muted);font-weight:600">after today's focus</span></div>
+          <div class="loss"><span class="rank">2</span><div class="body"><div class="nm">Matching Features</div><div class="tr"><i style="width:0;background:var(--brand-border)"></i></div></div><span class="sc">0 / 5</span><span class="pts">5 missed</span><span class="ch">›</span></div>
+          <div class="loss"><span class="rank">3</span><div class="body"><div class="nm">Summary Completion</div><div class="tr"><i style="width:0;background:var(--brand-border)"></i></div></div><span class="sc">0 / 4</span><span class="pts">4 missed</span><span class="ch">›</span></div>
+        </div>
+        <p class="note"><b>Выигрыш:</b> −90px повтора, hero получает «приз» (+0.5 band, ~10 мин — оценка из веса типа в 40Q), список честно называется «Next up». Красный ранг №1 больше не спорит с фиолетовым hero.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 2. Веха вместо пропасти ═════════════════════════════════════════════ -->
+<section class="sec" id="d2">
+  <div class="wrap">
+    <div class="sec-head"><span class="pbadge p1">P1 · мотивация</span><h2>«6.0 band to go» — пропасть → ближайшая веха</h2></div>
+    <p class="why">Band 2 при цели 8 сейчас показывает подпись «6.0 band to go» — честно, но это марафон без станций: новичок видит пропасть, а не путь. <b>Milestone-фрейминг:</b> шкала получает фиолетовый тик ближайшей вехи (+0.5), подпись говорит про неё, target остаётся тёмным тиком дальше. Код уже «value-aware» (низкий band рисуется тихо) — это следующий шаг той же логики. <b>Потыкай переключатель:</b> веха работает на любом уровне.</p>
+    <div class="duo">
+      <div class="pane bad">
+        <span class="tag">До</span>
+        <div class="bandc card">
+          <div style="flex:none">
+            <div class="lab">Your band</div>
+            <div style="display:flex;align-items:baseline;gap:9px;margin-top:6px"><span class="num" style="color:var(--text-secondary)">2</span><span class="tgt">/ target <b>8</b></span></div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div class="bscale"><div class="fill" style="width:22.2%"></div><div class="tick" style="left:calc(88.9% - 2px)"></div></div>
+            <div class="bleg"><span>0</span><span style="color:var(--text-secondary);font-weight:600">6.0 band to go</span><span>9</span></div>
+          </div>
+        </div>
+        <p class="note">Подпись измеряет расстояние до конца пути. Для B1-студента на старте «6.0 to go» = «это не для меня».</p>
+      </div>
+      <div class="pane good">
+        <span class="tag">После · интерактив</span>
+        <div class="bandc card">
+          <div style="flex:none">
+            <div class="lab">Your band</div>
+            <div style="display:flex;align-items:baseline;gap:9px;margin-top:6px"><span class="num" id="bnum" style="color:var(--text-secondary)">2</span><span class="tgt">/ target <b>8</b></span></div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div class="bscale"><div class="fill" id="bfill" style="width:22.2%"></div><div class="tick mile" id="bmile" style="left:calc(27.8% - 2px)"></div><div class="tick" style="left:calc(88.9% - 2px)"></div></div>
+            <div class="bleg"><span>0</span><span id="bcap" style="color:var(--brand-active);font-weight:700">Next stop: 2.5 — usually 1–2 fixed types away</span><span>9</span></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px;justify-content:center">
+          <button class="btn-sw on" data-band="2">band 2</button>
+          <button class="btn-sw" data-band="5.5">band 5.5</button>
+          <button class="btn-sw" data-band="7.5">band 7.5</button>
+          <button class="btn-sw" data-band="8">target ✓</button>
+        </div>
+        <p class="note"><b>Механика:</b> веха = band + 0.5 (кратно полбэнда — как реальный IELTS); подпись хвалит по достижении и переставляет тик. Target-тик никуда не девается — путь виден, но меряем шагами.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 3. Пустой бар в hero ════════════════════════════════════════════════ -->
+<section class="sec" id="d3">
+  <div class="wrap">
+    <div class="sec-head"><span class="pbadge p2">P2 · zero-state</span><h2>Accuracy 0/15: пустой белый трек читается как скелетон</h2></div>
+    <p class="why">При 0% заполнения белый трек на фиолетовом выглядит как незагрузившийся элемент — и это «ноль» в самом эмоционально дорогом месте экрана. Фикс: при <code>correct === 0</code> вместо прогресс-бара — <b>спарклайн последних попыток типа</b> (данные уже в per_type_breakdown) или счёт «вопросов размечено», а бар появляется с первого верного ответа.</p>
+    <div class="duo">
+      <div class="pane bad">
+        <span class="tag">До · 0%</span>
+        <div class="focus">
+          <span class="eyeb">◎ Today's focus</span>
+          <h3>Matching Information</h3>
+          <div class="fp-head"><span class="fp-lab">Accuracy</span><span class="fp-val">0 / 15</span></div>
+          <div class="ftrack"><div class="ffill" style="width:0"></div></div>
+          <button class="fbtn">Fix this weakness →</button>
+        </div>
+        <p class="note">Трек на 0% + пустое пространство = «сломалось?». Ноль кричит, не помогая.</p>
+      </div>
+      <div class="pane good">
+        <span class="tag">После · первая точка пути</span>
+        <div class="focus">
+          <span class="eyeb">◎ Today's focus</span>
+          <h3>Matching Information</h3>
+          <div class="fp-head"><span class="fp-lab">Seen so far</span><span class="fp-val">15 questions · 3 tests</span></div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="spark"><i style="height:8px"></i><i style="height:8px"></i><i style="height:8px"></i></span>
+            <span style="font-size:12px;color:rgba(255,255,255,.8);font-weight:600">first correct answer starts your streak here</span>
+          </div>
+          <button class="fbtn">Fix this weakness →</button>
+        </div>
+        <p class="note"><b>Правило:</b> 0 верных → «размечено N вопросов» + спарклайн-заготовка; ≥1 верный → обычный бар. Тот же слот, ноль не выглядит поломкой.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 4. Recent tests ═════════════════════════════════════════════════════ -->
+<section class="sec" id="d4">
+  <div class="wrap">
+    <div class="sec-head"><span class="pbadge p2">P2 · actionable</span><h2>Recent tests: счёт есть — действия нет</h2></div>
+    <p class="why">Строка сейчас отвечает «сколько», но не «что с этим делать»: ни слабого типа попытки, ни динамики к прошлому разу. Данные уже лежат в <code>per_type_breakdown</code> — ни одного нового запроса. Плюс у Listening и Reading один и тот же значок книжки.</p>
+    <div class="duo">
+      <div class="pane bad">
+        <span class="tag">До</span>
+        <div class="sect card">
+          <h4 style="margin-bottom:6px">Recent tests</h4>
+          <div class="trow"><span class="ic">📖</span><div style="flex:1;min-width:0"><div class="tt">IELTS Reading Test - Why we need silence</div><div class="mt">Passage 1 · Today</div></div><span class="sc">0 / 13</span></div>
+          <div class="trow"><span class="ic">📖</span><div style="flex:1;min-width:0"><div class="tt">IELTS Listening — Volume 3 Test 3</div><div class="mt">Full Listening · 2 days ago</div></div><span class="bd">band 2</span><span class="sc">0 / 40</span></div>
+          <div class="trow" style="border-bottom:0"><span class="ic">📖</span><div style="flex:1;min-width:0"><div class="tt">IELTS Listening — Full Test 32</div><div class="mt">Full Listening · 4 days ago</div></div><span class="bd">band 2.5</span><span class="sc">4 / 40</span></div>
+        </div>
+        <p class="note">Три нуля подряд без контекста. Куда кликать и зачем — неясно (вся строка — ссылка, но выглядит как таблица).</p>
+      </div>
+      <div class="pane good">
+        <span class="tag">После · каждая строка знает, что дальше</span>
+        <div class="sect card">
+          <h4 style="margin-bottom:6px">Recent tests</h4>
+          <div class="trow"><span class="ic" style="background:var(--warn-subtle);color:var(--warn-text)">R</span><div style="flex:1;min-width:0"><div class="tt">Why we need silence</div><div class="mt">Passage 1 · Today · <b style="color:var(--error-text)">weak: Matching Info</b></div></div><span class="chip rev">review answers →</span><span class="sc">0 / 13</span></div>
+          <div class="trow"><span class="ic" style="background:var(--success-subtle);color:var(--success-text)">L</span><div style="flex:1;min-width:0"><div class="tt">Volume 3 Test 3</div><div class="mt">Full Listening · 2 days ago · weak: Map Labelling</div></div><span class="bd">band 2</span><span class="chip weak">−4 vs last</span><span class="sc">0 / 40</span></div>
+          <div class="trow" style="border-bottom:0"><span class="ic" style="background:var(--success-subtle);color:var(--success-text)">L</span><div style="flex:1;min-width:0"><div class="tt">Full Test 32</div><div class="mt">Full Listening · 4 days ago · weak: Form Completion</div></div><span class="bd">band 2.5</span><span class="chip up">first mock ✓</span><span class="sc">4 / 40</span></div>
+        </div>
+        <p class="note"><b>Три добавки:</b> значок секции (R/L цветом навыка), «weak: тип» в мета-строке (из breakdown попытки), дельта-чип к предыдущему той же категории. Заголовки чистим от «IELTS … Test -» — в приложении это шум.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 5. CTA-иерархия ═════════════════════════════════════════════════════ -->
+<section class="sec" id="d5">
+  <div class="wrap">
+    <div class="sec-head"><span class="pbadge p2">P2 · фокус действия</span><h2>Четыре CTA на экран → один primary</h2></div>
+    <p class="why">Сейчас конкурируют: «Fix this weakness» (hero), «Continue practice» (единственная solid-кнопка), «Browse all →», «View all →». Два зовут практиковаться в разные места. Правило: <b>один экран — одно главное действие</b> (hero); «Continue practice» становится умным — появляется только при реально незаконченной попытке и говорит куда именно. <b>Переключи состояние:</b></p>
+    <div class="duo">
+      <div class="pane bad">
+        <span class="tag">До · два primary</span>
+        <div class="focus" style="padding:18px"><span class="eyeb">◎ Today's focus</span><h3 style="font-size:20px">Matching Information</h3><button class="fbtn" style="margin-top:12px;padding:9px 14px;font-size:13px">Fix this weakness →</button></div>
+        <div class="weekc card" style="margin-top:12px">
+          <span class="flame">🔥</span><div><div class="wnum">1</div><div class="wsub">day streak</div></div>
+          <button class="wcta">▶ Continue practice</button>
+        </div>
+        <p class="note">Обе кнопки ведут «идти заниматься», но в разные каталоги. Выбор из двух одинаково громких — это не выбор, а пауза.</p>
+      </div>
+      <div class="pane good">
+        <span class="tag">После · интерактив</span>
+        <div class="focus" style="padding:18px"><span class="eyeb">◎ Today's focus</span><h3 style="font-size:20px">Matching Information</h3><button class="fbtn" style="margin-top:12px;padding:9px 14px;font-size:13px">Fix this weakness →</button></div>
+        <div class="weekc card" style="margin-top:12px" id="weekDemo">
+          <span class="flame">🔥</span><div><div class="wnum">1</div><div class="wsub">day streak</div></div>
+          <span class="wcta" id="resumeBtn" style="display:none;background:var(--surface-inset);color:var(--brand-active);border:1px solid var(--brand-border)">⏵ Resume · Volume 3 Test 3 — Q17</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:center">
+          <button class="btn-sw on" data-resume="off">нет незаконченной попытки</button>
+          <button class="btn-sw" data-resume="on">есть попытка in-progress</button>
+        </div>
+        <p class="note"><b>Правило:</b> без in-progress-попытки week-полоса — чистый статус (кнопки нет вовсе, hero и так зовёт). С попыткой — secondary-кнопка «Resume» с названием теста и номером вопроса: это уже не конкурент, а спасение прогресса.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 6. Week-полоса ══════════════════════════════════════════════════════ -->
+<section class="sec" id="d6">
+  <div class="wrap">
+    <div class="sec-head"><span class="pbadge p3">P3 · плотность данных</span><h2>Столбцы недели: бинарные плашки → высота = работа</h2></div>
+    <p class="why">Семь одинаковых плашек 30px несут один бит («был/не был»), хотя код уже считает <b>число тестов за день</b> (для тултипа). Пусть высота столбца это и показывает — та же площадь, больше правды, паттерн недели виден с одного взгляда.</p>
+    <div class="duo">
+      <div class="pane bad">
+        <span class="tag">До</span>
+        <div class="weekc card">
+          <span class="flame">🔥</span><div><div class="wnum">1</div><div class="wsub">day streak</div></div>
+          <div class="wdots">
+            <span class="wd"><i style="height:30px"></i><small>S</small></span><span class="wd"><i style="height:30px"></i><small>S</small></span><span class="wd"><i style="height:30px"></i><small>M</small></span><span class="wd"><i style="height:30px"></i><small>T</small></span><span class="wd"><i style="height:30px;background:color-mix(in oklab,var(--streak) 16%,#fff)"></i><small>W</small></span><span class="wd"><i style="height:30px;background:color-mix(in oklab,var(--streak) 16%,#fff)"></i><small>T</small></span><span class="wd"><i style="height:30px;background:var(--streak)"></i><small>F</small></span>
+          </div>
+          <span class="league">👑 Global league <b>#2</b></span>
+        </div>
+      </div>
+      <div class="pane good">
+        <span class="tag">После</span>
+        <div class="weekc card">
+          <span class="flame">🔥</span><div><div class="wnum">1</div><div class="wsub">day streak</div></div>
+          <div class="wdots">
+            <span class="wd"><i style="height:6px"></i><small>S</small></span><span class="wd"><i style="height:6px"></i><small>S</small></span><span class="wd"><i style="height:6px"></i><small>M</small></span><span class="wd"><i style="height:6px"></i><small>T</small></span><span class="wd"><i style="height:16px;background:color-mix(in oklab,var(--streak) 45%,#fff)"></i><small>W</small></span><span class="wd"><i style="height:24px;background:color-mix(in oklab,var(--streak) 65%,#fff)"></i><small>T</small></span><span class="wd"><i style="height:30px;background:var(--streak);outline:2px solid color-mix(in oklab,var(--streak) 35%,#fff);outline-offset:2px"></i><small>F</small></span>
+          </div>
+          <span class="league">👑 <b>#2</b> <span style="font-size:11px;color:var(--text-muted)">of 14 this week</span></span>
+        </div>
+        <p class="note"><b>Заодно:</b> лиге — знаменатель («of N this week»): «#2» без контекста льстит, с контекстом — мотивирует. Сегодняшний столбец — с обводкой вместо «горящего» цвета-исключения.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 7. Layout ═══════════════════════════════════════════════════════════ -->
+<section class="sec" id="d7">
+  <div class="wrap">
+    <div class="sec-head"><span class="pbadge p2">P2 · desktop</span><h2>≥1024px: стопка на всю ширину → диагностика + рейл статуса</h2></div>
+    <p class="why">Сейчас все секции full-width: loss-бары растягиваются на 700px ради «0/15», band-шкала — на всю страницу, скролл до Recent — два экрана. На десктопе контент делится на два естественных потока: <b>«что делать»</b> (Focus → Next up → Recent) и <b>«где я»</b> (Band → Week → League). Сетка 2:1 сажает их рядом — обзор всего дашборда без скролла. Мобайл не меняется (там стопка правильна).</p>
+    <div class="wire">
+      <div class="screen">
+        <div class="cap">До · 1280px, один столбец</div>
+        <div class="blk hero">Today's focus (full-width)</div>
+        <div class="blk">Where you lose points (full-width)</div>
+        <div class="blk">Your band (full-width)</div>
+        <div class="blk dim">This week · полоса</div>
+        <div class="blk">Recent tests (full-width)</div>
+        <div class="blk dim" style="text-align:center">↓ ~2.5 экрана скролла</div>
+      </div>
+      <div class="screen">
+        <div class="cap">После · 1280px, 2fr / 1fr</div>
+        <div class="blk hero">Today's focus (на обе колонки)</div>
+        <div class="cols">
+          <div>
+            <div class="blk">Next up (типы №2–5)</div>
+            <div class="blk">Recent tests</div>
+          </div>
+          <div>
+            <div class="blk">Your band → веха</div>
+            <div class="blk dim">Week / streak</div>
+            <div class="blk dim">League #2 of 14</div>
+          </div>
+        </div>
+        <div class="blk dim" style="text-align:center">↓ всё видно за ~1.2 экрана</div>
+      </div>
+    </div>
+    <p class="note" style="max-width:820px;margin:14px auto 0;font-size:12.5px;color:var(--text-muted)"><b>Инвариант проекта соблюдается:</b> DOM-порядок = визуальному (focus → next up → recent → band → week), колонки — чистый CSS grid по брейкпоинту в классах, никаких <code>order</code> (фокус клавиатуры не ломается — правило из редизайна).</p>
+  </div>
+</section>
+
+<!-- ══ 8. Мелочи ═══════════════════════════════════════════════════════════ -->
+<section class="sec" id="d8">
+  <div class="wrap">
+    <div class="sec-head"><span class="pbadge p3">P3 · полировка</span><h2>Мелочи одним проходом</h2></div>
+    <div class="duo">
+      <div class="pane bad">
+        <span class="tag">До</span>
+        <div style="display:flex;flex-direction:column;gap:12px;font-size:13px;color:var(--text-secondary)">
+          <div>• Band-шкала — только визуал: скринридеру достаётся голая подпись, без «2 out of 9, target 8».</div>
+          <div>• Заголовки тестов с префиксом «IELTS Reading Test - …» — в приложении каждый заголовок начинается одинаково, глаз ищет отличия в хвосте.</div>
+          <div>• «15 missed / 5 missed / 4 missed» — три mono-пилюли одинакового веса; счёт и так стоит рядом (0/15).</div>
+          <div>• Тултип дня недели — hover-only: с клавиатуры и на таче недостижим (aria-label есть — ок, но sighted-keyboard пользователь его не видит).</div>
+          <div>• «Welcome back» + «Hi, ultra-test» + дата — три строки на приветствие при плотном экране ниже.</div>
+        </div>
+      </div>
+      <div class="pane good">
+        <span class="tag">После</span>
+        <div style="display:flex;flex-direction:column;gap:12px;font-size:13px;color:var(--text-secondary)">
+          <div>• <code>role="img" aria-label="Band 2 of 9, target 8, next stop 2.5"</code> на контейнер шкалы.</div>
+          <div>• Титул чистим на рендере: <code>title.replace(/^IELTS (Reading|Listening)( Test)?\s*[-—]\s*/,"")</code> — категория и так в мета-строке.</div>
+          <div>• «missed»-пилюля остаётся только у худшего типа (красная смысловая), у остальных счёт справа уже всё говорит.</div>
+          <div>• Столбцам недели — <code>tabindex="0"</code> + показ тултипа на <code>:focus-visible</code> (CSS уже есть, добавить селектор).</div>
+          <div>• Приветствие в одну строку: «Hi, ultra-test · Friday, July 3» — экономим 40px над hero.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 9. Бонус ════════════════════════════════════════════════════════════ -->
+<section class="sec" id="d9">
+  <div class="wrap">
+    <div class="sec-head"><span class="pbadge bonus">Бонус · концепт</span><h2>Today's focus → Today's plan: чек-лист вместо лозунга</h2></div>
+    <p class="why">Самая сильная версия hero — не «один тип», а <b>план дня из 2–3 шагов</b>, сгенерированный из weak-списка и незаконченных попыток: дрилл слабейшего → короткая серия по №2 → review вчерашних ошибок. Чек-лист даёт то, чего лозунг не даёт: <b>ощущение завершаемости дня</b> (0/3 → 3/3) — главный крючок ежедневного возврата. Данные все уже на сервере, LLM не нужен — это правила. <b>Потыкай шаги:</b></p>
+    <div class="duo" style="grid-template-columns:1fr 1.2fr">
+      <div class="pane bad">
+        <span class="tag">До · лозунг</span>
+        <div class="focus">
+          <span class="eyeb">◎ Today's focus</span>
+          <h3>Matching Information</h3>
+          <p>Your weakest type so far — closing it is the single fastest move toward your band.</p>
+          <button class="fbtn">Fix this weakness →</button>
+        </div>
+        <p class="note">Одно действие — хорошо, но день не имеет формы: сделал дрилл, а дальше что? Дашборд молчит до следующего захода.</p>
+      </div>
+      <div class="pane good">
+        <span class="tag">После · план дня (кликается)</span>
+        <div class="focus">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+            <span class="eyeb">◎ Today's plan</span>
+            <span class="fp-val" id="planScore" style="font-size:13px">0 / 3 · ~25 min</span>
+          </div>
+          <h3 style="font-size:22px">Close Matching Information</h3>
+          <div style="margin-top:14px">
+            <div class="plan-step" data-step><span class="cb">✓</span><span class="pt">Drill Matching Information — 8 questions</span><span class="pm">~10 min</span></div>
+            <div class="plan-step" data-step><span class="cb">✓</span><span class="pt">Quick set: Matching Features ×5</span><span class="pm">~8 min</span></div>
+            <div class="plan-step" data-step><span class="cb">✓</span><span class="pt">Review yesterday's «Why we need silence»</span><span class="pm">~7 min</span></div>
+          </div>
+          <div id="planDone" style="display:none;margin-top:14px;background:rgba(255,255,255,.16);border-radius:11px;padding:10px 14px;font-size:13px;font-weight:700">🎉 Day complete — streak safe. Tomorrow: Summary Completion.</div>
+        </div>
+        <p class="note"><b>Генерация без ИИ:</b> шаг 1 = weak[0] дрилл, шаг 2 = weak[1] короткая серия, шаг 3 = review последней попытки с ошибками (или resume незаконченной). Выполнение шага детектится существующими событиями (submitted attempt с q_type-фильтром / открытый result). Это и есть «инструмент исчезает в задаче».</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap footnote">
+  <b>Сводка объёма:</b> §1+§3 — правки FocusCard/LossRow (~40 строк); §2 — milestone-логика в BandReadout (~15 строк); §4 — TestRow + подсчёт weak/дельты из уже загруженных attempts (~30 строк); §5 — условный Resume (нужен запрос in-progress попытки — он дешёвый, по индексу one-in_progress); §6 — высота столбцов из готового count + знаменатель лиги (1 запрос count по лиге); §7 — CSS-grid в DASH_CSS (~15 строк); §8 — построчно; §9 — концепт, обсуждаем отдельно (нужна таблица/логика плана дня и детект выполнения). Всё, кроме §9, — один спокойный заход. Скажи «делай» (все или номера секций) — внесу.
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const toast=document.getElementById('toast');let tmr;
+function showToast(t){toast.textContent=t;toast.classList.add('show');clearTimeout(tmr);tmr=setTimeout(()=>toast.classList.remove('show'),2400);}
+
+/* §2 — band milestone switcher */
+const CAPS={
+  "2":  {fill:22.2, mile:27.8, num:"2",  cap:"Next stop: 2.5 — usually 1–2 fixed types away", numCol:"var(--text-secondary)"},
+  "5.5":{fill:61.1, mile:66.7, num:"5.5",cap:"Next stop: 6.0 — Matching Headings is what's in the way", numCol:"var(--text-primary)"},
+  "7.5":{fill:83.3, mile:88.9, num:"7.5",cap:"Next stop: 8.0 — your target. One clean mock away", numCol:"var(--text-primary)"},
+  "8":  {fill:88.9, mile:88.9, num:"8",  cap:"Target reached 🎯 — keep it warm before test day", numCol:"var(--text-primary)"}
+};
+document.querySelectorAll('[data-band]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('[data-band]').forEach(x=>x.classList.toggle('on',x===b));
+    const c=CAPS[b.dataset.band];
+    document.getElementById('bfill').style.width=c.fill+'%';
+    document.getElementById('bmile').style.left='calc('+c.mile+'% - 2px)';
+    const n=document.getElementById('bnum');n.textContent=c.num;n.style.color=c.numCol;
+    document.getElementById('bcap').textContent=c.cap;
+  });
+});
+
+/* §5 — resume switcher */
+document.querySelectorAll('[data-resume]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('[data-resume]').forEach(x=>x.classList.toggle('on',x===b));
+    document.getElementById('resumeBtn').style.display=b.dataset.resume==='on'?'':'none';
+    showToast(b.dataset.resume==='on'?'Кнопка появилась только потому, что есть что продолжать':'Нет попытки — нет кнопки: hero остаётся единственным зовом');
+  });
+});
+
+/* §9 — plan checklist */
+const steps=[...document.querySelectorAll('[data-step]')];
+function syncPlan(){
+  const done=steps.filter(s=>s.classList.contains('done')).length;
+  document.getElementById('planScore').textContent=done+' / 3 · ~'+Math.max(25-done*9,0)+' min';
+  document.getElementById('planDone').style.display=done===3?'':'none';
+}
+steps.forEach(s=>s.addEventListener('click',()=>{s.classList.toggle('done');syncPlan();}));
+</script>
+</body>
+</html>
