@@ -4,6 +4,8 @@
   --line:rgba(25,21,41,.09);--rule:rgba(25,21,41,.055);
   --v:#8170EA;--v2:#6A52DE;--vb:#A99CFF;--vsoft:#EFEBFE;--vtint:rgba(129,112,234,.06);
   --red:#F0506A;--amber:#F2A93B;--green:#1FBE86;
+  /* тёмные пары для ТЕКСТА на светлом фоне (AA ≥4.5:1); светлые — только заливкам */
+  --red-d:#D63554;--amber-d:#B27512;--green-d:#138A5E;
   --sans:var(--font-jakarta),"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:var(--font-jbmono),"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
   --maxw:1140px;--ease:cubic-bezier(.22,.9,.27,1);
@@ -81,7 +83,8 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
 .targ{display:flex;align-items:center;gap:12px;margin:14px 0 2px}
 .targ .tlab{font-size:12px;color:var(--ink-3);font-weight:600;white-space:nowrap}
 .targ .tbar{flex:1;height:6px;border-radius:99px;background:#EFEDF7;overflow:hidden}
-.targ .tbar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--v),var(--vb));width:0;transition:width 1s var(--ease)}
+/* transform вместо width: заполнение композитится, без layout на каждый кадр */
+.targ .tbar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--v),var(--vb));width:100%;transform:scaleX(0);transform-origin:left;transition:transform 1s var(--ease)}
 .insight{display:flex;align-items:center;gap:11px;margin-top:18px;padding:13px 15px;background:var(--vsoft);border-radius:14px;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;transition:background .2s,transform .2s}
 .insight:hover{background:#E7E1FE;transform:translateY(-1px)}
 .insight .ix{width:30px;height:30px;border-radius:9px;background:var(--v);color:#fff;display:grid;place-content:center;flex:none}
@@ -104,7 +107,9 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
 .bar-n{font-weight:600;font-size:15px;display:flex;align-items:center;gap:9px}
 .bar-s{font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
 .track{height:7px;border-radius:99px;background:#EFEDF7;overflow:hidden}
-.fill{height:100%;border-radius:99px;width:0;transition:width 1.1s var(--ease)}
+.fill{height:100%;border-radius:99px;width:100%;transform:scaleX(0);transform-origin:left;transition:transform 1.1s var(--ease)}
+a.bar{display:block;border-radius:10px;transition:background .18s}
+a.bar:hover{background:var(--vtint)}
 .weakt{font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;background:rgba(240,80,106,.13);color:#D63554;padding:3px 8px;border-radius:6px}
 .card-foot{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:15px;border-top:1px solid var(--rule);font-size:13.5px;color:var(--ink-2);font-weight:500}
 .card-foot .go{color:var(--v2);font-weight:700;display:inline-flex;align-items:center;gap:6px}.card-foot .go .ico{width:14px;height:14px}
@@ -247,9 +252,11 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
    лендинга: --surface-inset → --vtint, --brand → --v. Стрелка — псевдоэлемент,
    чтобы не плодить 14 span'ов в разметке. */
 @media (prefers-reduced-motion: no-preference){
-  .ti{--i:0;cursor:pointer;border-radius:10px;transition:padding .18s cubic-bezier(.22,1,.36,1),background .18s cubic-bezier(.22,1,.36,1),opacity .3s var(--ease)}
+  .ti{--i:0;border-radius:10px;transition:background .18s cubic-bezier(.22,1,.36,1),opacity .3s var(--ease)}
+  .ti .tt{transition:transform .18s cubic-bezier(.22,1,.36,1)}
   .ti::after{content:"→";margin-left:8px;flex:none;font-weight:700;color:var(--v);opacity:0;transform:translateX(-6px);transition:opacity .18s,transform .18s}
-  .ti:hover{padding-left:12px;background:var(--vtint)}
+  .ti:hover{background:var(--vtint)}
+  .ti:hover .tt{transform:translateX(12px)}
   .ti:hover::after{opacity:1;transform:none}
   @keyframes nudge{0%,100%{transform:none}50%{transform:scale(1.06)}}
   .ti.hot:hover .tx{animation:nudge .4s ease}
@@ -258,7 +265,7 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
 
 footer{padding:54px 0 42px;border-top:1px solid var(--line);margin-top:96px}
 .foot{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:30px}
-.foot h4{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:700;margin-bottom:14px}
+.foot .foot-h{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:700;margin-bottom:14px}
 .foot a{display:block;color:var(--ink-2);font-size:15px;margin-bottom:10px;font-weight:500}.foot a:hover{color:var(--v2)}
 .foot .ft{color:var(--ink-2);font-size:15px;margin-top:14px;max-width:30ch;line-height:1.5}
 .copy{margin-top:40px;font-size:13px;color:var(--ink-3)}

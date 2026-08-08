@@ -22,13 +22,27 @@ export default function Home() {
     const targLab = document.getElementById("targLab");
     const tfill = document.getElementById("tfill");
 
+    // текст ↔ бар разводим по парам: светлый тон заливке, тёмный (AA) — цифрам
     function colFor(p: number) {
-      return p < 45 ? "var(--red)" : p < 70 ? "var(--amber)" : "var(--green)";
+      return p < 45 ? { bar: "var(--red)", txt: "var(--red-d)" }
+        : p < 70 ? { bar: "var(--amber)", txt: "var(--amber-d)" }
+        : { bar: "var(--green)", txt: "var(--green-d)" };
     }
+
+    // slug типа для deep-link в дрилл после signup
+    const TYPE_SLUGS: Record<string, string> = {
+      "Sentence Completion": "sentence-completion",
+      "Matching Headings": "matching-headings",
+      "Multiple Choice": "multiple-choice",
+      "True / False / Not Given": "tfng",
+      "Matching Information": "matching-information",
+      "Yes / No / Not Given": "ynng",
+    };
 
     // scramble / decode text effect
     const SC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ/—";
-    function scrambleTo(el: HTMLElement, text: string) {
+    const SC_NUM = "0123456789."; // band-число — только цифры, без «O.T»
+    function scrambleTo(el: HTMLElement, text: string, alphabet: string = SC) {
       if (reduce) { el.textContent = text; return; }
       const old = el.textContent || "";
       const len = Math.max(old.length, text.length);
@@ -48,7 +62,7 @@ export default function Home() {
           if (frame >= x.e) { done++; out += x.t; }
           else if (frame >= x.s) {
             if (x.t === " ") { out += " "; }
-            else { if (!x.c || Math.random() < 0.3) x.c = SC[Math.floor(Math.random() * SC.length)]; out += '<span class="dim">' + x.c + "</span>"; }
+            else { if (!x.c || Math.random() < 0.3) x.c = alphabet[Math.floor(Math.random() * alphabet.length)]; out += '<span class="dim">' + x.c + "</span>"; }
           } else { out += x.f; }
         }
         el.innerHTML = out;
@@ -85,15 +99,16 @@ export default function Home() {
           const p = Math.round(r[1] / r[2] * 100);
           const c = colFor(p);
           const w = i === 0 ? ' <span class="weakt">weakest</span>' : "";
-          return '<div class="bar"><div class="bar-h"><span class="bar-n">' + r[0] + w + '</span><span class="bar-s" style="color:' + c + '">' + r[1] + "/" + r[2] + '</span></div><div class="track"><div class="fill" style="background:' + c + '" data-w="' + p + '%"></div></div></div>';
+          const href = "/auth?intent=drill&type=" + (TYPE_SLUGS[r[0]] ?? "weakest");
+          return '<a class="bar" href="' + href + '"><div class="bar-h"><span class="bar-n">' + r[0] + w + '</span><span class="bar-s" style="color:' + c.txt + '">' + r[1] + "/" + r[2] + '</span></div><div class="track"><div class="fill" style="background:' + c.bar + '" data-w="' + (p / 100) + '"></div></div></a>';
         }).join("");
       }
       setCycle(rows);
       const gap = Math.max(0, Math.round((7 - to) * 10) / 10);
       if (targLab) targLab.textContent = gap <= 0 ? "7.0 target reached" : gap.toFixed(1) + " bands to your 7.0 target";
-      if (tfill) (tfill as HTMLElement).style.width = Math.min(to / 7 * 100, 100) + "%";
+      if (tfill) (tfill as HTMLElement).style.transform = "scaleX(" + Math.min(to / 7, 1) + ")";
       if (isSwitch && !reduce && bandNum && cardEl) {
-        scrambleTo(bandNum, d.band);
+        scrambleTo(bandNum, d.band, SC_NUM);
         bandNum.classList.remove("pop"); void bandNum.offsetWidth; bandNum.classList.add("pop");
         cardEl.classList.remove("flash"); void cardEl.offsetWidth; cardEl.classList.add("flash");
         setTimeout(() => { cardEl.classList.remove("flash"); }, 540);
@@ -104,7 +119,7 @@ export default function Home() {
       if (!rowsEl) return;
       const bars = rowsEl.querySelectorAll<HTMLElement>(".bar");
       const fills = rowsEl.querySelectorAll<HTMLElement>(".fill");
-      if (reduce || !animate) { fills.forEach(f => { f.style.width = f.dataset.w ?? "0%"; }); return; }
+      if (reduce || !animate) { fills.forEach(f => { f.style.transform = "scaleX(" + (f.dataset.w ?? "0") + ")"; }); return; }
       bars.forEach((b, i) => {
         b.style.opacity = "0"; b.style.transform = "translateY(12px)";
         setTimeout(() => {
@@ -112,10 +127,11 @@ export default function Home() {
           b.style.opacity = "1"; b.style.transform = "none";
         }, 40 + i * 85);
       });
-      requestAnimationFrame(() => { fills.forEach((f, i) => { setTimeout(() => { f.style.width = f.dataset.w ?? "0%"; }, 150 + i * 100); }); });
+      requestAnimationFrame(() => { fills.forEach((f, i) => { setTimeout(() => { f.style.transform = "scaleX(" + (f.dataset.w ?? "0") + ")"; }, 150 + i * 100); }); });
     }
 
-    render("6.5", false);
+    // Дефолт band 6.5 отрендерен сервером прямо в JSX (#rows) — первый пейнт
+    // с контентом без JS; render() нужен только для переключений и entrance.
 
     // Card intersection — animate bars once when visible
     let cardSeen = false;
@@ -132,15 +148,16 @@ export default function Home() {
         });
       }, { threshold: 0.4 });
       cardObserver.observe(cardNode);
-    } else {
-      render("6.5", false);
     }
+    // else: reduced-motion / нет IO — SSR-состояние 6.5 уже финальное, JS не нужен
 
     // Band-selector pills
     document.querySelectorAll<HTMLButtonElement>(".bp").forEach(p => {
       p.addEventListener("click", () => {
-        document.querySelectorAll<HTMLButtonElement>(".bp").forEach(x => x.classList.remove("on"));
-        p.classList.add("on");
+        document.querySelectorAll<HTMLButtonElement>(".bp").forEach(x => {
+          x.classList.toggle("on", x === p);
+          x.setAttribute("aria-pressed", x === p ? "true" : "false");
+        });
         render(p.dataset.b ?? "6.5", true, true);
       });
     });
@@ -331,7 +348,10 @@ export default function Home() {
       const items = document.querySelectorAll<HTMLElement>("#typeList .ti");
       btns.forEach(b => {
         b.addEventListener("click", () => {
-          btns.forEach(x => x.classList.remove("on")); b.classList.add("on");
+          btns.forEach(x => {
+            x.classList.toggle("on", x === b);
+            x.setAttribute("aria-pressed", x === b ? "true" : "false");
+          });
           const f = b.dataset.f ?? "all";
           let vis = 0;
           items.forEach(t => {
@@ -407,7 +427,7 @@ export default function Home() {
             </span>
             <h1>
               <span className="hl" style={{ animationDelay: ".08s" }}>Stop</span>{" "}
-              <span className="hl" style={{ animationDelay: ".16s" }}>guessing</span>
+              <span className="hl" style={{ animationDelay: ".16s" }}>guessing</span>{" "}
               <br />
               <span className="hl" style={{ animationDelay: ".24s" }}>your</span>{" "}
               <span className="hl" style={{ animationDelay: ".3s" }}><em>band.</em></span>
@@ -418,10 +438,10 @@ export default function Home() {
             <div className="bandsel">
               <span className="bl">Stuck at</span>
               <div className="bpills" id="bpills">
-                <button type="button" className="bp" data-b="5.5">5.5</button>
-                <button type="button" className="bp" data-b="6.0">6.0</button>
-                <button type="button" className="bp on" data-b="6.5">6.5</button>
-                <button type="button" className="bp" data-b="7.0">7.0</button>
+                <button type="button" className="bp" data-b="5.5" aria-pressed="false">5.5</button>
+                <button type="button" className="bp" data-b="6.0" aria-pressed="false">6.0</button>
+                <button type="button" className="bp on" data-b="6.5" aria-pressed="true">6.5</button>
+                <button type="button" className="bp" data-b="7.0" aria-pressed="false">7.0</button>
               </div>
               <span className="bres">{"It's usually "}<b id="bres">Matching Headings</b>{" quietly costing you the band."}</span>
             </div>
@@ -446,10 +466,29 @@ export default function Home() {
               </div>
               <div className="targ">
                 <span className="tlab" id="targLab">0.5 bands to your 7.0 target</span>
-                <div className="tbar"><i id="tfill"></i></div>
+                <div className="tbar"><i id="tfill" style={{ transform: "scaleX(0.9286)" }}></i></div>
               </div>
               <div className="wlp">Where you lose points</div>
-              <div id="rows"></div>
+              {/* SSR-дефолт band 6.5 — first paint с контентом без JS; render() перезаписывает
+                  этот же markup при переключении пилюль (держать в lockstep с render()) */}
+              <div id="rows">
+                <a className="bar" href="/auth?intent=drill&type=matching-headings">
+                  <div className="bar-h"><span className="bar-n">Matching Headings <span className="weakt">weakest</span></span><span className="bar-s" style={{ color: "var(--red-d)" }}>2/6</span></div>
+                  <div className="track"><div className="fill" style={{ background: "var(--red)", transform: "scaleX(0.33)" }} data-w="0.33"></div></div>
+                </a>
+                <a className="bar" href="/auth?intent=drill&type=tfng">
+                  <div className="bar-h"><span className="bar-n">True / False / Not Given</span><span className="bar-s" style={{ color: "var(--amber-d)" }}>5/9</span></div>
+                  <div className="track"><div className="fill" style={{ background: "var(--amber)", transform: "scaleX(0.56)" }} data-w="0.56"></div></div>
+                </a>
+                <a className="bar" href="/auth?intent=drill&type=multiple-choice">
+                  <div className="bar-h"><span className="bar-n">Multiple Choice</span><span className="bar-s" style={{ color: "var(--amber-d)" }}>6/9</span></div>
+                  <div className="track"><div className="fill" style={{ background: "var(--amber)", transform: "scaleX(0.67)" }} data-w="0.67"></div></div>
+                </a>
+                <a className="bar" href="/auth?intent=drill&type=matching-information">
+                  <div className="bar-h"><span className="bar-n">Matching Information</span><span className="bar-s" style={{ color: "var(--green-d)" }}>6/8</span></div>
+                  <div className="track"><div className="fill" style={{ background: "var(--green)", transform: "scaleX(0.75)" }} data-w="0.75"></div></div>
+                </a>
+              </div>
               <div className="card-foot">
                 <span>Tap any type to drill it</span>
                 <span className="go">Practise weakest <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -507,10 +546,10 @@ export default function Home() {
             <p>In red: where students quietly lose the half-band that costs them everything.</p>
           </div>
           <div className="tfilter rv">
-            <button type="button" className="tf on" data-f="all">All <span>14</span></button>
-            <button type="button" className="tf" data-f="reading">Reading</button>
-            <button type="button" className="tf" data-f="listening">Listening</button>
-            <button type="button" className="tf" data-f="hot">Hardest <span>4</span></button>
+            <button type="button" className="tf on" data-f="all" aria-pressed="true">All <span>14</span></button>
+            <button type="button" className="tf" data-f="reading" aria-pressed="false">Reading</button>
+            <button type="button" className="tf" data-f="listening" aria-pressed="false">Listening</button>
+            <button type="button" className="tf" data-f="hot" aria-pressed="false">Hardest <span>4</span></button>
           </div>
           <div className="types rv" id="typeList">
             <div className="ti hot" data-cat="reading" data-hot="1"><span className="tt">Matching Headings</span><span className="tx">band-killer</span></div>
@@ -718,19 +757,19 @@ export default function Home() {
             <p className="ft">The IELTS trainer that shows you where you lose points, then fixes them.</p>
           </div>
           <div>
-            <h4>Product</h4>
+            <h3 className="foot-h">Product</h3>
             <a href="/app/reading">Reading</a>
             <a href="/app/listening">Listening</a>
             <a href="/pricing">Pricing</a>
           </div>
           <div>
-            <h4>Learn</h4>
+            <h3 className="foot-h">Learn</h3>
             <a href="#how">How it works</a>
             <a href="/app/leaderboard">Leaderboard</a>
             <a href="/app/badges">Badges</a>
           </div>
           <div>
-            <h4>Company</h4>
+            <h3 className="foot-h">Company</h3>
             <a href="/about">About</a>
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>
@@ -739,9 +778,9 @@ export default function Home() {
         <div className="wrap copy">© 2026 bando · Stop guessing your band.</div>
       </footer>
 
-      <a href="/auth" className="mcta" id="mcta" aria-hidden="true" tabIndex={-1}>
+      <a href="/auth" className="mcta" id="mcta">
         Take a free test
-        <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </a>
     </>
   );
