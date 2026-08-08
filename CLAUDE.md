@@ -6,8 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > [SCHEMA_NOTES.md](./SCHEMA_NOTES.md) — разрешённые неоднозначности схемы. [BACKLOG.md](./BACKLOG.md) —
 > продуктовый бэклог (Волна 1 закрыта, Волна 2 ждёт). [AUDIT.md](./AUDIT.md) — реестр аудита.
 > [REDESIGN.md](./REDESIGN.md) / [WORKLOG.md](./WORKLOG.md) — закрытые треки (редизайн / perf+sec).
-> [CLAUDE_AUDIT.md](./CLAUDE_AUDIT.md) — актуальный широкий аудит 2026-06-25: открытые находки и deferred blockers для Claude Code.
+> [CLAUDE_AUDIT.md](./CLAUDE_AUDIT.md) — широкий аудит 2026-06-25 (закрыт).
+> **[AUDIT_2026-07-01.md](./AUDIT_2026-07-01.md) — АКТИВНЫЙ трек: объединённый аудит (Fan-out + Codex), 27 находок + R1;
+> ремедиация идёт по §7 (приоритет), статус каждой — в §10 (журнал закрытия).**
 > Новую работу начинать по явной просьбе пользователя.
+>
+> **Старт сессии (аудит-трек).** Если пользователь НЕ поставил другую задачу — первым делом сориентируйся по
+> `AUDIT_2026-07-01.md` (§2 реестр, §7 приоритет, §10 журнал) и продолжи следующую ОТКРЫТУЮ находку по §7 (после §7 —
+> проходы §9). Явная другая просьба приоритетнее — не перехватывай несвязанные запросы. **Протокол закрытия (чтобы не
+> переделывать закрытое):** (1) перед фиксом подтверди, что находка ещё воспроизводится в коде (`file:line`); устарела →
+> помечай `N-A`/closed-as-stale с пруфом, код не трогай; (2) после закрытия допиши в §2 `→ ЗАКРЫТО <дата> commit <hash>`
+> и обнови строку в §10 (⬜→✅/🚫/N-A); (3) НИКОГДА не бери находку, помеченную в §10 как ✅ или N-A; (4) проверки перед
+> «закрыто»: `tsc`; payment/RLS/grading/migrations → `npm run verify`; логика → `npm test`; один гранулярный коммит на находку.
 
 ## Source of truth
 
@@ -94,9 +104,10 @@ lacks `runner_html`.
 
 ## Migrations & schema
 
-- `src/db/schema.ts` (Drizzle) is the **typed source of truth** (18 tables as of migration
-  `0022_signup_throttle`; the audit-closure batch added `attempt_review_snapshot` (0021) and
-  `signup_throttle` (0022), plus enum/column changes in 0018–0020).
+- `src/db/schema.ts` (Drizzle) is the **typed source of truth** (**28 DB tables** as of migration
+  `0034_error_log`; `verify.ts` `APP_TABLE_COUNT = 28` asserts the migrated count. schema.ts types
+  **27** — the legacy `topic` table lingers in the DB but its export was dropped as dead code, #26).
+  Per-table provenance + RLS posture live in **SCHEMA_NOTES.md** (updated in lockstep).
   The executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by a
   custom up/down migrator (`scripts/migrate.ts`) with a `_migrations` bookkeeping table. **Keep
   schema.ts and the SQL in lockstep when the model changes.**
@@ -132,8 +143,9 @@ fail-fasts if a required server var is missing.
 ## Import pipeline (`src/lib/import/`)
 
 Deterministic, **no LLM, no eval** (BRIEF §4.2). `parse-test.ts` uses cheerio for the markup and
-`node:vm` (isolated context) to read the embedded JS data objects (`correctAnswers`,
-`acceptableAnswers`, `mcqGroups`, `questionTypes`, `explanations`, `evidence`). `question-types.ts`
+`node:vm` (isolated global-free context, `timeout` + a `MAX_VM_INPUT` size-gate against OOM, #20) to
+read the embedded JS data objects (`correctAnswers`, `acceptableAnswers`, `mcqGroups`,
+`questionTypes`, `explanations`, `evidence`). `question-types.ts`
 maps inconsistent source labels → the fixed canon enum. The answer key is routed to one of three modes
 by which data object holds it: `mcq_set` / `text_accept` / `exact`. `persist.ts` writes the
 `ParsedTest` into `content_item`/`passage`/`question`/`answer_key` in one transaction, idempotent per
@@ -175,9 +187,11 @@ early).
   tiers+payment (`0006`). Tier gating `src/lib/tiers.ts`; payment webhook is the sole grant path
   (entitlement from the trusted `pending` row, not the body). Accepted gaps → SCHEMA_NOTES 2C/2D
   (mirror AUDIT.md "осознанно отложено").
-- **✅ Launch hardening** — PostHog funnel + Sentry (key-optional, fail-open), submit velocity throttle
-  (`src/lib/anti-cheat.ts`), in-app notifications, re-import data-loss guard, one-in_progress index
-  (`0007`), Telegram content-import bot (`app/api/telegram/`, owner-path, whitelist).
+- **✅ Launch hardening** — PostHog funnel + error-monitoring (self-hosted `error_log` sink via
+  `logError()` → `/admin/errors`, `0034`; Sentry key-optional/fail-open alongside), submit velocity
+  throttle (`src/lib/anti-cheat.ts`), in-app notifications, re-import data-loss guard, one-in_progress
+  index (`0007`), Telegram content-import bot (`app/api/telegram/`, owner-path, whitelist, prod
+  secret-gated #4).
 - **✅ Волна 1** — paywall, onboarding, band states, EN + `/pricing`, anti-bot seam, Telegram share.
   Detail → BACKLOG.md.
 - **✅ Frontend redesign «bando»** — all `/app` screens + landing + auth re-skinned (inline styles +
@@ -186,8 +200,11 @@ early).
   in CSS classes, never inline (inline beats media queries).
 
 ### ⛔ Blocked / pending (needs external input)
-- **Anti-bot on signup** — Turnstile seam done (`src/lib/anti-bot/`, fail-open), needs Cloudflare keys.
-  Email-verify + signup velocity still TODO.
+- **Anti-bot on signup** — live with **zero deps**: signup honeypot (`anti-cheat.ts`
+  `isHoneypotTripped`, hidden decoy field) + per-IP velocity cap (`0022`). Turnstile seam
+  (`src/lib/anti-bot/`, fail-open) is now **optional**, needs Cloudflare keys. Email-verify still TODO.
+- **Payments** — webhook is fail-closed in prod; `verifyWebhook` is a generic HMAC placeholder — real
+  Payme/Click/Uzum signatures + merchant keys are the launch-blocker (#9/D1).
 - **Weekly digest / email** — `notification` table + in-app centre exist; digest jobs + email provider TODO.
 - **i18n** — deferred (EN at launch per §10).
 
@@ -197,6 +214,10 @@ early).
 - **Аудит** — Codex-аудит + from-scratch sweep (7 осей, adversarial-verify); все находки закрыты,
   [AUDIT.md](./AUDIT.md) реестр пуст. Ядро (answer_key / RLS / tier / anti-cheat / injection) подтверждено
   чистым в коде.
+- **Аудит 2026-07-01** ([AUDIT_2026-07-01.md](./AUDIT_2026-07-01.md), Fan-out + Codex) — **код-трек закрыт**:
+  26/27 находок ✅ (миграции `0032`/`0033`/`0034` на проде); открыт только `#9`/`D1` (payment-подписи,
+  merchant-ключи). Осталось не-кодовое: a11y живой прогон (§9.1, браузер), finder-sweep (§9.2). Журнал
+  закрытий — §2/§10 там же.
 - **Perf/lag `/app`** — срезаны серийные server-render round-trips: AppShell header-hoist, leaderboard
   (+ viewer-row), exam/reading START (server-only access-модуль `src/lib/exam/access.ts`), Result
   (correlated subselects + `answer_key` EXISTS-gate), getPublishedTests parallelize. Каждое изменение
