@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // #12: importRunner must be atomic — a failure in the fallible pre-work (audio fetch,
 // anti-leak) must leave NO half-draft. We mock every dependency so the test asserts
 // only the control flow: persistTest is reached only after all validation passes.
-const { parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist } = vi.hoisted(() => ({
+const { parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind } = vi.hoisted(() => ({
   parseRunner: vi.fn(),
   fetchAudio: vi.fn(),
   uploadAudio: vi.fn(),
@@ -11,6 +11,7 @@ const { parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResid
   assertNoLeak: vi.fn(),
   brandResidue: vi.fn(),
   persist: vi.fn(),
+  dupFind: vi.fn(),
 }));
 
 vi.mock("./parse-runner", () => ({ parseRunner }));
@@ -18,7 +19,16 @@ vi.mock("./safe-audio-fetch", () => ({ fetchExternalAudio: fetchAudio }));
 vi.mock("@/lib/telegram/storage", () => ({ uploadAudio }));
 vi.mock("./sanitize-runner", () => ({ sanitizeRunner: sanitize, assertNoKeyLeak: assertNoLeak }));
 vi.mock("./skin-runner", () => ({ runnerBrandResidue: brandResidue }));
-vi.mock("../persist", () => ({ persistTest: persist }));
+vi.mock("../persist", () => ({
+  persistTest: persist,
+  findDuplicateTest: dupFind,
+  DuplicateTestError: class extends Error {
+    constructor(ex: { title: string }) {
+      super(`Duplicate test content: matches "${ex.title}"`);
+      this.name = "DuplicateTestError";
+    }
+  },
+}));
 
 import { importRunner } from "./import-runner";
 
@@ -31,10 +41,11 @@ const listeningParsed = () => ({
 });
 
 beforeEach(() => {
-  [parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist].forEach((m) => m.mockReset());
+  [parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind].forEach((m) => m.mockReset());
   sanitize.mockReturnValue("<runner/>");
   brandResidue.mockReturnValue([]);
   persist.mockResolvedValue("unused-return");
+  dupFind.mockResolvedValue(null); // default: дубля нет
 });
 
 describe("importRunner atomicity (#12)", () => {
@@ -53,6 +64,16 @@ describe("importRunner atomicity (#12)", () => {
     expect(parsedArg.passages[0]!.audioPath).toBeNull();
     expect(res.hasAudio).toBe(false);
     expect(res.warnings).toBe(1);
+  });
+
+  // Дубль-гвард (QA 2026-07-02): тот же тест под другим именем файла ложился второй
+  // строкой. Отказ ДО аудио-фетча — не тратим минуты скачивания на дубль.
+  it("отказывает на дубле содержимого ДО audio-fetch и persist", async () => {
+    parseRunner.mockReturnValue({ parsed: listeningParsed(), externalAudioSrc: "http://cdn/x.mp3" });
+    dupFind.mockResolvedValue({ id: "old1", title: "Old Copy", status: "draft", sourceFilePath: "old.html" });
+    await expect(importRunner("<html/>", { sourceFilePath: "new-name.html" })).rejects.toThrow(/duplicate/i);
+    expect(fetchAudio).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
   });
 
   // Пустой парс = нераспознанный источник; молчаливый 0-вопросный драфт хуже отказа.

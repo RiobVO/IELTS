@@ -16,7 +16,7 @@ import { webhookSecretValid } from "@/lib/telegram/auth";
 import { uploadAudio } from "@/lib/telegram/storage";
 import { importRunner } from "@/lib/import/runner/import-runner";
 import { setRunnerAudioSrc } from "@/lib/import/runner/sanitize-runner";
-import { RegradeRequiredError } from "@/lib/import/persist";
+import { RegradeRequiredError, DuplicateTestError } from "@/lib/import/persist";
 import { publishReviewedContentItem } from "@/lib/content/publish";
 
 /**
@@ -191,6 +191,15 @@ async function handleHtmlUpload(
         chatId,
         `У теста «${name}» уже есть попытки (${e.attemptCount}) — повторный импорт ` +
           `удалил бы их. Правка пройденного теста — через Re-grade.`,
+      );
+    } else if (e instanceof DuplicateTestError) {
+      const ex = e.existing;
+      await sendMessage(
+        chatId,
+        `«${name}» — дубль уже загруженного теста «${ex.title}» (${ex.status}` +
+          (ex.sourceFilePath ? `, файл ${ex.sourceFilePath}` : "") +
+          `). Переимпорт того же теста — пришли файл под ТЕМ ЖЕ именем; ` +
+          `если это новый тест — проверь содержимое файла.`,
       );
     } else {
       console.error("telegram html import failed", e);
