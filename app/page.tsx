@@ -181,6 +181,23 @@ export default function Home() {
     window.addEventListener("scroll", onScroll, { passive: true });
     paintProgress();
 
+    // Mobile burger drawer (<920px; CSS прячет кнопку на десктопе)
+    const nburger = document.getElementById("nburger");
+    const ndrawer = document.getElementById("ndrawer");
+    function toggleDrawer() {
+      if (!nburger || !ndrawer) return;
+      const open = !ndrawer.classList.contains("open");
+      ndrawer.classList.toggle("open", open);
+      nburger.setAttribute("aria-expanded", String(open));
+    }
+    function closeDrawer() {
+      if (!nburger || !ndrawer) return;
+      ndrawer.classList.remove("open");
+      nburger.setAttribute("aria-expanded", "false");
+    }
+    nburger?.addEventListener("click", toggleDrawer);
+    ndrawer?.querySelectorAll("a").forEach(a => a.addEventListener("click", closeDrawer));
+
     // Sticky mobile CTA — reveal once the hero is scrolled past (CSS gates it to <920px)
     const mcta = document.getElementById("mcta");
     const heroEl = document.querySelector("header.hero");
@@ -378,6 +395,8 @@ export default function Home() {
     // ── Cleanup ─────────────────────────────────────────────────────────────
     return () => {
       window.removeEventListener("scroll", onScroll);
+      nburger?.removeEventListener("click", toggleDrawer);
+      ndrawer?.querySelectorAll("a").forEach(a => a.removeEventListener("click", closeDrawer));
       if (heroAnimId !== undefined) cancelAnimationFrame(heroAnimId);
       if (tiltRaf !== undefined) cancelAnimationFrame(tiltRaf);
       cardObserver?.disconnect();
@@ -411,9 +430,19 @@ export default function Home() {
             <a href="/pricing">Pricing</a>
           </div>
           <div className="nav-r">
-            <a href="/auth" style={{ color: "var(--ink-2)" }}>Log in</a>
-            <a href="/auth" className="btn btn-v">Start free</a>
+            <a href="/auth" className="nav-login" style={{ color: "var(--ink-2)" }}>Log in</a>
+            <a href="/auth" className="btn btn-v">Take a free test</a>
+            <button type="button" className="nburger" id="nburger" aria-label="Menu" aria-expanded="false" aria-controls="ndrawer">
+              <i></i><i></i><i></i>
+            </button>
           </div>
+        </div>
+        <div className="ndrawer" id="ndrawer">
+          <a href="/app/reading">Reading</a>
+          <a href="/app/listening">Listening</a>
+          <a href="#how">How it works</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/auth" style={{ color: "var(--v2)" }}>Log in</a>
         </div>
       </nav>
 
@@ -491,7 +520,7 @@ export default function Home() {
               </div>
               <div className="card-foot">
                 <span>Tap any type to drill it</span>
-                <span className="go">Practise weakest <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+                <a className="go" href="/auth?intent=drill&type=weakest">Practise weakest <svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
               </div>
             </div>
           </div>
@@ -551,21 +580,22 @@ export default function Home() {
             <button type="button" className="tf" data-f="listening" aria-pressed="false">Listening</button>
             <button type="button" className="tf" data-f="hot" aria-pressed="false">Hardest <span>4</span></button>
           </div>
+          {/* строки — настоящие ссылки: «Tap any type to drill it» обязан работать */}
           <div className="types rv" id="typeList">
-            <div className="ti hot" data-cat="reading" data-hot="1"><span className="tt">Matching Headings</span><span className="tx">band-killer</span></div>
-            <div className="ti" data-cat="reading"><span className="tt">True / False / Not Given</span><span className="tx">Reading</span></div>
-            <div className="ti hot" data-cat="reading" data-hot="1"><span className="tt">Yes / No / Not Given</span><span className="tx">tricky</span></div>
-            <div className="ti" data-cat="reading"><span className="tt">Multiple Choice</span><span className="tx">Reading</span></div>
-            <div className="ti" data-cat="reading"><span className="tt">Matching Information</span><span className="tx">Reading</span></div>
-            <div className="ti" data-cat="reading"><span className="tt">Matching Features</span><span className="tx">Reading</span></div>
-            <div className="ti hot" data-cat="reading" data-hot="1"><span className="tt">Matching Sentence Endings</span><span className="tx">tricky</span></div>
-            <div className="ti" data-cat="both"><span className="tt">Sentence Completion</span><span className="tx">both</span></div>
-            <div className="ti" data-cat="both"><span className="tt">Summary / Note Completion</span><span className="tx">both</span></div>
-            <div className="ti" data-cat="both"><span className="tt">Table / Flow-chart Completion</span><span className="tx">both</span></div>
-            <div className="ti" data-cat="reading"><span className="tt">Diagram Label Completion</span><span className="tx">Reading</span></div>
-            <div className="ti hot" data-cat="listening" data-hot="1"><span className="tt">Plan / Map / Diagram Labelling</span><span className="tx">band-killer</span></div>
-            <div className="ti" data-cat="listening"><span className="tt">Form / Note Completion</span><span className="tx">Listening</span></div>
-            <div className="ti" data-cat="both"><span className="tt">Short Answer</span><span className="tx">both</span></div>
+            <a className="ti hot" data-cat="reading" data-hot="1" href="/auth?intent=drill&type=matching-headings"><span className="tt">Matching Headings</span><span className="tx">band-killer</span></a>
+            <a className="ti" data-cat="reading" href="/auth?intent=drill&type=tfng"><span className="tt">True / False / Not Given</span><span className="tx">Reading</span></a>
+            <a className="ti hot" data-cat="reading" data-hot="1" href="/auth?intent=drill&type=ynng"><span className="tt">Yes / No / Not Given</span><span className="tx">tricky</span></a>
+            <a className="ti" data-cat="reading" href="/auth?intent=drill&type=multiple-choice"><span className="tt">Multiple Choice</span><span className="tx">Reading</span></a>
+            <a className="ti" data-cat="reading" href="/auth?intent=drill&type=matching-information"><span className="tt">Matching Information</span><span className="tx">Reading</span></a>
+            <a className="ti" data-cat="reading" href="/auth?intent=drill&type=matching-features"><span className="tt">Matching Features</span><span className="tx">Reading</span></a>
+            <a className="ti hot" data-cat="reading" data-hot="1" href="/auth?intent=drill&type=matching-sentence-endings"><span className="tt">Matching Sentence Endings</span><span className="tx">tricky</span></a>
+            <a className="ti" data-cat="both" href="/auth?intent=drill&type=sentence-completion"><span className="tt">Sentence Completion</span><span className="tx">both</span></a>
+            <a className="ti" data-cat="both" href="/auth?intent=drill&type=summary-note-completion"><span className="tt">Summary / Note Completion</span><span className="tx">both</span></a>
+            <a className="ti" data-cat="both" href="/auth?intent=drill&type=table-flowchart-completion"><span className="tt">Table / Flow-chart Completion</span><span className="tx">both</span></a>
+            <a className="ti" data-cat="reading" href="/auth?intent=drill&type=diagram-label-completion"><span className="tt">Diagram Label Completion</span><span className="tx">Reading</span></a>
+            <a className="ti hot" data-cat="listening" data-hot="1" href="/auth?intent=drill&type=map-labelling"><span className="tt">Plan / Map / Diagram Labelling</span><span className="tx">band-killer</span></a>
+            <a className="ti" data-cat="listening" href="/auth?intent=drill&type=form-note-completion"><span className="tt">Form / Note Completion</span><span className="tx">Listening</span></a>
+            <a className="ti" data-cat="both" href="/auth?intent=drill&type=short-answer"><span className="tt">Short Answer</span><span className="tx">both</span></a>
           </div>
         </div>
       </section>
@@ -723,8 +753,21 @@ export default function Home() {
               <p>Practice tests and your per-type breakdown cost nothing, no card. Upgrade when you want projected full-mock bands and AI Writing &amp; Speaking feedback.</p>
             </div>
             <div className="pt-cta">
-              <a href="/auth" className="btn btn-v btn-lg">Start free</a>
+              <a href="/auth" className="btn btn-v btn-lg">Take a free test</a>
               <a href="/pricing" className="btn btn-g btn-lg">See pricing</a>
+            </div>
+            {/* честные цифры вместо вырезанных отзывов; обновлять при росте контента */}
+            <div className="proofline">
+              <span className="pi"><b>6</b> full exam papers</span>
+              <span className="pi"><b>240+</b> real questions</span>
+              <span className="pi"><b>Server-graded</b> — the band we stand behind</span>
+            </div>
+            <div className="payrow">
+              <span className="lab">Local cards:</span>
+              <span className="paychip">Uzcard</span>
+              <span className="paychip">Humo</span>
+              <span className="paychip">Visa</span>
+              <span className="lab">· UZS pricing</span>
             </div>
           </div>
         </div>
