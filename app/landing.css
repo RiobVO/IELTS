@@ -4,8 +4,8 @@
   --line:rgba(25,21,41,.09);--rule:rgba(25,21,41,.055);
   --v:#8170EA;--v2:#6A52DE;--vb:#A99CFF;--vsoft:#EFEBFE;--vtint:rgba(129,112,234,.06);
   --red:#F0506A;--amber:#F2A93B;--green:#1FBE86;
-  /* тёмные пары для ТЕКСТА на светлом фоне (AA ≥4.5:1); светлые — только заливкам */
-  --red-d:#D63554;--amber-d:#B27512;--green-d:#138A5E;
+  /* тёмные пары: текст на светлом/тинтах ≥4.5:1, статус-заливки на треке ≥3:1 (пересчитано) */
+  --red-d:#C0284A;--amber-d:#8A5A00;--green-d:#0F7A50;
   --sans:var(--font-jakarta),"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:var(--font-jbmono),"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
   --maxw:1140px;--ease:cubic-bezier(.22,.9,.27,1);
@@ -101,7 +101,7 @@ h1{font-size:clamp(2.9rem,6vw,4.6rem);margin:24px 0 0}
 .fill{height:100%;border-radius:99px;width:100%;transform:scaleX(0);transform-origin:left;transition:transform 1.1s var(--ease)}
 a.bar{display:block;border-radius:10px;transition:background .18s}
 a.bar:hover{background:var(--vtint)}
-.weakt{font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;background:rgba(240,80,106,.13);color:#D63554;padding:3px 8px;border-radius:6px}
+.weakt{font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;background:rgba(240,80,106,.13);color:var(--red-d);padding:3px 8px;border-radius:6px}
 .card-foot{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:15px;border-top:1px solid var(--rule);font-size:13.5px;color:var(--ink-2);font-weight:500}
 .card-foot .go{color:var(--v2);font-weight:700;display:inline-flex;align-items:center;gap:6px}.card-foot .go .ico{width:14px;height:14px}
 
@@ -176,10 +176,11 @@ a.bar:hover{background:var(--vtint)}
 .sheet-timer{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--v2);background:var(--vsoft);border-radius:8px;padding:4px 10px;font-variant-numeric:tabular-nums}
 .qgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:8px}
 .q{aspect-ratio:1;border-radius:7px;display:grid;place-content:center;transition:transform .4s var(--ease),opacity .35s,background .3s}
-.q span{font-family:var(--mono);font-size:9px;font-weight:600;color:#fff}
+.q span{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--ink)}
 .q.pre{transform:scale(.6);opacity:0}
 .q.dim{opacity:.3}
 .q:hover{transform:scale(1.14)}
+.q:focus-visible{outline-color:var(--ink)}
 .sheet-legend{display:flex;gap:8px 16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)}
 .lg{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--ink-2);transition:color .2s}
 .lg:hover{color:var(--v2)}
@@ -199,13 +200,13 @@ a.bar:hover{background:var(--vtint)}
 .tf{font-family:var(--sans);font-weight:700;font-size:14px;border:1px solid var(--line);background:var(--card);color:var(--ink-2);padding:9px 16px;border-radius:99px;cursor:pointer;box-shadow:var(--sh-sm);transition:color .2s,background .2s,border-color .2s}
 .tf:hover{border-color:var(--ink-3);color:var(--ink)}
 .tf.on{background:var(--v2);color:#fff;border-color:var(--v2)}
-.tf span{opacity:.6;font-weight:600;margin-left:4px}
+.tf span{font-weight:600;margin-left:4px}
 .ti{transition:opacity .3s var(--ease)}
 .ti{display:flex;align-items:center;gap:14px;padding:15px 0;border-bottom:1px solid var(--rule);break-inside:avoid}
 .ti .tn{font-weight:700;font-size:13px;color:var(--ink-3);width:24px;flex:none}
 .ti .tt{font-weight:600;font-size:17px;flex:1}
 .ti .tx{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-3)}
-.ti.hot .tt{color:var(--v2)}.ti.hot .tx{color:#D63554;background:rgba(240,80,106,.12);padding:3px 8px;border-radius:6px}
+.ti.hot .tt{color:var(--v2)}.ti.hot .tx{color:var(--red-d);background:rgba(240,80,106,.12);padding:3px 8px;border-radius:6px}
 
 /* #types — микро-анимации (стрелка/hover/nudge/stagger). Всё под no-preference,
    чтобы при reduced-motion секция оставалась статичной. Токены смаплены на палитру
@@ -241,7 +242,7 @@ footer{padding:54px 0 42px;border-top:1px solid var(--line);margin-top:96px}
 .close>p{font-size:18px;color:var(--ink-2);margin:16px auto 0;max-width:42ch}
 .close-pts{list-style:none;display:flex;justify-content:center;flex-wrap:wrap;gap:12px 26px;margin:24px 0 32px}
 .close-pts li{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:var(--ink)}
-.close-pts .ci{width:18px;height:18px;flex:none;color:var(--green)}
+.close-pts .ci{width:18px;height:18px;flex:none;color:var(--green-d)}
 
 /* sticky mobile CTA — appears once the hero is scrolled past */
 .mcta{display:none}
