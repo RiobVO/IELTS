@@ -523,7 +523,7 @@ export default function Home() {
               <span className="hl" style={{ animationDelay: ".3s" }}><em>band.</em></span>
             </h1>
             <p className="lede">
-              The real exam tells you <span className="hx" data-text="6.5">6.5</span> and walks away. bando shows the exact question types <b>costing you points</b>, then drills them.
+              The real exam tells you <span className="hx" data-text="6.5">6.5</span> — and nothing more. bando shows the exact question types <b>costing you points</b>, then drills them.
             </p>
             <div className="bandsel">
               <span className="bl">Stuck at</span>
@@ -533,7 +533,7 @@ export default function Home() {
                 <button type="button" className="bp on" data-b="6.5" aria-pressed="true">6.5</button>
                 <button type="button" className="bp" data-b="7.0" aria-pressed="false">7.0</button>
               </div>
-              <span className="bres">{"It's usually "}<b id="bres">Matching Headings</b>{" quietly costing you the band."}</span>
+              <span className="bres">{"It's usually "}<b id="bres">Matching Headings</b>{" — that's where your points go."}</span>
             </div>
             <div className="cta-row">
               <a href="/auth" className="btn btn-v btn-lg" id="cta">
@@ -603,7 +603,7 @@ export default function Home() {
               <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>Hands you a band score</div>
               <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>A pile of tests: &ldquo;practice more&rdquo;</div>
               <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>No idea which type is wrong</div>
-              <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>You burn weeks guessing</div>
+              <div className="vr"><svg className="m ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>You lose weeks guessing</div>
             </div>
             <div className="vc us rv">
               <div className="vh"><span className="bd">bando</span>Shows you the reason</div>
@@ -648,7 +648,7 @@ export default function Home() {
             <div className="sst"><div className="n" id="sheetQ">40</div><div className="l">questions under real exam timing</div></div>
             <div className="sst"><div className="n"><span className="acc">1</span>st</div><div className="l">full mock free — watch the sheet get stamped</div></div>
           </div>
-          <p className="stnote rv">Built on real exam-format Reading &amp; Listening papers. Graded on the server, so the band you see is the band we stand behind.</p>
+          <p className="stnote rv">Built on real exam-format Reading &amp; Listening papers. Graded on the server, so the band you see is a band you can trust.</p>
         </div>
       </section>
 
@@ -656,7 +656,7 @@ export default function Home() {
         <div className="wrap">
           <div className="sec-h rv" style={{ marginBottom: "10px" }}>
             <h2>14 question types. We tell you which one is yours.</h2>
-            <p>In red: where students quietly lose the half-band that costs them everything.</p>
+            <p>In red: the types where students lose the half-band they need.</p>
           </div>
           <div className="tfilter rv">
             <button type="button" className="tf on" data-f="all" aria-pressed="true">All <span>14</span></button>
@@ -666,7 +666,7 @@ export default function Home() {
           </div>
           {/* строки — настоящие ссылки: «Tap any type to drill it» обязан работать */}
           <div className="types rv" id="typeList">
-            <a className="ti hot" data-cat="reading" data-hot="1" href="/auth?intent=drill&type=matching-headings"><span className="tt">Matching Headings</span><span className="tx">band-killer</span></a>
+            <a className="ti hot" data-cat="reading" data-hot="1" href="/auth?intent=drill&type=matching-headings"><span className="tt">Matching Headings</span><span className="tx">costs bands</span></a>
             <a className="ti" data-cat="reading" href="/auth?intent=drill&type=tfng"><span className="tt">True / False / Not Given</span><span className="tx">Reading</span></a>
             <a className="ti hot" data-cat="reading" data-hot="1" href="/auth?intent=drill&type=ynng"><span className="tt">Yes / No / Not Given</span><span className="tx">tricky</span></a>
             <a className="ti" data-cat="reading" href="/auth?intent=drill&type=multiple-choice"><span className="tt">Multiple Choice</span><span className="tx">Reading</span></a>
@@ -677,7 +677,7 @@ export default function Home() {
             <a className="ti" data-cat="both" href="/auth?intent=drill&type=summary-note-completion"><span className="tt">Summary / Note Completion</span><span className="tx">both</span></a>
             <a className="ti" data-cat="both" href="/auth?intent=drill&type=table-flowchart-completion"><span className="tt">Table / Flow-chart Completion</span><span className="tx">both</span></a>
             <a className="ti" data-cat="reading" href="/auth?intent=drill&type=diagram-label-completion"><span className="tt">Diagram Label Completion</span><span className="tx">Reading</span></a>
-            <a className="ti hot" data-cat="listening" data-hot="1" href="/auth?intent=drill&type=map-labelling"><span className="tt">Plan / Map / Diagram Labelling</span><span className="tx">band-killer</span></a>
+            <a className="ti hot" data-cat="listening" data-hot="1" href="/auth?intent=drill&type=map-labelling"><span className="tt">Plan / Map / Diagram Labelling</span><span className="tx">costs bands</span></a>
             <a className="ti" data-cat="listening" href="/auth?intent=drill&type=form-note-completion"><span className="tt">Form / Note Completion</span><span className="tx">Listening</span></a>
             <a className="ti" data-cat="both" href="/auth?intent=drill&type=short-answer"><span className="tt">Short Answer</span><span className="tx">both</span></a>
           </div>
