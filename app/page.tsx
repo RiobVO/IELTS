@@ -338,10 +338,20 @@ export default function Home() {
       }
     }
 
-    // .hx scramble on hover
+    // .hx scramble: hover на мыши, tap-toggle на touch — иначе dashed-подчёркивание
+    // обещает клик, который ничего не делает
+    const fineHover = window.matchMedia("(hover:hover) and (pointer:fine)").matches;
     document.querySelectorAll<HTMLElement>(".hx").forEach(el => {
-      el.addEventListener("mouseenter", () => { el.classList.add("dec"); scrambleTo(el, el.dataset.text ?? ""); });
-      el.addEventListener("mouseleave", () => { el.classList.remove("dec"); el.textContent = el.dataset.text ?? ""; });
+      if (fineHover) {
+        el.addEventListener("mouseenter", () => { el.classList.add("dec"); scrambleTo(el, el.dataset.text ?? ""); });
+        el.addEventListener("mouseleave", () => { el.classList.remove("dec"); el.textContent = el.dataset.text ?? ""; });
+      } else {
+        el.addEventListener("click", () => {
+          const on = el.classList.toggle("dec");
+          if (on) scrambleTo(el, el.dataset.text ?? "");
+          else el.textContent = el.dataset.text ?? "";
+        });
+      }
     });
 
     // ── Hero canvas animation ───────────────────────────────────────────────
@@ -483,7 +493,7 @@ export default function Home() {
           </div>
           <div className="nav-r">
             <a href="/auth" className="nav-login" style={{ color: "var(--ink-2)" }}>Log in</a>
-            <a href="/auth" className="btn btn-v">Free test</a>
+            <a href="/auth" className="btn btn-v">Take a free test</a>
             <button type="button" className="nburger" id="nburger" aria-label="Menu" aria-expanded="false" aria-controls="ndrawer">
               <i></i><i></i><i></i>
             </button>
@@ -509,7 +519,6 @@ export default function Home() {
             <h1>
               <span className="hl" style={{ animationDelay: ".08s" }}>Stop</span>{" "}
               <span className="hl" style={{ animationDelay: ".16s" }}>guessing</span>{" "}
-              <br />
               <span className="hl" style={{ animationDelay: ".24s" }}>your</span>{" "}
               <span className="hl" style={{ animationDelay: ".3s" }}><em>band.</em></span>
             </h1>
@@ -582,7 +591,6 @@ export default function Home() {
       <section className="pad" style={{ paddingTop: 0 }}>
         <div className="wrap">
           <div className="sec-h cn rv" style={{ marginBottom: "48px" }}>
-            <span className="ek">The bando difference</span>
             <h2>More tests won&apos;t fix it. <em>Knowing your type will.</em></h2>
             <p>You don&apos;t have a stamina problem. You have a blind spot, and we name it.</p>
           </div>
@@ -647,7 +655,6 @@ export default function Home() {
       <section className="pad" id="types" style={{ paddingTop: 0 }}>
         <div className="wrap">
           <div className="sec-h rv" style={{ marginBottom: "10px" }}>
-            <span className="ek">No guesswork</span>
             <h2>14 question types. We tell you which one is yours.</h2>
             <p>In red: where students quietly lose the half-band that costs them everything.</p>
           </div>
@@ -728,7 +735,6 @@ export default function Home() {
       <section className="pad" id="how" style={{ paddingTop: 0 }}>
         <div className="wrap">
           <div className="sec-h cn rv" style={{ marginBottom: "44px" }}>
-            <span className="ek">How bando works</span>
             <h2>Everything you need to <em>get your band</em>.</h2>
           </div>
           <div className="fgrid">
@@ -844,7 +850,7 @@ export default function Home() {
       </footer>
 
       <a href="/auth" className="mcta" id="mcta">
-        Free test
+        Take a free test
         <svg className="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </a>
     </>
