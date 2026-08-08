@@ -431,7 +431,7 @@ export default function Home() {
           </div>
           <div className="nav-r">
             <a href="/auth" className="nav-login" style={{ color: "var(--ink-2)" }}>Log in</a>
-            <a href="/auth" className="btn btn-v">Take a free test</a>
+            <a href="/auth" className="btn btn-v">Free test</a>
             <button type="button" className="nburger" id="nburger" aria-label="Menu" aria-expanded="false" aria-controls="ndrawer">
               <i></i><i></i><i></i>
             </button>
@@ -767,8 +767,8 @@ export default function Home() {
               <p>Practice tests and your per-type breakdown cost nothing, no card. Upgrade when you want projected full-mock bands and AI Writing &amp; Speaking feedback.</p>
             </div>
             <div className="pt-cta">
-              <a href="/auth" className="btn btn-v btn-lg">Take a free test</a>
-              <a href="/pricing" className="btn btn-g btn-lg">See pricing</a>
+              {/* в pricing-секции главное действие — смотреть тарифы; free-test CTA есть в hero и close */}
+              <a href="/pricing" className="btn btn-v btn-lg">See pricing</a>
             </div>
             {/* честные цифры вместо вырезанных отзывов; обновлять при росте контента */}
             <div className="proofline">
