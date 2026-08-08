@@ -697,8 +697,11 @@ export default function Home() {
           </div>
           <div className="fgrid">
             <a className="fcard lead rv" href="/auth">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/emoji/stopwatch_3d.png" alt="Stopwatch" width={88} height={88} loading="lazy" decoding="async" />
+              <span className="minishot" aria-hidden="true">
+                <span className="mk">Part 2 · Q14–26</span>
+                <span className="mv num">18:42</span>
+                <span className="mdots"><i className="on"></i><i className="on"></i><i></i><i></i><i className="fl"></i></span>
+              </span>
               <div>
                 <h3>Real exam mode</h3>
                 <p>Computer-delivered IELTS: timer, navigator, mark-for-review, highlight and notes. Reading on calm paper; single-pass Listening, exactly like exam day.</p>
@@ -708,8 +711,13 @@ export default function Home() {
               </div>
             </a>
             <a className="fcard rv" href="/auth">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/emoji/bar_chart_3d.png" alt="Bar chart" width={72} height={72} loading="lazy" decoding="async" />
+              <span className="minishot" aria-hidden="true">
+                <span className="mk">Weakest</span>
+                <span className="mv sm">Match. Headings</span>
+                <span className="mb"><i style={{ width: "33%", background: "var(--red)" }}></i></span>
+                <span className="mb"><i style={{ width: "56%", background: "var(--amber)" }}></i></span>
+                <span className="mb"><i style={{ width: "75%", background: "var(--green)" }}></i></span>
+              </span>
               <div>
                 <h3>Per-type breakdown</h3>
                 <p>Not just a 6.5. Every question type ranked worst-first, so the one weakness dragging your band down is impossible to miss.</p>
@@ -719,8 +727,11 @@ export default function Home() {
               </div>
             </a>
             <a className="fcard rv" href="/auth">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/emoji/memo_3d.png" alt="Memo" width={72} height={72} loading="lazy" decoding="async" />
+              <span className="minishot" aria-hidden="true">
+                <span className="mk">Drill · TFNG</span>
+                <span className="mv num">7/9</span>
+                <span className="mb"><i style={{ width: "78%", background: "var(--green)" }}></i></span>
+              </span>
               <div>
                 <h3>Targeted drills</h3>
                 <p>Tap any weak type to practise only that one: Matching Headings, TFNG, completion, until it stops costing you points.</p>
@@ -730,8 +741,11 @@ export default function Home() {
               </div>
             </a>
             <a className="fcard rv" href="/auth">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/emoji/books_3d.png" alt="Books" width={72} height={72} loading="lazy" decoding="async" />
+              <span className="minishot" aria-hidden="true">
+                <span className="mk">Projected band</span>
+                <span className="mv">6.5</span>
+                <span className="mb"><i style={{ width: "93%", background: "linear-gradient(90deg,var(--v),var(--vb))" }}></i></span>
+              </span>
               <div>
                 <h3>Full mock tests</h3>
                 <p>Sit complete 40-question papers under real timing and get a projected band you can trust.</p>
