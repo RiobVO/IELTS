@@ -27,7 +27,10 @@ export default async function AdminPage({
       status: contentItem.status,
       reviewedAt: contentItem.reviewedAt,
       importWarnings: contentItem.importWarnings,
-      questions: sql<number>`(SELECT count(*)::int FROM question q WHERE q.content_item_id = ${contentItem.id})`,
+      // Внешняя ссылка написана ТЕКСТОМ (content_item.id): drizzle рендерит
+      // ${contentItem.id} в raw-sql как неквалифицированный "id", который внутри
+      // подзапроса резолвится в question.id → самосравнение → всегда 0.
+      questions: sql<number>`(SELECT count(*)::int FROM question q WHERE q.content_item_id = content_item.id)`,
     })
     .from(contentItem)
     .orderBy(desc(contentItem.createdAt));
