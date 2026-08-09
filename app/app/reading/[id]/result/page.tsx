@@ -13,10 +13,8 @@ import { isUuid } from "@/lib/uuid";
 import { qtypeDescription, qtypeLabel } from "@/lib/labels";
 import { AppShell } from "../../../_AppShell";
 import { Button } from "@/components/core/Button";
-import { Badge } from "@/components/core/Badge";
-import { Icon } from "@/components/core/icons";
-import Debrief from "./Debrief";
-import { AnswerKeyFilter, type AKItem, type AKType } from "./InsightReport";
+import ResultCoach from "./ResultCoach";
+import type { AKItem, AKType } from "./InsightReport";
 
 export const dynamic = "force-dynamic";
 
@@ -349,7 +347,7 @@ export default async function ResultPage({
     };
   });
 
-  // Debrief data layer (S1-S5 «дебриф», rendered by <Debrief/> below). Every
+  // Coach data layer (hero + tabs, rendered by <ResultCoach/> below). Every
   // field is a plain derivation of data already fetched/graded above — no new
   // queries. `missed` is the safe subset (number/qtype only, no answer key) —
   // rendered even when gated; `replay` carries answer/why/evidence and is
@@ -449,7 +447,6 @@ export default async function ResultPage({
 
   return (
     <AppShell active={section}>
-      <style>{RESULT_CSS}</style>
       <div style={S.wrap}>
         <div style={S.backRow}>
           <Button variant="ghost" size="sm" icon="arrow-left" href={catalogBase}>
@@ -457,54 +454,17 @@ export default async function ResultPage({
           </Button>
         </div>
 
-        <Debrief data={debriefData} unlockedBadges={unlockedBadges} />
-
-        {/* Answer key. Everyone sees right/wrong per question. The correct answer,
-            explanation and text evidence are revealed only when `fullReview` is
-            true — currently free for all (REVIEW_OPEN). When the flag is closed,
-            those props aren't rendered, so the answer_key never reaches the HTML. */}
-        <section id="answer-key" style={{ marginTop: 18, scrollMarginTop: 80 }}>
-          <div style={S.reviewHead}>
-            <h2 style={S.h2}>{fullReview ? "Full answer key" : "What you missed"}</h2>
-            {fullReview ? (
-              <Badge tone="success">
-                <Icon name="book-open" size={12} /> Free
-              </Badge>
-            ) : (
-              <Badge tone="brand">Answers on Premium</Badge>
-            )}
-          </div>
-          <AnswerKeyFilter items={akItems} types={akTypes} />
-        </section>
-
-        <div className="res-footer" style={S.footer}>
-          <Button variant="secondary" fullWidth href={catalogBase}>
-            Back to catalog
-          </Button>
-          <Button fullWidth trailingIcon="arrow-right" href={retryHref}>
-            Try again
-          </Button>
-        </div>
+        {/* answer_key gating unchanged: akItems/replay only ever carry
+            answer/evidence when `fullReview` (see the akItems/replay builds
+            above) — the fixed dock at the bottom replaces the old res-footer,
+            hence the extra bottom padding on `wrap` to clear it. */}
+        <ResultCoach data={debriefData} akItems={akItems} akTypes={akTypes} unlockedBadges={unlockedBadges} />
       </div>
     </AppShell>
   );
 }
 
-// Два fullWidth-Button (Back to catalog / Try again) в ряд теснятся на узких
-// телефонах — переключаемое свойство живёт в классе, не inline (иначе inline
-// перебивает media-query — responsive-inline-class invariant).
-const RESULT_CSS = `
-@media (max-width:430px){
-  .res-footer{flex-direction:column}
-}
-`;
-
 const S: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 760, margin: "0 auto", padding: "16px 18px 40px", display: "flex", flexDirection: "column" },
+  wrap: { maxWidth: 760, margin: "0 auto", padding: "16px 18px 104px", display: "flex", flexDirection: "column" },
   backRow: { display: "flex", alignItems: "center", marginBottom: 4 },
-
-  reviewHead: { display: "flex", alignItems: "center", gap: 8, margin: "0 0 12px" },
-  h2: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 800, margin: 0, color: "var(--text-primary)" },
-
-  footer: { marginTop: 24, display: "flex", gap: 10 },
 };
