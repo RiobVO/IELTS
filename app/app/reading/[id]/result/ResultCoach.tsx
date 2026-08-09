@@ -352,9 +352,9 @@ function ReviewRoom({
                   : "✕ Still slips — here's why:"
                 : `The answer is «${item.answer}».`}
             </div>
-            {item.why && (
+            {(item.why || item.tag) && (
               <div className="rc-rev-why">
-                💡 <span>{item.why}</span>
+                {item.why && <>💡 <span>{item.why}</span></>}
                 {item.tag && <span className="rc-rev-tag">{item.tag}</span>}
               </div>
             )}
