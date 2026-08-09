@@ -238,8 +238,12 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
 
   const signup = mode === "signup";
 
+  // flex + margin:auto на карте, НЕ grid place-items: у grid авто-трек сайзится по
+  // min-content карты (фикс. 940px), процентный max-width при этом не резолвится —
+  // карта не ужималась под узкий вьюпорт и рвала экран на мобиле. margin:auto ещё и
+  // не клипает верх карты, когда она выше вьюпорта (высокий signup + Turnstile).
   return (
-    <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "32px 20px", background: "var(--bg-base)" }}>
+    <main className="auth-main" style={{ minHeight: "100dvh", display: "flex", padding: "32px 20px", background: "var(--bg-base)" }}>
       <style>{`
         @keyframes auth-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
         .auth-rise{animation:auth-rise .5s var(--ease-out) both}
@@ -252,18 +256,28 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
         /* Мобильный (<760px): раздвижная карта — desktop-метафора. Прячем violet-панель,
            активная форма встаёт в поток на всю ширину (не absolute) и задаёт высоту карты,
            неактивная скрыта; переключение — текстовым тогглом. Так signup с Turnstile не
-           обрезается фиксированной высотой. */
+           обрезается фиксированной высотой. .auth-mbrand — бренд-строка над формой:
+           панель с лого скрыта, без неё мобильный экран безымянный. */
         .auth-toggle{display:none}
+        .auth-mbrand{display:none}
         @media (max-width:759px){
+          .auth-main{padding:14px 10px!important}
           .auth-card{height:auto!important;min-height:0!important;overflow:visible!important}
           .auth-panel{display:none}
-          .auth-form{position:static!important;width:100%!important;padding:30px 20px!important;opacity:1!important;pointer-events:auto!important;transform:none!important}
+          .auth-form{position:static!important;width:100%!important;padding:26px 20px 30px!important;opacity:1!important;pointer-events:auto!important;transform:none!important}
           .auth-form.is-idle{display:none!important}
           .auth-toggle{display:block}
+          .auth-mbrand{display:flex;align-items:center;justify-content:center;gap:9px;margin:26px 0 -8px}
         }
       `}</style>
 
-      <div className="auth-card" style={{ position: "relative", width: 940, maxWidth: "100%", height: 580, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-xl)", overflow: "hidden" }}>
+      <div className="auth-card" style={{ position: "relative", width: 940, maxWidth: "100%", height: 580, margin: "auto", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-xl)", overflow: "hidden" }}>
+
+        {/* Бренд-строка — только мобильный (см. .auth-mbrand в <style>) */}
+        <div className="auth-mbrand">
+          <img src="/bando-mark.svg" width={22} height={22} alt="" />
+          <span style={{ fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: 19, color: "var(--text-primary)" }}>band<span style={{ color: "var(--brand)" }}>o</span></span>
+        </div>
 
         {/* Signup form — LEFT half */}
         <div className={`auth-form ${signup ? "is-active" : "is-idle"}`} style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: (100 - PANEL) + "%", display: "grid", alignItems: "safe center", justifyItems: "center", overflowY: "auto", padding: "34px 36px", opacity: signup ? 1 : 0, pointerEvents: signup ? "auto" : "none", transition: "opacity .2s var(--ease-out)" }}>
