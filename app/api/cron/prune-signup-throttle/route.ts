@@ -8,11 +8,12 @@ import { logError } from "@/lib/monitoring/log-error";
 
 /**
  * Cron-чистка signup_throttle (anti-abuse, миграция 0022). Строка пишется на
- * КАЖДУЮ попытку signup/login/reset (app/auth/actions.ts) и никогда не
- * чистилась. Окно счёта троттлинга — 1 час (SIGNUP_THROTTLE_WINDOW_SECONDS,
- * src/lib/anti-cheat.ts) — 48ч запас на порядок больше окна, троттлинг не
- * задет, строки старше просто балласт. Аутентификация — как у соседних
- * cron-роутов (Bearer CRON_SECRET, fail-closed).
+ * КАЖДУЮ попытку signup/login/reset/predictor (checkIpThrottle,
+ * src/lib/anti-bot/ip-throttle.ts) и никогда не чистилась. Самое широкое окно
+ * счёта — 1 час (AUTH_THROTTLE_LIMITS.signup, src/lib/anti-cheat.ts) — 48ч
+ * запас на порядок больше окна, троттлинг не задет, строки старше просто
+ * балласт. Аутентификация — как у соседних cron-роутов (Bearer CRON_SECRET,
+ * fail-closed).
  */
 export const dynamic = "force-dynamic";
 

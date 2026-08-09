@@ -420,9 +420,11 @@ export const attemptReviewSnapshot = pgTable("attempt_review_snapshot", {
 });
 
 /* -------------------------------------------------------------------------- */
-/* signup_throttle — signup velocity-cap (anti-abuse, migration 0022)          */
-/* SERVER-ONLY: written/read by the signUp action (owner path). RLS on, grants  */
-/* revoked. Stores sha256(ip) (not PII), one row per signup attempt.            */
+/* signup_throttle — shared auth/predictor velocity-cap (anti-abuse, migration */
+/* 0022). SERVER-ONLY: written only via the advisory-locked checkIpThrottle    */
+/* (src/lib/anti-bot/ip-throttle.ts); the scope rides as a prefix in the key — */
+/* sha256("<scope>:<ip|email>") (not PII), one row per attempt. RLS on, grants */
+/* revoked.                                                                    */
 /* -------------------------------------------------------------------------- */
 export const signupThrottle = pgTable(
   "signup_throttle",

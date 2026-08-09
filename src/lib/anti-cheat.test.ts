@@ -5,13 +5,11 @@ import {
   AUTH_THROTTLE_LIMITS,
   countSubmitsInWindow,
   exceedsAuthThrottle,
-  exceedsSignupRate,
   exceedsSubmitRate,
   isHoneypotTripped,
   isTooFastToRate,
   shouldRateAttempt,
   MIN_RATED_SECONDS_PER_QUESTION,
-  SIGNUP_THROTTLE_MAX,
   SUBMIT_THROTTLE_MAX,
   SUBMIT_THROTTLE_WINDOW_SECONDS,
 } from "./anti-cheat";
@@ -57,19 +55,16 @@ describe("exceedsSubmitRate", () => {
   });
 });
 
-describe("exceedsSignupRate", () => {
-  it("меньше потолка → false", () => {
-    expect(exceedsSignupRate(SIGNUP_THROTTLE_MAX - 1)).toBe(false);
-  });
-  it("ровно потолок → true (граница включительна, >=)", () => {
-    expect(exceedsSignupRate(SIGNUP_THROTTLE_MAX)).toBe(true);
-  });
-  it("больше потолка → true", () => {
-    expect(exceedsSignupRate(SIGNUP_THROTTLE_MAX + 1)).toBe(true);
-  });
-});
-
 describe("exceedsAuthThrottle", () => {
+  it("signup: меньше потолка → false", () => {
+    expect(exceedsAuthThrottle("signup", AUTH_THROTTLE_LIMITS.signup.max - 1)).toBe(false);
+  });
+  it("signup: ровно потолок → true (граница включительна, >=)", () => {
+    expect(exceedsAuthThrottle("signup", AUTH_THROTTLE_LIMITS.signup.max)).toBe(true);
+  });
+  it("signup: больше потолка → true", () => {
+    expect(exceedsAuthThrottle("signup", AUTH_THROTTLE_LIMITS.signup.max + 1)).toBe(true);
+  });
   it("login: меньше потолка → false", () => {
     expect(exceedsAuthThrottle("login", AUTH_THROTTLE_LIMITS.login.max - 1)).toBe(false);
   });

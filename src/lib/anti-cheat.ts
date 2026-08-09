@@ -33,36 +33,6 @@ export function exceedsSubmitRate(submitsInWindow: number): boolean {
   return submitsInWindow >= SUBMIT_THROTTLE_MAX;
 }
 
-/** Скользящее окно signup-лимита, секунд (1 час). */
-export const SIGNUP_THROTTLE_WINDOW_SECONDS = 60 * 60;
-
-/**
- * Максимум регистраций с одного IP в окне. >= порога -> отказ. Tunable.
- *
- * CGNAT-ревизия (стелс-запуск ~600 тёплых регистраций за часы, UZ-мобильные
- * операторы за Carrier-Grade NAT — десятки-сотни живых юзеров делят один egress-IP):
- * порог поднят 10 → 100. При старой десятке концентрированная волна из одного
- * канала легко даёт >10 регистраций/час с общего carrier-IP, и 11-й+ живой юзер
- * ловит «Too many sign-ups» — при одноразовой тёплой волне это невозвратный отток.
- * Ассиметрия резкая: ложный блок легитимного = потерянный навсегда юзер, лишний
- * бот = дёшево (его всё равно ловят honeypot + Turnstile + email-confirm — это и
- * есть несущие анти-бот гейты; этот cap — лишь backstop). 100/час покрывает
- * реалистичную пиковую концентрацию волны на одном IP с запасом, всё ещё отсекая
- * farm-накрутку. Если владелец ждёт один доминирующий carrier-IP с >100 живых
- * регистраций/час — поднять до 200 или временно снять cap на окно T0.
- */
-export const SIGNUP_THROTTLE_MAX = 100;
-
-/**
- * true, если число регистраций с одного IP в окне достигло потолка — текущую
- * регистрацию отклоняем (§11 anti-abuse, поверх captcha). Чистая — порог
- * тестируется без БД; сам COUNT в окне делает server action по индексу
- * signup_throttle (ip_hash, created_at).
- */
-export function exceedsSignupRate(signupsInWindow: number): boolean {
-  return signupsInWindow >= SIGNUP_THROTTLE_MAX;
-}
-
 /**
  * Минимальный «честный» темп: секунд на вопрос, ниже которого сабмит физически не
  * может быть человеческим (start → почти мгновенная сдача). Консервативный — в разы
@@ -109,23 +79,37 @@ export function shouldRateAttempt(input: {
 }
 
 /**
- * IP/email-throttle для login/reset-password (§11 anti-abuse) — тот же механизм и та
- * же таблица signup_throttle, что signup-cap выше (миграция под отдельную колонку
- * scope не заводится — ключ вместо этого несёт префикс scope, см. checkAuthThrottle
- * в app/auth/actions.ts). Login и reset (по IP) — щедрый порог: общий IP за NAT
- * (университет/офис) не должен блокировать легитимных юзеров, отсекаем только
- * автоматизированный спам с одного адреса. resetEmail — строгий per-email лимит
- * поверх reset: живой юзер жмёт "send" один раз, не трижды, а NAT его не размывает.
+ * IP/email-throttle auth-флоу и публичного предиктора (§11 anti-abuse) — общая
+ * таблица signup_throttle (миграция под отдельную колонку scope не заводится —
+ * ключ несёт префикс scope, см. checkIpThrottle в src/lib/anti-bot/ip-throttle.ts).
+ * Login и reset (по IP) — щедрый порог: общий IP за NAT (университет/офис) не
+ * должен блокировать легитимных юзеров, отсекаем только автоматизированный спам
+ * с одного адреса. resetEmail — строгий per-email лимит поверх reset: живой юзер
+ * жмёт "send" один раз, не трижды, а NAT его не размывает.
  */
 export const AUTH_THROTTLE_LIMITS = {
   login: { windowSeconds: 10 * 60, max: 10 },
   reset: { windowSeconds: 10 * 60, max: 10 },
   resetEmail: { windowSeconds: 10 * 60, max: 3 },
   /**
+   * Signup velocity-cap, поверх captcha (fail-open без ключей). Порог tunable.
+   * CGNAT-ревизия (стелс-запуск ~600 тёплых регистраций за часы, UZ-мобильные
+   * операторы за Carrier-Grade NAT — десятки-сотни живых юзеров делят один
+   * egress-IP): порог поднят 10 → 100. При старой десятке концентрированная волна
+   * из одного канала легко даёт >10 регистраций/час с общего carrier-IP, и 11-й+
+   * живой юзер ловит «Too many sign-ups» — при одноразовой тёплой волне это
+   * невозвратный отток. Ассиметрия резкая: ложный блок легитимного = потерянный
+   * навсегда юзер, лишний бот = дёшево (его всё равно ловят honeypot + Turnstile +
+   * email-confirm — несущие анти-бот гейты; этот cap — лишь backstop). Если
+   * владелец ждёт один доминирующий carrier-IP с >100 живых регистраций/час —
+   * поднять до 200 или временно снять cap на окно T0.
+   */
+  signup: { windowSeconds: 60 * 60, max: 100 },
+  /**
    * Публичный Band Predictor (G1-6) — единственный грейдинг без аккаунта, поэтому
    * ему нужен собственный потолок по IP. Щедрый: живой человек проходит пробу
    * минут за десять, а за общим carrier-IP (UZ-мобильные операторы за CGNAT, см.
-   * SIGNUP_THROTTLE_MAX) их могут быть десятки одновременно — ложный отказ здесь
+   * signup выше) их могут быть десятки одновременно — ложный отказ здесь
    * дороже лишнего прогона. Отсекает автоматический перебор, не живую волну.
    */
   predictor: { windowSeconds: 10 * 60, max: 30 },
@@ -135,7 +119,7 @@ export type AuthThrottleScope = keyof typeof AUTH_THROTTLE_LIMITS;
 
 /** true, если число попыток в окне достигло потолка для данного scope — текущую
  *  попытку отклоняем. Чистая — порог тестируется без БД (тот же паттерн, что
- *  exceedsSignupRate выше); сам COUNT в окне и запись делает checkAuthThrottle. */
+ *  exceedsSubmitRate выше); сам COUNT в окне и запись делает checkIpThrottle. */
 export function exceedsAuthThrottle(scope: AuthThrottleScope, countInWindow: number): boolean {
   return countInWindow >= AUTH_THROTTLE_LIMITS[scope].max;
 }
