@@ -179,6 +179,12 @@ a.bar:hover{background:var(--vtint)}
 .q.dim{opacity:.3}
 .q:hover{transform:scale(1.14)}
 .q:focus-visible{outline-color:var(--ink)}
+/* Ячейка ~36px на узких телефонах < 44px тап-таргета — растим хит-зону
+   невидимым ::after поверх визуала, сам .q не меняем. */
+@media(max-width:430px){
+  .q{position:relative}
+  .q::after{content:"";position:absolute;inset:50% auto auto 50%;width:44px;height:44px;transform:translate(-50%,-50%)}
+}
 .sheet-legend{display:flex;gap:8px 16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)}
 .lg{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--ink-2);transition:color .2s}
 .lg:hover{color:var(--v2)}
