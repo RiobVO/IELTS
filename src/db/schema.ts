@@ -288,7 +288,12 @@ export const passage = pgTable(
     // раннер рисует атомизированный список (фоллбэк). Грейдинг от этого не зависит.
     questionsHtml: text("questions_html"),
   },
-  (t) => [index("passage_content_item_id_idx").on(t.contentItemId)],
+  (t) => [
+    index("passage_content_item_id_idx").on(t.contentItemId),
+    // 0062: БД-инвариант поверх гарантии persist.ts — два пассажа на одном слоте
+    // "order" делают порядок рендера неопределённым (BACKLOG W2-13).
+    unique("passage_content_item_order_key").on(t.contentItemId, t.order),
+  ],
 );
 
 /* -------------------------------------------------------------------------- */
