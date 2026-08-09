@@ -105,6 +105,39 @@ export function computeBlindSpot(
   return { label, weakBucket: weak, strongBucket: strong, costMarks: weak.total - weak.correct };
 }
 
+/**
+ * Тег вопроса для guided-replay чипа (Review Room, derive-добавка §e-1):
+ * помечает, принадлежит ли ИМЕННО ЭТОТ вопрос диагностированному blindSpot —
+ * "your blind spot" для настоящей Not-Given слепой зоны, "common trap" для
+ * симметричного случая (True/False или Yes/No — слабый бакет) либо для
+ * генерализованного fallback (blindSpot без strongBucket, весь тип слабый).
+ * null, если blindSpot не задан или вопрос вне его бакета/типа.
+ */
+export function blindSpotTag(
+  q: { qtype: string; accept: string[] },
+  blindSpot: BlindSpot | null,
+): string | null {
+  if (!blindSpot) return null;
+  const isNg = q.accept.some((a) => a.trim().toUpperCase() === NG_ACCEPT);
+  const belongs = blindSpot.strongBucket
+    ? TERNARY_TYPES.has(q.qtype) && (blindSpot.label === "Not Given" ? isNg : !isNg)
+    : qtypeLabel(q.qtype) === blindSpot.label;
+  if (!belongs) return null;
+  return blindSpot.label === "Not Given" ? "your blind spot" : "common trap";
+}
+
+/**
+ * Shareable one-liner (Telegram viral loop, W1-5) — first-person, без
+ * завершающего двоеточия (coach-редизайн: старый вариант звучал как заголовок
+ * поста, не как реплика от лица игрока). Вынесено из page.tsx в чистую
+ * функцию, чтобы формулировку можно было проверить юнит-тестом.
+ */
+export function buildShareHeadline(banded: boolean, band: number | null, pct: number): string {
+  return banded
+    ? `I just hit Band ${band} on IELTS Reading with bando — and finally found the one habit costing me marks.`
+    : `I scored ${pct}% on IELTS Reading with bando and pinned down exactly which question type is costing me marks.`;
+}
+
 export interface GrowthBar {
   tag: "1st" | "2nd" | "now";
   correct: number;
@@ -207,6 +240,8 @@ export interface DebriefData {
     answer: string;
     why: string | null;
     evidence: string | null;
+    /** derive-добавка §e-1 — см. blindSpotTag(). */
+    tag: string | null;
   }[];
 
   level: {
@@ -221,5 +256,5 @@ export interface DebriefData {
     retryHref: string;
   };
 
-  share: { refCode: string; headline: string; value: string } | null;
+  share: { refCode: string; headline: string } | null;
 }

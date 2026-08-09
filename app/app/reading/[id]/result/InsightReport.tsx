@@ -33,6 +33,9 @@ export interface AKItem {
   label: string;
   correct: boolean;
   given: string;
+  /** Generic per-type strategy (labels.ts qtypeDescription) — always present,
+   *  not gated (coach ak-list reference; rendering lands in the ak-list rescin). */
+  strategy: string;
   /** Present only when the full review is unlocked (server-gated). */
   answer?: string;
   explanation?: string | null;

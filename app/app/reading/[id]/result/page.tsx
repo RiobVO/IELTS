@@ -7,10 +7,10 @@ import { getProfile, getUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import type { ReviewSnapshot } from "@/lib/exam/review-snapshot";
-import { computeBlindSpot, computeGrowth, computeNearMiss, stripHtml, type DebriefData } from "@/lib/result/debrief";
+import { blindSpotTag, buildShareHeadline, computeBlindSpot, computeGrowth, computeNearMiss, stripHtml, type DebriefData } from "@/lib/result/debrief";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
-import { qtypeLabel } from "@/lib/labels";
+import { qtypeDescription, qtypeLabel } from "@/lib/labels";
 import { AppShell } from "../../../_AppShell";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
@@ -320,9 +320,7 @@ export default async function ResultPage({
       : [];
 
   // Shareable one-liner for the Telegram viral loop (W1-5).
-  const shareScore = banded ? `band ${att.bandScore}` : `${result.percent}%`;
-  const weakestType = weakest ? qtypeLabel(weakest[0]) : null;
-  const shareHeadline = `I scored ${shareScore} on bando${weakestType ? ` — weakest type: ${weakestType}` : ""}. Train your IELTS Reading & Listening:`;
+  const shareHeadline = buildShareHeadline(banded, banded ? Number(att.bandScore) : null, result.percent);
 
   // Answer-key appendix data (Variant A), built from the already-loaded grade
   // result (no extra queries, perf-safe). The answer_key fields are attached
@@ -337,6 +335,9 @@ export default async function ResultPage({
       label: qtypeLabel(q.qtype),
       correct: q.correct,
       given: given && given !== "" ? given : "—",
+      // Ungated (derive-добавка §e-2) — generic per-type reference, unlike the
+      // gated per-question `explanation` below.
+      strategy: qtypeDescription(q.qtype),
     };
     if (!fullReview) return base;
     const ev = m.evidence as { para: string; snippet: string } | null;
@@ -413,6 +414,7 @@ export default async function ResultPage({
             answer: m.accept.join(" / "),
             why: m.explanation,
             evidence: m.evidence?.snippet ?? null,
+            tag: blindSpotTag({ qtype: q.qtype, accept: m.accept }, blindSpot),
           };
         });
 
@@ -442,9 +444,7 @@ export default async function ResultPage({
       drillHref: weakest && weakestCostMarks > 0 ? `${catalogBase}?q_type=${encodeURIComponent(weakest[0])}` : null,
       retryHref,
     },
-    share: profile?.referral_code
-      ? { refCode: profile.referral_code, headline: shareHeadline, value: banded ? String(att.bandScore) : `${result.percent}%` }
-      : null,
+    share: profile?.referral_code ? { refCode: profile.referral_code, headline: shareHeadline } : null,
   };
 
   return (
