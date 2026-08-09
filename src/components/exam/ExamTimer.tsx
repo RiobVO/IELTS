@@ -74,6 +74,7 @@ export function ExamTimer({
           type="button"
           onClick={onTogglePause}
           aria-label={paused ? "Resume" : "Pause"}
+          className="exam-timer-pause"
           style={{ display: "inline-flex", border: "none", background: "transparent", color: "var(--text-muted)", cursor: "pointer", padding: 2 }}
         >
           <Icon name={paused ? "play" : "pause"} size={15} />
@@ -83,7 +84,7 @@ export function ExamTimer({
         aria-hidden="true"
         style={{ position: "absolute", left: 0, bottom: 0, height: 2, width: `${ratio * 100}%`, background: rail, transition: "width 1s linear, background-color var(--duration-base) var(--ease-standard)" }}
       />
-      <style>{`@keyframes nine-blink{0%,100%{opacity:1}50%{opacity:.55}}@media (prefers-reduced-motion:reduce){[style*="nine-blink"]{animation:none!important}}`}</style>
+      <style>{`@keyframes nine-blink{0%,100%{opacity:1}50%{opacity:.55}}@media (prefers-reduced-motion:reduce){[style*="nine-blink"]{animation:none!important}}@media (max-width:430px){.exam-timer-pause{position:relative}.exam-timer-pause::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}}`}</style>
     </div>
   );
 }

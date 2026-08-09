@@ -36,6 +36,7 @@ function NavCell({ q, active, onJump }: { q: NavQuestion; active: boolean; onJum
   const c = cell(q, active);
   return (
     <button
+      className="nav-cell"
       onClick={() => onJump?.(q.number)}
       onFocus={() => setFocus(true)}
       onBlur={() => setFocus(false)}
@@ -79,6 +80,7 @@ export const QuestionNavigator = memo(function QuestionNavigator({ parts, curren
   const multi = parts.length > 1;
   return (
     <nav aria-label="Question navigator" style={S.bar}>
+      <style>{NAV_CSS}</style>
       <div style={S.scroller}>
         {parts.map((p, i) => (
           <div key={i} style={S.group}>
@@ -98,6 +100,9 @@ export const QuestionNavigator = memo(function QuestionNavigator({ parts, curren
     </nav>
   );
 });
+
+// Тап-таргет: ячейки навигатора 32px → ≥44px на узком экране (горизонтальный скроллер уже есть).
+const NAV_CSS = `@media (max-width:430px){.nav-cell{width:44px!important;height:44px!important}}`;
 
 const S: Record<string, CSSProperties> = {
   bar: {

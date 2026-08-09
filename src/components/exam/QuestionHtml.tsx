@@ -55,7 +55,7 @@ function Slot({ q, qtype, value }: { q: number; qtype: string; value?: string })
   if (qtype === "radio") {
     const sel = a === value;
     return (
-      <button type="button" role="radio" aria-checked={sel} aria-label={`Question ${q}, option ${value}`} onClick={() => ctx.onAnswer(q, value ?? "")} style={S.radio(sel)}>
+      <button type="button" role="radio" aria-checked={sel} aria-label={`Question ${q}, option ${value}`} onClick={() => ctx.onAnswer(q, value ?? "")} className="q-hit" style={S.radio(sel)}>
         {sel && <span style={S.dot} />}
       </button>
     );
@@ -64,7 +64,7 @@ function Slot({ q, qtype, value }: { q: number; qtype: string; value?: string })
     const arr = Array.isArray(a) ? a : a ? [a] : [];
     const sel = value != null && arr.includes(value);
     return (
-      <button type="button" role="checkbox" aria-checked={sel} aria-label={`Question ${q}, option ${value}`} onClick={() => ctx.onToggle(q, value ?? "")} style={S.check(sel)}>
+      <button type="button" role="checkbox" aria-checked={sel} aria-label={`Question ${q}, option ${value}`} onClick={() => ctx.onToggle(q, value ?? "")} className="q-hit" style={S.check(sel)}>
         {sel && <span style={S.tick}>✓</span>}
       </button>
     );
@@ -72,7 +72,7 @@ function Slot({ q, qtype, value }: { q: number; qtype: string; value?: string })
   // text (default)
   const v = typeof a === "string" ? a : "";
   return (
-    <input value={v} onChange={(e) => ctx.onAnswer(q, e.target.value)} aria-label={`Answer for question ${q}`} autoComplete="off" data-q={q} style={S.text(!!v)} />
+    <input value={v} onChange={(e) => ctx.onAnswer(q, e.target.value)} aria-label={`Answer for question ${q}`} autoComplete="off" data-q={q} className="q-text" style={S.text(!!v)} />
   );
 }
 
@@ -183,4 +183,13 @@ const Q_CSS = `
 .q-verbatim .stem{display:flex;gap:8px;margin-bottom:10px;font-weight:600}
 .q-verbatim .materials-box,.q-verbatim .form-box,.q-verbatim .summary-wrap{margin:10px 0;padding:14px 16px;background:var(--surface-hover);border:1px solid var(--border);border-radius:8px}
 .q-verbatim .analysis{display:none}
+/* Мобильный проход (≤430px): широкие таблицы вопросов скроллятся вместо клиппинга панели;
+   author-CSS перебивает presentational-хинт nowrap → ячейки переносятся. Поля и тап-таргеты ≥44px. */
+@media (max-width:430px){
+  .q-verbatim table{display:block;overflow-x:auto}
+  .q-verbatim td[nowrap],.q-verbatim th[nowrap]{white-space:normal}
+  .q-verbatim .q-text{min-width:80px!important;max-width:100%!important;min-height:44px!important}
+  .q-verbatim .q-hit{position:relative}
+  .q-verbatim .q-hit::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
+}
 `;

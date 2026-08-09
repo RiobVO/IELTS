@@ -33,12 +33,18 @@ export default function ExamFrame({ attemptId, contentItemId }: Props) {
   }, [attemptId]);
 
   return (
-    <iframe
-      ref={iframeRef}
-      src={`/app/exam/${contentItemId}/runner`}
-      title="IELTS exam"
-      sandbox="allow-scripts allow-modals"
-      style={{ width: "100%", height: "100vh", border: "0", display: "block" }}
-    />
+    <>
+      {/* 100dvh с фолбэком на 100vh: динамический вьюпорт учитывает адресную строку/панели
+          мобильного браузера, чтобы раннер не уезжал под них (на десктопе идентично 100vh). */}
+      <style>{".exam-frame{height:100vh;height:100dvh}"}</style>
+      <iframe
+        ref={iframeRef}
+        src={`/app/exam/${contentItemId}/runner`}
+        title="IELTS exam"
+        sandbox="allow-scripts allow-modals"
+        className="exam-frame"
+        style={{ width: "100%", border: "0", display: "block" }}
+      />
+    </>
   );
 }

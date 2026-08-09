@@ -267,7 +267,7 @@ export const PassagePane = memo(function PassagePane({
       </div>
 
       <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        <div style={S.masthead}>
+        <div className="pp-masthead" style={S.masthead}>
           <div style={S.overline}>{categoryLabel(category)}</div>
           <h2 style={S.ptitle}>{title}</h2>
           <div style={S.pmeta}>
@@ -379,6 +379,12 @@ const PASSAGE_CSS = `
 /* Touch target: кнопки капсулы 38px → ≥44px на грубом указателе (десктоп без изменений). */
 .cap-btn{width:38px;height:38px}
 @media (pointer:coarse){.cap-btn{width:44px;height:44px}}
+/* Мобильный проход (≤430px): горизонтальные поля пассажа/masthead 48px→16px, чтобы текст
+   не жался к краям экрана (планшет/десктоп >430px без изменений). */
+@media (max-width:430px){
+  .bando-reading.editorial{padding-left:16px!important;padding-right:16px!important}
+  .pp-masthead{padding-left:16px!important;padding-right:16px!important}
+}
 `;
 
 const S = {
