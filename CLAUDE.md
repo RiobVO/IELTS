@@ -302,7 +302,7 @@ explicitly; bare `Matching` intentionally stays low-confidence). Empty/short pro
 (`QN: empty prompt`). Telegram bot (`app/api/telegram/`) is the phone-side import path (owner-path,
 whitelist, prod secret-gated). QTYPE is mandatory (`docs/authoring-spec.md`) — publish is hard-blocked
 on a blank/unresolved question type (`isUnresolvedQuestionTypeWarning`). Listening mp3 is capped at
-15 MB (`src/lib/import/audio-cap.ts`, both the Telegram branch and the runner's external-audio fetch) —
+12 MB (`src/lib/import/audio-cap.ts`, both the Telegram branch and the runner's external-audio fetch) —
 Storage is 1 GB on Supabase Free; `scripts/storage-orphans.ts` inventories/deletes objects
 without a live `content_item` row.
 
