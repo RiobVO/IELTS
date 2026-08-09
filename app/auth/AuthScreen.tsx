@@ -292,9 +292,11 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
                 <input type="hidden" name="ref" value={refCode ?? ""} />
                 {/* Honeypot (#anti-bot): невидимая приманка. Живой юзер её не видит и
                     оставляет пустой; бот, автозаполняющий поля, попадётся (server:
-                    isHoneypotTripped). Offscreen, НЕ display:none (часть ботов такое
-                    пропускает); aria-hidden + tabIndex=-1 + без label → скринридер и
-                    Tab-навигация её не касаются (a11y). */}
+                    isHoneypotTripped). Прячем clip-паттерном (1×1 + clip-path), а НЕ
+                    left:-9999px: на мобиле карта становится overflow:visible (для Turnstile),
+                    и уехавший за -9999px инпут рвал горизонтальную раскладку. НЕ display:none
+                    (часть ботов такое пропускает); aria-hidden + tabIndex=-1 + без label →
+                    скринридер и Tab-навигация её не касаются (a11y). */}
                 <input
                   type="text"
                   name="website"
@@ -302,7 +304,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
                   autoComplete="off"
                   aria-hidden="true"
                   defaultValue=""
-                  style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
+                  style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", clipPath: "inset(50%)", whiteSpace: "nowrap", border: 0, opacity: 0 }}
                 />
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div className="auth-rise">
