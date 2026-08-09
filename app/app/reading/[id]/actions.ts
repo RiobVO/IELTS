@@ -164,8 +164,6 @@ export async function submitAttempt(
     user.id,
     accessData.userTier,
     accessData.tierRequired,
-    accessData.category,
-    contentItemId,
     null,
     accessData.adminDraftBypass, // F4: admin-draft QA-прогон вне монетизации
   );

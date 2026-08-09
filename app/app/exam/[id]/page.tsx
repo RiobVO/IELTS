@@ -146,8 +146,6 @@ export default async function ExamPage({
     user.id,
     userTier,
     test.tierRequired,
-    test.category,
-    id,
     existing ? null : modeParam,
     isDraftPreview, // adminDraftBypass — только когда isAdmin уже подтверждён выше
   );
@@ -178,15 +176,10 @@ export default async function ExamPage({
     );
   }
 
-  // Пройти enforceAccess с !meetsTier можно только по trial-лейну (§4.8) → это
-  // trial-старт: H3-атомарный claim в startAttempt. Admin-draft-preview — НЕ trial
-  // (доступ дан bypass'ом, не расходом слота): forced false, иначе admin с
-  // tier < tierRequired молча съел бы свой единственный trial на QA-прогоне.
-  const isTrial = !isDraftPreview && !meetsTier(userTier, test.tierRequired);
   // `resume` из батча выше (с mock→practice конверсией admin-preview) — резюм без
   // повторного SELECT той же строки. userTier — авторитетная Basic-кап проверка
   // теперь внутри транзакции startAttempt (не только soft-check в enforceAccess).
-  const { attemptId } = await startAttempt(user.id, id, mode, isTrial, resume, userTier);
+  const { attemptId } = await startAttempt(user.id, id, mode, resume, userTier);
   // Лимит mock из URL (?min=) — от пресетов ModeStart; clamp против ручных значений
   // (та же валидация, что в /app/reading). В iframe уходит только для mock: раннер
   // синхронизирует внутренний mock-таймер с этим значением (forceRunnerMode).

@@ -57,7 +57,7 @@ function pgCode(e: unknown): string | null {
 }
 
 // redirect() из next/navigation НЕ мокаем: он бросает NEXT_REDIRECT, и это ровно
-// тот сигнал отказа по капу/trial, который проверяем через isNextRedirectError.
+// тот сигнал отказа по капу, который проверяем через isNextRedirectError.
 import { startAttempt } from "@/lib/exam/access";
 import { finalizeSubmit } from "@/lib/exam/finalize-submit";
 import { isNextRedirectError } from "@/lib/exam/is-redirect-error";
@@ -93,17 +93,13 @@ async function seedUser(): Promise<string> {
 }
 
 /**
- * Минимальный published content_item. По умолчанию одиночный passage (basic,
- * не-trial-путь). `full=true` → полный tier-гейтнутый тест (full_reading +
- * premium) для trial-веток.
+ * Минимальный published content_item (одиночный passage, basic).
  */
-async function seedContent(full = false): Promise<string> {
+async function seedContent(): Promise<string> {
   seq++;
-  const category = full ? "full_reading" : "passage_1";
-  const tier = full ? "premium" : "basic";
   const [row] = await sql<{ id: string }[]>`
     INSERT INTO content_item (section, category, title, band_type, tier_required, status)
-    VALUES ('reading', ${category}, ${`T-${seq}`}, 'reading_academic', ${tier}, 'published')
+    VALUES ('reading', 'passage_1', ${`T-${seq}`}, 'reading_academic', 'basic', 'published')
     RETURNING id`;
   return row!.id;
 }
@@ -251,7 +247,7 @@ beforeEach(async () => {
   afterHooks.length = 0; // очередь after() не течёт между тестами
   captureServerMock.mockClear();
   // Полный чистый лист: TRUNCATE auth.users каскадом сносит profile → attempt/
-  // referral/trial_claim/content_item/notification/user_badge/leaderboard/…;
+  // referral/content_item/notification/user_badge/leaderboard/…;
   // badge (без FK к profile) и error_log чистим явно.
   await sql`TRUNCATE auth.users, badge, error_log CASCADE`;
 });
@@ -280,7 +276,7 @@ describe("Basic-кап на старты (транзакционный, под r
     const items = await Promise.all([seedContent(), seedContent(), seedContent(), seedContent()]);
 
     const results = await Promise.allSettled(
-      items.map((id) => startAttempt(userId, id, "practice", false, null, "basic")),
+      items.map((id) => startAttempt(userId, id, "practice", null, "basic")),
     );
 
     const created = results.filter((r) => r.status === "fulfilled");
@@ -302,7 +298,7 @@ describe("Basic-кап на старты (транзакционный, под r
     const items = await Promise.all([seedContent(), seedContent(), seedContent(), seedContent()]);
 
     const results = await Promise.allSettled(
-      items.map((id) => startAttempt(userId, id, "mock", false, null, "basic")),
+      items.map((id) => startAttempt(userId, id, "mock", null, "basic")),
     );
 
     const created = results.filter((r) => r.status === "fulfilled");
@@ -323,7 +319,7 @@ describe("Basic-кап на старты (транзакционный, под r
     await seedPracticeToday(userId, spent, BASIC_PRACTICE_DAILY_LIMIT); // 2 практис сегодня
     const fresh = await seedContent();
 
-    const err = await startAttempt(userId, fresh, "practice", false, null, "basic").catch((e) => e);
+    const err = await startAttempt(userId, fresh, "practice", null, "basic").catch((e) => e);
     expect(isNextRedirectError(err)).toBe(true);
     expect((err as { digest: string }).digest).toContain("limit=practice");
     // Ни одной попытки на новом тесте.
@@ -339,12 +335,12 @@ describe("Basic-кап на старты (транзакционный, под r
 
     // Третий старт (база 2 + бонус 1) обязан пройти — прежний код отбил бы его.
     const fresh = await seedContent();
-    const ok = await startAttempt(userId, fresh, "mock", false, null, "basic");
+    const ok = await startAttempt(userId, fresh, "mock", null, "basic");
     expect(ok.attemptId).toBeTruthy();
 
     // Четвёртый — уже за поднятым лимитом.
     const beyond = await seedContent();
-    const err = await startAttempt(userId, beyond, "mock", false, null, "basic").catch((e) => e);
+    const err = await startAttempt(userId, beyond, "mock", null, "basic").catch((e) => e);
     expect(isNextRedirectError(err)).toBe(true);
     expect((err as { digest: string }).digest).toContain("limit=mock");
     expect(await countRows("attempt", "user_id = $1 AND mode = 'mock'", userId)).toBe(
@@ -359,7 +355,7 @@ describe("Basic-кап на старты (транзакционный, под r
     await seedPracticeToday(userId, spent, BASIC_PRACTICE_DAILY_LIMIT);
 
     const fresh = await seedContent();
-    const err = await startAttempt(userId, fresh, "practice", false, null, "basic").catch((e) => e);
+    const err = await startAttempt(userId, fresh, "practice", null, "basic").catch((e) => e);
     expect(isNextRedirectError(err)).toBe(true);
     expect((err as { digest: string }).digest).toContain("limit=practice");
   });
@@ -373,7 +369,7 @@ describe("Basic-кап на старты (транзакционный, под r
     const items = await Promise.all([seedContent(), seedContent(), seedContent(), seedContent()]);
 
     const results = await Promise.allSettled(
-      items.map((id) => startAttempt(userId, id, "mock", false, null, "basic")),
+      items.map((id) => startAttempt(userId, id, "mock", null, "basic")),
     );
 
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(mockWeeklyLimit(1)); // 3
@@ -386,7 +382,7 @@ describe("Basic-кап на старты (транзакционный, под r
 
     // userTier='premium' → fast-path без транзакции/капа (paid безлимит).
     const results = await Promise.allSettled(
-      items.map((id) => startAttempt(userId, id, "practice", false, null, "premium")),
+      items.map((id) => startAttempt(userId, id, "practice", null, "premium")),
     );
 
     expect(results.every((r) => r.status === "fulfilled")).toBe(true);
@@ -403,8 +399,8 @@ describe("Гонка старта ОДНОГО item → одна попытка 
     const item = await seedContent();
 
     const [a, b] = await Promise.all([
-      startAttempt(userId, item, "practice", false, null, "basic"),
-      startAttempt(userId, item, "practice", false, null, "basic"),
+      startAttempt(userId, item, "practice", null, "basic"),
+      startAttempt(userId, item, "practice", null, "basic"),
     ]);
 
     expect(a.attemptId).toBe(b.attemptId); // проигравший гонку получил resume победителя
@@ -423,8 +419,8 @@ describe("Гонка старта ОДНОГО item → одна попытка 
     const item = await seedContent();
 
     const [a, b] = await Promise.all([
-      startAttempt(userId, item, "practice", false, null, "premium"),
-      startAttempt(userId, item, "practice", false, null, "premium"),
+      startAttempt(userId, item, "practice", null, "premium"),
+      startAttempt(userId, item, "practice", null, "premium"),
     ]);
 
     expect(a.attemptId).toBe(b.attemptId);
@@ -449,8 +445,8 @@ describe("Гонка старта ОДНОГО item → одна попытка 
     const item = await seedContent();
 
     const [a, b] = await Promise.all([
-      startAttempt(userId, item, "practice", false, null, "basic"),
-      startAttempt(userId, item, "practice", false, null, "basic"),
+      startAttempt(userId, item, "practice", null, "basic"),
+      startAttempt(userId, item, "practice", null, "basic"),
     ]);
 
     expect(a.attemptId).toBe(b.attemptId); // проигравший получил resume, НЕ cap-отказ
@@ -647,23 +643,19 @@ describe("Откат транзакции при инъекции сбоя", () 
     expect(await countRows("error_log", "message = 'applyPostSubmit failed'")).toBe(1);
   });
 
-  it("startAttempt trial-путь: RAISE на INSERT attempt → ни trial_claim, ни attempt не появились", async () => {
+  it("startAttempt (basic cap-путь): RAISE на INSERT attempt → ошибка пробрасывается, attempt не появился", async () => {
     const userId = await seedUser();
-    const item = await seedContent(true); // full_reading + premium → trial-лейн
+    const item = await seedContent();
 
-    // Транзакция startAttempt (isTrial): profile FOR UPDATE → insert trial_claim →
-    // cap-count → INSERT attempt (openNewAttempt) → инъекция бросает → tx откат.
+    // Транзакция startAttempt (basic): profile FOR UPDATE → cap-count →
+    // INSERT attempt (openNewAttempt) → инъекция бросает → tx откат.
     await sql.unsafe(INJECT_SQL.raiseOnAttemptInsert);
-    const err = await startAttempt(userId, item, "practice", true, null, "basic").catch((e) => e);
+    const err = await startAttempt(userId, item, "practice", null, "basic").catch((e) => e);
 
     // Это реальный сбой БД (инъекция на INSERT attempt), НЕ redirect —
     // startAttempt транзакцию не оборачивает try/catch, ошибка пробрасывается.
-    // (drizzle обёртывает pg-ошибку в «Failed query: insert into attempt…» — сам
-    // факт проброса + откат ниже и есть доказательство атомарности.)
     expect(err).toBeInstanceOf(Error);
     expect(isNextRedirectError(err)).toBe(false);
-    // trial_claim, вставленный ранее в ТОЙ ЖЕ транзакции, откатился вместе с attempt.
-    expect(await countRows("trial_claim", "user_id = $1", userId)).toBe(0);
     expect(await countRows("attempt", "user_id = $1", userId)).toBe(0);
   });
 });
@@ -702,8 +694,8 @@ describe("Лок-порядок profile→content_item под нагрузкой
           userId, contentItemId: items[1]!, attemptId: `${r}-b`,
           mode: "mock", rawScore: 5, total: 10, timeUsedSeconds: 1200, submittedAt: new Date(),
         }),
-        startAttempt(userId, items[2]!, "practice", false, null, "basic"),
-        startAttempt(userId, items[0]!, "practice", false, null, "basic"),
+        startAttempt(userId, items[2]!, "practice", null, "basic"),
+        startAttempt(userId, items[0]!, "practice", null, "basic"),
       ];
       const settled = await Promise.allSettled(ops);
       for (const s of settled) {

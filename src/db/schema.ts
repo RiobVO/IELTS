@@ -1198,39 +1198,6 @@ export const preorder = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
-/* trial_claim — атомарный маркер «trial-лейн израсходован» (migration 0054)    */
-/* Заменяет advisory-xact-lock в startAttempt: инвариант «один бесплатный полный */
-/* тест на юзера» держит PRIMARY KEY(user_id) — INSERT ... ON CONFLICT (user_id) */
-/* DO NOTHING сериализует конкурентные trial-старты без блокирующего лока на     */
-/* pgbouncer. НЕ источник правды решения (им остаётся hasConsumedTrial по         */
-/* attempt) — только concurrency-guard: победитель открывает попытку, проигравший */
-/* пересверяется с hasConsumedTrial. SERVER-ONLY как signup_throttle/error_log:   */
-/* RLS on, гранты клиенту сняты, ноль политик — клиент это состояние не читает.   */
-/* content_item_id ON DELETE CASCADE зеркалит attempt: удаление теста освобождает */
-/* trial, держа claim консистентным с attempt-derived hasConsumedTrial.           */
-/* -------------------------------------------------------------------------- */
-export const trialClaim = pgTable(
-  "trial_claim",
-  {
-    // PK(user_id) = сам инвариант «один trial на юзера».
-    userId: uuid("user_id")
-      .primaryKey()
-      .references(() => profile.id, { onDelete: "cascade" }),
-    // На каком тесте trial потрачен: провенанс + CASCADE-привязка времени жизни
-    // claim к тесту (удалили тест → claim ушёл, как и его attempts).
-    contentItemId: uuid("content_item_id")
-      .notNull()
-      .references(() => contentItem.id, { onDelete: "cascade" }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  // FK-индекс content_item_id: cascade-delete теста без seq-scan (user_id покрыт
-  // PK слева) — паттерн mistake_resolution/saved_word.
-  (t) => [index("trial_claim_content_item_id_idx").on(t.contentItemId)],
-);
-
-/* -------------------------------------------------------------------------- */
 /* telegram_link (0061) — связка аккаунта с чатом СТУДЕНЧЕСКОГО бота (G2-1).    */
 /* Отдельный бот от импортного (тот стоит на whitelist'е admin-id, потому что   */
 /* пишет контент owner-path); этот открыт всем, поэтому chat_id ничего не значит */

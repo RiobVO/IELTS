@@ -4,8 +4,7 @@ import { attempt, contentItem, profile } from "@/db/schema";
 import { env } from "@/env";
 import { getUser, isAdminProfile } from "@/lib/auth";
 import { renderRunnerDocument } from "@/lib/import/runner/render-runner";
-import { hasConsumedTrial } from "@/lib/exam/access";
-import { isFullCategory, trialAllows } from "@/lib/exam/trial";
+import { isFullCategory } from "@/lib/exam/categories";
 import { effectiveTier, meetsTier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 
@@ -72,27 +71,13 @@ export async function GET(
   const userTier = prof
     ? effectiveTier({ tier: prof.tier, premium_until: prof.premiumUntil })
     : "basic";
-  // Tier-гейт + trial-лейн (§4.8), зеркалит enforceAccess: Basic может открыть ОДИН
-  // полный тест без апгрейда. Без этого iframe-раннер отдал бы 403 на легитимном
-  // trial-старте (страница уже пропустила), и trial сломался бы на середине.
+  // Tier-гейт (§4.8), зеркалит enforceAccess: с 0063 без trial-лейна — тир не
+  // дотягивает → 403 (defense-in-depth на прямой GET /runner; на проде весь R/L
+  // basic, ветка живёт как seam будущего пейвола).
   // F4: черновик ещё не продаётся — тир-гейт неприменим к admin-preview (та же
   // логика, что enforceAccess.adminDraftBypass на странице /app/exam/[id]).
   if (!isDraftPreview && !meetsTier(userTier, item.tierRequired)) {
-    const maybeTrial = userTier === "basic" && isFullCategory(item.category);
-    const trialConsumed = maybeTrial ? await hasConsumedTrial(user.id, id) : true;
-    // C2: trial отдаёт runner-HTML ТОЛЬКО при существующей in_progress-попытке юзера
-    // на ЭТОТ item (att). Иначе прямой GET /runner без старта читал бы контент многих
-    // full mock, не расходуя trial. Легитимный поток цел: exam page создаёт попытку
-    // до загрузки iframe. Для premium/ultra ветка не исполняется (meetsTier пропускает).
-    const trialGranted =
-      !!att &&
-      trialAllows({
-        userTier,
-        tierRequired: item.tierRequired,
-        category: item.category,
-        trialConsumed,
-      });
-    if (!trialGranted) return new Response("Forbidden", { status: 403 });
+    return new Response("Forbidden", { status: 403 });
   }
 
   // Лимит mock из ?min= (iframe передаёт его сюда). Route доступен прямым GET →

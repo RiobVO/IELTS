@@ -13,11 +13,11 @@
  * keep their own gate.
  */
 import "server-only";
-import { and, count, desc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
-import { attempt, contentItem, profile, trialClaim } from "@/db/schema";
+import { attempt, contentItem, profile } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
 import { isAdminProfile } from "@/lib/auth";
 import {
@@ -28,7 +28,6 @@ import {
   REFERRAL_MOCK_BONUS_MAX,
   type Tier,
 } from "@/lib/tiers";
-import { FULL_CATEGORIES, isFullCategory, trialAllows } from "./trial";
 
 /** Режим попытки (P0): серверная сущность, выбирается ДО создания attempt. */
 export type AttemptMode = "practice" | "mock";
@@ -76,7 +75,6 @@ export async function loadAccessData(
 ): Promise<{
   userTier: Tier;
   tierRequired: Tier;
-  category: string;
   bandScale: Record<string, number> | null;
   /** true только когда юзер — admin И тест ещё не опубликован (F4). Сигнал для
    *  enforceAccess: QA-прогон черновика вне монетизации (тир/дневной кап
@@ -96,7 +94,6 @@ export async function loadAccessData(
     db
       .select({
         tierRequired: contentItem.tierRequired,
-        category: contentItem.category,
         bandScale: contentItem.bandScale,
         status: contentItem.status,
       })
@@ -112,7 +109,6 @@ export async function loadAccessData(
   return {
     userTier: effectiveTier({ tier: prof.tier, premium_until: prof.premiumUntil }),
     tierRequired: item.tierRequired,
-    category: item.category,
     bandScale: (item.bandScale as Record<string, number> | null) ?? null,
     adminDraftBypass: admin && item.status !== "published",
   };
@@ -128,11 +124,6 @@ export async function enforceAccess(
   userId: string,
   userTier: Tier,
   tierRequired: Tier,
-  /** Категория теста — из content_item (owner-path), НЕ из client-input: решает,
-   *  применим ли trial-лейн (только полный тест). */
-  category: string,
-  /** id текущего теста — trial-запрос исключает его попытки (свой trial не расход). */
-  contentItemId: string,
   /**
    * Basic caps считают и гейтят ТОЛЬКО СОЗДАНИЕ НОВОГО attempt — 2
    * practice/день + 2 mock/неделю (owner decision 2026-07-17; анти-абуз сверх
@@ -154,18 +145,11 @@ export async function enforceAccess(
 ): Promise<void> {
   if (adminDraftBypass) return;
 
-  // (a) Tier gate + trial-лейн (§4.8). Обычный tier-гейт закрыл бы полный тест для
-  // Basic — trial-лейн пропускает ОДИН (лендинг «first full test is free»).
-  // DB-запрос «израсходован ли trial» делаем ТОЛЬКО когда он реально может помочь
-  // (Basic + полный тест); иначе лишний RT не нужен — trialAllows и так даст deny.
+  // (a) Tier gate (§4.8). С 0063 без trial-лейна: тир не дотягивает → upgrade.
+  // На проде весь R/L контент tier_required='basic' (пивот 2026-07-17), так что
+  // для живого каталога ветка не срабатывает; это seam будущего пейвола и гейт W/S.
   if (!meetsTier(userTier, tierRequired)) {
-    const maybeTrial = userTier === "basic" && isFullCategory(category);
-    const trialConsumed = maybeTrial
-      ? await hasConsumedTrial(userId, contentItemId)
-      : true;
-    if (!trialAllows({ userTier, tierRequired, category, trialConsumed })) {
-      redirect("/app/upgrade");
-    }
+    redirect("/app/upgrade");
   }
 
   // (b) Basic caps (owner decision 2026-07-17, replaces the old 25/day mock-only
@@ -238,39 +222,6 @@ export async function enforceAccess(
       }
     }
   }
-}
-
-/**
- * Израсходован ли trial-лейн (§4.8): есть ли у юзера attempt на полном tier-
- * гейтнутом тесте (category full_*, tier_required выше basic), считающийся расходом.
- * Расход = попытка на ДРУГОМ таком тесте ЛИБО СДАННАЯ (submitted) на ТЕКУЩЕМ item.
- * Исключается только СОБСТВЕННАЯ in_progress текущего item — чтобы резюм/submit
- * своего trial жили; submitted текущего = расход (иначе бесконечные бесплатные
- * ретейки того же full mock). owner-path (Drizzle bypass RLS); attempt.user_id
- * индексирован, JOIN по PK, LIMIT 1 — один RT. `exec` — db или tx (H3 recheck под локом).
- */
-export async function hasConsumedTrial(
-  userId: string,
-  currentContentItemId: string,
-  exec: DbExecutor = db,
-): Promise<boolean> {
-  const [row] = await exec
-    .select({ id: attempt.id })
-    .from(attempt)
-    .innerJoin(contentItem, eq(contentItem.id, attempt.contentItemId))
-    .where(
-      and(
-        eq(attempt.userId, userId),
-        ne(contentItem.tierRequired, "basic"),
-        inArray(contentItem.category, [...FULL_CATEGORIES]),
-        or(
-          ne(attempt.contentItemId, currentContentItemId),
-          eq(attempt.status, "submitted"),
-        ),
-      ),
-    )
-    .limit(1);
-  return !!row;
 }
 
 /**
@@ -354,14 +305,6 @@ export async function startAttempt(
   /** Режим НОВОЙ попытки; существующая in_progress резюмится со СВОИМ mode. */
   modeIfNew: AttemptMode,
   /**
-   * H3: доступ выдан trial-лейном (§4.8), не по тиру. Создание НОВОЙ попытки тогда
-   * атомарно по юзеру — claim единственного trial-слота через trial_claim
-   * (PK user_id, ON CONFLICT DO NOTHING), иначе два параллельных старта РАЗНЫХ full
-   * mock оба пройдут (partial-индекс 0007 держит только (user,item)). Резюм
-   * существующей попытки — БЕЗ claim (ранний return по `resume`).
-   */
-  isTrial: boolean,
-  /**
    * Результат страничного findInProgressAttempt из ТОГО ЖЕ запроса: объект →
    * резюмим его без повторного SELECT той же строки (страница уже решила mode по
    * нему — единый снимок согласованнее, чем второе чтение); null → попытки нет,
@@ -417,16 +360,16 @@ export async function startAttempt(
   }
 
   const needsCapCheck = userTier === "basic";
-  // Fast path: nothing to serialize (paid tier, non-trial) — skip the
+  // Fast path: nothing to serialize (paid tier — no cap) — skip the
   // transaction entirely, same as before this change.
-  if (!isTrial && !needsCapCheck) {
+  if (!needsCapCheck) {
     return openNewAttempt(db, userId, contentItemId, modeIfNew);
   }
 
   return db.transaction(async (tx) => {
     // Lock order invariant (Codex review 2026-07-17, major #1): profile FIRST,
     // ALWAYS, before ANYTHING else in this transaction — in particular before
-    // the trialClaim insert below, whose FK to content_item takes a share-lock
+    // the attempt insert below, whose FK to content_item takes a share-lock
     // on that content_item row. apply-post-submit.ts documents the same
     // invariant ("Lock order is always profile -> content_item") for its own
     // rated-submit transaction; unifying on ONE global order across every
@@ -474,51 +417,24 @@ export async function startAttempt(
       };
     }
 
-    // Trial-старт: атомарный claim единственного trial-слота юзера через
-    // trial_claim (0054) вместо блокирующего advisory-xact-lock. PK(user_id)
-    // сериализует конкурентные старты РАЗНЫХ full mock: второй INSERT ждёт
-    // row-lock ключа до commit первого, затем ловит ON CONFLICT DO NOTHING
-    // (пустой RETURNING) — без удержания advisory-лока на server-connection
-    // пула pgbouncer.
-    if (isTrial) {
-      const claimed = await tx
-        .insert(trialClaim)
-        .values({ userId, contentItemId })
-        .onConflictDoNothing({ target: trialClaim.userId })
-        .returning({ userId: trialClaim.userId });
-      // Проиграл claim → слот уже занят (победителем гонки или прежним стартом этой
-      // же сессии). Источник правды решения — прежний hasConsumedTrial (READ
-      // COMMITTED: после commit победителя его attempt виден): расход на другом/
-      // сданном тесте → redirect; собственный in_progress текущего item он
-      // пропускает, а openNewAttempt резюмит его по partial-индексу 0007. Так claim
-      // НЕ может дать ложный deny — только отсечь двойное открытие. Победитель
-      // (claim создан) открывает сразу: enforceAccess уже прошёл (trial не
-      // израсходован), а конкурентный расход был бы виден как проигрыш claim.
-      if (claimed.length === 0 && (await hasConsumedTrial(userId, contentItemId, tx))) {
-        redirect("/app/upgrade");
-      }
-    }
-
     // Basic cap — АВТОРИТЕТНАЯ проверка (Codex review 2026-07-17 blocker): the
     // COUNT in enforceAccess happens in its OWN, separate statement/round-trip
     // before this transaction even starts — two concurrent starts can both
     // read "1 of 2 used", both pass that soft check, then both reach here and
     // both INSERT (classic check-then-act race). A counting cap (up to N, not
-    // a single slot) can't be modeled as one ON CONFLICT DO NOTHING insert
-    // like trial_claim, so instead it's SERIALIZED for THIS user by the
+    // a single slot) can't be modeled as one ON CONFLICT DO NOTHING insert,
+    // so instead it's SERIALIZED for THIS user by the
     // profile row-lock taken at the top of this transaction (same technique
     // progress/apply-post-submit.ts already uses to serialize concurrent
     // submits of one user — profile is a natural one-row-per-user lock target,
     // no schema change needed). A concurrent start by a DIFFERENT user locks a
     // DIFFERENT row, so there's no cross-user contention. This is a
     // TRANSACTION-scoped row lock, released at COMMIT/ROLLBACK — deliberately
-    // NOT a session-scoped advisory lock (pg_advisory_lock), which the trial
-    // gate dropped for exactly this reason: it doesn't play safe with
-    // pgbouncer transaction-mode pooling (the underlying connection can be
-    // handed to another session between statements outside an explicit
+    // NOT a session-scoped advisory lock (pg_advisory_lock): that doesn't play
+    // safe with pgbouncer transaction-mode pooling (the underlying connection
+    // can be handed to another session between statements outside an explicit
     // transaction). A tx-scoped row lock lives and dies with THIS transaction,
-    // so it's safe under transaction-mode pooling the same way trial_claim's
-    // ON CONFLICT already is.
+    // so it's safe under transaction-mode pooling.
     if (needsCapCheck) {
       const limit =
         modeIfNew === "practice"
@@ -562,8 +478,8 @@ export async function startAttempt(
 
 /**
  * Вставляет новую in_progress-попытку (или резюмит победителя гонки того же item) и
- * фейрит `test_start`. Выделено из startAttempt, чтобы non-trial и trial-под-локом
- * пути делили ОДНУ логику вставки; `exec` = db или транзакция (для trial-клейма).
+ * фейрит `test_start`. Выделено из startAttempt, чтобы fast-path (paid) и
+ * cap-путь-под-локом делили ОДНУ логику вставки; `exec` = db или транзакция.
  */
 async function openNewAttempt(
   exec: DbExecutor,
