@@ -208,7 +208,7 @@ export default async function ProfilePage() {
             </svg>
             <div style={S.ringCenter}>
               <div style={S.ringNum}>{bestBand != null ? bestBand.toFixed(1) : "—"}</div>
-              <div style={S.ringCap}>best band</div>
+              <div className="pf-ring-cap" style={S.ringCap}>best band</div>
             </div>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -251,7 +251,7 @@ export default async function ProfilePage() {
           </a>
           <div style={S.weekCard}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 13 }}>
-              <span style={S.sub}>This week</span>
+              <span className="pf-sub" style={S.sub}>This week</span>
               <span style={S.weekStreak}><Icon name="flame" size={13} strokeWidth={2.4} /> {streak}-day</span>
             </div>
             <div style={{ display: "flex", gap: 7 }}>
@@ -260,7 +260,7 @@ export default async function ProfilePage() {
                   <div style={{ ...S.weekDot, background: d.on ? "color-mix(in oklab, var(--streak) 16%, var(--surface))" : "var(--surface-inset)", color: d.on ? "var(--streak)" : "var(--text-disabled)" }}>
                     {d.on && <Icon name="check" size={14} strokeWidth={2.6} />}
                   </div>
-                  <div style={S.weekLab}>{d.lab}</div>
+                  <div className="pf-week-lab" style={S.weekLab}>{d.lab}</div>
                 </div>
               ))}
             </div>
@@ -279,7 +279,7 @@ export default async function ProfilePage() {
         <div className="pf-duo2" style={S.duo2}>
           <div style={S.achCard}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
-              <span style={S.sub}>Achievements</span>
+              <span className="pf-sub" style={S.sub}>Achievements</span>
               <a href="/app/badges" style={S.achLink}>All {badges.length || 12} →</a>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
@@ -310,7 +310,7 @@ export default async function ProfilePage() {
 
         {/* Account & billing — quiet, at the bottom */}
         <div style={S.quietCard}>
-          <div style={S.quietHead}><span style={S.sub}>Account &amp; billing</span></div>
+          <div style={S.quietHead}><span className="pf-sub" style={S.sub}>Account &amp; billing</span></div>
           <QuietRow icon="book-open" label="Email" value={profile?.email ?? user.email ?? "—"} />
           <QuietRow icon="bar-chart" label="Target band" value={target != null ? target.toFixed(1) : "Not set"} />
           <QuietRow icon="crown" label="Plan" value={TIER_LABEL[current]} />
@@ -325,7 +325,7 @@ export default async function ProfilePage() {
 
         {/* Payment history — quiet */}
         <div style={S.quietCard}>
-          <div style={S.quietHead}><span style={S.sub}>Payment history</span></div>
+          <div style={S.quietHead}><span className="pf-sub" style={S.sub}>Payment history</span></div>
           {payments.length === 0 ? (
             <div style={S.payEmpty}>No payments yet.</div>
           ) : (
@@ -404,6 +404,11 @@ const PF_CSS = `
    без переноса вылезает за карту — разрешаем wrap. */
 @media (max-width:430px){
   .pf-payrow{flex-wrap:wrap;row-gap:6px}
+  /* Микро-текст: "best band"/буква дня — смысловые лейблы → 12px; секционные
+     uppercase-заголовки (This week/Achievements/…) — тоже 12px. */
+  .pf-ring-cap{font-size:12px!important}
+  .pf-week-lab{font-size:12px!important}
+  .pf-sub{font-size:12px!important}
 }
 `;
 

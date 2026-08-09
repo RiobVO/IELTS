@@ -445,7 +445,7 @@ export default function ExamRunner({
     } else if (audioPhase === "transfer") {
       timerArea = (
         <>
-          <span style={badge(true)}>Transfer</span>
+          <span className="exam-mode-badge" style={badge(true)}>Transfer</span>
           <ExamTimer remainingSeconds={transferRemaining ?? TRANSFER_SECONDS} totalSeconds={TRANSFER_SECONDS} />
         </>
       );
@@ -457,14 +457,14 @@ export default function ExamRunner({
       const total = mockTotalSeconds();
       timerArea = (
         <>
-          <span style={badge(true)}>Mock</span>
+          <span className="exam-mode-badge" style={badge(true)}>Mock</span>
           <ExamTimer remainingSeconds={mockRemaining ?? total} totalSeconds={total} />
         </>
       );
     } else {
       timerArea = (
         <>
-          <span style={badge(false)}>Practice</span>
+          <span className="exam-mode-badge" style={badge(false)}>Practice</span>
           <span style={S.clock}>
             <Icon name={paused ? "pause" : "clock"} size={18} style={{ color: "var(--text-muted)" }} /> {fmt(practiceSeconds)}
           </span>
@@ -1075,6 +1075,8 @@ const READING_CSS = `
   .exam-overlay{align-items:start!important}
   .exam-start-cards{grid-template-columns:1fr!important}
   .exam-presets{flex-wrap:wrap!important}
+  /* Бейдж режима (Practice/Mock/Transfer) — смысловой лейбл, поднимаем до 12px. */
+  .exam-mode-badge{font-size:12px!important}
 }
 
 /* === Cambridge skin (шаг 4): бело-сине-графитовый вид реального computer-IELTS.

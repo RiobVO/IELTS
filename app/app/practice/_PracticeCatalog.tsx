@@ -271,7 +271,7 @@ export function PracticeCatalog({
           «твой следующий ход»: доминирующий hero-CTA + вторичный drill-чип. */}
       <section className="pc-headrow" style={S.headrow}>
         <div>
-          <div style={S.overline}>
+          <div className="pc-overline" style={S.overline}>
             <span style={S.overlineDot} />
             Practice library
           </div>
@@ -787,7 +787,7 @@ function TestRow({ t }: { t: PracticeTest }) {
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 4 }}>
-          <span style={{ ...S.rowPill, color: sec.tileFg, background: sec.tileBg }}>{sec.label}</span>
+          <span className="pc-row-pill" style={{ ...S.rowPill, color: sec.tileFg, background: sec.tileBg }}>{sec.label}</span>
           <span style={S.rowMeta}>{cat(t.category)} · {t.questionCount} Q</span>
         </div>
         <div style={S.rowTitle}>{t.title}</div>
@@ -932,6 +932,8 @@ const CSS = `
 @media (pointer:coarse){.pc-showall{min-height:44px}.pc-goalsel{min-height:44px}}
 /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
 @media (max-width:430px){.pc-goalsel{font-size:16px!important}}
+/* Микро-текст: overline-эйбрау и R/L-пилюля в строке теста — смысловые лейблы → 12px. */
+@media (max-width:430px){.pc-overline{font-size:12px!important}.pc-row-pill{font-size:12px!important}}
 @media (prefers-reduced-motion:reduce){
   .pc-bars span{animation:none!important;transform:none!important}
   .pc-goalsaved{animation:none!important}

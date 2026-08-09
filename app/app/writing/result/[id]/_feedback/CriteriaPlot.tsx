@@ -39,11 +39,11 @@ export function CriteriaPlot({ rows, targetBand }: { rows: PlotRow[]; targetBand
           <div style={S.stripLabel}>Criterion · estimated range</div>
           <div style={S.axis}>
             {ticks.map((t) => (
-              <span key={t} style={{ ...S.tick, left: `${axisPct(t)}%` }}>
+              <span key={t} className="wf-plot-tick" style={{ ...S.tick, left: `${axisPct(t)}%` }}>
                 {t}
               </span>
             ))}
-            <span style={{ ...S.targetMark, left: `${targetLeft}%`, transform: targetAnchor }}>TARGET {targetBand.toFixed(1)}</span>
+            <span className="wf-plot-targetmark" style={{ ...S.targetMark, left: `${targetLeft}%`, transform: targetAnchor }}>TARGET {targetBand.toFixed(1)}</span>
           </div>
         </div>
 
@@ -80,7 +80,7 @@ export function CriteriaPlot({ rows, targetBand }: { rows: PlotRow[]; targetBand
 function Line({ label, value, labelColor, valueColor = "var(--text-secondary)" }: { label: string; value: string; labelColor: string; valueColor?: string }) {
   return (
     <div style={S.line}>
-      <span style={{ ...S.lineLabel, color: labelColor }}>{label}</span>
+      <span className="wf-plot-linelabel" style={{ ...S.lineLabel, color: labelColor }}>{label}</span>
       <span style={{ ...S.lineValue, color: valueColor, fontWeight: label === "Next" ? 500 : 400 }}>{value}</span>
     </div>
   );

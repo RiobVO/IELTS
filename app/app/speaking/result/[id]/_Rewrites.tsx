@@ -33,6 +33,7 @@ export function Rewrites({ rewrites }: { rewrites: Rewrite[] }) {
 
   return (
     <section>
+      <style>{CSS}</style>
       <div style={S.head}>
         <h2 style={S.h2}>Say it stronger</h2>
         <span style={S.pill}>Band 7+</span>
@@ -47,11 +48,11 @@ export function Rewrites({ rewrites }: { rewrites: Rewrite[] }) {
           return (
             <div key={i} style={S.pair}>
               <div style={S.yours}>
-                <span style={{ ...S.tag, ...S.tagY }}>Yours</span>
+                <span className="sr-rw-tag" style={{ ...S.tag, ...S.tagY }}>Yours</span>
                 <span style={S.yoursText}>{diffHighlight(r.original, reps.map((p) => p.from), S.strike)}</span>
               </div>
               <div style={S.strong}>
-                <span style={{ ...S.tag, ...S.tagS }}>Stronger</span>
+                <span className="sr-rw-tag" style={{ ...S.tag, ...S.tagS }}>Stronger</span>
                 <span style={S.strongText}>{diffHighlight(r.improved, reps.map((p) => p.to), S.up)}</span>
               </div>
             </div>
@@ -61,6 +62,13 @@ export function Rewrites({ rewrites }: { rewrites: Rewrite[] }) {
     </section>
   );
 }
+
+// "Yours"/"Stronger" — смысловые uppercase-теги, поднимаем до 12px на узком экране.
+const CSS = `
+@media (max-width:430px){
+  .sr-rw-tag{font-size:12px!important}
+}
+`;
 
 const S: Record<string, CSSProperties> = {
   head: { display: "flex", alignItems: "center", gap: 10, marginBottom: 4 },

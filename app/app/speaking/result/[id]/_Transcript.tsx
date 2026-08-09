@@ -206,7 +206,7 @@ export function Transcript({
           }}
         >
           {seg.text}
-          <sup style={S.sup}>{idx + 1}</sup>
+          <sup className="st-sup" style={S.sup}>{idx + 1}</sup>
         </mark>
       );
     });
@@ -394,6 +394,8 @@ const CSS = `
 @media (max-width:430px){
   .st-wave::before{content:"";position:absolute;top:50%;left:0;transform:translateY(-50%);width:100%;height:44px}
   .st-delete{min-height:44px}
+  /* Сноска-индекс аннотации — цифровой микро-лейбл, минимум 11px. */
+  .st-sup{font-size:11px!important}
 }
 `;
 

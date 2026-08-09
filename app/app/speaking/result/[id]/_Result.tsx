@@ -142,6 +142,11 @@ const GRID_CSS = `
 /* Тап-таргет пилюли истории 38px < 44px на узких телефонах. */
 @media (max-width:430px){
   .sr-pill{min-height:44px}
+  /* CriteriaPlot/BandHero микро-текст (см. Writing _FeedbackView.tsx — тот же реюз). */
+  .wf-plot-tick{font-size:11px!important}
+  .wf-plot-targetmark{font-size:12px!important}
+  .wf-plot-linelabel{font-size:12px!important}
+  .wf-blocker-badge{font-size:12px!important}
 }
 `;
 

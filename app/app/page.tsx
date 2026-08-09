@@ -516,7 +516,7 @@ function WeekCard({
                   ? { outline: "2px solid color-mix(in oklab, var(--streak) 35%, var(--surface))", outlineOffset: 2 }
                   : null),
               }} />
-              <div aria-hidden="true" style={S.weekLab}>{w.lab}</div>
+              <div aria-hidden="true" className="dash-week-lab" style={S.weekLab}>{w.lab}</div>
               {/* Hover-ридаут столбца: число тестов / today / rest — декоративный
                   (aria-hidden), доступную версию несёт aria-label ячейки. */}
               <span aria-hidden="true" className="daytip">{weekdayTip(w)}</span>
@@ -695,7 +695,7 @@ function TestRow({ a, chip }: { a: AttemptRow; chip: Chip }) {
       </div>
       <span className="dash-trow-tail" style={{ display: "flex", alignItems: "center", gap: 14 }}>
         {band != null && <Badge tone="brand" mono>band {band}</Badge>}
-        <span style={{ ...S.chip, ...(chip.kind === "weak" ? S.chipWeak : chip.kind === "up" ? S.chipUp : S.chipRev) }}>{chip.text}</span>
+        <span className="dash-chip" style={{ ...S.chip, ...(chip.kind === "weak" ? S.chipWeak : chip.kind === "up" ? S.chipUp : S.chipRev) }}>{chip.text}</span>
         <span style={S.trowScore}>{score}</span>
       </span>
     </Link>
@@ -775,6 +775,10 @@ const DASH_CSS = `
 @media (max-width:430px){
   .dash-trow{flex-wrap:wrap}
   .dash-trow-tail{flex:1 1 100%;justify-content:flex-end}
+  /* Мелкий текст трудно читать на телефоне: чип дельты и буква дня недели —
+     смысловые лейблы, поднимаем до 12px (правило микро-текста батча F). */
+  .dash-chip{font-size:12px!important}
+  .dash-week-lab{font-size:12px!important}
 }
 `;
 

@@ -40,6 +40,8 @@ const NB_CSS = `
 /* Тап-таргет 44px на узких телефонах — "Mark all read" был обычным текстом без высоты. */
 @media (max-width:430px){
   .nb-markall{display:inline-flex;align-items:center;min-height:44px}
+  /* Счётчик непрочитанных — чисто цифровой микро-лейбл, поднимаем до минимума 11px. */
+  .nb-badge{font-size:11px!important}
 }
 `;
 
@@ -122,6 +124,7 @@ export function NotificationsBell({
         <Icon name="bell" size={19} strokeWidth={2.2} />
         {unread > 0 && (
           <span
+            className="nb-badge"
             style={{
               position: "absolute",
               top: 4,
