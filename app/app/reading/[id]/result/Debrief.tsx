@@ -202,7 +202,7 @@ function ScoreReveal({ data, onContinue }: { data: DebriefData; onContinue: () =
         Your debrief · {data.title}
         {data.category ? ` · ${categoryLabel(data.category)}` : ""} · {data.totalQuestions} questions
       </div>
-      <AnimatedDonut pct={score.correctPct} />
+      <AnimatedDonut pct={score.correctPct} raw={score.raw} total={score.total} />
       <div className="db-rv-band">
         <div className="db-rv-eyebrow">{bandValue != null ? "Band score" : "Score"}</div>
         <div className="db-rv-n">
@@ -416,8 +416,18 @@ function LevelCard({ level }: { level: DebriefData["level"] }) {
 
   return (
     <div className="db-lvl">
-      <h3 className="db-lvl-h3">You&rsquo;re a {avgPctDisplay}% reader — everywhere except one place.</h3>
-      <p className="db-lvl-lead">The purple line is <b>your own average</b>. One type sits far below it.</p>
+      <h3 className="db-lvl-h3">
+        {gain > 0
+          ? `You’re a ${avgPctDisplay}% reader — everywhere except one place.`
+          : `You’re a consistent ${avgPctDisplay}% reader across every type.`}
+      </h3>
+      <p className="db-lvl-lead">
+        {gain > 0 ? (
+          <>The purple line is <b>your own average</b>. One type sits far below it.</>
+        ) : (
+          <>The purple line is <b>your own average</b> — every type tracks it closely.</>
+        )}
+      </p>
       <div className="db-lvl-rows">
         {level.rows.map((r, i) => {
           const p = r.total > 0 ? Math.round((r.correct / r.total) * 100) : 0;

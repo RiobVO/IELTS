@@ -355,14 +355,18 @@ export default async function ResultPage({
   // built ONLY when fullReview, mirroring the akItems gate above.
   const bandScale = (ci[0]?.bandScale as Record<string, number> | null) ?? null;
   const nearMiss = computeNearMiss(bandScale, result.rawScore);
+  // На идеальной/ровной попытке weakest всё равно указывает на какой-то тип
+  // (perType всегда непусто), но там нечего чинить — costMarks === 0. Гейт на
+  // реальную потерю баллов, иначе S2/S5 придумывают "слабый тип" из воздуха.
+  const weakestCostMarks = weakest ? weakest[1].total - weakest[1].correct : 0;
   const blindSpot: DebriefData["blindSpot"] =
     computeBlindSpot(result.perQuestion, meta) ??
-    (weakest
+    (weakest && weakestCostMarks > 0
       ? {
           label: qtypeLabel(weakest[0]),
           weakBucket: { correct: weakest[1].correct, total: weakest[1].total },
           strongBucket: null,
-          costMarks: weakest[1].total - weakest[1].correct,
+          costMarks: weakestCostMarks,
         }
       : null);
   // Хронологический ряд для computeGrowth: prevRows приходит most-recent-first
@@ -434,8 +438,8 @@ export default async function ResultPage({
     replay,
     level: { rows: levelRows, avgPct: correctPct, growth },
     plan: {
-      weakLabel: weakest ? qtypeLabel(weakest[0]) : null,
-      drillHref: weakest ? `${catalogBase}?q_type=${encodeURIComponent(weakest[0])}` : null,
+      weakLabel: weakest && weakestCostMarks > 0 ? qtypeLabel(weakest[0]) : null,
+      drillHref: weakest && weakestCostMarks > 0 ? `${catalogBase}?q_type=${encodeURIComponent(weakest[0])}` : null,
       retryHref,
     },
     share: profile?.referral_code
