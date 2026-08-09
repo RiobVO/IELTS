@@ -239,7 +239,7 @@ function Shell({ children, onClose }: { children: ReactNode; onClose: () => void
           </span>
           <span style={S.headTitle}>Speaking Lab</span>
           <span style={S.partPill}>Part 2 · Long turn</span>
-          <button type="button" aria-label="Close" onClick={onClose} style={S.close}>
+          <button type="button" aria-label="Close" onClick={onClose} className="sa-close" style={S.close}>
             <Icon name="x" size={18} strokeWidth={2.2} />
           </button>
         </div>
@@ -609,6 +609,11 @@ const CSS = `
 /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
 @media (max-width:430px){
   .sa-scratch{font-size:16px!important}
+}
+/* Close-кнопка 30×30 — визуал сохраняем, тап-зону растим псевдоэлементом. */
+.sa-close{position:relative}
+@media (max-width:430px){
+  .sa-close::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
 }
 `;
 

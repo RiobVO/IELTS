@@ -46,6 +46,8 @@ nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 80%,
   .ndrawer a{display:block;padding:13px 28px;font-size:15px;font-weight:700;color:var(--ink-2);border-bottom:1px solid var(--rule)}
   .ndrawer a:last-child{border-bottom:0}
 }
+/* Тап-таргет бургера 40x40 < 44px на узких телефонах. */
+@media(max-width:430px){.nburger{width:44px;height:44px}}
 .btn{display:inline-flex;align-items:center;gap:9px;font-family:var(--sans);font-weight:700;font-size:15px;border-radius:13px;padding:12px 21px;cursor:pointer;border:1.5px solid transparent;transition:transform .22s var(--ease),box-shadow .28s,background .2s,border-color .2s}
 .btn .ico{width:17px;height:17px}
 .btn-v{background:var(--v2);color:#fff;box-shadow:0 10px 24px -10px rgba(129,112,234,.6)}

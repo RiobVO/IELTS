@@ -549,9 +549,10 @@ const CSS = `
   .wl-card:hover{transform:none}
   .wl-card:hover .wl-arrow{transform:none}
 }
-/* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
+/* iOS зумит вьюпорт при фокусе поля с font-size <16px; крестик очистки/селекты — до 44px тап-таргета. */
 @media (max-width:430px){
-  .wl-sort{font-size:16px!important}
+  .wl-sort{font-size:16px!important;min-height:44px!important}
+  .wl-clear{width:44px!important;height:44px!important}
 }
 `;
 

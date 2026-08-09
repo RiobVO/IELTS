@@ -59,7 +59,7 @@ export default function OnboardingForm({
   return (
     <div style={S.screen}>
       {/* iOS зумит вьюпорт при фокусе поля с font-size <16px. */}
-      <style>{`.ob-card{padding:24px 20px 28px}@media(min-width:480px){.ob-card{padding:34px 32px 36px}}@media(max-width:430px){.ob-select{font-size:16px!important}}`}</style>
+      <style>{`.ob-card{padding:24px 20px 28px}@media(min-width:480px){.ob-card{padding:34px 32px 36px}}@media(max-width:430px){.ob-select{font-size:16px!important}.ob-opt{min-height:44px!important}.ob-skip{min-height:44px!important;display:inline-flex;align-items:center;justify-content:center}}`}</style>
       <div className="ob-card" style={{ ...S.card, maxWidth: step === "diagnostic" ? 620 : 460 }}>
         <div style={S.eyebrow}>{heading.eyebrow}</div>
         <h1 style={S.h1}>{heading.title}</h1>
@@ -126,6 +126,7 @@ export default function OnboardingForm({
                               type="button"
                               key={opt}
                               onClick={() => setAns(q.number, opt)}
+                              className="ob-opt"
                               style={{ ...S.opt2, ...(on ? S.optOn : null) }}
                             >
                               {opt}
@@ -147,7 +148,7 @@ export default function OnboardingForm({
                 <Button type="button" size="lg" fullWidth trailingIcon="arrow-right" onClick={() => setResult(gradeDiagnostic(answers))}>
                   See my result
                 </Button>
-                <button type="submit" style={S.skip}>
+                <button type="submit" className="ob-skip" style={S.skip}>
                   Skip for now
                 </button>
               </div>

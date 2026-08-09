@@ -269,6 +269,12 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
           .auth-toggle{display:block}
           .auth-mbrand{display:flex;align-items:center;justify-content:center;gap:9px;margin:26px 0 -8px}
         }
+        /* Тап-таргеты ≥44px на узких телефонах: тоггл signup/login и "Forgot password?"
+           были обычным текстом (~16-20px). */
+        @media (max-width:430px){
+          .auth-toggle-btn{display:inline-flex;align-items:center;min-height:44px}
+          .auth-forgot{display:inline-flex;align-items:center;min-height:44px}
+        }
       `}</style>
 
       <div className="auth-card" style={{ position: "relative", width: 940, maxWidth: "100%", height: 580, margin: "auto", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-2xl)", boxShadow: "var(--shadow-xl)", overflow: "hidden" }}>
@@ -356,7 +362,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
 
               <div className="auth-toggle" style={{ textAlign: "center", marginTop: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" }}>
                 Already have an account?{" "}
-                <button type="button" onClick={() => setMode("login")} style={{ border: "none", background: "none", padding: 0, color: "var(--text-link)", fontWeight: 700, fontFamily: "inherit", fontSize: "inherit", cursor: "pointer" }}>Log in</button>
+                <button type="button" onClick={() => setMode("login")} className="auth-toggle-btn" style={{ border: "none", background: "none", padding: 0, color: "var(--text-link)", fontWeight: 700, fontFamily: "inherit", fontSize: "inherit", cursor: "pointer" }}>Log in</button>
               </div>
             </div>
           )}
@@ -396,7 +402,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
                   </div>
                 </div>
                 <div className="auth-rise" style={{ textAlign: "right", marginTop: 10 }}>
-                  <a href="/auth/reset" style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-link)" }}>Forgot password?</a>
+                  <a href="/auth/reset" className="auth-forgot" style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-link)" }}>Forgot password?</a>
                 </div>
                 <div className="auth-rise" style={{ marginTop: 18 }}>
                   <SubmitButton>Log in</SubmitButton>
@@ -414,7 +420,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
 
               <div className="auth-toggle" style={{ textAlign: "center", marginTop: 18, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)" }}>
                 New to bando?{" "}
-                <button type="button" onClick={() => setMode("signup")} style={{ border: "none", background: "none", padding: 0, color: "var(--text-link)", fontWeight: 700, fontFamily: "inherit", fontSize: "inherit", cursor: "pointer" }}>Create account</button>
+                <button type="button" onClick={() => setMode("signup")} className="auth-toggle-btn" style={{ border: "none", background: "none", padding: 0, color: "var(--text-link)", fontWeight: 700, fontFamily: "inherit", fontSize: "inherit", cursor: "pointer" }}>Create account</button>
               </div>
             </div>
           )}

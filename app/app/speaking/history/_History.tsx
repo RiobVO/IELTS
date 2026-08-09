@@ -113,6 +113,8 @@ const CSS = `
 @media (max-width:640px){.sh-grid{grid-template-columns:1fr}}
 .sh-card:hover{border-color:var(--brand-border)!important;box-shadow:var(--shadow-solid-lg)}
 .sh-del:hover{color:var(--error-text)!important}
+/* Тап-таргет 44px на узких телефонах — кнопка была padding:4. */
+@media (max-width:430px){.sh-del{min-height:44px}}
 `;
 
 const S: Record<string, CSSProperties> = {
