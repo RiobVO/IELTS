@@ -1884,6 +1884,16 @@ function GoalControl({
   }, [hydrated, prefs]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
+  // Escape закрывает панель (a11y-парность с ReaderPanel и клик-вне на backdrop).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
