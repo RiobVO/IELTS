@@ -183,6 +183,10 @@ export default async function ProfilePage() {
     <AppShell active="profile">
       <style>{PF_CSS}</style>
       <div className="pf-wrap" style={S.wrap}>
+        {/* Мобильный путь назад — на &le;430px бургер единственный выход, добавляем явную ссылку. */}
+        <div className="mob-back">
+          <Button variant="ghost" size="sm" icon="arrow-left" href="/app">Home</Button>
+        </div>
         {/* Identity */}
         <div style={S.idRow}>
           <div style={S.avatar}>{initials((profile?.display_name ?? "") as string, profile?.email ?? user.email)}</div>
@@ -409,7 +413,10 @@ const PF_CSS = `
   .pf-ring-cap{font-size:12px!important}
   .pf-week-lab{font-size:12px!important}
   .pf-sub{font-size:12px!important}
+  /* Путь назад — виден только на узких телефонах (бургер иначе единственный выход). */
+  .mob-back{display:block;margin-bottom:10px}
 }
+.mob-back{display:none}
 `;
 
 const S: Record<string, React.CSSProperties> = {

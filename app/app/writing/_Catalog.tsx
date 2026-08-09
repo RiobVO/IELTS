@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { Button } from "@/components/core/Button";
 import { DifficultyMeter } from "@/components/core/DifficultyMeter";
 import { Icon } from "@/components/core/icons";
 import { Input } from "@/components/core/Input";
@@ -149,6 +150,11 @@ export function WritingCatalog({
   return (
     <div className="wl-wrap" style={S.wrap}>
       <style>{CSS}</style>
+
+      {/* Мобильный путь назад — на &le;430px бургер единственный выход. */}
+      <div className="mob-back">
+        <Button variant="ghost" size="sm" icon="arrow-left" href="/app/practice">Practice</Button>
+      </div>
 
       {/* Header */}
       <header className="wl-header" style={S.header}>
@@ -553,7 +559,9 @@ const CSS = `
 @media (max-width:430px){
   .wl-sort{font-size:16px!important;min-height:44px!important}
   .wl-clear{width:44px!important;height:44px!important}
+  .mob-back{display:block}
 }
+.mob-back{display:none}
 `;
 
 const S: Record<string, CSSProperties> = {

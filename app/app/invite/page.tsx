@@ -4,6 +4,7 @@ import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { AppShell } from "../_AppShell";
+import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
 import InviteLink from "./InviteLink";
 
@@ -41,8 +42,12 @@ export default async function InvitePage() {
 
   return (
     <AppShell active="profile">
-      <style>{`.inv-wrap{padding:22px 16px 40px}.inv-card{padding:20px}@media(min-width:560px){.inv-wrap{padding:30px 28px 48px}.inv-card{padding:28px}}`}</style>
+      <style>{`.inv-wrap{padding:22px 16px 40px}.inv-card{padding:20px}@media(min-width:560px){.inv-wrap{padding:30px 28px 48px}.inv-card{padding:28px}}.mob-back{display:none}@media(max-width:430px){.mob-back{display:block;margin-bottom:10px}}`}</style>
       <div className="inv-wrap" style={S.wrap}>
+        {/* Мобильный путь назад — на &le;430px бургер единственный выход. */}
+        <div className="mob-back">
+          <Button variant="ghost" size="sm" icon="arrow-left" href="/app">Home</Button>
+        </div>
         <h1 style={S.h1}>Invite a friend</h1>
         <p style={S.lead}>Once a friend finishes their first test, you both earn XP.</p>
 

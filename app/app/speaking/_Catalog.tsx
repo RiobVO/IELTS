@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { Button } from "@/components/core/Button";
 import { DifficultyMeter } from "@/components/core/DifficultyMeter";
 import { Icon, type IconName } from "@/components/core/icons";
 import { Onboarding } from "@/components/speaking/Onboarding";
@@ -76,6 +77,11 @@ export function SpeakingCatalog({
   return (
     <div className="sc-wrap" style={S.wrap}>
       <style>{CSS}</style>
+
+      {/* Мобильный путь назад — на &le;430px бургер единственный выход. */}
+      <div className="mob-back">
+        <Button variant="ghost" size="sm" icon="arrow-left" href="/app/practice">Practice</Button>
+      </div>
 
       <header className="sc-header" style={S.header}>
         <div style={{ minWidth: 0 }}>
@@ -302,6 +308,8 @@ const CSS = `
   .sc-card:hover{transform:none}
   .sc-card:hover .sc-arrow{transform:none}
 }
+.mob-back{display:none}
+@media (max-width:430px){ .mob-back{display:block} }
 `;
 
 const S: Record<string, CSSProperties> = {
