@@ -330,6 +330,7 @@ export const PassagePane = memo(function PassagePane({
               onChange={(e) => setEditor((ed) => (ed ? { ...ed, note: e.target.value } : ed))}
               placeholder="Add a note…"
               rows={3}
+              className="pp-note-textarea"
               style={S.editorTextarea}
             />
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
@@ -384,6 +385,8 @@ const PASSAGE_CSS = `
 @media (max-width:430px){
   .bando-reading.editorial{padding-left:16px!important;padding-right:16px!important}
   .pp-masthead{padding-left:16px!important;padding-right:16px!important}
+  /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
+  .pp-note-textarea{font-size:16px!important}
 }
 `;
 

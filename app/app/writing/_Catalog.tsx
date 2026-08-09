@@ -549,6 +549,10 @@ const CSS = `
   .wl-card:hover{transform:none}
   .wl-card:hover .wl-arrow{transform:none}
 }
+/* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
+@media (max-width:430px){
+  .wl-sort{font-size:16px!important}
+}
 `;
 
 const S: Record<string, CSSProperties> = {

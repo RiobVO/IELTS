@@ -58,7 +58,8 @@ export default function OnboardingForm({
 
   return (
     <div style={S.screen}>
-      <style>{`.ob-card{padding:24px 20px 28px}@media(min-width:480px){.ob-card{padding:34px 32px 36px}}`}</style>
+      {/* iOS зумит вьюпорт при фокусе поля с font-size <16px. */}
+      <style>{`.ob-card{padding:24px 20px 28px}@media(min-width:480px){.ob-card{padding:34px 32px 36px}}@media(max-width:430px){.ob-select{font-size:16px!important}}`}</style>
       <div className="ob-card" style={{ ...S.card, maxWidth: step === "diagnostic" ? 620 : 460 }}>
         <div style={S.eyebrow}>{heading.eyebrow}</div>
         <h1 style={S.h1}>{heading.title}</h1>
@@ -78,7 +79,7 @@ export default function OnboardingForm({
               <span style={S.label}>
                 Region <span style={S.opt}>· optional</span>
               </span>
-              <select name="region_id" defaultValue="" style={S.select}>
+              <select name="region_id" defaultValue="" className="ob-select" style={S.select}>
                 <option value="">Prefer not to say</option>
                 {regions.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -90,7 +91,7 @@ export default function OnboardingForm({
 
             <label style={S.field}>
               <span style={S.label}>Target band</span>
-              <select name="target_band" defaultValue="7.0" style={S.select} required>
+              <select name="target_band" defaultValue="7.0" className="ob-select" style={S.select} required>
                 {BANDS.map((b) => (
                   <option key={b} value={b}>
                     {b}

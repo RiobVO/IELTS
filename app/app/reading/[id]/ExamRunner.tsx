@@ -893,6 +893,7 @@ const QuestionBlock = memo(function QuestionBlock({
               placeholder="Type your answer"
               aria-label={`Answer for question ${q.number}`}
               autoComplete="off"
+              className="exam-answer-input"
               style={{ width: "100%", maxWidth: 280, height: 40, padding: "0 12px", borderRadius: "var(--radius-md)", border: `1px solid ${single ? "var(--brand)" : "var(--border)"}`, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", outline: "none" }}
             />
           )}
@@ -1068,7 +1069,9 @@ const READING_CSS = `
   .exam-ctrl{width:44px!important;height:44px!important}
   .exam-ctrl-text{height:44px!important}
   .exam-opt{min-height:44px!important}
-  .exam-gap-input{min-width:80px!important;max-width:100%!important;min-height:44px!important}
+  /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
+  .exam-gap-input{min-width:80px!important;max-width:100%!important;min-height:44px!important;font-size:16px!important}
+  .exam-answer-input{font-size:16px!important}
   .exam-overlay{align-items:start!important}
   .exam-start-cards{grid-template-columns:1fr!important}
   .exam-presets{flex-wrap:wrap!important}
