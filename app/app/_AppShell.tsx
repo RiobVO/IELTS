@@ -52,8 +52,11 @@ export async function AppShell({
           уезжает за правый край (кнопки Upgrade/Sign out срезаны). clip (не hidden и
           не auto) не создаёт scroll-container: sticky-шапка и body-scroll-lock drawer
           не ломаются, а overflow-y остаётся visible (страницу скроллит корень). main —
-          сосед шапки и drawer, поэтому клип не задевает их fixed-позиционирование. */}
-      <main id="content" style={{ flex: 1, minHeight: 0, overflowX: "clip" }}>{children}</main>
+          сосед шапки и drawer, поэтому клип не задевает их fixed-позиционирование.
+          Ограничено ≤1023px — диапазоном, где бургер/drawer видны; на десктопе drawer
+          скрыт (display:none), клип там бесполезен и не должен менять overflow. */}
+      <style>{"@media (max-width:1023px){#content{overflow-x:clip}}"}</style>
+      <main id="content" style={{ flex: 1, minHeight: 0 }}>{children}</main>
     </div>
   );
 }
