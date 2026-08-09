@@ -434,7 +434,7 @@ function Node({ n, current }: { n: TrackNode; current: boolean }) {
 const BDG_CSS = `
 .bdg-wrap{padding:22px 16px 48px}
 .bdg-cols{display:grid;grid-template-columns:1fr;gap:14px}
-.bdg-hero{flex-wrap:wrap;padding:20px}
+.bdg-hero{flex-wrap:wrap;padding:20px;align-items:center}
 .bdg-flame{animation:bdg-flicker 2.6s ease-in-out infinite}
 @keyframes bdg-flicker{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 .bdg-heat-cell{cursor:default;transition:transform .12s}
@@ -452,6 +452,9 @@ const BDG_CSS = `
 .bdg-tip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--surface-inverse)}
 .bdg-tip.below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:var(--surface-inverse)}
 @media (min-width:560px){ .bdg-hero{flex-wrap:nowrap;padding:24px 26px} }
+/* Узкие телефоны: кольцо+текст+кнопка в ряд не влезают — текст схлопывается, кнопка
+   налезает. Стек в колонку, только на ≤430px. */
+@media (max-width:430px){ .bdg-hero{flex-direction:column;align-items:flex-start} }
 @media (min-width:900px){
   .bdg-wrap{padding:30px 28px 56px}
   .bdg-cols{grid-template-columns:1.65fr 1fr;align-items:start}
@@ -472,7 +475,7 @@ const S: Record<string, React.CSSProperties> = {
   ringCount: { position: "relative", width: 64, height: 64, flex: "none", display: "grid", placeItems: "center" },
   ringCountB: { position: "relative", fontFamily: "var(--font-mono)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--brand)", display: "flex", alignItems: "baseline", gap: 1 },
 
-  hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "linear-gradient(150deg, var(--surface-inverse), var(--surface-inverse-deep))", color: "var(--surface-inverse-ink)", display: "flex", alignItems: "center", gap: 22, marginBottom: 26, boxShadow: "var(--shadow-lg)" },
+  hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "linear-gradient(150deg, var(--surface-inverse), var(--surface-inverse-deep))", color: "var(--surface-inverse-ink)", display: "flex", gap: 22, marginBottom: 26, boxShadow: "var(--shadow-lg)" },
   heroRing: { position: "relative", width: 96, height: 96, flex: "none", zIndex: 1 },
   heroMedal: { position: "absolute", inset: 11, borderRadius: "50%", display: "grid", placeItems: "center", background: "rgba(255,255,255,0.08)", color: "var(--surface-inverse-ink)" },
   heroEyebrow: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", letterSpacing: "var(--tracking-snug)", color: "var(--violet-300)", fontWeight: 600 },
