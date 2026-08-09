@@ -16,7 +16,7 @@ import type { NotifItem } from "@/components/app/NotificationsBell";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-export const NOTIF_PAGE_SIZE = 20;
+const NOTIF_PAGE_SIZE = 20;
 
 /** Курсор keyset-пагинации — последняя показанная (created_at, id). */
 export interface NotifCursor {

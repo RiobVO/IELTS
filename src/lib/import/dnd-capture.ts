@@ -108,7 +108,7 @@ export function extractEndingBank(
  * `data-section`, иначе `data-para` соседнего абзаца в `.paragraph-block`.
  * "" (не извлекается) → caller обязан fail-close.
  */
-export function headingParagraphLetter($: CheerioAPI, el: Element): string {
+function headingParagraphLetter($: CheerioAPI, el: Element): string {
   const lineId = $(el).closest(".heading-drop-line").attr("id") ?? "";
   const prefix = "heading-line-";
   if (lineId.startsWith(prefix)) {

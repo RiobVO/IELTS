@@ -22,7 +22,7 @@ export type DailyPlanItemKind = "mistakes" | "vocab" | "drill" | "drill2" | "moc
 // Нормы плана (решение владельца 2026-07-16): 2 практики в день, 2 полных мока
 // в неделю. Пункт закрывается по достижении нормы, прогресс виден парой N/M.
 export const DAILY_DRILL_TARGET = 2;
-export const WEEKLY_MOCK_TARGET = 2;
+const WEEKLY_MOCK_TARGET = 2;
 
 export interface DailyPlanInput {
   /** Дни до экзамена (уже посчитано getExamCountdown); null — дата не задана. */
