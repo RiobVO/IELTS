@@ -7,7 +7,7 @@ import { getProfile, getUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { grade, type GradeKey } from "@/lib/grading/grade";
 import type { ReviewSnapshot } from "@/lib/exam/review-snapshot";
-import { computeBlindSpot, computeGrowth, computeNearMiss, type DebriefData } from "@/lib/result/debrief";
+import { computeBlindSpot, computeGrowth, computeNearMiss, stripHtml, type DebriefData } from "@/lib/result/debrief";
 import { effectiveTier, hasFullReview, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import { qtypeLabel } from "@/lib/labels";
@@ -350,9 +350,9 @@ export default async function ResultPage({
 
   // Debrief data layer (S1-S5 «дебриф», rendered by <Debrief/> below). Every
   // field is a plain derivation of data already fetched/graded above — no new
-  // queries. S3's full replay (answer/explanation/evidence, gated by
-  // fullReview) lands in a follow-up commit; `missed` here is the safe subset
-  // (number/qtype only, no answer key) used for the current S3 placeholder.
+  // queries. `missed` is the safe subset (number/qtype only, no answer key) —
+  // rendered even when gated; `replay` carries answer/why/evidence and is
+  // built ONLY when fullReview, mirroring the akItems gate above.
   const bandScale = (ci[0]?.bandScale as Record<string, number> | null) ?? null;
   const nearMiss = computeNearMiss(bandScale, result.rawScore);
   const blindSpot: DebriefData["blindSpot"] =
@@ -384,6 +384,33 @@ export default async function ResultPage({
   const missed: DebriefData["missed"] = result.perQuestion
     .filter((q) => !q.correct)
     .map((q) => ({ number: q.number, qtype: q.qtype, label: qtypeLabel(q.qtype) }));
+  // Re-pick интерактивен только для tfng/ynng (decision §3) — фиксированный набор
+  // опций, независимый от question.options (тот нужен только mcq-раннеру).
+  const TERNARY_OPTIONS: Record<string, string[]> = {
+    tfng: ["TRUE", "FALSE", "NOT GIVEN"],
+    ynng: ["YES", "NO", "NOT GIVEN"],
+  };
+  // promptHtml уже загружен в liveRows (безусловный запрос выше, не зависит от
+  // snapshot) — переиспользуем вместо нового round-trip.
+  const promptByNumber = new Map(liveRows.map((r) => [r.number, r.promptHtml]));
+  const replay: DebriefData["replay"] = !fullReview
+    ? []
+    : result.perQuestion
+        .filter((q) => !q.correct)
+        .map((q) => {
+          const m = meta.get(q.number)!;
+          const given = Array.isArray(q.given) ? q.given.join(", ") : q.given;
+          return {
+            number: q.number,
+            type: qtypeLabel(q.qtype),
+            stem: stripHtml(promptByNumber.get(q.number) ?? ""),
+            options: TERNARY_OPTIONS[q.qtype] ?? null,
+            given: given && given !== "" ? given : "—",
+            answer: m.accept.join(" / "),
+            why: m.explanation,
+            evidence: m.evidence?.snippet ?? null,
+          };
+        });
 
   const debriefData: DebriefData = {
     title,
@@ -404,6 +431,7 @@ export default async function ResultPage({
     blindSpot,
     missed,
     replayLocked: !fullReview,
+    replay,
     level: { rows: levelRows, avgPct: correctPct, growth },
     plan: {
       weakLabel: weakest ? qtypeLabel(weakest[0]) : null,

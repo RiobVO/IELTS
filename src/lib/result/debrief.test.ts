@@ -1,6 +1,6 @@
 // Unit tests for the pure /result "debrief" derivations (no DB, no React).
 import { describe, it, expect } from "vitest";
-import { computeNearMiss, computeBlindSpot, computeGrowth } from "./debrief";
+import { computeNearMiss, computeBlindSpot, computeGrowth, stripHtml } from "./debrief";
 import type { PerQuestionResult } from "@/lib/grading/grade";
 
 describe("computeNearMiss", () => {
@@ -138,5 +138,21 @@ describe("computeGrowth", () => {
       { tag: "1st", correct: 1, total: 6 },
       { tag: "now", correct: 4, total: 6 },
     ]);
+  });
+});
+
+describe("stripHtml", () => {
+  it("strips nested tags and decodes HTML entities", () => {
+    const html = "<p>The author believes <b>shipping &amp; trade</b> grew.</p>";
+    expect(stripHtml(html)).toBe("The author believes shipping & trade grew.");
+  });
+
+  it("collapses newlines/whitespace between block elements into single spaces", () => {
+    const html = "<p>First paragraph.</p>\n<p>Second   paragraph.</p>";
+    expect(stripHtml(html)).toBe("First paragraph. Second paragraph.");
+  });
+
+  it("returns an empty string for empty input", () => {
+    expect(stripHtml("")).toBe("");
   });
 });

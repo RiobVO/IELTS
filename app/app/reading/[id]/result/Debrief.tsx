@@ -41,6 +41,16 @@ export default function Debrief({ data, unlockedBadges }: { data: DebriefData; u
   const [activeId, setActiveId] = useState("s1");
   const sectionsRef = useRef<Record<string, HTMLElement | null>>({});
   const playedRef = useRef<Set<string>>(new Set());
+  // Replay-степпер (S3) поднимает "готово" сюда — чапнав ставит .done, а не
+  // сам степпер (у него нет доступа к списку глав).
+  const [replayDone, setReplayDone] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMsg(null), 2600);
+  };
 
   // Sticky chapnav только для глав, которые реально рендерятся (blindSpot/level
   // могут отсутствовать в крайних случаях — 0 вопросов и т.п.) — иначе якорь
@@ -96,7 +106,7 @@ export default function Debrief({ data, unlockedBadges }: { data: DebriefData; u
             <a
               key={c.id}
               href={`#${c.id}`}
-              className={`db-chap${activeId === c.id ? " on" : ""}`}
+              className={`db-chap${activeId === c.id ? " on" : ""}${c.id === "s3" && replayDone ? " done" : ""}`}
               aria-current={activeId === c.id ? "true" : undefined}
             >
               <i />
@@ -125,7 +135,13 @@ export default function Debrief({ data, unlockedBadges }: { data: DebriefData; u
 
       <section id="s3" ref={(el) => { sectionsRef.current.s3 = el; }} className="db-mo">
         <ChapterEyebrow n={2} label="Replay your misses" />
-        <ReplayStub data={data} />
+        <ReplaySection
+          data={data}
+          onDone={() => {
+            setReplayDone(true);
+            showToast("Replay complete — nice work.");
+          }}
+        />
       </section>
 
       {data.level.rows.length > 0 && (
@@ -139,6 +155,10 @@ export default function Debrief({ data, unlockedBadges }: { data: DebriefData; u
         <ChapterEyebrow n={4} label="Next move" />
         <NextMoveCard data={data} />
       </section>
+
+      <div className={`db-toast${toastMsg ? " show" : ""}`} role="status" aria-live="polite">
+        {toastMsg}
+      </div>
     </div>
   );
 }
@@ -260,10 +280,18 @@ function BlindSpotCard({
 }
 
 /* ===================================================================== S3 */
-/* Заглушка — список пропущенных вопросов. Guided-replay степпер приходит
-   отдельным коммитом (нужен stripHtml для stem + интерактив tfng/ynng). */
+/* Guided replay: пропущенные вопросы по одному, "без таймера". Re-pick
+   интерактивен только для tfng/ynng (options != null) — прочие типы сразу
+   показывают reveal-панель (decision §3). Только при fullReview; иначе —
+   безопасный список Q-номеров/типов + апселл (answer/why/evidence на клиент
+   не попадают вовсе — DebriefData.replay пуст, когда replayLocked). */
 
-function ReplayStub({ data }: { data: DebriefData }) {
+function ReplaySection({ data, onDone }: { data: DebriefData; onDone: () => void }) {
+  const [gi, setGi] = useState(0);
+  const [answered, setAnswered] = useState(false);
+  const [pickedOpt, setPickedOpt] = useState<string | null>(null);
+  const [finished, setFinished] = useState(false);
+
   if (data.missed.length === 0) {
     return (
       <div className="db-rep">
@@ -271,24 +299,108 @@ function ReplayStub({ data }: { data: DebriefData }) {
       </div>
     );
   }
+  if (data.replayLocked || data.replay.length === 0) {
+    return (
+      <div className="db-rep">
+        <p className="db-rep-lead">
+          You missed {data.missed.length} question{data.missed.length === 1 ? "" : "s"} — replay them below.
+        </p>
+        <div className="db-rep-chips">
+          {data.missed.map((m) => (
+            <span className="db-rep-chip" key={m.number}>Q{m.number} · {m.label}</span>
+          ))}
+        </div>
+        {data.replayLocked && (
+          <div className="db-upsell">
+            <div className="db-upsell-title">See the answers and why</div>
+            <p className="db-upsell-text">
+              You can see which questions you missed. Premium reveals the correct answers, the
+              explanation behind each, and the exact text evidence.
+            </p>
+            <Button href="/app/upgrade" trailingIcon="arrow-right">Go Premium</Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const items = data.replay;
+  const item = items[gi];
+  const interactive = item.options != null;
+  const revealed = !interactive || answered;
+  const revealId = `db-gr-reveal-${gi}`;
+
+  const pick = (opt: string) => {
+    if (answered) return;
+    setPickedOpt(opt);
+    setAnswered(true);
+  };
+
+  const next = () => {
+    if (gi < items.length - 1) {
+      setGi(gi + 1);
+      setAnswered(false);
+      setPickedOpt(null);
+    } else if (!finished) {
+      setFinished(true);
+      onDone();
+    }
+  };
+
   return (
     <div className="db-rep">
-      <p className="db-rep-lead">
-        You missed {data.missed.length} question{data.missed.length === 1 ? "" : "s"} — replay them below.
-      </p>
-      <div className="db-rep-chips">
-        {data.missed.map((m) => (
-          <span className="db-rep-chip" key={m.number}>Q{m.number} · {m.label}</span>
-        ))}
+      {finished && (
+        <div className="db-rep-stamp">
+          Reviewed ✓<small>{items.length} of {items.length} replayed</small>
+        </div>
+      )}
+      <div className="db-rep-top">
+        <span className="db-rep-title">Replay the marks you lost</span>
+        <span className="db-rep-prog">{gi + 1} / {items.length}</span>
       </div>
-      {data.replayLocked && (
-        <div className="db-upsell">
-          <div className="db-upsell-title">See the answers and why</div>
-          <p className="db-upsell-text">
-            You can see which questions you missed. Premium reveals the correct answers, the
-            explanation behind each, and the exact text evidence.
-          </p>
-          <Button href="/app/upgrade" trailingIcon="arrow-right">Go Premium</Button>
+      <p className="db-rep-lead">Answer again — <b>without the timer</b>. Then see the proof in the text.</p>
+      <div className="db-rep-track"><i style={{ width: `${((gi + 1) / items.length) * 100}%` }} /></div>
+
+      <div className="db-gr-q"><span className="db-gr-qn">Q{item.number} · {item.type}</span>{item.stem}</div>
+
+      {interactive && (
+        <div className="db-gr-guess">
+          {item.options!.map((opt) => {
+            const isRight = answered && opt === item.answer;
+            const isWrong = answered && !isRight && opt === pickedOpt;
+            return (
+              <button
+                key={opt}
+                type="button"
+                className={`db-gr-opt${isRight ? " right" : isWrong ? " wrong" : ""}`}
+                onClick={() => pick(opt)}
+                disabled={answered}
+                aria-expanded={answered}
+                aria-controls={revealId}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {revealed && (
+        <div className="db-gr-reveal" id={revealId}>
+          <div className={`db-gr-verdict ${interactive ? (pickedOpt === item.answer ? "ok" : "no") : "no"}`}>
+            {interactive
+              ? pickedOpt === item.answer
+                ? "✓ Right this time — the habit is forming."
+                : "✕ Same trap — now watch how it works:"
+              : item.given === "—"
+                ? `You left this blank — the correct answer is "${item.answer}".`
+                : `You answered "${item.given}" — the correct answer is "${item.answer}".`}
+          </div>
+          {item.why && <div className="db-gr-why">💡 <span>{item.why}</span></div>}
+          {item.evidence && <div className="db-gr-ev">📖 <span>&ldquo;{item.evidence}&rdquo;</span></div>}
+          <button type="button" className="db-gr-next" onClick={next}>
+            {gi < items.length - 1 ? "Next miss →" : "Finish replay ✓"}
+          </button>
         </div>
       )}
     </div>
@@ -422,6 +534,7 @@ const DEBRIEF_CSS = `
 .db-chap i{width:6px;height:6px;border-radius:50%;background:var(--border-strong);transition:background-color var(--duration-fast) var(--ease-standard)}
 .db-chap.on{color:var(--brand-active);background:var(--brand-subtle);border-color:var(--brand-border)}
 .db-chap.on i{background:var(--brand)}
+.db-chap.done i{background:var(--success)}
 @media (min-width:1024px){ .db-chapnav{top:88px} }
 
 .db-mo{padding:38px 0 8px}
@@ -457,11 +570,38 @@ const DEBRIEF_CSS = `
 .db-one-l{font-family:var(--font-ui);font-size:11.5px;font-weight:700;color:rgba(255,255,255,.8);margin-top:3px}
 .db-one-prize{display:inline-flex;align-items:center;gap:8px;margin-top:18px;background:rgba(255,255,255,.16);border-radius:var(--radius-full);padding:8px 16px;font-family:var(--font-ui);font-size:13px;font-weight:800;color:var(--gold-500)}
 
-.db-rep{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-2xl);box-shadow:var(--shadow-sm);padding:22px}
+.db-rep{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-2xl);box-shadow:var(--shadow-sm);padding:22px;position:relative;overflow:hidden}
 .db-rep-perfect{font-family:var(--font-ui);font-size:var(--text-sm);color:var(--text-secondary);text-align:center;padding:12px 0}
+.db-rep-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.db-rep-title{font-family:var(--font-ui);font-size:16px;font-weight:800}
+.db-rep-prog{font-family:var(--font-mono);font-size:12px;color:var(--text-muted)}
 .db-rep-lead{font-family:var(--font-ui);font-size:13px;color:var(--text-muted);margin-bottom:14px}
 .db-rep-chips{display:flex;flex-wrap:wrap;gap:8px}
 .db-rep-chip{font-family:var(--font-mono);font-size:var(--text-xs);font-weight:600;color:var(--text-secondary);background:var(--surface-inset);border-radius:var(--radius-full);padding:6px 12px}
+.db-rep-track{height:6px;border-radius:var(--radius-full);background:var(--surface-inset);overflow:hidden;margin-bottom:18px}
+.db-rep-track i{display:block;height:100%;background:var(--brand);border-radius:var(--radius-full);transition:width .4s var(--ease-out)}
+.db-rep-stamp{position:absolute;right:14px;top:14px;transform:rotate(-8deg);font-family:var(--font-ui);font-weight:800;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--success-text);border:3px solid var(--success-text);border-radius:10px;padding:6px 12px;background:color-mix(in oklab, var(--surface) 90%, transparent);pointer-events:none}
+.db-rep-stamp small{display:block;font-family:var(--font-ui);font-size:8px;letter-spacing:.06em}
+
+.db-gr-q{font-family:var(--font-reading);font-size:17px;color:var(--text-primary);line-height:1.5;margin-bottom:14px}
+.db-gr-qn{font-family:var(--font-mono);font-size:12px;color:var(--brand);font-weight:600;margin-right:8px}
+.db-gr-guess{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.db-gr-opt{font-family:var(--font-ui);font-weight:700;font-size:13.5px;border:1.5px solid var(--border);background:var(--surface);color:var(--text-secondary);padding:10px 16px;border-radius:11px;cursor:pointer;transition:var(--transition-colors);min-height:44px}
+.db-gr-opt:hover:not(:disabled){border-color:var(--brand-border)}
+.db-gr-opt:disabled{cursor:default}
+.db-gr-opt.right{border-color:var(--success);background:var(--success-subtle);color:var(--success-text)}
+.db-gr-opt.wrong{border-color:var(--error);background:var(--error-subtle);color:var(--error-text)}
+.db-gr-reveal{border-top:1px solid var(--border-subtle);padding-top:13px}
+.db-gr-verdict{font-family:var(--font-ui);font-weight:800;font-size:14px;margin-bottom:8px}
+.db-gr-verdict.ok{color:var(--success-text)}
+.db-gr-verdict.no{color:var(--error-text)}
+.db-gr-why{display:flex;gap:8px;font-family:var(--font-ui);font-size:13px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px}
+.db-gr-ev{display:flex;gap:8px;font-family:var(--font-reading);font-size:13px;color:var(--reading-text);background:var(--reading-surface);border:1px solid var(--reading-rule);border-radius:10px;padding:11px 13px;line-height:1.55}
+.db-gr-next{display:inline-flex;align-items:center;gap:7px;background:var(--brand);color:var(--text-on-brand);font-weight:700;font-size:13.5px;border:0;border-radius:11px;padding:11px 18px;cursor:pointer;font-family:var(--font-ui);margin-top:14px;min-height:44px}
+.db-gr-next:hover{background:var(--brand-hover)}
+
+.db-toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,140%);opacity:0;pointer-events:none;background:var(--surface-inverse);color:var(--surface-inverse-ink);font-family:var(--font-ui);font-size:13.5px;font-weight:600;padding:12px 18px;border-radius:var(--radius-md);box-shadow:var(--shadow-md);transition:transform .3s var(--ease-out),opacity .3s;z-index:99;max-width:92vw}
+.db-toast.show{transform:translate(-50%,0);opacity:1}
 
 .db-upsell{margin-top:18px;border:1px solid var(--brand-border);background:var(--brand-subtle);border-radius:var(--radius-xl);padding:1.4rem 1.3rem;text-align:center}
 .db-upsell-title{font-family:var(--font-ui);font-size:var(--text-lg);font-weight:800;color:var(--text-link)}
@@ -509,12 +649,11 @@ const DEBRIEF_CSS = `
 
 @media (pointer:coarse){
   .db-chap{min-height:44px}
-  .db-rep-chip{min-height:28px}
 }
 @media (max-width:430px){
   .db-lev-name{width:96px}
 }
 @media (prefers-reduced-motion:reduce){
-  .db-chap i{transition:none}
+  .db-chap,.db-chap i,.db-rep-track i,.db-gr-opt,.db-gr-next,.db-toast{transition:none}
 }
 `;
