@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 37; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040) + saved_word (P11 «Saved words», 0041) + mistake_review (SR, 0044) + sprint_signup (пилот-когорта, 0051) + preorder (early-bird, 0052) + telegram_link (student bot, 0061); trial_claim (0054) dropped by 0063
+const APP_TABLE_COUNT = 36; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040) + saved_word (P11 «Saved words», 0041) + mistake_review (SR, 0044) + sprint_signup (пилот-когорта, 0051) + preorder (early-bird, 0052) + telegram_link (student bot, 0061); trial_claim (0054) dropped by 0063, legacy topic dropped by 0064 — счётчик наконец равен числу Drizzle-экспортов (36)
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);
