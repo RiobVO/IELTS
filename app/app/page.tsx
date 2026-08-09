@@ -693,9 +693,11 @@ function TestRow({ a, chip }: { a: AttemptRow; chip: Chip }) {
           {worst && <> · <span style={{ color: "var(--error-text)", fontWeight: 600 }}>weak: {qtypeLabel(worst.type)}</span></>}
         </div>
       </div>
-      {band != null && <Badge tone="brand" mono>band {band}</Badge>}
-      <span style={{ ...S.chip, ...(chip.kind === "weak" ? S.chipWeak : chip.kind === "up" ? S.chipUp : S.chipRev) }}>{chip.text}</span>
-      <span style={S.trowScore}>{score}</span>
+      <span className="dash-trow-tail" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {band != null && <Badge tone="brand" mono>band {band}</Badge>}
+        <span style={{ ...S.chip, ...(chip.kind === "weak" ? S.chipWeak : chip.kind === "up" ? S.chipUp : S.chipRev) }}>{chip.text}</span>
+        <span style={S.trowScore}>{score}</span>
+      </span>
     </Link>
   );
 }
@@ -767,6 +769,12 @@ const DASH_CSS = `
 @media (min-width:1024px){
   .dash-wrap{display:grid;grid-template-columns:2fr 1fr;gap:18px;align-items:start}
   .dash-grid-span{grid-column:1 / -1}
+}
+/* Узкие телефоны (≤430px): значок+заголовок не помещаются в один ряд с band/chip/score
+   → разрешаем перенос хвоста (badge/chip/score) на вторую строку вместо клиппинга. */
+@media (max-width:430px){
+  .dash-trow{flex-wrap:wrap}
+  .dash-trow-tail{flex:1 1 100%;justify-content:flex-end}
 }
 `;
 
