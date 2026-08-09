@@ -408,7 +408,8 @@ const S: Record<string, CSSProperties> = {
   // The transcript card (own border) — no longer wraps the note column, so the cards sit
   // in a tidy column instead of floating inside a shared box. minWidth:0 holds the split.
   left: { minWidth: 0, border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", background: "var(--surface)", padding: 18 },
-  body: { minWidth: 0, fontFamily: "var(--font-reading)", fontSize: 16, lineHeight: 2, color: "var(--text-primary)", whiteSpace: "pre-wrap" },
+  // overflowWrap: длинное слово без пробелов не должно распирать колонку вширь.
+  body: { minWidth: 0, fontFamily: "var(--font-reading)", fontSize: 16, lineHeight: 2, color: "var(--text-primary)", whiteSpace: "pre-wrap", overflowWrap: "anywhere" },
   sentence: { cursor: "pointer", borderRadius: 4, padding: "1px 2px", transition: "background .15s ease, color .15s ease", WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" },
   sentNow: { background: "var(--brand)", color: "#fff", fontWeight: 700 },
   sentPlayed: { color: "var(--text-muted)" },

@@ -87,7 +87,10 @@ export function ConsentModal({ onConsented, onCancel }: { onConsented: () => voi
   if (!mounted) return null;
 
   return createPortal(
-    <div style={S.scrim} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
+    <div className="cm-scrim" style={S.scrim} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
+      {/* Диалог выше вьюпорта клипит верх при place-items:center — на узких телефонах
+          прижимаем к верху и оставляем safe-area отступ снизу (жест/индикатор iOS). */}
+      <style>{"@media (max-width:430px){.cm-scrim{place-items:start center!important;padding-bottom:calc(20px + env(safe-area-inset-bottom))!important}}"}</style>
       <div
         ref={dialogRef}
         role="dialog"

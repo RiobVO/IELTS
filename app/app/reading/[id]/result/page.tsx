@@ -506,7 +506,7 @@ export default async function ResultPage({
           </div>
         )}
 
-        <div style={S.footer}>
+        <div className="res-footer" style={S.footer}>
           <Button variant="secondary" fullWidth href={catalogBase}>
             Back to catalog
           </Button>
@@ -528,6 +528,10 @@ const RESULT_CSS = `
 .res-verdict{text-wrap:balance}
 @media (min-width:620px){
   .res-herogrid{grid-template-columns:auto 1fr;gap:26px}
+}
+/* Два fullWidth-Button (Back to catalog / Try again) в ряд теснятся на узких телефонах. */
+@media (max-width:430px){
+  .res-footer{flex-direction:column}
 }
 `;
 
