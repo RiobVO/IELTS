@@ -104,9 +104,9 @@ lacks `runner_html`.
 
 ## Migrations & schema
 
-- `src/db/schema.ts` (Drizzle) is the **typed source of truth** (**28 DB tables** as of migration
-  `0034_error_log`; `verify.ts` `APP_TABLE_COUNT = 28` asserts the migrated count. schema.ts types
-  **27** — the legacy `topic` table lingers in the DB but its export was dropped as dead code, #26).
+- `src/db/schema.ts` (Drizzle) is the **typed source of truth** (**31 DB tables** as of migration
+  `0037_vocab`; `verify.ts` `APP_TABLE_COUNT = 31` asserts the migrated count. schema.ts types
+  **30** — the legacy `topic` table lingers in the DB but its export was dropped as dead code, #26).
   Per-table provenance + RLS posture live in **SCHEMA_NOTES.md** (updated in lockstep).
   The executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by a
   custom up/down migrator (`scripts/migrate.ts`) with a `_migrations` bookkeeping table. **Keep
@@ -198,6 +198,13 @@ early).
   CSS tokens, zero new deps), exam component kit, a11y/perf pass, mobile/responsive, /impeccable tail.
   Detail → REDESIGN.md. **Responsive invariant:** breakpoint-switched props (display/grid/width) live
   in CSS classes, never inline (inline beats media queries).
+- **✅ Progress hub + Vocabulary (2026-07-06)** — League+Badges слиты в `/app/progress` (route-табы
+  `?tab=league|badges`, старые URL 307-редиректят, top-nav Home/Practice/Progress/Vocabulary).
+  Vocabulary: `/app/vocabulary` (SM-2 flashcards, self-graded, ВНЕ rating/leaderboard-контура),
+  миграция `0037` (deck/card/progress; контент published-read, прогресс owner-SELECT + write-lockdown —
+  запись только server-action owner-path), детерминированный JSON-импорт (`npm run import:vocab`,
+  аддитивный upsert — реимпорт не трогает SRS-прогресс) + `/admin/vocabulary`, daily-new-cap для basic
+  (`VOCAB_DAILY_NEW_LIMIT`). Quiz-режим/Telegram-импорт/премиум-деки — отложенная Phase B.
 
 ### ⛔ Blocked / pending (needs external input)
 - **Anti-bot on signup** — live with **zero deps**: signup honeypot (`anti-cheat.ts`
