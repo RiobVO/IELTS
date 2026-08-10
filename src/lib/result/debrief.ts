@@ -304,6 +304,8 @@ export interface DebriefData {
     answer: string;
     why: string | null;
     evidence: string | null;
+    /** Ungated generic per-type reference — тот же qtypeDescription, что и у akItems.strategy (деградация как в Answer key). */
+    strategy: string;
     /** derive-добавка §e-1 — см. blindSpotTag(). */
     tag: string | null;
   }[];

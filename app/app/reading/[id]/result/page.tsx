@@ -419,6 +419,7 @@ export default async function ResultPage({
             answer: m.accept.join(" / "),
             why: m.explanation,
             evidence: m.evidence?.snippet ?? null,
+            strategy: qtypeDescription(q.qtype),
             tag: blindSpotTag({ qtype: q.qtype, accept: m.accept }, blindSpot),
           };
         });
