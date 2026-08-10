@@ -210,16 +210,13 @@ function DeckCard({ deck }: { deck: VocabDeckCard }) {
   // Дек «освоен», когда все карты перешли порог interval_days (mastered === total).
   const isMastered = deck.totalCards > 0 && deck.masteredCards >= deck.totalCards;
   const startedPct = deck.totalCards > 0 ? Math.round((deck.learnedCards / deck.totalCards) * 100) : 0;
-  const href = deck.locked ? "/app/upgrade" : `/app/vocabulary/${deck.id}`;
+  const primaryHref = deck.locked ? "/app/upgrade" : `/app/vocabulary/${deck.id}`;
   const tierLabel = TIER_LABEL[deck.tierRequired] ?? deck.tierRequired;
 
   return (
-    <Link
-      href={href}
-      className={`vc-card${deck.locked ? " vc-card--locked" : ""}`}
-      style={S.card}
-      aria-label={deck.locked ? `Upgrade to ${tierLabel} to unlock ${deck.title}` : undefined}
-    >
+    // Не-ссылочный контейнер: две явные ссылки в футере (Review/Maintain/Unlock +
+    // Browse) вместо одного Link на всю карточку — вложенный Link в Link невалиден.
+    <div className={`vc-card${deck.locked ? " vc-card--locked" : ""}`} style={S.card}>
       <div style={S.cardTop}>
         {deck.level && <Badge tone="neutral">{deck.level}</Badge>}
         {deck.locked ? (
@@ -261,22 +258,37 @@ function DeckCard({ deck }: { deck: VocabDeckCard }) {
         <div style={S.progressEmpty}>No cards yet</div>
       )}
 
-      <div style={deck.locked ? S.lockFoot : isMastered ? S.maintainFoot : S.startFoot}>
-        {deck.locked ? (
-          <>
-            <Icon name="lock" size={15} /> Unlock
-          </>
-        ) : isMastered ? (
-          <>
-            Maintain <Icon name="arrow-right" size={16} strokeWidth={2.6} />
-          </>
-        ) : (
-          <>
-            Review <Icon name="arrow-right" size={16} strokeWidth={2.6} />
-          </>
+      <div style={S.cardFoot}>
+        <Link
+          href={primaryHref}
+          style={deck.locked ? S.lockFoot : isMastered ? S.maintainFoot : S.startFoot}
+          aria-label={deck.locked ? `Upgrade to ${tierLabel} to unlock ${deck.title}` : undefined}
+        >
+          {deck.locked ? (
+            <>
+              <Icon name="lock" size={15} /> Unlock
+            </>
+          ) : isMastered ? (
+            <>
+              Maintain <Icon name="arrow-right" size={16} strokeWidth={2.6} />
+            </>
+          ) : (
+            <>
+              Review <Icon name="arrow-right" size={16} strokeWidth={2.6} />
+            </>
+          )}
+        </Link>
+        {!deck.locked && (
+          <Link
+            href={`/app/vocabulary/${deck.id}/browse`}
+            style={S.browseFoot}
+            aria-label={`Browse all words in ${deck.title}`}
+          >
+            <Icon name="eye" size={14} strokeWidth={2.2} /> Browse
+          </Link>
         )}
       </div>
-    </Link>
+    </div>
   );
 }
 
@@ -340,7 +352,7 @@ const S: Record<string, CSSProperties> = {
 
   grid: {},
 
-  card: { display: "flex", flexDirection: "column", gap: 12, textAlign: "left", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, textDecoration: "none", color: "inherit", cursor: "pointer", transition: "transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
+  card: { display: "flex", flexDirection: "column", gap: 12, textAlign: "left", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, color: "inherit", transition: "transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
   cardTop: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
   lockBadge: { display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700 },
   cardTitle: { fontSize: 18, fontWeight: 800, letterSpacing: "-0.015em", color: "var(--text-primary)" },
@@ -352,7 +364,9 @@ const S: Record<string, CSSProperties> = {
   progressLabel: { fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text-muted)" },
   progressEmpty: { marginTop: "auto", fontSize: 12.5, color: "var(--text-disabled)" },
 
-  startFoot: { marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
-  maintainFoot: { marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--success-text)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
-  lockFoot: { marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700 },
+  cardFoot: { marginTop: 4, display: "flex", alignItems: "center", gap: 14 },
+  startFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800, textDecoration: "none" },
+  maintainFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--success-text)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800, textDecoration: "none" },
+  lockFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, textDecoration: "none" },
+  browseFoot: { display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 13.5, fontWeight: 700, textDecoration: "none" },
 };
