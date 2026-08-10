@@ -2,8 +2,8 @@ import { revalidateTag } from "next/cache";
 import { after, NextResponse } from "next/server";
 import { and, desc, eq, exists, isNotNull, not, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { contentItem, passage } from "@/db/schema";
-import { telegramConfig } from "@/env";
+import { contentItem, passage, vocabDeck } from "@/db/schema";
+import { telegramConfig, publicSiteUrl } from "@/env";
 import {
   answerCallback,
   downloadFileBytes,
@@ -18,6 +18,8 @@ import { importRunner } from "@/lib/import/runner/import-runner";
 import { setRunnerAudioSrc } from "@/lib/import/runner/sanitize-runner";
 import { RegradeRequiredError, DuplicateTestError } from "@/lib/import/persist";
 import { publishReviewedContentItem } from "@/lib/content/publish";
+import { importVocabDeck } from "@/lib/import/vocab/persist-vocab";
+import { MAX_FILE_BYTES, VocabParseError } from "@/lib/import/vocab/parse-vocab";
 
 /**
  * Telegram-бот импорта контента (admin-канал, аналог /admin). Умеет:
@@ -25,6 +27,9 @@ import { publishReviewedContentItem } from "@/lib/content/publish";
  *    runner_html, аудио из HTML само) (draft) + кнопка «Опубликовать»;
  *  - mp3-файл         -> кладёт в Supabase Storage, привязывает к последнему
  *    Listening-тесту (audio_path + подмена <audio src> в runner_html), затем кнопка;
+ *  - JSON-колода слов -> importVocabDeck (тот же chokepoint, что /admin/vocabulary):
+ *    аддитивный upsert по имени файла (draft, либо published — статус реимпорт не
+ *    трогает) + ссылка на /admin/vocabulary;
  *  - нажатие кнопки   -> draft -> published (как /admin setStatus).
  *
  * Middleware исключает /api/telegram из auth: запрос от Telegram, не от юзера.
@@ -132,12 +137,14 @@ export async function POST(request: Request) {
       deferTelegramWork("html import", () => handleHtmlUpload(chatId, doc, name));
     } else if (lower.endsWith(".mp3") || (doc.mime_type ?? "").startsWith("audio/")) {
       deferTelegramWork("audio import", () => handleAudioUpload(chatId, doc));
+    } else if (lower.endsWith(".json") || doc.mime_type === "application/json") {
+      deferTelegramWork("vocab import", () => handleVocabUpload(chatId, doc, name));
     } else {
       deferTelegramWork(
         "unknown file reply",
         () => sendMessage(
           chatId,
-          `Не понял файл (${name}). Жду .html (тест) или .mp3 (аудио для Listening).`,
+          `Не понял файл (${name}). Жду .html (тест), .mp3 (аудио для Listening) или .json (колода слов).`,
         ),
       );
     }
@@ -288,6 +295,64 @@ async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
       chatId,
       "Не удалось загрузить аудио. Проверь файл и попробуй ещё раз.",
     );
+  }
+}
+
+/**
+ * JSON-колода слов -> importVocabDeck (owner-путь, тот же chokepoint, что и
+ * /admin/vocabulary) -> аддитивный upsert (draft для нового дека; статус НЕ
+ * трогается при реимпорте — см. persist-vocab.ts) + ссылка на /admin/vocabulary.
+ * sourceFilePath = имя файла — та же конвенция идемпотентности, что у HTML-тестов
+ * (повторная загрузка под тем же именем обновляет дек, а не плодит дубль).
+ */
+async function handleVocabUpload(
+  chatId: number,
+  doc: TgFile,
+  name: string,
+): Promise<void> {
+  // Ранний size-гейт ПО заявленному Telegram file_size — ДО скачивания: файл больше
+  // MAX_FILE_BYTES парсер всё равно отклонит, не тратим round-trip getFilePath+download.
+  if (typeof doc.file_size === "number" && doc.file_size > MAX_FILE_BYTES) {
+    await sendMessage(
+      chatId,
+      `Файл «${name}» слишком большой (${doc.file_size} > ${MAX_FILE_BYTES} байт) — не скачиваю.`,
+    );
+    return;
+  }
+  try {
+    const path = await getFilePath(doc.file_id);
+    const text = await downloadFileText(path);
+    const r = await importVocabDeck(text, name);
+    // importVocabDeck не возвращает title/status (см. VocabImportResult) — статус
+    // важен показать по факту: реимпорт уже опубликованного дека остаётся published.
+    const [deck] = await db
+      .select({ title: vocabDeck.title, status: vocabDeck.status })
+      .from(vocabDeck)
+      .where(eq(vocabDeck.id, r.deckId))
+      .limit(1);
+    const origin = publicSiteUrl();
+    const link = origin
+      ? `\n🔍 Review в админке: ${origin}/admin/vocabulary#${r.deckId}`
+      : "";
+    await sendMessage(
+      chatId,
+      `✅ «${deck?.title ?? name}» сохранена (${deck?.status ?? "draft"}).\n` +
+        `слов: ${r.inserted} новых, ${r.updated} обновлено, ${r.totalCards} всего.${link}`,
+    );
+  } catch (e) {
+    if (e instanceof VocabParseError) {
+      await sendMessage(
+        chatId,
+        `Не удалось разобрать колоду «${name}»: ${e.message.slice(0, 200)}`,
+      );
+    } else {
+      console.error("telegram vocab import failed", e);
+      const reason = String((e as Error)?.message ?? e).slice(0, 200);
+      await sendMessage(
+        chatId,
+        `Не удалось обработать «${name}» (парсинг или сохранение).\nПричина: ${reason}`,
+      );
+    }
   }
 }
 
