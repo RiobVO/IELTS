@@ -12,6 +12,11 @@ function card(word: string, order: number, over: Partial<ParsedVocabCard> = {}):
     translation: null,
     partOfSpeech: null,
     ipa: null,
+    synonyms: null,
+    collocations: null,
+    wordFamily: null,
+    quizPrompt: null,
+    acceptedAnswers: null,
     order,
     ...over,
   };
@@ -24,9 +29,28 @@ describe("buildCardRows", () => {
       card("beta", 1),
     ]);
     expect(rows).toEqual([
-      { deckId: "deck-1", order: 0, word: "alpha", definition: "def alpha", example: "ex", translation: null, partOfSpeech: "noun", ipa: null },
-      { deckId: "deck-1", order: 1, word: "beta", definition: "def beta", example: null, translation: null, partOfSpeech: null, ipa: null },
+      { deckId: "deck-1", order: 0, word: "alpha", definition: "def alpha", example: "ex", translation: null, partOfSpeech: "noun", ipa: null, synonyms: null, collocations: null, wordFamily: null, quizPrompt: null, acceptedAnswers: null },
+      { deckId: "deck-1", order: 1, word: "beta", definition: "def beta", example: null, translation: null, partOfSpeech: null, ipa: null, synonyms: null, collocations: null, wordFamily: null, quizPrompt: null, acceptedAnswers: null },
     ]);
+  });
+
+  it("пробрасывает enrichment/quiz-поля (0038) без изменений", () => {
+    const [row] = buildCardRows("deck-1", [
+      card("mitigate", 0, {
+        synonyms: ["reduce"],
+        collocations: ["mitigate the risk"],
+        wordFamily: ["mitigation"],
+        quizPrompt: "aim to ___ impact",
+        acceptedAnswers: ["mitigate", "reduce"],
+      }),
+    ]);
+    expect(row).toMatchObject({
+      synonyms: ["reduce"],
+      collocations: ["mitigate the risk"],
+      wordFamily: ["mitigation"],
+      quizPrompt: "aim to ___ impact",
+      acceptedAnswers: ["mitigate", "reduce"],
+    });
   });
 });
 

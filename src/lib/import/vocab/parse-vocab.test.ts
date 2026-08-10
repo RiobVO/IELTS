@@ -174,3 +174,127 @@ describe("parseVocab — tier / level / лимиты / JSON", () => {
     expect(() => parseVocab("[]")).toThrow(/root must be a JSON object/i);
   });
 });
+
+describe("parseVocab — enrichment (0038): валидный файл со всеми новыми полями", () => {
+  const p = parseVocab(
+    JSON.stringify({
+      title: "Enriched deck",
+      question_types: ["tfng", "mcq_single"],
+      cards: [
+        {
+          word: "mitigate",
+          definition: "make less severe",
+          synonyms: ["reduce", "lessen"],
+          collocations: ["mitigate the risk", "mitigate damage"],
+          word_family: ["mitigation", "mitigating"],
+          quiz_prompt: "New measures aim to ___ the impact of floods.",
+          accepted_answers: ["mitigate", "reduce"],
+        },
+      ],
+    }),
+  );
+
+  it("дек: question_types — канон-слаги", () => {
+    expect(p.questionTypes).toEqual(["tfng", "mcq_single"]);
+  });
+
+  it("карта: массивы обогащения и quiz-поля смаплены", () => {
+    expect(p.cards[0]).toMatchObject({
+      synonyms: ["reduce", "lessen"],
+      collocations: ["mitigate the risk", "mitigate damage"],
+      wordFamily: ["mitigation", "mitigating"],
+      quizPrompt: "New measures aim to ___ the impact of floods.",
+      acceptedAnswers: ["mitigate", "reduce"],
+    });
+  });
+
+  it("отсутствие enrichment → все new-поля null (обратная совместимость)", () => {
+    const plain = parseVocab(
+      JSON.stringify({ title: "T", cards: [{ word: "w", definition: "d" }] }),
+    );
+    expect(plain.questionTypes).toBeNull();
+    expect(plain.cards[0]).toMatchObject({
+      synonyms: null,
+      collocations: null,
+      wordFamily: null,
+      quizPrompt: null,
+      acceptedAnswers: null,
+    });
+  });
+
+  it("question_types: пустой массив → null; тримит слаги", () => {
+    expect(parseVocab(deck({ question_types: [] })).questionTypes).toBeNull();
+    expect(parseVocab(deck({ question_types: ["  tfng  "] })).questionTypes).toEqual(["tfng"]);
+  });
+
+  it("quiz_prompt задан, accepted_answers отсутствует → валидно (fallback=word)", () => {
+    const q = parseVocab(
+      deck({ cards: [{ word: "run", definition: "d", quiz_prompt: "I ___ daily." }] }),
+    );
+    expect(q.cards[0].quizPrompt).toBe("I ___ daily.");
+    expect(q.cards[0].acceptedAnswers).toBeNull();
+  });
+
+  it("пустые массивы обогащения → null (не ошибка)", () => {
+    const q = parseVocab(deck({ cards: [{ word: "run", definition: "d", synonyms: [] }] }));
+    expect(q.cards[0].synonyms).toBeNull();
+  });
+});
+
+describe("parseVocab — enrichment (0038): негативные кейсы", () => {
+  it("quiz_prompt без маркера ___ → ошибка", () => {
+    expect(() =>
+      parseVocab(deck({ cards: [{ word: "w", definition: "d", quiz_prompt: "no blank here" }] })),
+    ).toThrow(/must contain a blank marker/i);
+  });
+
+  it("accepted_answers задан пустым массивом → ошибка", () => {
+    expect(() =>
+      parseVocab(deck({ cards: [{ word: "w", definition: "d", accepted_answers: [] }] })),
+    ).toThrow(/"accepted_answers" must not be empty/i);
+  });
+
+  it("неизвестный question_type слаг → VocabParseError", () => {
+    expect(() => parseVocab(deck({ question_types: ["tfng", "essay_grading"] }))).toThrow(
+      /unknown question type/i,
+    );
+  });
+
+  it("question_types — не строковый элемент → ошибка", () => {
+    expect(() => parseVocab(deck({ question_types: [42] }))).toThrow(/must be strings/i);
+  });
+
+  it("лимит: >20 элементов в synonyms → ошибка", () => {
+    const synonyms = Array.from({ length: 21 }, (_, i) => `s${i}`);
+    expect(() =>
+      parseVocab(deck({ cards: [{ word: "w", definition: "d", synonyms }] })),
+    ).toThrow(/"synonyms" has too many items/i);
+  });
+
+  it("лимит: >10 элементов в accepted_answers → ошибка", () => {
+    const accepted_answers = Array.from({ length: 11 }, (_, i) => `a${i}`);
+    expect(() =>
+      parseVocab(
+        deck({ cards: [{ word: "w", definition: "d", quiz_prompt: "___", accepted_answers }] }),
+      ),
+    ).toThrow(/"accepted_answers" has too many items/i);
+  });
+
+  it("лимит: >10 question_types → ошибка", () => {
+    const question_types = Array.from({ length: 11 }, () => "tfng");
+    expect(() => parseVocab(deck({ question_types }))).toThrow(/question_types has too many items/i);
+  });
+
+  it("лимит: элемент массива длиннее 200 символов → ошибка", () => {
+    const synonyms = ["x".repeat(201)];
+    expect(() =>
+      parseVocab(deck({ cards: [{ word: "w", definition: "d", synonyms }] })),
+    ).toThrow(/too long/i);
+  });
+
+  it("пустая строка внутри массива обогащения → ошибка", () => {
+    expect(() =>
+      parseVocab(deck({ cards: [{ word: "w", definition: "d", synonyms: ["ok", "   "] }] })),
+    ).toThrow(/must not be empty/i);
+  });
+});

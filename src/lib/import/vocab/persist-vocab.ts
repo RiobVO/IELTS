@@ -48,6 +48,7 @@ export async function importVocabDeck(
         level: parsed.level,
         sourceFilePath: path,
         tierRequired: parsed.tierRequired,
+        questionTypes: parsed.questionTypes,
       })
       .onConflictDoUpdate({
         target: vocabDeck.sourceFilePath,
@@ -56,6 +57,7 @@ export async function importVocabDeck(
           description: sql`excluded.description`,
           level: sql`excluded.level`,
           tierRequired: sql`excluded.tier_required`,
+          questionTypes: sql`excluded.question_types`,
           updatedAt: sql`now()`,
         },
       })
@@ -86,6 +88,11 @@ export async function importVocabDeck(
           translation: sql`excluded.translation`,
           partOfSpeech: sql`excluded.part_of_speech`,
           ipa: sql`excluded.ipa`,
+          synonyms: sql`excluded.synonyms`,
+          collocations: sql`excluded.collocations`,
+          wordFamily: sql`excluded.word_family`,
+          quizPrompt: sql`excluded.quiz_prompt`,
+          acceptedAnswers: sql`excluded.accepted_answers`,
         },
       });
 

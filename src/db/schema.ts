@@ -854,6 +854,9 @@ export const vocabDeck = pgTable("vocab_deck", {
   status: contentStatus("status").notNull().default("draft"),
   // Денормализация для каталога (число карточек), пересчёт при (ре)импорте.
   wordCount: integer("word_count").notNull().default(0),
+  // Enrichment (0038): канон-слаги типов вопросов для quiz-режима дека. Nullable —
+  // публичная мета каталога (как content_item.question_types), лока не требует.
+  questionTypes: text("question_types").array(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -876,6 +879,15 @@ export const vocabCard = pgTable(
     translation: text("translation"),
     partOfSpeech: text("part_of_speech"),
     ipa: text("ipa"),
+    // Enrichment (0038): всё nullable. synonyms/collocations/wordFamily — обучающая
+    // семантика; quizPrompt (fill-in-blank, содержит маркер ___) + acceptedAnswers —
+    // опциональный quiz-режим. Лока нет: карточка — self-graded study material, ответ
+    // = само видимое слово (SCHEMA_NOTES 0037/0038), в отличие от answer_key.
+    synonyms: text("synonyms").array(),
+    collocations: text("collocations").array(),
+    wordFamily: text("word_family").array(),
+    quizPrompt: text("quiz_prompt"),
+    acceptedAnswers: text("accepted_answers").array(),
   },
   (t) => [
     // Фундамент идемпотентного upsert-реимпорта: слово уникально в пределах дека.
