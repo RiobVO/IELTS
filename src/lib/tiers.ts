@@ -17,6 +17,14 @@ const TIER_RANK: Record<Tier, number> = { basic: 0, premium: 1, ultra: 2 };
 export const BASIC_DAILY_LIMIT = 25;
 
 /**
+ * Basic-tier daily cap on NEW vocab cards introduced per day (SRS anti-cram, Vocab
+ * plan). Premium/Ultra are unlimited. Only NEW cards (no progress row yet) count —
+ * reviews of already-seen cards are never capped. Enforced server-side (owner-path
+ * SRS write), so a UI hint can't bypass it; tighten as an upsell when paid tiers land.
+ */
+export const VOCAB_DAILY_NEW_LIMIT = 20;
+
+/**
  * AI Writing (Task 2 feedback) is a paid feature and unlocks at Premium and up
  * (pricing page: "AI Writing feedback" sits in Premium; Ultra adds human review +
  * Speaking on top, still to come). Basic gets a single lifetime teaser preview so
