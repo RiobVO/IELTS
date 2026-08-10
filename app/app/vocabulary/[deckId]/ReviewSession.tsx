@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/core/icons";
 import { Button } from "@/components/core/Button";
@@ -43,9 +43,11 @@ interface ReviewSessionProps {
   /** Остаток новых карт на сегодня (null = безлимит premium/ultra). */
   newRemainingToday: number | null;
   deckTitle: string;
+  /** Rescue-вариант той же сессии: очередь уже начатых трудных слов без новых карт. */
+  rescueSession?: boolean;
 }
 
-export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }: ReviewSessionProps) {
+export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, rescueSession = false }: ReviewSessionProps) {
   const [total] = useState(cards.length);
   const [queue, setQueue] = useState(cards);
   const [mode, setMode] = useState<Mode>("flashcards");
@@ -58,6 +60,7 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
   const [errorHint, setErrorHint] = useState(false);
   const [transientMsg, setTransientMsg] = useState<string | null>(null);
   const [stats, setStats] = useState({ again: 0, good: 0 });
+  const [ttsVoice, setTtsVoice] = useState<SpeechSynthesisVoice | null>(null);
 
   // Type-режим: ввод, краткий success-флеш перед авто-переходом, и reveal неверного
   // ответа (ждёт явного "Continue" — в отличие от correct, который уходит сам).
@@ -79,6 +82,36 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
   const neverHadCards = total === 0;
 
   const showAnswerRef = useRef<HTMLButtonElement>(null);
+
+  // Голоса Web Speech API часто приезжают после первого render; кнопку показываем
+  // только когда браузер реально отдал английский voice.
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !("speechSynthesis" in window) ||
+      !("SpeechSynthesisUtterance" in window)
+    ) {
+      return;
+    }
+
+    const synth = window.speechSynthesis;
+    const pickVoice = (): void => {
+      const voices = synth.getVoices();
+      const englishVoices = voices.filter((voice) => /^en([-_]|$)/i.test(voice.lang));
+      const preferred =
+        englishVoices.find((voice) => voice.lang.toLowerCase().replace("_", "-").startsWith("en-gb")) ??
+        englishVoices[0] ??
+        null;
+      setTtsVoice(preferred);
+    };
+
+    pickVoice();
+    synth.addEventListener("voiceschanged", pickVoice);
+    return () => {
+      synth.removeEventListener("voiceschanged", pickVoice);
+      synth.cancel();
+    };
+  }, []);
 
   // Фокус следует за состоянием, а не остаётся на скрытой (backface-hidden) грани или
   // на контроле прошлого режима: flashcards-фронт → "Show answer"; flashcards-бэк →
@@ -120,6 +153,40 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
     setCorrectFlash(false);
     setWrongState(null);
     setErrorHint(false);
+  }
+
+  function pronounce(word: string): void {
+    if (
+      !ttsVoice ||
+      typeof window === "undefined" ||
+      !("speechSynthesis" in window) ||
+      !("SpeechSynthesisUtterance" in window)
+    ) {
+      return;
+    }
+
+    const utterance = new window.SpeechSynthesisUtterance(word);
+    utterance.voice = ttsVoice;
+    utterance.lang = ttsVoice.lang;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function renderTtsButton(word: string, hidden: boolean): ReactNode {
+    if (!ttsVoice) return null;
+    return (
+      <button
+        type="button"
+        className="rs-tts"
+        aria-label={`Pronounce ${word}`}
+        aria-hidden={hidden || undefined}
+        tabIndex={hidden ? -1 : 0}
+        onClick={() => pronounce(word)}
+        style={S.ttsBtn}
+      >
+        <Icon name="volume" size={17} strokeWidth={2.2} />
+      </button>
+    );
   }
 
   async function submitGrade(grade: Grade) {
@@ -230,6 +297,11 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
           {dueCount > 0 && (
             <span style={S.stat}>
               <Icon name="clock" size={13} strokeWidth={2.4} /> {dueCount} due
+            </span>
+          )}
+          {rescueSession && (
+            <span style={S.rescueStat}>
+              <Icon name="shield-check" size={13} strokeWidth={2.4} /> Rescue session · hardest {total}
             </span>
           )}
           {remaining !== null && (
@@ -351,7 +423,10 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
                 <div className={`rs-flip${flipped ? " is-flipped" : ""}`}>
                   <div className="rs-flip-inner">
                     <div className="rs-face rs-face-front" aria-hidden={flipped || undefined}>
-                      <div style={S.word}>{current.word}</div>
+                      <div style={S.wordRow}>
+                        <div style={S.word}>{current.word}</div>
+                        {renderTtsButton(current.word, flipped)}
+                      </div>
                       {current.ipa && <div style={S.ipa}>{current.ipa}</div>}
                       {current.partOfSpeech && <span style={S.pos}>{current.partOfSpeech}</span>}
                       {/* Флип-триггер — обычная кнопка: клик/тап/Enter/Space работают из
@@ -417,7 +492,10 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
                   <span style={S.wrongCorrect}>{wrongState.correctWord}</span>
                 </div>
                 <div style={S.wrongFull}>
-                  <div style={S.word}>{current.word}</div>
+                  <div style={S.wordRow}>
+                    <div style={S.word}>{current.word}</div>
+                    {renderTtsButton(current.word, false)}
+                  </div>
                   <div style={S.definition}>{current.definition}</div>
                   {current.translation && <div style={S.translation}>{current.translation}</div>}
                   {current.ipa && <div style={S.ipa}>{current.ipa}</div>}
@@ -482,6 +560,7 @@ const CSS = `
 .rs-face-back{transform:rotateY(180deg)}
 .rs-seg{min-height:40px;padding:0 16px;font-size:13px}
 .rs-seg:hover{color:var(--text-primary)}
+.rs-tts:hover{background:var(--surface)}
 .rs-compact{min-height:230px}
 @media (min-width:768px){
   .rs-flip-inner{min-height:270px}
@@ -498,6 +577,7 @@ const S: Record<string, CSSProperties> = {
   title: { margin: "10px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
   headStats: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 },
   stat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--surface-inset)", color: "var(--text-secondary)", fontSize: 12.5, fontWeight: 700 },
+  rescueStat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 12.5, fontWeight: 800 },
 
   // Mode toggle (Flashcards | Type the answer)
   modeRow: { display: "inline-flex", padding: 4, gap: 4, marginTop: 12, background: "var(--surface-inset)", borderRadius: 11, flex: "none" },
@@ -517,7 +597,9 @@ const S: Record<string, CSSProperties> = {
   capTitle: { fontSize: 15, fontWeight: 800, color: "var(--text-primary)" },
   capBody: { fontSize: 13, color: "var(--text-muted)", marginTop: 3, lineHeight: 1.5 },
 
+  wordRow: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap" },
   word: { fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
+  ttsBtn: { width: 38, height: 38, borderRadius: "var(--radius-full)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", display: "grid", placeItems: "center", padding: 0, cursor: "pointer", transition: "var(--transition-colors)" },
   ipa: { fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--text-muted)" },
   pos: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-link)", background: "var(--brand-subtle)", padding: "3px 10px", borderRadius: "var(--radius-full)" },
   flipBtn: { marginTop: 14, appearance: "none", cursor: "pointer", padding: "10px 20px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },

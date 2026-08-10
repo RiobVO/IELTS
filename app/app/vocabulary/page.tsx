@@ -94,7 +94,7 @@ function pickReviewTarget(decks: VocabDeckCard[], overview: VocabOverview): stri
 
 /** Дневной план (V1) + стрик/цель (V3) + банк слов (V4). Read-only, ничего не пишет. */
 function PlanPanel({ overview, ctaHref }: { overview: VocabOverview; ctaHref: string | null }) {
-  const { dueToday, forecast7, newRemainingToday, bank, sessionMinutes, streak, reviewedToday, goal } = overview;
+  const { dueToday, forecast7, newRemainingToday, rescueCount, bank, sessionMinutes, streak, reviewedToday, goal } = overview;
 
   return (
     <section style={S.plan} aria-label="Your vocabulary plan for today">
@@ -114,8 +114,14 @@ function PlanPanel({ overview, ctaHref }: { overview: VocabOverview; ctaHref: st
             <span style={S.statLabel}>Streak · goal {reviewedToday}/{goal}</span>
           </div>
         </div>
-        {/* flex-строка CTA: место под rescue-кнопку следующего пакета + Start review. */}
+        {/* flex-строка CTA: rescue-очередь трудных слов + Start review. */}
         <div style={S.planCta}>
+          {rescueCount > 0 && (
+            <Link href="/app/vocabulary/rescue" className="vc-rescue" style={S.rescueCta}>
+              <Icon name="shield-check" size={14} strokeWidth={2.4} />
+              Rescue hard words · {rescueCount}
+            </Link>
+          )}
           {ctaHref ? (
             <Button href={ctaHref} variant="primary" size="md" trailingIcon="arrow-right">
               Start review
@@ -283,6 +289,7 @@ const CSS = `
 .vc-grid{display:grid;grid-template-columns:1fr;gap:16px}
 .vc-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-solid-lg)}
 .vc-card--locked:hover{transform:none;box-shadow:var(--shadow-solid);border-color:var(--border)}
+.vc-rescue:hover{border-color:currentColor;background:var(--surface)}
 @media (min-width:640px){
   .vc-grid{grid-template-columns:repeat(2,1fr)}
 }
@@ -315,6 +322,7 @@ const S: Record<string, CSSProperties> = {
   statSmall: { fontSize: 13, color: "var(--text-muted)", fontWeight: 700 },
   statLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" },
   planCta: { marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  rescueCta: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 40, padding: "8px 14px", borderRadius: "var(--radius-full)", border: "2px solid transparent", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 13, fontWeight: 800, textDecoration: "none", transition: "var(--transition-colors)" },
   caughtUp: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: "var(--success-text)" },
   planFoot: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 26px", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-inset)", padding: "14px 20px" },
   spark: { display: "flex", alignItems: "flex-end", gap: 5, height: 44 },
