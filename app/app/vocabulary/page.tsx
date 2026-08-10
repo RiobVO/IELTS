@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { getVocabCatalog, getVocabOverview, type VocabDeckCard, type VocabOverview } from "@/lib/vocab/queries";
+import { getWeakTypeDeckRecommendation, type WeakTypeDeckRecommendation } from "@/lib/vocab/recommend";
 import { Badge } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
@@ -22,14 +23,16 @@ const TIER_LABEL: Record<string, string> = {
  * дневным планом сверху. Полностью серверный: план-панель и грид — статичная разметка
  * без клиентского состояния (hover — чистый CSS; единственный клиентский островок —
  * core Button у CTA). Данные: getVocabOverview (план/стрик/банк) + getVocabCatalog
- * (деки) параллельно — оба owner-path, читаются в одну волну. Тир-лок ведёт на
- * /app/upgrade тем же паттерном, что locked-тесты в каталоге Practice.
+ * (деки) + getWeakTypeDeckRecommendation (V10 rail — дек под слабейший тип вопросов)
+ * параллельно — все owner-path, читаются в одну волну. Тир-лок ведёт на /app/upgrade
+ * тем же паттерном, что locked-тесты в каталоге Practice.
  */
 export default async function VocabularyPage() {
   const user = await requireUser();
-  const [overview, decks] = await Promise.all([
+  const [overview, decks, weakTypeReco] = await Promise.all([
     getVocabOverview(user.id),
     getVocabCatalog(user.id),
+    getWeakTypeDeckRecommendation(user.id),
   ]);
 
   return (
@@ -50,6 +53,8 @@ export default async function VocabularyPage() {
         </section>
 
         {decks.length > 0 && <PlanPanel overview={overview} ctaHref={pickReviewTarget(decks, overview)} />}
+
+        {weakTypeReco && <WeakTypeRail reco={weakTypeReco} />}
 
         {decks.length === 0 ? (
           <div style={S.empty}>
@@ -204,6 +209,31 @@ function BankDot({ color, label }: { color: string; label: string }) {
   );
 }
 
+/* ------------------------------ Weak-type rail ----------------------------- */
+
+/**
+ * V10: рекомендация дека под слабейший тип вопросов (per_type_breakdown submitted-
+ * попыток, порог достоверности — recommend.ts). Рендерится только когда рекомендация
+ * не null (нет статистики, порог не пройден или контент ещё не протегирован —
+ * рекомендация отсутствует, rail молча скрыт).
+ */
+function WeakTypeRail({ reco }: { reco: WeakTypeDeckRecommendation }) {
+  return (
+    <div style={S.rail}>
+      <span style={S.railIcon}>
+        <Icon name="target" size={19} strokeWidth={2.2} />
+      </span>
+      <p style={S.railText}>
+        Your weakest question type is <b style={S.railStrong}>{reco.qtypeLabel}</b> — this deck
+        trains the paraphrase words it relies on.
+      </p>
+      <Button href={`/app/vocabulary/${reco.deckId}`} variant="secondary" size="sm" trailingIcon="arrow-right">
+        {reco.deckTitle}
+      </Button>
+    </div>
+  );
+}
+
 /* -------------------------------- Deck card ------------------------------- */
 
 function DeckCard({ deck }: { deck: VocabDeckCard }) {
@@ -345,6 +375,12 @@ const S: Record<string, CSSProperties> = {
   bankItem: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: "var(--text-secondary)" },
   bankDotI: { width: 9, height: 9, borderRadius: 3, flex: "none", display: "block" },
   bankTotal: { fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text-muted)" },
+
+  // Weak-type rail (V10)
+  rail: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "15px 18px", borderRadius: "var(--radius-lg)", background: "var(--info-subtle)", border: "2px solid color-mix(in oklab, var(--info) 45%, transparent)" },
+  railIcon: { width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", background: "#fff", color: "var(--info-text)", display: "grid", placeItems: "center" },
+  railText: { flex: 1, minWidth: 220, margin: 0, fontSize: 13.5, color: "var(--text-secondary)", lineHeight: 1.45 },
+  railStrong: { color: "var(--text-primary)" },
 
   empty: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "40px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", maxWidth: "52ch", marginInline: "auto" },
   emptyIcon: { display: "grid", placeItems: "center", width: 52, height: 52, borderRadius: "50%", background: "var(--brand-subtle)", color: "var(--text-link)", marginBottom: 4 },
