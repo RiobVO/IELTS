@@ -502,7 +502,7 @@ function ByType({
     <div>
       <div className="rc-bt-head">
         <h2>Where the marks went</h2>
-        <p>Sorted worst → best. Your weakest type is <b>the biggest pool of marks</b> to win back — that&rsquo;s your start line.</p>
+        <p>Sorted worst → best. Start with the highlighted type — <b>the fastest marks to win back</b>.</p>
       </div>
       <div className="rc-bt-card">
         <div>
@@ -538,7 +538,7 @@ function ByType({
                   <span ref={(el) => { barRefs.current[r.type] = el; }} style={{ width: `${pctWidth}%`, background: barColor(ratio) }} />
                 </div>
                 {isFocus && (
-                  <div className="rc-bt-note">Your weakest type — the biggest block of marks still on the table. Win these back first.</div>
+                  <div className="rc-bt-note">Your focus type — the fastest marks to win back. Start here.</div>
                 )}
               </div>
             );
