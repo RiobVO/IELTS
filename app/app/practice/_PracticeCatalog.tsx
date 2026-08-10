@@ -254,7 +254,8 @@ export function PracticeCatalog({
 
   // Живые скиллы (фильтр-карты) vs «Coming soon» (locked-тизеры). Writing/Speaking
   // живут в обеих ролях по флагу ops-гейта: live → ссылка, иначе → coming-полоса.
-  const liveCols = 2 + (writingEnabled ? 1 : 0) + (speakingEnabled ? 1 : 0);
+  // Vocabulary всегда живая (без env-гейта) — +1 колонка безусловно.
+  const liveCols = 2 + (writingEnabled ? 1 : 0) + (speakingEnabled ? 1 : 0) + 1;
   const comingSkills: ("writing" | "speaking")[] = [
     ...(writingEnabled ? [] : (["writing"] as const)),
     ...(speakingEnabled ? [] : (["speaking"] as const)),
@@ -360,6 +361,15 @@ export function PracticeCatalog({
               href="/app/speaking"
             />
           )}
+          {/* Vocabulary — всегда живая (нет ops-гейта, в отличие от Writing/Speaking). */}
+          <SkillCard
+            skill="vocabulary"
+            name="Vocabulary"
+            count="Flashcards with spaced repetition"
+            band={null}
+            targetBand={targetBand}
+            href="/app/vocabulary"
+          />
         </div>
       </section>
 
@@ -613,13 +623,14 @@ function HeroCard({ hero }: { hero: HeroData }) {
    and the action affordance. Per-skill colour is the given oklch palette (base =
    fill / ink = text / soft = chip bg) — applied inline, the bando tokens (surface,
    border, text, success) stay var(--*). */
-type SkillKey = "reading" | "listening" | "writing" | "speaking";
+type SkillKey = "reading" | "listening" | "writing" | "speaking" | "vocabulary";
 
 const SKILL_PALETTE: Record<SkillKey, { letter: string; base: string; soft: string; ink: string }> = {
   reading: { letter: "R", base: "oklch(0.585 0.225 292)", soft: "oklch(0.955 0.030 290)", ink: "oklch(0.50 0.205 292)" },
   listening: { letter: "L", base: "oklch(0.60 0.135 235)", soft: "oklch(0.93 0.055 232)", ink: "oklch(0.49 0.130 238)" },
   writing: { letter: "W", base: "oklch(0.64 0.135 70)", soft: "oklch(0.94 0.075 85)", ink: "oklch(0.56 0.120 65)" },
   speaking: { letter: "S", base: "oklch(0.585 0.150 158)", soft: "oklch(0.93 0.070 156)", ink: "oklch(0.49 0.130 160)" },
+  vocabulary: { letter: "V", base: "oklch(0.60 0.150 330)", soft: "oklch(0.95 0.045 328)", ink: "oklch(0.50 0.145 330)" },
 };
 
 function SkillCard({
