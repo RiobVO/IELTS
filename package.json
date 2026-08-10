@@ -20,6 +20,7 @@
     "verify": "tsx scripts/verify.ts",
     "storage:verify": "tsx scripts/smoke-speaking-storage.ts",
     "import": "tsx scripts/import-file.ts",
+    "import:vocab": "tsx scripts/import-vocab.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
