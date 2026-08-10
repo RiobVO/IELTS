@@ -25,6 +25,20 @@ export const BASIC_DAILY_LIMIT = 25;
 export const VOCAB_DAILY_NEW_LIMIT = 20;
 
 /**
+ * Дневная цель повторов для приватного vocab-стрика (план V3). Хардкод-константа
+ * (прецедент — GoalBar goal=5): цель мотивирует прогресс-панель, но НЕ гейтит доступ
+ * и НЕ течёт в рейтинг/Elo/XP — это отдельный обучающий счётчик.
+ */
+export const VOCAB_DAILY_GOAL = 15;
+
+/**
+ * Порог «карта освоена» (план V4): SM-2 interval_days ≥ этого значения. На таком
+ * интервале карта уходит в режим maintenance — каталог красит дек success и ставит
+ * бейдж «Mastered». Держим рядом с остальными vocab-тюнингами.
+ */
+export const VOCAB_MASTERED_INTERVAL_DAYS = 21;
+
+/**
  * AI Writing (Task 2 feedback) is a paid feature and unlocks at Premium and up
  * (pricing page: "AI Writing feedback" sits in Premium; Ultra adds human review +
  * Speaking on top, still to come). Basic gets a single lifetime teaser preview so

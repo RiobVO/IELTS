@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { getVocabCatalog, type VocabDeckCard } from "@/lib/vocab/queries";
+import { getVocabCatalog, getVocabOverview, type VocabDeckCard, type VocabOverview } from "@/lib/vocab/queries";
 import { Badge } from "@/components/core/Badge";
+import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
 import { AppShell } from "../_AppShell";
 
@@ -17,16 +18,19 @@ const TIER_LABEL: Record<string, string> = {
 };
 
 /**
- * Vocabulary (`/app/vocabulary`) — каталог словарных колод (flashcards + SRS).
- * Полностью серверный: грид ссылок без клиентского состояния (hover — чистый CSS),
- * в отличие от Practice, где фильтры требуют client-компонент. Единственный источник
- * данных — owner-path getVocabCatalog (готовый data-слой, не трогаем). Тир-лок ведёт
- * на /app/upgrade тем же паттерном, что и locked-тесты в каталоге Practice.
+ * Vocabulary (`/app/vocabulary`) — каталог словарных колод (flashcards + SRS) с
+ * дневным планом сверху. Полностью серверный: план-панель и грид — статичная разметка
+ * без клиентского состояния (hover — чистый CSS; единственный клиентский островок —
+ * core Button у CTA). Данные: getVocabOverview (план/стрик/банк) + getVocabCatalog
+ * (деки) параллельно — оба owner-path, читаются в одну волну. Тир-лок ведёт на
+ * /app/upgrade тем же паттерном, что locked-тесты в каталоге Practice.
  */
 export default async function VocabularyPage() {
   const user = await requireUser();
-  const decks = await getVocabCatalog(user.id);
-  const dueTotal = decks.reduce((sum, d) => sum + d.dueCount, 0);
+  const [overview, decks] = await Promise.all([
+    getVocabOverview(user.id),
+    getVocabCatalog(user.id),
+  ]);
 
   return (
     <AppShell active="vocabulary">
@@ -43,19 +47,9 @@ export default async function VocabularyPage() {
             Study IELTS vocabulary with spaced repetition — review what&apos;s due now, and
             we bring back what you forget later.
           </p>
-          {decks.length > 0 && (
-            <div style={S.dueSummary}>
-              <Icon name="clock" size={16} strokeWidth={2.4} style={{ color: "var(--text-link)" }} />
-              {dueTotal > 0 ? (
-                <span>
-                  <b style={S.dueCount}>{dueTotal}</b> {dueTotal === 1 ? "card" : "cards"} due today
-                </span>
-              ) : (
-                <span>You&apos;re all caught up today</span>
-              )}
-            </div>
-          )}
         </section>
+
+        {decks.length > 0 && <PlanPanel overview={overview} ctaHref={pickReviewTarget(decks, overview)} />}
 
         {decks.length === 0 ? (
           <div style={S.empty}>
@@ -80,8 +74,136 @@ export default async function VocabularyPage() {
   );
 }
 
+/**
+ * Цель кнопки «Start review»: дек с наибольшим due; если due нет — первый доступный
+ * дек с новыми картами (только когда дневной лимит новых не исчерпан); иначе null →
+ * панель показывает all-caught-up, CTA скрыт. Locked-деки исключены.
+ */
+function pickReviewTarget(decks: VocabDeckCard[], overview: VocabOverview): string | null {
+  const open = decks.filter((d) => !d.locked);
+  const byDue = open.filter((d) => d.dueCount > 0).sort((a, b) => b.dueCount - a.dueCount);
+  if (byDue.length > 0) return `/app/vocabulary/${byDue[0].id}`;
+  if (overview.newRemainingToday !== 0) {
+    const withNew = open.find((d) => d.totalCards - d.learnedCards > 0);
+    if (withNew) return `/app/vocabulary/${withNew.id}`;
+  }
+  return null;
+}
+
+/* ------------------------------- Plan panel ------------------------------- */
+
+/** Дневной план (V1) + стрик/цель (V3) + банк слов (V4). Read-only, ничего не пишет. */
+function PlanPanel({ overview, ctaHref }: { overview: VocabOverview; ctaHref: string | null }) {
+  const { dueToday, forecast7, newRemainingToday, bank, sessionMinutes, streak, reviewedToday, goal } = overview;
+
+  return (
+    <section style={S.plan} aria-label="Your vocabulary plan for today">
+      <div style={S.planMain}>
+        <div style={S.planStats}>
+          <Stat value={dueToday} label="Due today" />
+          <Stat value={newRemainingToday === null ? "∞" : newRemainingToday} label="New left today" />
+          <Stat
+            value={<>~{sessionMinutes}<small style={S.statSmall}> min</small></>}
+            label="Session"
+          />
+          <div style={S.stat}>
+            <span style={{ ...S.statNum, ...S.streakNum }}>
+              {streak}
+              <Icon name="flame" size={20} strokeWidth={2.2} style={{ color: "var(--streak)" }} />
+            </span>
+            <span style={S.statLabel}>Streak · goal {reviewedToday}/{goal}</span>
+          </div>
+        </div>
+        {/* flex-строка CTA: место под rescue-кнопку следующего пакета + Start review. */}
+        <div style={S.planCta}>
+          {ctaHref ? (
+            <Button href={ctaHref} variant="primary" size="md" trailingIcon="arrow-right">
+              Start review
+            </Button>
+          ) : (
+            <span style={S.caughtUp}>
+              <Icon name="circle-check" size={18} style={{ color: "var(--success-text)" }} />
+              All caught up
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div style={S.planFoot}>
+        <Spark forecast={forecast7} />
+        <div style={S.bank}>
+          <BankDot color="var(--success)" label={`${bank.mastered} mastered`} />
+          <BankDot color="var(--brand)" label={`${bank.learning} learning`} />
+          <BankDot color="var(--text-disabled)" label={`${bank.newCount} new`} />
+          <span style={S.bankTotal}>{bank.total} words total</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Stat({ value, label }: { value: ReactNode; label: string }) {
+  return (
+    <div style={S.stat}>
+      <span style={S.statNum}>{value}</span>
+      <span style={S.statLabel}>{label}</span>
+    </div>
+  );
+}
+
+/** UTC-аббревиатуры дней недели для тиков спарка (offset 0 = сегодня → «TD»). */
+const DOW = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
+/**
+ * 7-дневный прогноз due (столбики, сегодня выделен). Высоты нормированы к максимуму;
+ * нулевой день — тонкая метка. Смысловое содержание прогноза — в aria-label (role=img),
+ * сами столбики декоративны.
+ */
+function Spark({ forecast }: { forecast: number[] }) {
+  const max = Math.max(...forecast, 1);
+  const todayDow = new Date().getUTCDay();
+  const label =
+    "Due-card forecast for the next 7 days: " +
+    forecast
+      .map((c, i) => {
+        const day = i === 0 ? "today" : i === 1 ? "tomorrow" : DOW[(todayDow + i) % 7];
+        return `${day} ${c}`;
+      })
+      .join(", ");
+
+  return (
+    <div style={S.spark} role="img" aria-label={label}>
+      {forecast.map((c, i) => {
+        const isToday = i === 0;
+        const h = c === 0 ? 3 : Math.round((c / max) * 34) + 4;
+        return (
+          <span key={i} style={S.sparkCol}>
+            <i style={{ ...S.sparkBar, height: h, background: isToday ? "var(--brand)" : "var(--brand-subtle)" }} />
+            <em style={{ ...S.sparkTick, color: isToday ? "var(--text-link)" : "var(--text-disabled)" }}>
+              {isToday ? "TD" : DOW[(todayDow + i) % 7]}
+            </em>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function BankDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={S.bankItem}>
+      <i style={{ ...S.bankDotI, background: color }} />
+      {label}
+    </span>
+  );
+}
+
+/* -------------------------------- Deck card ------------------------------- */
+
 function DeckCard({ deck }: { deck: VocabDeckCard }) {
-  const pct = deck.totalCards > 0 ? Math.round((deck.learnedCards / deck.totalCards) * 100) : 0;
+  // Дек «освоен», когда все карты перешли порог interval_days (mastered === total).
+  const isMastered = deck.totalCards > 0 && deck.masteredCards >= deck.totalCards;
+  const startedPct = deck.totalCards > 0 ? Math.round((deck.learnedCards / deck.totalCards) * 100) : 0;
   const href = deck.locked ? "/app/upgrade" : `/app/vocabulary/${deck.id}`;
   const tierLabel = TIER_LABEL[deck.tierRequired] ?? deck.tierRequired;
 
@@ -98,6 +220,10 @@ function DeckCard({ deck }: { deck: VocabDeckCard }) {
           <span style={S.lockBadge}>
             <Icon name="lock" size={12} strokeWidth={2.4} /> {tierLabel}
           </span>
+        ) : isMastered ? (
+          <Badge tone="success">
+            <Icon name="check" size={12} strokeWidth={2.8} /> Mastered
+          </Badge>
         ) : deck.dueCount > 0 ? (
           <Badge tone="brand" mono>{deck.dueCount} to review</Badge>
         ) : deck.totalCards > 0 ? (
@@ -111,18 +237,32 @@ function DeckCard({ deck }: { deck: VocabDeckCard }) {
       {deck.totalCards > 0 ? (
         <div style={S.progressRow}>
           <span style={S.progressTrack}>
-            <span style={{ ...S.progressFill, width: `${pct}%` }} />
+            <span
+              style={{
+                ...S.progressFill,
+                width: `${isMastered ? 100 : startedPct}%`,
+                ...(isMastered ? { background: "var(--success)" } : null),
+              }}
+            />
           </span>
-          <span style={S.progressLabel}>{deck.learnedCards} / {deck.totalCards} learned</span>
+          <span style={S.progressLabel}>
+            {isMastered
+              ? `${deck.masteredCards} / ${deck.totalCards} mastered`
+              : `${deck.learnedCards} / ${deck.totalCards} started`}
+          </span>
         </div>
       ) : (
         <div style={S.progressEmpty}>No cards yet</div>
       )}
 
-      <div style={deck.locked ? S.lockFoot : S.startFoot}>
+      <div style={deck.locked ? S.lockFoot : isMastered ? S.maintainFoot : S.startFoot}>
         {deck.locked ? (
           <>
             <Icon name="lock" size={15} /> Unlock
+          </>
+        ) : isMastered ? (
+          <>
+            Maintain <Icon name="arrow-right" size={16} strokeWidth={2.6} />
           </>
         ) : (
           <>
@@ -135,7 +275,8 @@ function DeckCard({ deck }: { deck: VocabDeckCard }) {
 }
 
 /* Адаптив: грид 1 колонка mobile → 2 (≥640) → 3 (≥1024), брейкпоинт-свойства только
-   в классах (инвариант проекта — inline перебивает media-query). */
+   в классах (инвариант проекта — inline перебивает media-query). План-панель
+   складывается без брейкпоинтов — на flex-wrap. */
 const CSS = `
 .vc-wrap{padding:24px 16px 56px}
 .vc-h1{font-size:30px}
@@ -163,8 +304,27 @@ const S: Record<string, CSSProperties> = {
   overlineDot: { width: 7, height: 7, borderRadius: "var(--radius-full)", background: "var(--brand)" },
   h1: { margin: 0, lineHeight: 1.04, fontWeight: 800, letterSpacing: "-0.025em", color: "var(--text-primary)", textWrap: "balance" },
   sub: { margin: "12px 0 0", fontSize: 17, lineHeight: 1.5, color: "var(--text-muted)", maxWidth: "56ch" },
-  dueSummary: { display: "inline-flex", alignItems: "center", gap: 8, marginTop: 18, padding: "9px 16px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)", fontSize: 14, fontWeight: 600, color: "var(--text-secondary)" },
-  dueCount: { color: "var(--text-primary)", fontFamily: "var(--font-mono)" },
+
+  // Plan panel
+  plan: { display: "flex", flexDirection: "column", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", overflow: "hidden" },
+  planMain: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 18, padding: "18px 20px" },
+  planStats: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 22px" },
+  stat: { display: "flex", flexDirection: "column", gap: 2, minWidth: 80 },
+  statNum: { fontFamily: "var(--font-mono)", fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.1, color: "var(--text-primary)" },
+  streakNum: { color: "var(--streak)", display: "inline-flex", alignItems: "center", gap: 6 },
+  statSmall: { fontSize: 13, color: "var(--text-muted)", fontWeight: 700 },
+  statLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" },
+  planCta: { marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  caughtUp: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: "var(--success-text)" },
+  planFoot: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 26px", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-inset)", padding: "14px 20px" },
+  spark: { display: "flex", alignItems: "flex-end", gap: 5, height: 44 },
+  sparkCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4 },
+  sparkBar: { width: 14, borderRadius: "4px 4px 2px 2px", display: "block" },
+  sparkTick: { fontStyle: "normal", fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 700 },
+  bank: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16 },
+  bankItem: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: "var(--text-secondary)" },
+  bankDotI: { width: 9, height: 9, borderRadius: 3, flex: "none", display: "block" },
+  bankTotal: { fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text-muted)" },
 
   empty: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "40px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", maxWidth: "52ch", marginInline: "auto" },
   emptyIcon: { display: "grid", placeItems: "center", width: 52, height: 52, borderRadius: "50%", background: "var(--brand-subtle)", color: "var(--text-link)", marginBottom: 4 },
@@ -185,5 +345,6 @@ const S: Record<string, CSSProperties> = {
   progressEmpty: { marginTop: "auto", fontSize: 12.5, color: "var(--text-disabled)" },
 
   startFoot: { marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
+  maintainFoot: { marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--success-text)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
   lockFoot: { marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700 },
 };
