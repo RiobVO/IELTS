@@ -1,21 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/core/icons";
 import { Button } from "@/components/core/Button";
 import { Input } from "@/components/core/Input";
+import { buildParaphraseQuestion } from "@/lib/vocab/paraphrase";
 import { answerCardAction, reviewCardAction } from "../actions";
 
 /**
  * ReviewSession — клиентское тело одной сессии повторов (`/app/vocabulary/[deckId]`).
- * Два режима: Flashcards (флип word→definition, grade Again/Good) и Type the answer
- * (по definition ввести word, сервер сам решает correct/incorrect). Локальная очередь
- * общая для обоих режимов: "good"/correct убирает карту из сессии, "again"/incorrect
- * переставляет её в конец (SM-2 стейт и дневной лимит — авторитетно на сервере, этот
- * компонент только гонит очередь и шлёт результат через готовые reviewCardAction/
- * answerCardAction).
+ * Три режима: Flashcards (флип word→definition, grade Again/Good), Type the answer
+ * (по definition ввести word) и Paraphrase (V8: выбрать слово по синониму-промпту).
+ * Type и Paraphrase судит сервер (answerCardAction), Flashcards — self-graded. Локальная
+ * очередь общая для всех режимов: "good"/correct убирает карту из сессии, "again"/
+ * incorrect переставляет её в конец (SM-2 стейт и дневной лимит — авторитетно на
+ * сервере, этот компонент только гонит очередь и шлёт результат через готовые
+ * reviewCardAction/answerCardAction).
  *
  * Тип карточки продублирован локально (не импортирован из server-only queries.ts,
  * который нельзя тянуть в client-бандл) — по паттерну PracticeCatalog: клиентский
@@ -24,7 +26,7 @@ import { answerCardAction, reviewCardAction } from "../actions";
  */
 
 type Grade = "again" | "good";
-type Mode = "flashcards" | "type";
+type Mode = "flashcards" | "type" | "paraphrase";
 
 export interface ReviewCard {
   id: string;
@@ -34,6 +36,11 @@ export interface ReviewCard {
   translation: string | null;
   partOfSpeech: string | null;
   ipa: string | null;
+  // Enrichment 0038 (nullable). quizPrompt пока не рендерится — прокинут под B3.
+  synonyms: string[] | null;
+  collocations: string[] | null;
+  wordFamily: string[] | null;
+  quizPrompt: string | null;
 }
 
 interface ReviewSessionProps {
@@ -81,6 +88,18 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
   const finished = total > 0 && queue.length === 0;
   const neverHadCards = total === 0;
 
+  // Сегмент Paraphrase показываем только если в ИСХОДНОЙ очереди (cards) есть хотя бы
+  // одна карта с synonyms. На проде enrichment пуст → сегмент не всплывает, переключатель
+  // остаётся прежним (Flashcards | Type).
+  const paraphraseAvailable = cards.some((c) => (c.synonyms?.length ?? 0) > 0);
+  // Детерминированный Paraphrase-вопрос текущей карты (чистый модуль). Пул дистракторов —
+  // исходная очередь cards (стабильна, не сжимается по мере ответов). null → у карты нет
+  // synonyms/пула: в paraphrase-режиме рендерим обычную флип-карту (graceful mixed queue).
+  const paraphraseQuestion = useMemo(
+    () => (mode === "paraphrase" && current ? buildParaphraseQuestion(current, cards) : null),
+    [mode, current, cards],
+  );
+
   const showAnswerRef = useRef<HTMLButtonElement>(null);
 
   // Голоса Web Speech API часто приезжают после первого render; кнопку показываем
@@ -115,20 +134,25 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
 
   // Фокус следует за состоянием, а не остаётся на скрытой (backface-hidden) грани или
   // на контроле прошлого режима: flashcards-фронт → "Show answer"; flashcards-бэк →
-  // "Again"; type-режим без ответа → инпут; type-режим после wrong → "Continue"
-  // (correct не фокусируем ничего — короткий флеш без интерактива, следующая карта
-  // получит фокус сама, когда current?.id сменится). WCAG 2.4.3 — фокус не теряется.
+  // "Again"; type без ответа → инпут; paraphrase без ответа → первая опция; после wrong
+  // → "Continue" (correct не фокусируем ничего — короткий флеш без интерактива, следующая
+  // карта получит фокус сама, когда current?.id сменится). WCAG 2.4.3 — фокус не теряется.
   useEffect(() => {
     if (!current) return;
-    if (mode === "flashcards") {
+    // Paraphrase-карта без вопроса (нет synonyms/пула) фактически рендерится флип-картой
+    // — ведём фокус как во flashcards.
+    const paraphraseAsFlip = mode === "paraphrase" && !paraphraseQuestion;
+    if (mode === "flashcards" || paraphraseAsFlip) {
       if (flipped) document.getElementById("rs-again-btn")?.focus();
       else showAnswerRef.current?.focus();
     } else if (wrongState) {
       document.getElementById("rs-continue-btn")?.focus();
     } else if (!correctFlash) {
-      document.getElementById("rs-type-input")?.focus();
+      // Неотвеченная quiz-карта: paraphrase → первая опция, type → инпут.
+      if (mode === "paraphrase") document.getElementById("rs-opt-0")?.focus();
+      else document.getElementById("rs-type-input")?.focus();
     }
-  }, [current?.id, flipped, mode, wrongState, correctFlash]);
+  }, [current?.id, flipped, mode, wrongState, correctFlash, paraphraseQuestion]);
 
   // Транзиентное сообщение (tier/not_found, correct/incorrect в type-режиме) угасает
   // само — тот же паттерн, что GoalBar (practice/_PracticeCatalog.tsx) использует для
@@ -223,14 +247,16 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
     }
   }
 
-  async function submitAnswer() {
+  // Общий отправитель quiz-ответа для type- и paraphrase-режимов: сервер — единственный
+  // судья (answerCardAction сверяет с word owner-path), клиент шлёт лишь выбранное/
+  // введённое слово. Различие режимов только в источнике answer (инпут vs клик опции).
+  async function sendAnswer(answer: string) {
     const card = current;
-    const typed = typedValue.trim();
-    if (!card || pending || !typed) return;
+    if (!card || pending || !answer) return;
     setPending(true);
     setErrorHint(false);
     try {
-      const result = await answerCardAction(card.id, typed);
+      const result = await answerCardAction(card.id, answer);
       if (result.ok) {
         setRemaining(result.newRemainingToday);
         // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
@@ -251,7 +277,8 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
           setTransientMsg(`Not quite — the answer was "${result.correctWord}".`);
           // Новый reveal — guard "Continue" снова "не потреблено".
           continueConsumedRef.current = false;
-          setWrongState({ correctWord: result.correctWord, typedWrong: typed });
+          // typedWrong = выбранное/введённое слово (в paraphrase — текст опции).
+          setWrongState({ correctWord: result.correctWord, typedWrong: answer });
         }
       } else if (result.reason === "daily_cap") {
         setDailyCapHit(true);
@@ -282,6 +309,107 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
     setQueue((q) => [...q.slice(1), card]);
     setWrongState(null);
     setTypedValue("");
+  }
+
+  // Флип-карта (word→definition + enrichment + grade Again/Good). Вынесена в функцию,
+  // потому что используется в двух ветках рендера: режим Flashcards И paraphrase-режим
+  // для карты БЕЗ synonyms (graceful mixed queue — падаем на привычную флип-карту).
+  function renderFlashcards() {
+    if (!current) return null;
+    const syn = current.synonyms ?? [];
+    const coll = current.collocations ?? [];
+    const wf = current.wordFamily ?? [];
+    const hasEnrich = syn.length > 0 || coll.length > 0 || wf.length > 0;
+    return (
+      <>
+        <div className={`rs-flip${flipped ? " is-flipped" : ""}`}>
+          <div className="rs-flip-inner">
+            <div className="rs-face rs-face-front" aria-hidden={flipped || undefined}>
+              <div style={S.wordRow}>
+                <div style={S.word}>{current.word}</div>
+                {renderTtsButton(current.word, flipped)}
+              </div>
+              {current.ipa && <div style={S.ipa}>{current.ipa}</div>}
+              {current.partOfSpeech && <span style={S.pos}>{current.partOfSpeech}</span>}
+              {/* Флип-триггер — обычная кнопка: клик/тап/Enter/Space работают из
+                  коробки, без выдуманных aria-pressed/aria-expanded. Уходит из
+                  таб-порядка и из a11y-дерева, когда грань перевёрнута назад
+                  (CSS backface-visibility её только визуально прячет). */}
+              <button
+                type="button"
+                ref={showAnswerRef}
+                onClick={() => setFlipped(true)}
+                tabIndex={flipped ? -1 : 0}
+                aria-hidden={flipped || undefined}
+                style={S.flipBtn}
+              >
+                Show answer
+              </button>
+            </div>
+            <div className="rs-face rs-face-back" aria-hidden={!flipped || undefined}>
+              <div style={S.definition}>{current.definition}</div>
+              {current.example && <p style={S.example}><em>{current.example}</em></p>}
+              {current.translation && <div style={S.translation}>{current.translation}</div>}
+              {/* Enrichment 0038 — рендерим ТОЛЬКО присутствующие ряды; нет ни одного →
+                  блока нет, карточка выглядит как раньше. Длинный контент скроллится
+                  внутри .rs-face (overflow-y:auto), флип не ломается. */}
+              {hasEnrich && (
+                <div style={S.enrich}>
+                  {syn.length > 0 && (
+                    <div style={S.enrichRow}>
+                      <span style={S.enrichLab}>Synonyms</span>
+                      {syn.map((s, i) => (
+                        <span key={`syn-${i}`} style={{ ...S.chip, ...S.chipSyn }}>{s}</span>
+                      ))}
+                    </div>
+                  )}
+                  {coll.length > 0 && (
+                    <div style={S.enrichRow}>
+                      <span style={S.enrichLab}>Collocations</span>
+                      {coll.map((c, i) => (
+                        <span key={`coll-${i}`} style={S.chip}>{c}</span>
+                      ))}
+                    </div>
+                  )}
+                  {wf.length > 0 && (
+                    <div style={S.enrichRow}>
+                      <span style={S.enrichLab}>Word family</span>
+                      {wf.map((w, i) => (
+                        <span key={`wf-${i}`} style={S.chip}>{w}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {flipped && (
+          <div style={S.actions}>
+            <Button
+              id="rs-again-btn"
+              variant="secondary"
+              size="lg"
+              disabled={pending}
+              onClick={() => submitGrade("again")}
+              style={{ flex: 1 }}
+            >
+              Again
+            </Button>
+            <Button
+              variant="success"
+              size="lg"
+              disabled={pending}
+              onClick={() => submitGrade("good")}
+              style={{ flex: 1 }}
+            >
+              Good
+            </Button>
+          </div>
+        )}
+      </>
+    );
   }
 
   return (
@@ -335,6 +463,19 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
             >
               Type the answer
             </button>
+            {/* Paraphrase — только когда в исходной очереди есть карты с synonyms. */}
+            {paraphraseAvailable && (
+              <button
+                type="button"
+                aria-pressed={mode === "paraphrase"}
+                disabled={pending || correctFlash || !!wrongState}
+                className="rs-seg"
+                style={{ ...S.seg, ...(mode === "paraphrase" ? S.segActive : null), ...(pending || correctFlash || wrongState ? S.segOff : null) }}
+                onClick={() => switchMode("paraphrase")}
+              >
+                Paraphrase
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -419,63 +560,7 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
         current && (
           <>
             {mode === "flashcards" ? (
-              <>
-                <div className={`rs-flip${flipped ? " is-flipped" : ""}`}>
-                  <div className="rs-flip-inner">
-                    <div className="rs-face rs-face-front" aria-hidden={flipped || undefined}>
-                      <div style={S.wordRow}>
-                        <div style={S.word}>{current.word}</div>
-                        {renderTtsButton(current.word, flipped)}
-                      </div>
-                      {current.ipa && <div style={S.ipa}>{current.ipa}</div>}
-                      {current.partOfSpeech && <span style={S.pos}>{current.partOfSpeech}</span>}
-                      {/* Флип-триггер — обычная кнопка: клик/тап/Enter/Space работают из
-                          коробки, без выдуманных aria-pressed/aria-expanded. Уходит из
-                          таб-порядка и из a11y-дерева, когда грань перевёрнута назад
-                          (CSS backface-visibility её только визуально прячет). */}
-                      <button
-                        type="button"
-                        ref={showAnswerRef}
-                        onClick={() => setFlipped(true)}
-                        tabIndex={flipped ? -1 : 0}
-                        aria-hidden={flipped || undefined}
-                        style={S.flipBtn}
-                      >
-                        Show answer
-                      </button>
-                    </div>
-                    <div className="rs-face rs-face-back" aria-hidden={!flipped || undefined}>
-                      <div style={S.definition}>{current.definition}</div>
-                      {current.example && <p style={S.example}><em>{current.example}</em></p>}
-                      {current.translation && <div style={S.translation}>{current.translation}</div>}
-                    </div>
-                  </div>
-                </div>
-
-                {flipped && (
-                  <div style={S.actions}>
-                    <Button
-                      id="rs-again-btn"
-                      variant="secondary"
-                      size="lg"
-                      disabled={pending}
-                      onClick={() => submitGrade("again")}
-                      style={{ flex: 1 }}
-                    >
-                      Again
-                    </Button>
-                    <Button
-                      variant="success"
-                      size="lg"
-                      disabled={pending}
-                      onClick={() => submitGrade("good")}
-                      style={{ flex: 1 }}
-                    >
-                      Good
-                    </Button>
-                  </div>
-                )}
-              </>
+              renderFlashcards()
             ) : correctFlash ? (
               <div className="rs-compact" style={S.correctBox}>
                 <Icon name="circle-check" size={26} strokeWidth={2.2} style={{ color: "var(--success-text)" }} />
@@ -504,11 +589,39 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
                   Continue
                 </Button>
               </div>
+            ) : mode === "paraphrase" ? (
+              // Paraphrase Sprint: карта с synonyms → выбор слова по синониму-промпту;
+              // карта БЕЗ synonyms/пула (paraphraseQuestion === null) → обычная флип-карта.
+              paraphraseQuestion ? (
+                <div className="rs-compact" style={S.paraFace}>
+                  <span style={S.paraOverline}>Paraphrase Sprint</span>
+                  <div style={S.paraPrompt}>
+                    Which word matches <em style={S.paraSyn}>&ldquo;{paraphraseQuestion.synonym}&rdquo;</em>?
+                  </div>
+                  <div role="group" aria-label="Answer options" style={S.optGroup}>
+                    {paraphraseQuestion.options.map((opt, i) => (
+                      <button
+                        key={opt}
+                        id={i === 0 ? "rs-opt-0" : undefined}
+                        type="button"
+                        className="rs-opt"
+                        disabled={pending}
+                        onClick={() => sendAnswer(opt)}
+                        style={S.optBtn}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                renderFlashcards()
+              )
             ) : (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  submitAnswer();
+                  sendAnswer(typedValue.trim());
                 }}
                 style={S.typeForm}
               >
@@ -551,17 +664,21 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
    3D-вращения — ровно то, что просит инвариант reduced-motion). rs-seg — тот же
    pill-паттерн, что Segmented в writing/_Catalog.tsx (компонент не экспортирован,
    стиль продублирован). rs-compact держит высоту type-режима на уровне флип-карты,
-   чтобы смена режима/ответа не дёргала layout. */
+   чтобы смена режима/ответа не дёргала layout. justify-content:safe center — центрируем
+   грань, но при переполнении (длинный enrichment) падаем на выравнивание к началу, чтобы
+   контент скроллился целиком, а не обрезался сверху centered-overflow-багом флексбокса. */
 const CSS = `
 .rs-flip{perspective:1200px}
 .rs-flip-inner{position:relative;min-height:230px;transform-style:preserve-3d;transition:transform var(--duration-deliberate) var(--ease-in-out)}
 .rs-flip.is-flipped .rs-flip-inner{transform:rotateY(180deg)}
-.rs-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:26px 22px;border-radius:var(--radius-xl);border:2px solid var(--border);background:var(--surface);box-shadow:var(--shadow-solid);overflow-y:auto;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.rs-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:safe center;text-align:center;gap:10px;padding:26px 22px;border-radius:var(--radius-xl);border:2px solid var(--border);background:var(--surface);box-shadow:var(--shadow-solid);overflow-y:auto;backface-visibility:hidden;-webkit-backface-visibility:hidden}
 .rs-face-back{transform:rotateY(180deg)}
 .rs-seg{min-height:40px;padding:0 16px;font-size:13px}
 .rs-seg:hover{color:var(--text-primary)}
 .rs-tts:hover{background:var(--surface)}
 .rs-compact{min-height:230px}
+.rs-opt:hover{border-color:var(--brand-border);background:var(--brand-subtle)}
+.rs-opt:disabled{opacity:.55;cursor:not-allowed}
 @media (min-width:768px){
   .rs-flip-inner{min-height:270px}
   .rs-compact{min-height:270px}
@@ -579,8 +696,9 @@ const S: Record<string, CSSProperties> = {
   stat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--surface-inset)", color: "var(--text-secondary)", fontSize: 12.5, fontWeight: 700 },
   rescueStat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 12.5, fontWeight: 800 },
 
-  // Mode toggle (Flashcards | Type the answer)
-  modeRow: { display: "inline-flex", padding: 4, gap: 4, marginTop: 12, background: "var(--surface-inset)", borderRadius: 11, flex: "none" },
+  // Mode toggle (Flashcards | Type the answer | Paraphrase). flexWrap — статичная
+  // страховка от переполнения на узких экранах при третьем сегменте (не брейкпоинт).
+  modeRow: { display: "inline-flex", padding: 4, gap: 4, marginTop: 12, background: "var(--surface-inset)", borderRadius: 11, flex: "none", flexWrap: "wrap" },
   seg: { appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, cursor: "pointer", transition: "var(--transition-colors)" },
   segActive: { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-xs)" },
   segOff: { opacity: 0.5, cursor: "not-allowed" },
@@ -607,6 +725,14 @@ const S: Record<string, CSSProperties> = {
   example: { margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--text-muted)" },
   translation: { fontSize: 15, fontWeight: 700, color: "var(--text-link)" },
 
+  // Enrichment (back-грань флип-карты): mono overline-метки + chips. Синонимы —
+  // brand-subtle, коллокации/word-family — surface-inset; разделитель border-subtle сверху.
+  enrich: { width: "100%", display: "flex", flexDirection: "column", gap: 10, marginTop: 4, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" },
+  enrichRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" },
+  enrichLab: { flex: "none", fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-disabled)" },
+  chip: { display: "inline-flex", padding: "4px 11px", borderRadius: "var(--radius-full)", background: "var(--surface-inset)", color: "var(--text-secondary)", fontSize: 12.5, fontWeight: 700 },
+  chipSyn: { background: "var(--brand-subtle)", color: "var(--text-link)" },
+
   actions: { display: "flex", gap: 12 },
   errorHint: { textAlign: "center", fontSize: 13, fontWeight: 700, color: "var(--error-text)" },
 
@@ -614,6 +740,14 @@ const S: Record<string, CSSProperties> = {
   typeForm: { display: "flex", flexDirection: "column", gap: 14 },
   typeFace: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 10, padding: "26px 22px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)", overflowY: "auto" },
   typeLabel: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" },
+
+  // Paraphrase Sprint (V8): overline-подпись, промпт-синоним и колонка опций-кнопок.
+  paraFace: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "safe center", textAlign: "center", gap: 14, padding: "26px 22px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)", overflowY: "auto" },
+  paraOverline: { fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-link)" },
+  paraPrompt: { fontSize: 17, lineHeight: 1.5, fontWeight: 600, color: "var(--text-primary)", maxWidth: "40ch" },
+  paraSyn: { fontStyle: "normal", fontWeight: 800, color: "var(--text-link)" },
+  optGroup: { display: "flex", flexDirection: "column", gap: 9, width: "100%", maxWidth: 400 },
+  optBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "12px 16px", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", fontFamily: "var(--font-ui)", fontSize: 14.5, fontWeight: 700, color: "var(--text-primary)", cursor: "pointer", boxShadow: "var(--shadow-solid)", transition: "var(--transition-colors)" },
 
   correctBox: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: "var(--radius-xl)", border: "2px solid var(--success-subtle)", background: "var(--success-subtle)" },
   correctWord: { fontSize: 24, fontWeight: 800, color: "var(--success-text)" },
