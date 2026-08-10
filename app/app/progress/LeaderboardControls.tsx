@@ -23,7 +23,7 @@ export default function LeaderboardControls({
   scopeOptions: Option[];
 }) {
   const href = (p: string, s: string) =>
-    `/app/leaderboard?period=${encodeURIComponent(p)}&scope=${encodeURIComponent(s)}`;
+    `/app/progress?tab=league&period=${encodeURIComponent(p)}&scope=${encodeURIComponent(s)}`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 4 }}>

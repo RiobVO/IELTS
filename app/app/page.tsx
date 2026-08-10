@@ -523,7 +523,7 @@ function WeekCard({
             </div>
           ))}
         </div>
-        <Link href="/app/leaderboard" style={S.weekLeague}>
+        <Link href="/app/progress?tab=league" style={S.weekLeague}>
           <span style={S.leagueIcSm}>
             <Icon name="crown" size={18} strokeWidth={2.2} />
           </span>

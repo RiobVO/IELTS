@@ -862,8 +862,8 @@ export default function Home() {
           <div>
             <h3 className="foot-h">Learn</h3>
             <a href="#how">How it works</a>
-            <a href="/app/leaderboard">Leaderboard</a>
-            <a href="/app/badges">Badges</a>
+            <a href="/app/progress?tab=league">Leaderboard</a>
+            <a href="/app/progress?tab=badges">Badges</a>
           </div>
           <div>
             <h3 className="foot-h">Company</h3>
