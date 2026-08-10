@@ -95,6 +95,40 @@ describe("reviewCard — again (провал)", () => {
   });
 });
 
+describe("reviewCard — easy (знал сразу, новая карта)", () => {
+  it("easy на свежем стейте: interval 7, repetitions 2, ease +0.1, lapses 0, due = now + 7д", () => {
+    const { state, dueAt } = reviewCard(null, "easy", NOW);
+    expect(state.intervalDays).toBe(7);
+    expect(state.repetitions).toBe(2);
+    expect(state.lapses).toBe(0);
+    expect(state.ease).toBeCloseTo(2.6, 5); // 2.5 + 0.1
+    expect(daysAfterNow(dueAt)).toBe(7);
+  });
+
+  it("ease за easy не превышает потолок 2.8 (reviewCard формулу применяет; «только новая» — гейт applyReview)", () => {
+    const highEase: SrsState = { ease: 2.75, intervalDays: 0, repetitions: 0, lapses: 0 };
+    const { state } = reviewCard(highEase, "easy", NOW); // 2.75 + 0.1 = 2.85 → clamp 2.8
+    expect(state.ease).toBeCloseTo(2.8, 5);
+    expect(state.ease).toBeLessThanOrEqual(2.8);
+  });
+
+  it("again после easy сбрасывает серию (repetitions→0, interval→0, lapse++)", () => {
+    const afterEasy = reviewCard(null, "easy", NOW).state; // reps 2, interval 7
+    const again = reviewCard(afterEasy, "again", NOW);
+    expect(again.state.repetitions).toBe(0);
+    expect(again.state.intervalDays).toBe(0);
+    expect(again.state.lapses).toBe(1);
+    expect(again.dueAt.getTime()).toBe(NOW.getTime());
+  });
+
+  it("детерминизм: одинаковый (state, easy, now) → идентичный результат", () => {
+    const a = reviewCard(null, "easy", NOW);
+    const b = reviewCard(null, "easy", NOW);
+    expect(a.state).toEqual(b.state);
+    expect(a.dueAt.getTime()).toBe(b.dueAt.getTime());
+  });
+});
+
 describe("reviewCard — детерминизм", () => {
   it("одинаковый (state, grade, now) → идентичный результат", () => {
     const input: SrsState = { ease: 2.6, intervalDays: 3, repetitions: 2, lapses: 0 };

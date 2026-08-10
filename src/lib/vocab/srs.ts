@@ -3,7 +3,7 @@
  * vocab-флеш-карточек. ЧИСТАЯ логика — без IO, времени «изнутри» (now передаётся),
  * env и db; целиком юнит-тестируема (srs.test.ts).
  *
- * MVP-механика — two-button «не знаю / знаю» (Grade = "again" | "good"), поэтому
+ * MVP-механика — three-button «не знаю / знаю / знал сразу» (Grade = "again" | "good" | "easy"), поэтому
  * это не полный SuperMemo-2 (0..5), а его редукция до двух исходов. Формула ниже.
  *
  * Формула (порядок как в классическом SM-2 — интервал считается по СТАРОМУ ease,
@@ -19,10 +19,13 @@
  *     repetitions = 0            // серия сбрасывается
  *     interval = 0               // карта возвращается в текущую сессию (due = now)
  *     ease = max(1.3, prev.ease − 0.2)
+ *   easy (знал сразу — ТОЛЬКО новая карта, гейт в applyReview по gate.isNew):
+ *     repetitions = 2, interval = 7 дней (пропуск лестницы 1д/3д)
+ *     ease = min(2.8, prev.ease + 0.1), lapses без изменений
  *   dueAt = now + interval (для interval = 0 → ровно now).
  */
 
-export type Grade = "again" | "good";
+export type Grade = "again" | "good" | "easy";
 
 export interface SrsState {
   /** Фактор лёгкости SM-2 (float). Стартовый 2.5, коридор [EASE_MIN, EASE_MAX]. */
@@ -43,6 +46,8 @@ const EASE_STEP_GOOD = 0.05; // прибавка ease за «good»
 const EASE_STEP_AGAIN = 0.2; // штраф ease за «again»
 const INTERVAL_FIRST_DAYS = 1; // repetitions === 1
 const INTERVAL_SECOND_DAYS = 3; // repetitions === 2
+const EASY_FIRST_DAYS = 7; // «знал сразу» (только новая карта): недельный первый интервал вместо лестницы
+const EASE_STEP_EASY = 0.1; // прибавка ease за «easy» (чуть щедрее обычного good)
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** Стартовый стейт первого просмотра (когда строки прогресса ещё нет). */
@@ -62,7 +67,7 @@ function clamp(value: number, min: number, max: number): number {
  * grade, now) всегда дают идентичный результат (dueAt считается от переданного now).
  *
  * @param state текущий стейт карты или null (первый просмотр → стартовые значения)
- * @param grade исход повтора: "again" (не знаю) / "good" (знаю)
+ * @param grade исход повтора: "again" (не знаю) / "good" (знаю) / "easy" (знал сразу — только новая карта)
  * @param now   «сейчас» — точка отсчёта dueAt (передаётся снаружи ради детерминизма)
  */
 export function reviewCard(
@@ -82,6 +87,19 @@ export function reviewCard(
       lapses: prev.lapses + 1,
     };
     return { state: next, dueAt: new Date(now.getTime()) };
+  }
+
+  if (grade === "easy") {
+    // «Знал сразу» — валиден ТОЛЬКО для новой карты (гарантируется в applyReview по
+    // gate.isNew). Пропускаем лестницу 1д/3д: сразу repetitions=2 и недельный первый
+    // интервал; ease чуть выше обычного good (+0.1); lapses не трогаем.
+    const next: SrsState = {
+      ease: clamp(prev.ease + EASE_STEP_EASY, EASE_MIN, EASE_MAX),
+      intervalDays: EASY_FIRST_DAYS,
+      repetitions: 2,
+      lapses: prev.lapses,
+    };
+    return { state: next, dueAt: new Date(now.getTime() + EASY_FIRST_DAYS * MS_PER_DAY) };
   }
 
   // grade === "good"
