@@ -13,7 +13,7 @@
  * (page.tsx) — this component only renders it.
  */
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { Button } from "@/components/core/Button";
 import { categoryLabel } from "@/lib/labels";
 import type { DebriefData } from "@/lib/result/debrief";
@@ -31,6 +31,16 @@ function prefersReduced(): boolean {
 const barColor = (ratio: number) => (ratio >= 0.6 ? "var(--success)" : ratio > 0 ? "var(--warn)" : "var(--error)");
 
 type TabKey = "review" | "types" | "key";
+
+// Полный ARIA-tablist паттерн (roving tabindex + id/aria-controls/
+// aria-labelledby): "key"-панель обязана сохранить id="answer-key" — на него
+// завязан #answer-key deep-link (см. useEffect в ResultCoach).
+const TAB_ORDER: TabKey[] = ["review", "types", "key"];
+const TAB_META: Record<TabKey, { tabId: string; panelId: string }> = {
+  review: { tabId: "rc-tab-review", panelId: "rc-panel-review" },
+  types: { tabId: "rc-tab-types", panelId: "rc-panel-types" },
+  key: { tabId: "rc-tab-key", panelId: "answer-key" },
+};
 
 interface UnlockedBadge {
   id: string;
@@ -52,12 +62,19 @@ export default function ResultCoach({
   unlockedBadges: UnlockedBadge[];
 }) {
   const [tab, setTab] = useState<TabKey>("review");
-  const [akFilter, setAkFilter] = useState("all");
+  // Дефолт "wrong", а не "all" — экран построен вокруг промахов (прототип
+  // result-coach.html:484 тоже стартует с active="wrong"). Пустой экран
+  // возможен только при 0 промахов — тогда дефолт остаётся "all".
+  const [akFilter, setAkFilter] = useState(() => (data.missed.length > 0 ? "wrong" : "all"));
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const tabsRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const panelRefs = useRef<Partial<Record<TabKey, HTMLElement | null>>>({});
+  // Бейдж таба Review = куратированный replay (см. page.tsx), а не общее
+  // число промахов — за исключением гейта (replay пуст, но Review-панель
+  // всё равно показывает полный список missed-чипов + upsell).
+  const reviewBadgeCount = data.replay.length > 0 ? data.replay.length : data.missed.length;
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -66,9 +83,15 @@ export default function ResultCoach({
   };
 
   // Deep-link into the answer key (e.g. shared /result#answer-key) opens
-  // straight into that tab instead of the Review-misses default.
+  // straight into that tab instead of the Review-misses default — then
+  // scrolls there once the panel is actually visible (rAF: the display:none →
+  // block flip from setTab hasn't painted yet in this same tick).
   useEffect(() => {
-    if (window.location.hash === "#answer-key") setTab("key");
+    if (window.location.hash !== "#answer-key") return;
+    setTab("key");
+    requestAnimationFrame(() => {
+      document.getElementById("answer-key")?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" });
+    });
   }, []);
 
   // The panel's visible/hidden state is already correct via the `hide` class
@@ -84,6 +107,21 @@ export default function ResultCoach({
   }, [tab]);
 
   const goTab = (t: TabKey) => setTab(t);
+  // Roving tabindex + стрелочная навигация (полный ARIA-tablist паттерн):
+  // ArrowLeft/Right крутят по кругу, Home/End — к первому/последнему табу;
+  // фокус переносится явно (roving tabindex сам по себе не двигает фокус браузера).
+  const onTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const i = TAB_ORDER.indexOf(tab);
+    let next: TabKey | null = null;
+    if (e.key === "ArrowRight") next = TAB_ORDER[(i + 1) % TAB_ORDER.length];
+    else if (e.key === "ArrowLeft") next = TAB_ORDER[(i - 1 + TAB_ORDER.length) % TAB_ORDER.length];
+    else if (e.key === "Home") next = TAB_ORDER[0];
+    else if (e.key === "End") next = TAB_ORDER[TAB_ORDER.length - 1];
+    if (!next) return;
+    e.preventDefault();
+    goTab(next);
+    document.getElementById(TAB_META[next].tabId)?.focus();
+  };
   const scrollToTabs = () => tabsRef.current?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" });
   const scrollToDock = () => dockRef.current?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "center" });
   const jumpToType = (type: string) => {
@@ -106,28 +144,76 @@ export default function ResultCoach({
 
       <div className="rc-tabs" ref={tabsRef}>
         <div className="rc-seg" role="tablist" aria-label="Result sections">
-          <button type="button" role="tab" aria-selected={tab === "review"} className={`rc-tab${tab === "review" ? " on" : ""}`} onClick={() => goTab("review")}>
-            🎯 Review misses <span className="rc-b">{data.missed.length}</span>
+          <button
+            type="button"
+            role="tab"
+            id={TAB_META.review.tabId}
+            aria-selected={tab === "review"}
+            aria-controls={TAB_META.review.panelId}
+            tabIndex={tab === "review" ? 0 : -1}
+            className={`rc-tab${tab === "review" ? " on" : ""}`}
+            onClick={() => goTab("review")}
+            onKeyDown={onTabKeyDown}
+          >
+            🎯 Review misses <span className="rc-b">{reviewBadgeCount}</span>
           </button>
-          <button type="button" role="tab" aria-selected={tab === "types"} className={`rc-tab${tab === "types" ? " on" : ""}`} onClick={() => goTab("types")}>
+          <button
+            type="button"
+            role="tab"
+            id={TAB_META.types.tabId}
+            aria-selected={tab === "types"}
+            aria-controls={TAB_META.types.panelId}
+            tabIndex={tab === "types" ? 0 : -1}
+            className={`rc-tab${tab === "types" ? " on" : ""}`}
+            onClick={() => goTab("types")}
+            onKeyDown={onTabKeyDown}
+          >
             📊 By type
           </button>
-          <button type="button" role="tab" aria-selected={tab === "key"} className={`rc-tab${tab === "key" ? " on" : ""}`} onClick={() => goTab("key")}>
+          <button
+            type="button"
+            role="tab"
+            id={TAB_META.key.tabId}
+            aria-selected={tab === "key"}
+            aria-controls={TAB_META.key.panelId}
+            tabIndex={tab === "key" ? 0 : -1}
+            className={`rc-tab${tab === "key" ? " on" : ""}`}
+            onClick={() => goTab("key")}
+            onKeyDown={onTabKeyDown}
+          >
             📋 Answer key <span className="rc-b">{data.totalQuestions}</span>
           </button>
         </div>
       </div>
 
-      <section role="tabpanel" className={`rc-panel${tab === "review" ? "" : " hide"}`} ref={(el) => { panelRefs.current.review = el; }}>
+      <section
+        role="tabpanel"
+        id={TAB_META.review.panelId}
+        aria-labelledby={TAB_META.review.tabId}
+        className={`rc-panel${tab === "review" ? "" : " hide"}`}
+        ref={(el) => { panelRefs.current.review = el; }}
+      >
         <ReviewRoom data={data} onSkipToKey={() => goTab("key")} showToast={showToast} scrollToDock={scrollToDock} />
         <p className="rc-hint">Active recall beats re-reading. Answer first — <b>then</b> see the proof from the passage.</p>
       </section>
 
-      <section role="tabpanel" className={`rc-panel${tab === "types" ? "" : " hide"}`} ref={(el) => { panelRefs.current.types = el; }}>
+      <section
+        role="tabpanel"
+        id={TAB_META.types.panelId}
+        aria-labelledby={TAB_META.types.tabId}
+        className={`rc-panel${tab === "types" ? "" : " hide"}`}
+        ref={(el) => { panelRefs.current.types = el; }}
+      >
         <ByType level={data.level} totalQuestions={data.totalQuestions} active={tab === "types"} onFocus={jumpToType} />
       </section>
 
-      <section id="answer-key" role="tabpanel" className={`rc-panel${tab === "key" ? "" : " hide"}`} ref={(el) => { panelRefs.current.key = el; }}>
+      <section
+        id={TAB_META.key.panelId}
+        role="tabpanel"
+        aria-labelledby={TAB_META.key.tabId}
+        className={`rc-panel${tab === "key" ? "" : " hide"}`}
+        ref={(el) => { panelRefs.current.key = el; }}
+      >
         <AnswerKeyFilter items={akItems} types={akTypes} filter={akFilter} onFilterChange={setAkFilter} />
       </section>
 
@@ -157,10 +243,15 @@ function Hero({ data, onReview, onTypes }: { data: DebriefData; onReview: () => 
         <div className="rc-vd-grid">
           <div>
             <Dial pct={score.correctPct} center={bandValue != null ? { kind: "band", value: bandValue } : { kind: "pct", value: pct }} />
-            <div className="rc-vd-score">
-              <span className="p">{pct}%</span>
-              <span className="s">{score.raw} / {score.total} correct</span>
-            </div>
+            {/* Non-banded (kind==="pct"): диал уже показывает pct% в центре —
+                этот блок повторял бы тот же процент рядом. Показываем только
+                когда центр = band, тогда pct% здесь не дублирует, а дополняет. */}
+            {bandValue != null && (
+              <div className="rc-vd-score">
+                <span className="p">{pct}%</span>
+                <span className="s">{score.raw} / {score.total} correct</span>
+              </div>
+            )}
           </div>
           <div className="rc-vd-rule" />
           <div>
@@ -411,9 +502,12 @@ function ByType({
       </div>
       <div className="rc-bt-card">
         <div>
-          {level.rows.map((r, i) => {
+          {level.rows.map((r) => {
             const ratio = r.total > 0 ? r.correct / r.total : 0;
-            const isFocus = i === 0;
+            // r.weak — единая цель коучинга (page.tsx focusQType), не жёстко
+            // rows[0]: worst-по-проценту тип и диагностированный blindSpot
+            // могут быть разными типами.
+            const isFocus = r.weak;
             const pctWidth = Math.max(ratio * 100, 3);
             const open = () => onFocus(r.type);
             return (
@@ -520,7 +614,8 @@ function Dock({ data, dockRef }: { data: DebriefData; dockRef: RefObject<HTMLDiv
           <Button variant="secondary" href={plan.retryHref}>Re-sit test</Button>
           {hasDrill && (
             <Button href={plan.drillHref!}>
-              🎯 Start {plan.weakLabel} drill<span style={{ opacity: 0.7, fontWeight: 600 }}> · ~10 min</span>
+              🎯 <span className="rc-dock-full">Start {plan.weakLabel} drill</span><span className="rc-dock-short">Start drill</span>
+              <span className="rc-dock-time" style={{ opacity: 0.7, fontWeight: 600 }}> · ~10 min</span>
             </Button>
           )}
         </div>
@@ -601,7 +696,9 @@ const COACH_CSS = `
 .rc-rev-why b{color:var(--text-primary)}
 .rc-rev-tag{font-family:var(--font-ui);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--warn-text);background:var(--warn-subtle);border-radius:6px;padding:3px 8px;margin-left:auto;flex:none}
 .rc-ev{display:flex;gap:11px;font-family:var(--font-reading);font-size:14px;color:var(--reading-text);background:var(--reading-surface);border:1px solid var(--reading-rule);border-radius:12px;padding:14px 16px;line-height:1.6}
-.rc-ev mark{background:var(--reading-mark);border-radius:3px;padding:1px 3px}
+/* .rc-ev mark сознательно не портирован из прототипа: evidence рендерится как
+   плоский текст (React text child, не dangerouslySetInnerHTML) — <mark> в
+   данных нет и не может отрендериться, правило было бы мёртвым CSS. */
 .rc-rr-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px}
 .rc-rr-skip{font-family:var(--font-ui);font-size:13px;font-weight:600;color:var(--text-muted);background:0;border:0;cursor:pointer;min-height:44px}
 .rc-rr-next{display:inline-flex;align-items:center;gap:8px;background:var(--brand);color:#fff;font-family:var(--font-ui);font-weight:700;font-size:14px;border:0;border-radius:12px;padding:12px 20px;cursor:pointer;box-shadow:0 2px 0 var(--brand-active);transition:var(--transition-transform);min-height:44px}
@@ -647,6 +744,7 @@ const COACH_CSS = `
 .rc-dock-t b{font-weight:800;color:var(--text-primary)}
 .rc-dock-t span{color:var(--text-muted)}
 .rc-dock-r{margin-left:auto;display:flex;gap:10px;flex-shrink:0}
+.rc-dock-short{display:none}
 .rc-toast{position:fixed;left:50%;bottom:88px;transform:translate(-50%,140%);opacity:0;pointer-events:none;background:var(--surface-inverse);color:var(--surface-inverse-ink);font-family:var(--font-ui);font-size:13.5px;font-weight:600;padding:12px 18px;border-radius:var(--radius-md);box-shadow:var(--shadow-md);transition:transform .3s var(--ease-out),opacity .3s;z-index:60;max-width:92vw}
 .rc-toast.show{transform:translate(-50%,0);opacity:1}
 
@@ -654,9 +752,17 @@ const COACH_CSS = `
   .rc-dock-in{gap:10px}
   .rc-dock-l{display:none}
   .rc-dock-r{margin:0;width:100%}
-  .rc-dock-r > a,.rc-dock-r > button{flex:1;justify-content:center}
+  /* min-width:0!important — Button задаёт свой min-width инлайн-стилем
+     (React style prop), внешний класс без !important его не перебьёт;
+     без этого длинный лейбл распирает flex:1-кнопку и клипается на ≤680. */
+  .rc-dock-r > a,.rc-dock-r > button{flex:1;justify-content:center;min-width:0!important}
+  .rc-dock-time{display:none}
+}
+@media (max-width:430px){
+  .rc-dock-full{display:none}
+  .rc-dock-short{display:inline}
 }
 @media (prefers-reduced-motion:reduce){
-  .rc-rr-track i,.rc-opt,.rc-rr-next,.rc-bt-row,.rc-bt-name,.rc-bt-go,.rc-bt-bar span,.rc-toast{transition:none}
+  .rc-rr-track i,.rc-opt,.rc-rr-next,.rc-bt-row,.rc-bt-name,.rc-bt-go,.rc-bt-bar span,.rc-toast,.rc-tab{transition:none}
 }
 `;

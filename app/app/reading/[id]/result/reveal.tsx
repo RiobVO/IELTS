@@ -84,8 +84,11 @@ export function Dial({
         />
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="var(--brand-border)" />
-            <stop offset="1" stopColor="var(--success)" />
+            {/* Литеральные oklch-стопы из прототипа (result-coach.html:250) —
+                токены --brand-border/--success дают заметно другой, более
+                тусклый вид дуги. */}
+            <stop offset="0" stopColor="oklch(0.82 0.16 292)" />
+            <stop offset="1" stopColor="oklch(0.86 0.15 156)" />
           </linearGradient>
         </defs>
       </svg>
