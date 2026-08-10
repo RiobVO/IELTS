@@ -1,7 +1,7 @@
 // Юнит-тесты нормализации/сравнения quiz-ответа (чистая логика). Акценты строятся
 // из кодовых точек (String.fromCodePoint) — исходник ASCII, форма Unicode однозначна.
 import { describe, it, expect } from "vitest";
-import { normalizeAnswer, isAnswerCorrect, gradeForAnswer } from "./answer";
+import { normalizeAnswer, isAnswerCorrect, isAnswerAccepted, gradeForAnswer } from "./answer";
 
 // "cafe" с острым ударением над e:
 //   composed   = e-acute одной кодовой точкой (U+00E9)
@@ -50,6 +50,30 @@ describe("isAnswerCorrect", () => {
 
   it("пустой ввод не равен непустому слову", () => {
     expect(isAnswerCorrect("", "hello")).toBe(false);
+  });
+});
+
+describe("isAnswerAccepted", () => {
+  it("accepts answers case-insensitively", () => {
+    expect(isAnswerAccepted("POSE", ["pose", "poses"])).toBe(true);
+  });
+
+  it("accepts answers with trimmed and collapsed whitespace", () => {
+    expect(isAnswerAccepted("  take   place ", ["take place"])).toBe(true);
+  });
+
+  it("accepts NFC-equivalent accents", () => {
+    expect(isAnswerAccepted(CAFE_DECOMPOSED, ["coffee", CAFE_COMPOSED])).toBe(true);
+  });
+
+  it("rejects empty typed input", () => {
+    expect(isAnswerAccepted("   \t ", [""])).toBe(false);
+    expect(isAnswerAccepted("", ["pose"])).toBe(false);
+  });
+
+  it("rejects an empty accepted list", () => {
+    // Карта без вариантов не засчитывается автоматически (пустой список → всегда false).
+    expect(isAnswerAccepted("pose", [])).toBe(false);
   });
 });
 

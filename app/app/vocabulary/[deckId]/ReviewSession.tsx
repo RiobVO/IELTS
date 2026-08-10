@@ -7,13 +7,13 @@ import { Icon } from "@/components/core/icons";
 import { Button } from "@/components/core/Button";
 import { Input } from "@/components/core/Input";
 import { buildParaphraseQuestion } from "@/lib/vocab/paraphrase";
-import { answerCardAction, reviewCardAction } from "../actions";
+import { answerCardAction, answerCompletionAction, reviewCardAction } from "../actions";
 
 /**
  * ReviewSession — клиентское тело одной сессии повторов (`/app/vocabulary/[deckId]`).
- * Три режима: Flashcards (флип word→definition, grade Again/Good), Type the answer
- * (по definition ввести word) и Paraphrase (V8: выбрать слово по синониму-промпту).
- * Type и Paraphrase судит сервер (answerCardAction), Flashcards — self-graded. Локальная
+ * Четыре режима: Flashcards (флип word→definition, grade Again/Good), Type the answer
+ * (по definition ввести word), Paraphrase (V8: выбрать слово по синониму-промпту)
+ * и Completion (V9: заполнить gap-sentence). Quiz-режимы судит сервер, Flashcards — self-graded. Локальная
  * очередь общая для всех режимов: "good"/correct убирает карту из сессии, "again"/
  * incorrect переставляет её в конец (SM-2 стейт и дневной лимит — авторитетно на
  * сервере, этот компонент только гонит очередь и шлёт результат через готовые
@@ -26,7 +26,8 @@ import { answerCardAction, reviewCardAction } from "../actions";
  */
 
 type Grade = "again" | "good";
-type Mode = "flashcards" | "type" | "paraphrase";
+type Mode = "flashcards" | "type" | "paraphrase" | "completion";
+type AnswerAction = typeof answerCardAction;
 
 export interface ReviewCard {
   id: string;
@@ -36,7 +37,7 @@ export interface ReviewCard {
   translation: string | null;
   partOfSpeech: string | null;
   ipa: string | null;
-  // Enrichment 0038 (nullable). quizPrompt пока не рендерится — прокинут под B3.
+  // Enrichment 0038 (nullable). accepted_answers сюда не добавлять: грейдинг только на сервере.
   synonyms: string[] | null;
   collocations: string[] | null;
   wordFamily: string[] | null;
@@ -88,10 +89,11 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
   const finished = total > 0 && queue.length === 0;
   const neverHadCards = total === 0;
 
-  // Сегмент Paraphrase показываем только если в ИСХОДНОЙ очереди (cards) есть хотя бы
-  // одна карта с synonyms. На проде enrichment пуст → сегмент не всплывает, переключатель
-  // остаётся прежним (Flashcards | Type).
+  // Дополнительные сегменты показываем только если в ИСХОДНОЙ очереди (cards) есть
+  // хотя бы одна подходящая карта. На проде enrichment/quiz_prompt пуст → сегменты
+  // не всплывают, переключатель остаётся прежним (Flashcards | Type).
   const paraphraseAvailable = cards.some((c) => (c.synonyms?.length ?? 0) > 0);
+  const completionAvailable = cards.some((c) => !!c.quizPrompt);
   // Детерминированный Paraphrase-вопрос текущей карты (чистый модуль). Пул дистракторов —
   // исходная очередь cards (стабильна, не сжимается по мере ответов). null → у карты нет
   // synonyms/пула: в paraphrase-режиме рендерим обычную флип-карту (graceful mixed queue).
@@ -134,25 +136,26 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
 
   // Фокус следует за состоянием, а не остаётся на скрытой (backface-hidden) грани или
   // на контроле прошлого режима: flashcards-фронт → "Show answer"; flashcards-бэк →
-  // "Again"; type без ответа → инпут; paraphrase без ответа → первая опция; после wrong
+  // "Again"; type/completion без ответа → инпут; paraphrase без ответа → первая опция; после wrong
   // → "Continue" (correct не фокусируем ничего — короткий флеш без интерактива, следующая
   // карта получит фокус сама, когда current?.id сменится). WCAG 2.4.3 — фокус не теряется.
   useEffect(() => {
     if (!current) return;
-    // Paraphrase-карта без вопроса (нет synonyms/пула) фактически рендерится флип-картой
+    // Карта без режима-specific промпта фактически рендерится флип-картой
     // — ведём фокус как во flashcards.
     const paraphraseAsFlip = mode === "paraphrase" && !paraphraseQuestion;
-    if (mode === "flashcards" || paraphraseAsFlip) {
+    const completionAsFlip = mode === "completion" && !current.quizPrompt;
+    if (mode === "flashcards" || paraphraseAsFlip || completionAsFlip) {
       if (flipped) document.getElementById("rs-again-btn")?.focus();
       else showAnswerRef.current?.focus();
     } else if (wrongState) {
       document.getElementById("rs-continue-btn")?.focus();
     } else if (!correctFlash) {
-      // Неотвеченная quiz-карта: paraphrase → первая опция, type → инпут.
+      // Неотвеченная quiz-карта: paraphrase → первая опция, type/completion → инпут.
       if (mode === "paraphrase") document.getElementById("rs-opt-0")?.focus();
       else document.getElementById("rs-type-input")?.focus();
     }
-  }, [current?.id, flipped, mode, wrongState, correctFlash, paraphraseQuestion]);
+  }, [current?.id, current?.quizPrompt, flipped, mode, wrongState, correctFlash, paraphraseQuestion]);
 
   // Транзиентное сообщение (tier/not_found, correct/incorrect в type-режиме) угасает
   // само — тот же паттерн, что GoalBar (practice/_PracticeCatalog.tsx) использует для
@@ -171,6 +174,8 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
   // переключение должно действовать только на неотвеченную карту.
   function switchMode(next: Mode) {
     if (next === mode || pending || correctFlash || wrongState) return;
+    if (next === "paraphrase" && !paraphraseAvailable) return;
+    if (next === "completion" && !completionAvailable) return;
     setMode(next);
     setFlipped(false);
     setTypedValue("");
@@ -247,16 +252,15 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
     }
   }
 
-  // Общий отправитель quiz-ответа для type- и paraphrase-режимов: сервер — единственный
-  // судья (answerCardAction сверяет с word owner-path), клиент шлёт лишь выбранное/
-  // введённое слово. Различие режимов только в источнике answer (инпут vs клик опции).
-  async function sendAnswer(answer: string) {
+  // Общий отправитель quiz-ответа: сервер — единственный судья, клиент шлёт только
+  // выбранное/введённое слово. Различие режимов — в источнике answer и server action.
+  async function sendAnswer(answer: string, answerAction: AnswerAction = answerCardAction) {
     const card = current;
     if (!card || pending || !answer) return;
     setPending(true);
     setErrorHint(false);
     try {
-      const result = await answerCardAction(card.id, answer);
+      const result = await answerAction(card.id, answer);
       if (result.ok) {
         setRemaining(result.newRemainingToday);
         // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
@@ -311,9 +315,56 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
     setTypedValue("");
   }
 
+  function renderCompletionSentence(prompt: string): ReactNode {
+    const parts = prompt.split("___");
+    return parts.map((part, index) => (
+      <span key={`completion-part-${index}`}>
+        {index > 0 && (
+          <span aria-label="missing word" style={S.completionGap}>
+            &nbsp;
+          </span>
+        )}
+        {part}
+      </span>
+    ));
+  }
+
+  function renderInputQuizForm(
+    face: ReactNode,
+    label: string,
+    answerAction: AnswerAction = answerCardAction,
+    placeholder?: string,
+  ): ReactNode {
+    return (
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          sendAnswer(typedValue.trim(), answerAction);
+        }}
+        style={S.typeForm}
+      >
+        {face}
+        <label htmlFor="rs-type-input" style={S.typeLabel}>{label}</label>
+        <Input
+          id="rs-type-input"
+          size="lg"
+          value={typedValue}
+          onChange={(e) => setTypedValue(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={pending}
+          placeholder={placeholder}
+          aria-label={label}
+        />
+        <Button type="submit" size="lg" disabled={pending || typedValue.trim() === ""} fullWidth>
+          Check
+        </Button>
+      </form>
+    );
+  }
+
   // Флип-карта (word→definition + enrichment + grade Again/Good). Вынесена в функцию,
-  // потому что используется в двух ветках рендера: режим Flashcards И paraphrase-режим
-  // для карты БЕЗ synonyms (graceful mixed queue — падаем на привычную флип-карту).
+  // потому что используется в обычном Flashcards и graceful fallback ветках quiz-режимов.
   function renderFlashcards() {
     if (!current) return null;
     const syn = current.synonyms ?? [];
@@ -476,6 +527,19 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
                 Paraphrase
               </button>
             )}
+            {/* Completion — только когда в исходной очереди есть карты с quizPrompt. */}
+            {completionAvailable && (
+              <button
+                type="button"
+                aria-pressed={mode === "completion"}
+                disabled={pending || correctFlash || !!wrongState}
+                className="rs-seg"
+                style={{ ...S.seg, ...(mode === "completion" ? S.segActive : null), ...(pending || correctFlash || wrongState ? S.segOff : null) }}
+                onClick={() => switchMode("completion")}
+              >
+                Completion
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -617,32 +681,28 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
               ) : (
                 renderFlashcards()
               )
+            ) : mode === "completion" ? (
+              current.quizPrompt ? (
+                renderInputQuizForm(
+                  <div className="rs-compact" style={S.completionFace}>
+                    <span style={S.completionOverline}>Completion trainer</span>
+                    <div style={S.completionPrompt}>{renderCompletionSentence(current.quizPrompt)}</div>
+                  </div>,
+                  "Type the missing word",
+                  answerCompletionAction,
+                  "Type the missing word...",
+                )
+              ) : (
+                renderFlashcards()
+              )
             ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  sendAnswer(typedValue.trim());
-                }}
-                style={S.typeForm}
-              >
+              renderInputQuizForm(
                 <div className="rs-compact" style={S.typeFace}>
                   <div style={S.definition}>{current.definition}</div>
                   {current.example && <p style={S.example}><em>{current.example}</em></p>}
-                </div>
-                <label htmlFor="rs-type-input" style={S.typeLabel}>Type the word</label>
-                <Input
-                  id="rs-type-input"
-                  size="lg"
-                  value={typedValue}
-                  onChange={(e) => setTypedValue(e.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                  disabled={pending}
-                />
-                <Button type="submit" size="lg" disabled={pending || typedValue.trim() === ""} fullWidth>
-                  Check
-                </Button>
-              </form>
+                </div>,
+                "Type the word",
+              )
             )}
 
             {errorHint && (
@@ -696,8 +756,8 @@ const S: Record<string, CSSProperties> = {
   stat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--surface-inset)", color: "var(--text-secondary)", fontSize: 12.5, fontWeight: 700 },
   rescueStat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 12.5, fontWeight: 800 },
 
-  // Mode toggle (Flashcards | Type the answer | Paraphrase). flexWrap — статичная
-  // страховка от переполнения на узких экранах при третьем сегменте (не брейкпоинт).
+  // Mode toggle (Flashcards | Type the answer | Paraphrase | Completion). flexWrap —
+  // статичная страховка от переполнения на узких экранах при доп. сегментах (не брейкпоинт).
   modeRow: { display: "inline-flex", padding: 4, gap: 4, marginTop: 12, background: "var(--surface-inset)", borderRadius: 11, flex: "none", flexWrap: "wrap" },
   seg: { appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, cursor: "pointer", transition: "var(--transition-colors)" },
   segActive: { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-xs)" },
@@ -740,6 +800,12 @@ const S: Record<string, CSSProperties> = {
   typeForm: { display: "flex", flexDirection: "column", gap: 14 },
   typeFace: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 10, padding: "26px 22px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)", overflowY: "auto" },
   typeLabel: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" },
+
+  // Completion Trainer (V9): gap-sentence с визуальным пропуском, ответ проверяется сервером.
+  completionFace: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "safe center", textAlign: "center", gap: 16, padding: "26px 22px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)", overflowY: "auto" },
+  completionOverline: { fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-link)" },
+  completionPrompt: { fontSize: 18, lineHeight: 1.6, fontWeight: 650, color: "var(--text-primary)", maxWidth: "42ch" },
+  completionGap: { display: "inline-block", minWidth: "5.5ch", margin: "0 5px", borderBottom: "3px solid var(--brand)", lineHeight: 1, verticalAlign: "baseline" },
 
   // Paraphrase Sprint (V8): overline-подпись, промпт-синоним и колонка опций-кнопок.
   paraFace: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "safe center", textAlign: "center", gap: 14, padding: "26px 22px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)", overflowY: "auto" },
