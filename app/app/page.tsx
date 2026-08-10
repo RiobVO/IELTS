@@ -4,6 +4,7 @@ import { and, count, desc, eq, sql } from "drizzle-orm";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getHeaderData } from "@/lib/notifications/header-data";
+import { getVocabDueSummary, type VocabDueSummary } from "@/lib/vocab/summary";
 import { db } from "@/db";
 import { attempt, contentItem, leaderboardEntry } from "@/db/schema";
 import { categoryLabel, qtypeLabel, LISTENING_CATEGORIES } from "@/lib/labels";
@@ -83,7 +84,7 @@ export default async function Dashboard() {
 
   // Профиль / список попыток / глобальный ранг независимы → один Promise.all
   // (без водопада). Ранг читается owner-путём, но строго по своему user_id.
-  const [profile, attemptsRes, rankRows, leagueCountRows, inProgressRows] = await Promise.all([
+  const [profile, attemptsRes, rankRows, leagueCountRows, inProgressRows, vocabSummary] = await Promise.all([
     getProfile(),
     supabase
       .from("attempt")
@@ -125,6 +126,9 @@ export default async function Dashboard() {
       .where(and(eq(attempt.userId, user.id), eq(attempt.status, "in_progress"), eq(contentItem.status, "published")))
       .orderBy(desc(attempt.startedAt))
       .limit(1),
+    // Слим-сводка Vocabulary (due/streak/goal) для правого рейла — независима
+    // от остальных данных дашборда, читается в той же волне.
+    getVocabDueSummary(user.id),
     // Пре-варм данных шапки конкурентно с телом дашборда (cache()'d; AppShell
     // переиспользует — убирает trailing notification-хоп).
     getHeaderData(),
@@ -369,6 +373,9 @@ export default async function Dashboard() {
 
           {/* This week — тонкая полоса momentum под диагностикой, не co-hero */}
           <WeekCard streak={streak} xp={xp} rating={rating} rank={globalRank} week={week} resume={resume} leagueTotal={leagueTotal} />
+
+          {/* Vocabulary — слим-модуль сводки (due/streak/goal), приватный от рейтинга */}
+          <VocabCard summary={vocabSummary} />
         </div>
       </div>
     </AppShell>
@@ -550,6 +557,63 @@ function WeekCard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* Vocabulary — слим-модуль сводки (getVocabDueSummary), три состояния:
+   due>0 (обычное — счётчик + бейджи + CTA), due=0 & streak>0 (all caught up,
+   без лишнего CTA) и due=0 & streak=0 (банк слов пуст — компактный старт-CTA).
+   Стрик/цель берутся ТОЛЬКО из summary — вне рейтинга/current_streak. */
+function VocabCard({ summary }: { summary: VocabDueSummary }) {
+  const { dueToday, streak, reviewedToday, goal } = summary;
+  const zero = dueToday === 0 && streak === 0;
+  const caughtUp = dueToday === 0 && streak > 0;
+
+  return (
+    <div style={{ ...S.card, ...S.vocabCard }} aria-label="Vocabulary summary">
+      <div style={S.vocabTop}>
+        <span style={S.vocabIc}>
+          <Icon name="graduation-cap" size={19} strokeWidth={2.2} />
+        </span>
+        <div>
+          <div style={S.vocabTitle}>Vocabulary</div>
+          <div style={S.vocabLine}>
+            {zero ? (
+              "No cards started yet"
+            ) : caughtUp ? (
+              "All caught up"
+            ) : (
+              <>
+                <span style={S.vocabNum}>{dueToday}</span> cards due today
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {zero ? (
+        <>
+          <p style={S.vocabText}>Build your word bank — start your first deck.</p>
+          <Button variant="primary" size="sm" trailingIcon="arrow-right" href="/app/vocabulary" style={S.vocabCta}>
+            Start learning
+          </Button>
+        </>
+      ) : (
+        <>
+          <div style={S.vocabBadges}>
+            <span style={S.vocabBadgeStreak}>
+              <Icon name="flame" size={12} strokeWidth={2.4} /> {streak}-day streak
+            </span>
+            {!caughtUp && <span style={S.vocabBadgeGoal}>{reviewedToday}/{goal} goal</span>}
+          </div>
+          {!caughtUp && (
+            <Button variant="primary" size="sm" trailingIcon="arrow-right" href="/app/vocabulary" style={S.vocabCta}>
+              Review now
+            </Button>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -856,6 +920,19 @@ const S: Record<string, React.CSSProperties> = {
   leagueTotal: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", fontWeight: 600 },
   leagueRating: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--brand)", background: "var(--brand-subtle)", borderRadius: "var(--radius-full)", padding: "3px 9px" },
   leagueHint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--brand-active)" },
+
+  /* Vocabulary rail card */
+  vocabCard: { padding: 18, display: "flex", flexDirection: "column", gap: 12 },
+  vocabTop: { display: "flex", alignItems: "center", gap: 10 },
+  vocabIc: { width: 38, height: 38, flex: "none", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)" },
+  vocabTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)" },
+  vocabLine: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)", marginTop: 2 },
+  vocabNum: { fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-primary)" },
+  vocabText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.5, color: "var(--text-muted)", margin: 0 },
+  vocabBadges: { display: "flex", gap: 8, flexWrap: "wrap" },
+  vocabBadgeStreak: { display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--streak)", background: "var(--streak-subtle)", borderRadius: "var(--radius-full)", padding: "4px 10px" },
+  vocabBadgeGoal: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-secondary)", background: "var(--surface-inset)", borderRadius: "var(--radius-full)", padding: "4px 10px" },
+  vocabCta: { alignSelf: "flex-start" },
 
   /* Band readout */
   bandCard: { padding: "24px 28px" },
