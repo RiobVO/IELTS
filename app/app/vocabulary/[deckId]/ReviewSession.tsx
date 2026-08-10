@@ -5,13 +5,17 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/core/icons";
 import { Button } from "@/components/core/Button";
-import { reviewCardAction } from "../actions";
+import { Input } from "@/components/core/Input";
+import { answerCardAction, reviewCardAction } from "../actions";
 
 /**
  * ReviewSession — клиентское тело одной сессии повторов (`/app/vocabulary/[deckId]`).
- * Локальная очередь: "good" убирает карту из сессии, "again" переставляет её в
- * конец (SM-2 стейт и дневной лимит — авторитетно на сервере, этот компонент
- * только гонит очередь и шлёт grade через готовый reviewCardAction).
+ * Два режима: Flashcards (флип word→definition, grade Again/Good) и Type the answer
+ * (по definition ввести word, сервер сам решает correct/incorrect). Локальная очередь
+ * общая для обоих режимов: "good"/correct убирает карту из сессии, "again"/incorrect
+ * переставляет её в конец (SM-2 стейт и дневной лимит — авторитетно на сервере, этот
+ * компонент только гонит очередь и шлёт результат через готовые reviewCardAction/
+ * answerCardAction).
  *
  * Тип карточки продублирован локально (не импортирован из server-only queries.ts,
  * который нельзя тянуть в client-бандл) — по паттерну PracticeCatalog: клиентский
@@ -20,6 +24,7 @@ import { reviewCardAction } from "../actions";
  */
 
 type Grade = "again" | "good";
+type Mode = "flashcards" | "type";
 
 export interface ReviewCard {
   id: string;
@@ -43,6 +48,7 @@ interface ReviewSessionProps {
 export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }: ReviewSessionProps) {
   const [total] = useState(cards.length);
   const [queue, setQueue] = useState(cards);
+  const [mode, setMode] = useState<Mode>("flashcards");
   const [flipped, setFlipped] = useState(false);
   const [pending, setPending] = useState(false);
   const [remaining, setRemaining] = useState(newRemainingToday);
@@ -53,6 +59,19 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
   const [transientMsg, setTransientMsg] = useState<string | null>(null);
   const [stats, setStats] = useState({ again: 0, good: 0 });
 
+  // Type-режим: ввод, краткий success-флеш перед авто-переходом, и reveal неверного
+  // ответа (ждёт явного "Continue" — в отличие от correct, который уходит сам).
+  const [typedValue, setTypedValue] = useState("");
+  const [correctFlash, setCorrectFlash] = useState(false);
+  const [wrongState, setWrongState] = useState<{ correctWord: string; typedWrong: string } | null>(null);
+  const correctTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (correctTimeoutRef.current) clearTimeout(correctTimeoutRef.current); }, []);
+  // Синхронный one-shot guard для "Continue": два клика до ре-рендера иначе дважды
+  // инкрементят again и дважды двигают ту же (замкнутую) карту в хвост очереди,
+  // теряя реальную следующую голову ([A,B,C] → [C,A,A] вместо [B,C,A]). Ref мутирует
+  // немедленно (в отличие от state), поэтому второй клик в том же тике уже видит true.
+  const continueConsumedRef = useRef(false);
+
   const current = queue[0] ?? null;
   const completed = total - queue.length;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -61,25 +80,47 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
 
   const showAnswerRef = useRef<HTMLButtonElement>(null);
 
-  // Фокус следует за состоянием, а не остаётся на скрытой (backface-hidden) грани:
-  // новая карта (фронт) → "Show answer"; после флипа → "Again" (первая grade-кнопка,
-  // найдена по id — Button не форвардит ref). WCAG 2.4.3 — фокус не теряется при смене.
+  // Фокус следует за состоянием, а не остаётся на скрытой (backface-hidden) грани или
+  // на контроле прошлого режима: flashcards-фронт → "Show answer"; flashcards-бэк →
+  // "Again"; type-режим без ответа → инпут; type-режим после wrong → "Continue"
+  // (correct не фокусируем ничего — короткий флеш без интерактива, следующая карта
+  // получит фокус сама, когда current?.id сменится). WCAG 2.4.3 — фокус не теряется.
   useEffect(() => {
     if (!current) return;
-    if (flipped) {
-      document.getElementById("rs-again-btn")?.focus();
-    } else {
-      showAnswerRef.current?.focus();
+    if (mode === "flashcards") {
+      if (flipped) document.getElementById("rs-again-btn")?.focus();
+      else showAnswerRef.current?.focus();
+    } else if (wrongState) {
+      document.getElementById("rs-continue-btn")?.focus();
+    } else if (!correctFlash) {
+      document.getElementById("rs-type-input")?.focus();
     }
-  }, [current?.id, flipped]);
+  }, [current?.id, flipped, mode, wrongState, correctFlash]);
 
-  // Транзиентное сообщение (tier/not_found) угасает само — тот же паттерн, что
-  // GoalBar (practice/_PracticeCatalog.tsx) использует для "Saved"/"Error".
+  // Транзиентное сообщение (tier/not_found, correct/incorrect в type-режиме) угасает
+  // само — тот же паттерн, что GoalBar (practice/_PracticeCatalog.tsx) использует для
+  // "Saved"/"Error".
   useEffect(() => {
     if (!transientMsg) return;
     const id = setTimeout(() => setTransientMsg(null), 2600);
     return () => clearTimeout(id);
   }, [transientMsg]);
+
+  // Переключение режима меняет рендер ТЕКУЩЕЙ (ещё НЕотвеченной) карты — сбрасывает
+  // только её локальный view-стейт; очередь/статистику/remaining/daily-cap не трогает.
+  // Блокируется во время pending (ответ в полёте мог бы прилететь в режим, который
+  // его уже не рендерит) И пока карта уже в отвеченном type-состоянии (correctFlash/
+  // wrongState) — сервер результат уже записал, а correct-таймер ещё сдвинет очередь;
+  // переключение должно действовать только на неотвеченную карту.
+  function switchMode(next: Mode) {
+    if (next === mode || pending || correctFlash || wrongState) return;
+    setMode(next);
+    setFlipped(false);
+    setTypedValue("");
+    setCorrectFlash(false);
+    setWrongState(null);
+    setErrorHint(false);
+  }
 
   async function submitGrade(grade: Grade) {
     const card = current;
@@ -90,6 +131,9 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
       const result = await reviewCardAction(card.id, grade);
       if (result.ok) {
         setRemaining(result.newRemainingToday);
+        // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
+        // тот же баннер, что сидируется на старте сессии, идемпотентно.
+        if (result.newRemainingToday === 0) setDailyCapHit(true);
         setStats((s) => ({ ...s, [grade]: s[grade] + 1 }));
         // "again" — в конец локальной очереди (interval 0, due немедленно, как задумано
         // SM-2 на сервере); "good" — карта покидает сессию.
@@ -110,6 +154,67 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
     } finally {
       setPending(false);
     }
+  }
+
+  async function submitAnswer() {
+    const card = current;
+    const typed = typedValue.trim();
+    if (!card || pending || !typed) return;
+    setPending(true);
+    setErrorHint(false);
+    try {
+      const result = await answerCardAction(card.id, typed);
+      if (result.ok) {
+        setRemaining(result.newRemainingToday);
+        // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
+        // тот же баннер, что сидируется на старте сессии, идемпотентно.
+        if (result.newRemainingToday === 0) setDailyCapHit(true);
+        if (result.correct) {
+          setTransientMsg("Correct!");
+          setCorrectFlash(true);
+          // Короткая пауза (не CSS-анимация — reduced-motion не задета) перед авто-
+          // переходом, чтобы юзер успел увидеть success-фидбек до смены карты.
+          correctTimeoutRef.current = setTimeout(() => {
+            setStats((s) => ({ ...s, good: s.good + 1 }));
+            setQueue((q) => q.slice(1));
+            setCorrectFlash(false);
+            setTypedValue("");
+          }, 650);
+        } else {
+          setTransientMsg(`Not quite — the answer was "${result.correctWord}".`);
+          // Новый reveal — guard "Continue" снова "не потреблено".
+          continueConsumedRef.current = false;
+          setWrongState({ correctWord: result.correctWord, typedWrong: typed });
+        }
+      } else if (result.reason === "daily_cap") {
+        setDailyCapHit(true);
+        setQueue((q) => q.slice(1));
+        setTypedValue("");
+      } else if (result.reason === "tier" || result.reason === "not_found") {
+        setTransientMsg("That card is no longer available — moving on.");
+        setQueue((q) => q.slice(1));
+        setTypedValue("");
+      } else {
+        // "invalid" | "error" — карта остаётся на месте, юзер может повторить попытку.
+        setErrorHint(true);
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
+  // Incorrect-reveal подтверждён юзером — только теперь карта уходит в хвост очереди
+  // и считается в статистике (again). Сервер уже записал grade в момент ответа;
+  // Continue — чисто клиентский шаг продолжения, второго вызова action не делает.
+  // one-shot guard (continueConsumedRef) — см. комментарий у объявления рефа.
+  function continueAfterWrong() {
+    const card = current;
+    if (!card || !wrongState || continueConsumedRef.current) return;
+    continueConsumedRef.current = true;
+    setStats((s) => ({ ...s, again: s.again + 1 }));
+    setQueue((q) => [...q.slice(1), card]);
+    setWrongState(null);
+    setTypedValue("");
   }
 
   return (
@@ -133,6 +238,33 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
             </span>
           )}
         </div>
+        {!neverHadCards && !finished && (
+          <div style={S.modeRow} role="group" aria-label="Review mode">
+            {/* disabled пока карта в отвеченном состоянии (pending/correctFlash/
+                wrongState) — переключение действует только на неотвеченную карту,
+                зеркалит guard внутри switchMode. */}
+            <button
+              type="button"
+              aria-pressed={mode === "flashcards"}
+              disabled={pending || correctFlash || !!wrongState}
+              className="rs-seg"
+              style={{ ...S.seg, ...(mode === "flashcards" ? S.segActive : null), ...(pending || correctFlash || wrongState ? S.segOff : null) }}
+              onClick={() => switchMode("flashcards")}
+            >
+              Flashcards
+            </button>
+            <button
+              type="button"
+              aria-pressed={mode === "type"}
+              disabled={pending || correctFlash || !!wrongState}
+              className="rs-seg"
+              style={{ ...S.seg, ...(mode === "type" ? S.segActive : null), ...(pending || correctFlash || wrongState ? S.segOff : null) }}
+              onClick={() => switchMode("type")}
+            >
+              Type the answer
+            </button>
+          </div>
+        )}
       </div>
 
       {!finished && !neverHadCards && (
@@ -152,8 +284,8 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
         </div>
       )}
 
-      {/* Тихое SR-объявление для tier/not_found — карта уже убрана из DOM, юзер не
-          должен теряться в догадках, почему очередь вдруг короче. */}
+      {/* Тихое SR-объявление — карта убрана из DOM (tier/not_found) или ответ уже
+          известен (correct/incorrect в type-режиме) раньше, чем сменится визуал. */}
       <div aria-live="polite" style={S.srOnly}>{transientMsg}</div>
 
       {dailyCapHit && (
@@ -214,58 +346,114 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
       ) : (
         current && (
           <>
-            <div className={`rs-flip${flipped ? " is-flipped" : ""}`}>
-              <div className="rs-flip-inner">
-                <div className="rs-face rs-face-front" aria-hidden={flipped || undefined}>
-                  <div style={S.word}>{current.word}</div>
-                  {current.ipa && <div style={S.ipa}>{current.ipa}</div>}
-                  {current.partOfSpeech && <span style={S.pos}>{current.partOfSpeech}</span>}
-                  {/* Флип-триггер — обычная кнопка: клик/тап/Enter/Space работают из
-                      коробки, без выдуманных aria-pressed/aria-expanded. Уходит из
-                      таб-порядка и из a11y-дерева, когда грань перевёрнута назад
-                      (CSS backface-visibility её только визуально прячет). */}
-                  <button
-                    type="button"
-                    ref={showAnswerRef}
-                    onClick={() => setFlipped(true)}
-                    tabIndex={flipped ? -1 : 0}
-                    aria-hidden={flipped || undefined}
-                    style={S.flipBtn}
-                  >
-                    Show answer
-                  </button>
+            {mode === "flashcards" ? (
+              <>
+                <div className={`rs-flip${flipped ? " is-flipped" : ""}`}>
+                  <div className="rs-flip-inner">
+                    <div className="rs-face rs-face-front" aria-hidden={flipped || undefined}>
+                      <div style={S.word}>{current.word}</div>
+                      {current.ipa && <div style={S.ipa}>{current.ipa}</div>}
+                      {current.partOfSpeech && <span style={S.pos}>{current.partOfSpeech}</span>}
+                      {/* Флип-триггер — обычная кнопка: клик/тап/Enter/Space работают из
+                          коробки, без выдуманных aria-pressed/aria-expanded. Уходит из
+                          таб-порядка и из a11y-дерева, когда грань перевёрнута назад
+                          (CSS backface-visibility её только визуально прячет). */}
+                      <button
+                        type="button"
+                        ref={showAnswerRef}
+                        onClick={() => setFlipped(true)}
+                        tabIndex={flipped ? -1 : 0}
+                        aria-hidden={flipped || undefined}
+                        style={S.flipBtn}
+                      >
+                        Show answer
+                      </button>
+                    </div>
+                    <div className="rs-face rs-face-back" aria-hidden={!flipped || undefined}>
+                      <div style={S.definition}>{current.definition}</div>
+                      {current.example && <p style={S.example}><em>{current.example}</em></p>}
+                      {current.translation && <div style={S.translation}>{current.translation}</div>}
+                    </div>
+                  </div>
                 </div>
-                <div className="rs-face rs-face-back" aria-hidden={!flipped || undefined}>
+
+                {flipped && (
+                  <div style={S.actions}>
+                    <Button
+                      id="rs-again-btn"
+                      variant="secondary"
+                      size="lg"
+                      disabled={pending}
+                      onClick={() => submitGrade("again")}
+                      style={{ flex: 1 }}
+                    >
+                      Again
+                    </Button>
+                    <Button
+                      variant="success"
+                      size="lg"
+                      disabled={pending}
+                      onClick={() => submitGrade("good")}
+                      style={{ flex: 1 }}
+                    >
+                      Good
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : correctFlash ? (
+              <div className="rs-compact" style={S.correctBox}>
+                <Icon name="circle-check" size={26} strokeWidth={2.2} style={{ color: "var(--success-text)" }} />
+                <span style={S.correctWord}>{current.word}</span>
+              </div>
+            ) : wrongState ? (
+              <div style={S.wrongBox}>
+                <div style={S.wrongRow}>
+                  <span style={S.wrongLabel}>You typed</span>
+                  <span style={S.wrongTyped}>{wrongState.typedWrong}</span>
+                </div>
+                <div style={S.wrongRow}>
+                  <span style={S.wrongLabel}>Correct</span>
+                  <span style={S.wrongCorrect}>{wrongState.correctWord}</span>
+                </div>
+                <div style={S.wrongFull}>
+                  <div style={S.word}>{current.word}</div>
+                  <div style={S.definition}>{current.definition}</div>
+                  {current.translation && <div style={S.translation}>{current.translation}</div>}
+                  {current.ipa && <div style={S.ipa}>{current.ipa}</div>}
+                </div>
+                <Button id="rs-continue-btn" variant="secondary" size="lg" onClick={continueAfterWrong} fullWidth>
+                  Continue
+                </Button>
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitAnswer();
+                }}
+                style={S.typeForm}
+              >
+                <div className="rs-compact" style={S.typeFace}>
                   <div style={S.definition}>{current.definition}</div>
                   {current.example && <p style={S.example}><em>{current.example}</em></p>}
-                  {current.translation && <div style={S.translation}>{current.translation}</div>}
                 </div>
-              </div>
-            </div>
-
-            {flipped && (
-              <div style={S.actions}>
-                <Button
-                  id="rs-again-btn"
-                  variant="secondary"
+                <label htmlFor="rs-type-input" style={S.typeLabel}>Type the word</label>
+                <Input
+                  id="rs-type-input"
                   size="lg"
+                  value={typedValue}
+                  onChange={(e) => setTypedValue(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
                   disabled={pending}
-                  onClick={() => submitGrade("again")}
-                  style={{ flex: 1 }}
-                >
-                  Again
+                />
+                <Button type="submit" size="lg" disabled={pending || typedValue.trim() === ""} fullWidth>
+                  Check
                 </Button>
-                <Button
-                  variant="success"
-                  size="lg"
-                  disabled={pending}
-                  onClick={() => submitGrade("good")}
-                  style={{ flex: 1 }}
-                >
-                  Good
-                </Button>
-              </div>
+              </form>
             )}
+
             {errorHint && (
               <div role="alert" style={S.errorHint}>
                 Couldn&apos;t save that — check your connection and try again.
@@ -282,15 +470,25 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle }:
    Единственный transition — сам rotateY; глобальный @media(prefers-reduced-motion)
    в tokens/base.css уже гасит ЛЮБОЙ transition-duration до ~0, так что смена грани
    становится мгновенной без своего дублирующего media-query (мгновенная смена без
-   3D-вращения — ровно то, что просит инвариант reduced-motion). */
+   3D-вращения — ровно то, что просит инвариант reduced-motion). rs-seg — тот же
+   pill-паттерн, что Segmented в writing/_Catalog.tsx (компонент не экспортирован,
+   стиль продублирован). rs-compact держит высоту type-режима на уровне флип-карты,
+   чтобы смена режима/ответа не дёргала layout. */
 const CSS = `
 .rs-flip{perspective:1200px}
 .rs-flip-inner{position:relative;min-height:230px;transform-style:preserve-3d;transition:transform var(--duration-deliberate) var(--ease-in-out)}
 .rs-flip.is-flipped .rs-flip-inner{transform:rotateY(180deg)}
 .rs-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:26px 22px;border-radius:var(--radius-xl);border:2px solid var(--border);background:var(--surface);box-shadow:var(--shadow-solid);overflow-y:auto;backface-visibility:hidden;-webkit-backface-visibility:hidden}
 .rs-face-back{transform:rotateY(180deg)}
+.rs-seg{min-height:40px;padding:0 16px;font-size:13px}
+.rs-seg:hover{color:var(--text-primary)}
+.rs-compact{min-height:230px}
 @media (min-width:768px){
   .rs-flip-inner{min-height:270px}
+  .rs-compact{min-height:270px}
+}
+@media (pointer:coarse){
+  .rs-seg{min-height:44px}
 }
 `;
 
@@ -300,6 +498,12 @@ const S: Record<string, CSSProperties> = {
   title: { margin: "10px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
   headStats: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 },
   stat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--surface-inset)", color: "var(--text-secondary)", fontSize: 12.5, fontWeight: 700 },
+
+  // Mode toggle (Flashcards | Type the answer)
+  modeRow: { display: "inline-flex", padding: 4, gap: 4, marginTop: 12, background: "var(--surface-inset)", borderRadius: 11, flex: "none" },
+  seg: { appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, cursor: "pointer", transition: "var(--transition-colors)" },
+  segActive: { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-xs)" },
+  segOff: { opacity: 0.5, cursor: "not-allowed" },
 
   progressRow: { display: "flex", alignItems: "center", gap: 12 },
   progressTrack: { position: "relative", flex: 1, display: "block", height: 8, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
@@ -323,6 +527,21 @@ const S: Record<string, CSSProperties> = {
 
   actions: { display: "flex", gap: 12 },
   errorHint: { textAlign: "center", fontSize: 13, fontWeight: 700, color: "var(--error-text)" },
+
+  // Type-the-answer mode
+  typeForm: { display: "flex", flexDirection: "column", gap: 14 },
+  typeFace: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 10, padding: "26px 22px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)", overflowY: "auto" },
+  typeLabel: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" },
+
+  correctBox: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: "var(--radius-xl)", border: "2px solid var(--success-subtle)", background: "var(--success-subtle)" },
+  correctWord: { fontSize: 24, fontWeight: 800, color: "var(--success-text)" },
+
+  wrongBox: { display: "flex", flexDirection: "column", gap: 14, padding: "22px 20px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
+  wrongRow: { display: "flex", alignItems: "baseline", gap: 8, fontSize: 15 },
+  wrongLabel: { flex: "none", minWidth: "5.5em", fontWeight: 700, color: "var(--text-muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" },
+  wrongTyped: { textDecoration: "line-through", color: "var(--text-disabled)" },
+  wrongCorrect: { fontWeight: 800, color: "var(--success-text)" },
+  wrongFull: { display: "flex", flexDirection: "column", gap: 8, alignItems: "center", textAlign: "center", paddingTop: 14, borderTop: "1px solid var(--border-subtle)" },
 
   summary: { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10, padding: "40px 24px", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-solid)" },
   summaryIcon: { display: "grid", placeItems: "center", width: 56, height: 56, borderRadius: "50%", background: "var(--success-subtle)", color: "var(--success-text)", marginBottom: 4 },

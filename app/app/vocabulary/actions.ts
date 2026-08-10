@@ -6,40 +6,55 @@ import { vocabProgress } from "@/db/schema";
 import { getUser } from "@/lib/auth";
 import { logError } from "@/lib/monitoring/log-error";
 import { isUuid } from "@/lib/uuid";
-import { enforceVocabReview } from "@/lib/vocab/access";
-import { reviewCard } from "@/lib/vocab/srs";
+import { enforceVocabReview, type VocabReviewGate } from "@/lib/vocab/access";
+import { gradeForAnswer, isAnswerCorrect, normalizeAnswer } from "@/lib/vocab/answer";
+import { reviewCard, type Grade } from "@/lib/vocab/srs";
+
+/** Верхняя граница длины введённого ответа (cost/DoS-guard до нормализации). */
+const MAX_ANSWER_LEN = 200;
 
 /**
- * Итог одного повтора для UI. dueAt — ISO-строка (server action сериализует ответ
- * через RSC-границу; строка однозначна и стабильна для контракта). newRemainingToday
- * — остаток новых карт ПОСЛЕ этого повтора (null = безлимит).
+ * Итог two-button повтора («не знаю / знаю») для UI. dueAt — ISO-строка (server
+ * action сериализует ответ через RSC-границу). newRemainingToday — остаток новых
+ * карт ПОСЛЕ этого повтора (null = безлимит).
  */
 export type ReviewResult =
   | { ok: true; dueAt: string; intervalDays: number; newRemainingToday: number | null }
   | { ok: false; reason: "not_found" | "tier" | "daily_cap" | "invalid" | "error" };
 
 /**
- * Записать повтор карточки. Трест-граница: тир-гейт, дневной лимит и SM-2 считаются
- * НА СЕРВЕРЕ (клиент шлёт только оценку), запись — owner-path upsert (grant на
- * INSERT/UPDATE у authenticated отозван, клиентских writes нет). Вне соревновательного
- * контура: НЕ трогает rating/leaderboard/badges/Elo/notifications (§4.6).
- *
- * grade типизирован как string (client-reachable — придёт что угодно) и валидируется
- * до любых запросов; cardId экранируется isUuid, иначе uuid-колонка даст 22P02.
+ * Итог quiz-повтора «type the answer». Сервер — единственный судья: сверяет ввод с
+ * word (owner-path в гейте), клиент балл не присылает. correctWord отдаётся в обоих
+ * ok-случаях (после ответа показать эталон легально).
  */
-export async function reviewCardAction(cardId: string, grade: string): Promise<ReviewResult> {
-  const user = await getUser();
-  if (!user) redirect("/auth");
+export type AnswerResult =
+  | {
+      ok: true;
+      correct: boolean;
+      correctWord: string;
+      dueAt: string;
+      intervalDays: number;
+      newRemainingToday: number | null;
+    }
+  | { ok: false; reason: "not_found" | "tier" | "daily_cap" | "invalid" | "error" };
 
-  // Валидация входа ДО запросов.
-  if (!isUuid(cardId)) return { ok: false, reason: "not_found" };
-  if (grade !== "again" && grade !== "good") return { ok: false, reason: "invalid" };
-  // grade сужен до "again" | "good" (= Grade) — присваивается reviewCard без каста.
+/** ok-ветка гейта — вход общего контура записи. */
+type VocabReviewGateOk = Extract<VocabReviewGate, { ok: true }>;
 
-  const gate = await enforceVocabReview(user.id, cardId);
-  if (!gate.ok) return { ok: false, reason: gate.reason };
-
-  const now = new Date();
+/**
+ * Общий контур записи повтора (SM-2 + owner-path upsert + post-review остаток),
+ * разделяемый two-button и quiz режимами — различие только в том, как получен grade.
+ * Возвращает null при сбое записи (вызывающий → reason:"error"). НЕ экспортируется
+ * (не server action). Вне соревновательного контура: rating/badges/notifications не
+ * трогаются (§4.6).
+ */
+async function applyReview(
+  userId: string,
+  cardId: string,
+  gate: VocabReviewGateOk,
+  grade: Grade,
+  now: Date,
+): Promise<{ dueAt: Date; intervalDays: number; newRemainingToday: number | null } | null> {
   const { state, dueAt } = reviewCard(gate.currentState, grade, now);
 
   try {
@@ -48,7 +63,7 @@ export async function reviewCardAction(cardId: string, grade: string): Promise<R
     await db
       .insert(vocabProgress)
       .values({
-        userId: user.id,
+        userId,
         cardId,
         ease: state.ease,
         intervalDays: state.intervalDays,
@@ -70,15 +85,15 @@ export async function reviewCardAction(cardId: string, grade: string): Promise<R
       });
   } catch (e) {
     // Запись прогресса — не «молчаливый» best-effort: фиксируем в error_log и
-    // сообщаем UI отказ (logError сам не бросает — падение БД уходит в console).
+    // сигналим сбой (logError сам не бросает — падение БД уходит в console).
     await logError({
       source: "server",
-      message: `reviewCardAction upsert failed: ${e instanceof Error ? e.message : String(e)}`,
+      message: `applyReview upsert failed: ${e instanceof Error ? e.message : String(e)}`,
       stack: e instanceof Error ? e.stack : null,
-      userId: user.id,
+      userId,
       context: { cardId, grade },
     });
-    return { ok: false, reason: "error" };
+    return null;
   }
 
   // Остаток новых карт ПОСЛЕ повтора: новая карта у basic съедает 1; повтор и
@@ -90,10 +105,73 @@ export async function reviewCardAction(cardId: string, grade: string): Promise<R
         ? Math.max(0, gate.newRemainingToday - 1)
         : gate.newRemainingToday;
 
+  return { dueAt, intervalDays: state.intervalDays, newRemainingToday };
+}
+
+/**
+ * Two-button повтор. Трест-граница: тир-гейт, дневной лимит и SM-2 — на СЕРВЕРЕ
+ * (клиент шлёт только оценку), запись — owner-path upsert (grant на INSERT/UPDATE у
+ * authenticated отозван). grade типизирован как string (client-reachable) и
+ * валидируется до запросов; cardId экранируется isUuid (иначе uuid-колонка → 22P02).
+ */
+export async function reviewCardAction(cardId: string, grade: string): Promise<ReviewResult> {
+  const user = await getUser();
+  if (!user) redirect("/auth");
+
+  // Валидация входа ДО запросов.
+  if (!isUuid(cardId)) return { ok: false, reason: "not_found" };
+  if (grade !== "again" && grade !== "good") return { ok: false, reason: "invalid" };
+  // grade сужен до "again" | "good" (= Grade).
+
+  const gate = await enforceVocabReview(user.id, cardId);
+  if (!gate.ok) return { ok: false, reason: gate.reason };
+
+  const applied = await applyReview(user.id, cardId, gate, grade, new Date());
+  if (!applied) return { ok: false, reason: "error" };
+
   return {
     ok: true,
-    dueAt: dueAt.toISOString(),
-    intervalDays: state.intervalDays,
-    newRemainingToday,
+    dueAt: applied.dueAt.toISOString(),
+    intervalDays: applied.intervalDays,
+    newRemainingToday: applied.newRemainingToday,
+  };
+}
+
+/**
+ * Quiz-повтор «type the answer». Server-graded: сверяет нормализованный ввод с word
+ * карты (owner-path в гейте), маппит верно/неверно → good/again и гонит тот же SM-2
+ * upsert, что two-button (общий applyReview). Новая карта ест дневной лимит одинаково
+ * в обоих режимах (общий enforceVocabReview). typedAnswer типизирован как string
+ * (client-reachable) и валидируется: ≤200 и непустой после нормализации.
+ */
+export async function answerCardAction(
+  cardId: string,
+  typedAnswer: string,
+): Promise<AnswerResult> {
+  const user = await getUser();
+  if (!user) redirect("/auth");
+
+  // Валидация входа ДО запросов.
+  if (!isUuid(cardId)) return { ok: false, reason: "not_found" };
+  if (typeof typedAnswer !== "string" || typedAnswer.length > MAX_ANSWER_LEN) {
+    return { ok: false, reason: "invalid" };
+  }
+  if (normalizeAnswer(typedAnswer) === "") return { ok: false, reason: "invalid" };
+
+  const gate = await enforceVocabReview(user.id, cardId);
+  if (!gate.ok) return { ok: false, reason: gate.reason };
+
+  // Server-судья: сравнение нормализованных строк; верно → "good", неверно → "again".
+  const correct = isAnswerCorrect(typedAnswer, gate.word);
+  const applied = await applyReview(user.id, cardId, gate, gradeForAnswer(correct), new Date());
+  if (!applied) return { ok: false, reason: "error" };
+
+  return {
+    ok: true,
+    correct,
+    correctWord: gate.word,
+    dueAt: applied.dueAt.toISOString(),
+    intervalDays: applied.intervalDays,
+    newRemainingToday: applied.newRemainingToday,
   };
 }
