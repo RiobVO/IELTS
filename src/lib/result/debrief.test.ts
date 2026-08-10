@@ -1,6 +1,15 @@
 // Unit tests for the pure /result "debrief" derivations (no DB, no React).
 import { describe, it, expect } from "vitest";
-import { computeNearMiss, computeBlindSpot, computeGrowth, stripHtml, blindSpotTag, buildShareHeadline } from "./debrief";
+import {
+  computeNearMiss,
+  computeBlindSpot,
+  computeGeneralizedBlindSpot,
+  computeGrowth,
+  stripHtml,
+  blindSpotTag,
+  resolveFocusQType,
+  buildShareHeadline,
+} from "./debrief";
 import type { PerQuestionResult } from "@/lib/grading/grade";
 
 describe("computeNearMiss", () => {
@@ -121,6 +130,43 @@ describe("computeBlindSpot", () => {
   });
 });
 
+describe("computeGeneralizedBlindSpot", () => {
+  it("returns null when there is only one type (nothing to compare against)", () => {
+    expect(computeGeneralizedBlindSpot([["tfng", { correct: 1, total: 6 }]])).toBeNull();
+  });
+
+  it("returns null on an all-miss attempt (every type scores 0%)", () => {
+    const perType: [string, { correct: number; total: number }][] = [
+      ["tfng", { correct: 0, total: 6 }],
+      ["mcq_single", { correct: 0, total: 5 }],
+      ["short_answer", { correct: 0, total: 7 }],
+    ];
+    expect(computeGeneralizedBlindSpot(perType)).toBeNull();
+  });
+
+  it("returns null when every type ties at the same percentage", () => {
+    const perType: [string, { correct: number; total: number }][] = [
+      ["tfng", { correct: 3, total: 6 }],
+      ["mcq_single", { correct: 2, total: 4 }],
+    ];
+    expect(computeGeneralizedBlindSpot(perType)).toBeNull();
+  });
+
+  it("generalizes to the weakest type when it is strictly below the average of the rest", () => {
+    const perType: [string, { correct: number; total: number }][] = [
+      ["tfng", { correct: 0, total: 6 }],
+      ["mcq_single", { correct: 4, total: 5 }],
+      ["short_answer", { correct: 6, total: 7 }],
+    ];
+    expect(computeGeneralizedBlindSpot(perType)).toEqual({
+      label: "True / False / Not Given",
+      weakBucket: { correct: 0, total: 6 },
+      strongBucket: null,
+      costMarks: 6,
+    });
+  });
+});
+
 describe("computeGrowth", () => {
   it("returns null when there is no previous attempt (first attempt ever)", () => {
     const history = [{ perTypeBreakdown: { tfng: { correct: 3, total: 6 } } }];
@@ -213,21 +259,74 @@ describe("blindSpotTag", () => {
   });
 });
 
+describe("resolveFocusQType", () => {
+  const ngBlindSpot = { label: "Not Given", weakBucket: { correct: 0, total: 2 }, strongBucket: { correct: 2, total: 2 }, costMarks: 2 };
+  const generalBlindSpot = { label: "Matching Headings", weakBucket: { correct: 1, total: 4 }, strongBucket: null, costMarks: 3 };
+
+  it("returns the fallback when there is no blind spot", () => {
+    expect(resolveFocusQType([], new Map(), null, "mcq_single")).toBe("mcq_single");
+  });
+
+  it("resolves to the ternary type behind an NG blind spot", () => {
+    const perQuestion = [{ number: 1, qtype: "tfng" }, { number: 2, qtype: "tfng" }];
+    const meta = new Map([
+      [1, { accept: ["NOT GIVEN"] }],
+      [2, { accept: ["NOT GIVEN"] }],
+    ]);
+    expect(resolveFocusQType(perQuestion, meta, ngBlindSpot, null)).toBe("tfng");
+  });
+
+  it("picks the majority qtype when an NG blind spot mixes tfng and ynng questions", () => {
+    const perQuestion = [
+      { number: 1, qtype: "tfng" },
+      { number: 2, qtype: "tfng" },
+      { number: 3, qtype: "ynng" },
+    ];
+    const meta = new Map([
+      [1, { accept: ["NOT GIVEN"] }],
+      [2, { accept: ["NOT GIVEN"] }],
+      [3, { accept: ["NOT GIVEN"] }],
+    ]);
+    expect(resolveFocusQType(perQuestion, meta, ngBlindSpot, null)).toBe("tfng");
+  });
+
+  it("resolves to the generalized blind spot's own type", () => {
+    const perQuestion = [{ number: 1, qtype: "matching_headings" }, { number: 2, qtype: "mcq_single" }];
+    const meta = new Map([
+      [1, { accept: ["B"] }],
+      [2, { accept: ["A"] }],
+    ]);
+    expect(resolveFocusQType(perQuestion, meta, generalBlindSpot, null)).toBe("matching_headings");
+  });
+
+  it("falls back when no question actually belongs to the blind spot", () => {
+    const perQuestion = [{ number: 1, qtype: "mcq_single" }];
+    const meta = new Map([[1, { accept: ["A"] }]]);
+    expect(resolveFocusQType(perQuestion, meta, generalBlindSpot, "mcq_single")).toBe("mcq_single");
+  });
+});
+
 describe("buildShareHeadline", () => {
   it("has no trailing colon in either branch", () => {
-    expect(buildShareHeadline(true, 6.5, 78)).not.toMatch(/:$/);
-    expect(buildShareHeadline(false, null, 42)).not.toMatch(/:$/);
+    expect(buildShareHeadline(true, 6.5, 78, "reading")).not.toMatch(/:$/);
+    expect(buildShareHeadline(false, null, 42, "reading")).not.toMatch(/:$/);
   });
 
   it("uses the banded copy when a band score is present", () => {
-    expect(buildShareHeadline(true, 6.5, 78)).toBe(
+    expect(buildShareHeadline(true, 6.5, 78, "reading")).toBe(
       "I just hit Band 6.5 on IELTS Reading with bando — and finally found the one habit costing me marks.",
     );
   });
 
   it("uses the percentage copy when there is no band", () => {
-    expect(buildShareHeadline(false, null, 42)).toBe(
+    expect(buildShareHeadline(false, null, 42, "reading")).toBe(
       "I scored 42% on IELTS Reading with bando and pinned down exactly which question type is costing me marks.",
+    );
+  });
+
+  it("interpolates IELTS Listening for the listening section", () => {
+    expect(buildShareHeadline(true, 6.5, 78, "listening")).toBe(
+      "I just hit Band 6.5 on IELTS Listening with bando — and finally found the one habit costing me marks.",
     );
   });
 });
