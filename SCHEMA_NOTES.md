@@ -4,7 +4,7 @@ Ambiguities in BRIEF.md §5/§6.1 resolved while building the schema + migration
 The brief wins; where it was silent or self-conflicting, a sane choice was made
 and logged here. No tables were invented beyond what the brief implies.
 
-## Table count: 28 (Phase 1 shipped 13; +15 added in later phases)
+## Table count: 31 (Phase 1 shipped 13; +18 added in later phases)
 
 §5 enumerates 12 tables (`badge`/`user_badge` are two). The Phase-1 worked example
 expected **13 tables** — the 13th is **`notification`**, defined in **§11**
@@ -13,7 +13,7 @@ expected **13 tables** — the 13th is **`notification`**, defined in **§11**
 Phase-1 list (13): `region, profile, content_item, passage, question, answer_key,
 attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
 
-**Post-Phase additions (+15 → 28, in lockstep with `verify.ts` `APP_TABLE_COUNT = 28`):**
+**Post-Phase additions (+18 → 31, in lockstep with `verify.ts` `APP_TABLE_COUNT = 31`):**
 - `payment` — migration `0006_payments` (Phase 2D: tiers + payment lifecycle).
 - `annotation` — migration `0013_annotation` (reader highlights/notes, W2-1).
 - `leaderboard_snapshot` — migration `0014_leaderboard_snapshot` (rank-movement deltas).
@@ -32,9 +32,13 @@ attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
 - `error_log` — migration `0034_error_log` (self-hosted error monitoring; SERVER-ONLY,
   RLS + grants revoked like `signup_throttle`; written by `logError()` — client-error
   endpoint + explicit server catch, read owner-path by `/admin/errors`).
+- `vocab_deck`, `vocab_card`, `vocab_progress` — migration `0037_vocab` (Vocabulary
+  feature: spaced-repetition flashcards). Deck/card are published-gated content (like
+  `content_item`/`passage`); `vocab_progress` is a per-user SM-2 SRS state, owner-read
+  with server-only writes. See the "0037 — Vocabulary" section below.
 
-The DB has **28** tables (`verify.ts` `APP_TABLE_COUNT = 28` asserts the migrated count).
-`src/db/schema.ts` types **27** of them: the legacy `topic` table (migration `0000`, Phase 1)
+The DB has **31** tables (`verify.ts` `APP_TABLE_COUNT = 31` asserts the migrated count).
+`src/db/schema.ts` types **30** of them: the legacy `topic` table (migration `0000`, Phase 1)
 is unused since Phase 3 moved to `writing_task`/`speaking_task`, so its Drizzle export +
 `topic_skill` enum were dropped as dead code (#26) while the empty table lingers in the DB
 (no destructive drop). Re-add a typed export only if `topic` is ever revived.
@@ -569,3 +573,54 @@ touch it). `signUp` (`app/auth/actions.ts`) checks it via the pure `isHoneypotTr
 "confirmation sent" message, no account created, DB untouched, trap not revealed). Runs
 first — cheaper than the Turnstile/throttle checks and works with zero keys, so Turnstile is
 now optional rather than the only signup defense.
+
+## 0037 — Vocabulary (vocab_deck / vocab_card / vocab_progress)
+
+Feature Vocabulary (spaced-repetition flashcards; product plan 2026-07-06). Three
+**additive** tables — the R/L/W/S core is untouched. Bumps the app table count
+**28 → 31** (`verify.ts` `APP_TABLE_COUNT = 31`). **No new enums:** `status` reuses
+`content_status` (`draft|published`) and `tier_required` reuses `user_tier`.
+
+- **`vocab_deck`** — a word set (content). Purpose: the catalog unit a user studies.
+  Provenance: Vocabulary plan (2026-07-06). Published-gated **like `content_item`**
+  (RLS `SELECT TO authenticated USING (status='published')`; drafts read owner-path
+  only). `source_file_path` is **NOT NULL UNIQUE** — the DB-level idempotency key for
+  (re)import (mirrors `content_item.source_file_path`, but pinned UNIQUE here so a
+  re-import upserts the deck by path instead of relying on app-level dedup).
+  `word_count` is a denormalized catalog counter (recomputed on (re)import). RLS
+  posture: `REVOKE ALL FROM anon, authenticated, PUBLIC` then `GRANT SELECT TO
+  authenticated` + `GRANT ALL TO service_role` — secure-by-default like `0035`, since
+  on prod Supabase hands new tables broad default-privilege grants that a bare
+  published policy would leave open to anon.
+- **`vocab_card`** — a word in a deck (content). Provenance: same plan. Visible only
+  when its deck is published — RLS mirrors **`passage`→`content_item`** (EXISTS join on
+  `vocab_deck.status='published'`). **`UNIQUE(deck_id, word)`** is the foundation of the
+  idempotent upsert re-import (a word is unique within its deck). Ordered by `"order"`
+  (quoted reserved word, like `passage`/`question`); index `(deck_id, "order")` serves
+  both ordered reads and the FK/cascade (leftmost `deck_id`). Same secure-by-default
+  grants as `vocab_deck`.
+  - **Why `vocab_card` has NO answer_key-style lock:** these are self-graded
+    flashcards. In the MVP a card carries no *hidden* correct answer to protect —
+    `definition`/`translation` are the study material the user is meant to see once the
+    deck is published (unlike `answer_key`, whose leak would let a client pre-grade a
+    scored test). So the card is a normal published-read content row; no lock table,
+    no column-grant carve-out.
+- **`vocab_progress`** — per-user SM-2 SRS state (`ease`/`interval_days`/`repetitions`/
+  `lapses`/`due_at`/`last_reviewed_at`). Provenance: same plan. **Owner-read** (RLS
+  `SELECT TO authenticated USING (user_id = auth.uid())`), `UNIQUE(user_id, card_id)`;
+  index `(user_id, due_at)` is the due-queue, and a dedicated `(card_id)` FK index keeps
+  the cascade-delete fast when a re-import replaces cards.
+  - **Why `vocab_progress` is written ONLY owner-path (no client write policy):** the
+    SM-2 scheduler and the daily review cap are authoritative server logic. If the
+    client could `INSERT`/`UPDATE` its own progress it could forge review state or
+    bypass the cap — exactly the `attempt` score-forgery vector. So there is **no**
+    `INSERT`/`UPDATE`/`DELETE` policy and `REVOKE ALL FROM anon, authenticated, PUBLIC`
+    strips the default-priv grants; only `SELECT` is re-granted to `authenticated`
+    (scoped to own rows) and writes go through the Drizzle owner path. `verify` asserts
+    this: `vocab_progress` joins the owner-read RLS cohort (RLS on + anon denied) **and**
+    the write-lockdown check proves an `authenticated` `INSERT` is denied at the grant
+    layer (42501), mirroring the `attempt` forge assertion.
+
+**Verification.** `verify` gate green on local docker (31 tables; up→down→up clean +
+idempotent; `vocab_progress` RLS on + anon denied + authenticated INSERT denied).
+Supabase application follows the plan's deploy sequencing.
