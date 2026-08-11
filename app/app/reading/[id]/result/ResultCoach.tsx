@@ -142,6 +142,13 @@ export default function ResultCoach({
         </div>
       )}
 
+      {/* P13 (practice-only) — format_loss пуст для mock, блок никогда не рендерится там. */}
+      {data.isPractice && data.formatLoss.length > 0 && (
+        <div style={{ margin: "14px 0" }}>
+          <FormatCostCallout items={data.formatLoss} />
+        </div>
+      )}
+
       <div className="rc-tabs" ref={tabsRef}>
         <div className="rc-seg" role="tablist" aria-label="Result sections">
           <button
@@ -229,15 +236,18 @@ export default function ResultCoach({
 /* ============================================================ Hero (verdict) */
 
 function Hero({ data, onReview, onTypes }: { data: DebriefData; onReview: () => void; onTypes: () => void }) {
-  const { score } = data;
+  const { score, isPractice } = data;
   const pct = Math.round(score.correctPct * 100);
-  const bandValue = score.banded && score.band != null ? score.band : null;
+  // P12: practice не показывает band как "вердикт" — диал всегда в pct-режиме,
+  // независимо от того, посчитан ли band_score (Full-тест). Mock (isPractice
+  // false) — тот же bandValue, что и раньше, рендер не меняется.
+  const bandValue = !isPractice && score.banded && score.band != null ? score.band : null;
 
   return (
     <section className="rc-verdict">
       <div className="rc-vd-in">
         <div className="rc-vd-meta">
-          Your result · <b>{data.title}</b>
+          {isPractice ? "Practice review" : "Your result"} · <b>{data.title}</b>
           {data.category ? ` · ${categoryLabel(data.category)}` : ""} · {data.totalQuestions} questions
         </div>
         <div className="rc-vd-grid">
@@ -245,8 +255,10 @@ function Hero({ data, onReview, onTypes }: { data: DebriefData; onReview: () => 
             <Dial pct={score.correctPct} center={bandValue != null ? { kind: "band", value: bandValue } : { kind: "pct", value: pct }} />
             {/* Non-banded (kind==="pct"): диал уже показывает pct% в центре —
                 этот блок повторял бы тот же процент рядом. Показываем только
-                когда центр = band, тогда pct% здесь не дублирует, а дополняет. */}
-            {bandValue != null && (
+                когда центр = band, тогда pct% здесь не дублирует, а дополняет —
+                ИЛИ всегда в practice (P12: raw score + процент остаются видны,
+                даже когда band скрыт из диала). */}
+            {(bandValue != null || isPractice) && (
               <div className="rc-vd-score">
                 <span className="p">{pct}%</span>
                 <span className="s">{score.raw} / {score.total} correct</span>
@@ -300,6 +312,31 @@ function BlindSpotCopy({ blindSpot }: { blindSpot: DebriefData["blindSpot"] }) {
         )}
       </p>
     </>
+  );
+}
+
+/* P13 — «Потерял N ответов на формате» (practice-only). Переиспользует
+   .rc-rr/.rc-rr-title/.rc-rr-lead/.rc-rr-chips/.rc-rr-chip — тот же карточный
+   вид, что у guided-replay ниже, без новых CSS-правил. */
+
+const FORMAT_LOSS_REASON_LABEL: Record<DebriefData["formatLoss"][number]["reason"], string> = {
+  "word-limit": "over the word limit",
+  "choice-count": "wrong number of choices",
+};
+
+function FormatCostCallout({ items }: { items: DebriefData["formatLoss"] }) {
+  return (
+    <div className="rc-rr">
+      <div className="rc-rr-title">Format cost you {items.length} answer{items.length === 1 ? "" : "s"}</div>
+      <p className="rc-rr-lead" style={{ marginTop: 8 }}>
+        These misses look like format slips, not knowledge gaps — get the format right and they&rsquo;re free marks.
+      </p>
+      <div className="rc-rr-chips">
+        {items.map((it) => (
+          <span className="rc-rr-chip" key={it.number}>Q{it.number} · {FORMAT_LOSS_REASON_LABEL[it.reason]}</span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -586,13 +623,15 @@ function GrowthStrip({ growth }: { growth: NonNullable<DebriefData["level"]["gro
 /* =================================================================== Dock */
 
 function Dock({ data, dockRef }: { data: DebriefData; dockRef: RefObject<HTMLDivElement | null> }) {
-  const { score, blindSpot, plan } = data;
+  const { score, blindSpot, plan, isPractice } = data;
   const pct = Math.round(score.correctPct * 100);
   const dotValue = score.marksToNext ?? blindSpot?.costMarks ?? null;
+  // P12: practice не сулит "→ Band N" — милстоун остаётся процентным, как у
+  // non-banded попыток (mock с isPractice=false ветвится ровно как раньше).
   const milestoneText =
-    score.banded && score.nextBand != null && score.marksToNext != null
+    score.banded && !isPractice && score.nextBand != null && score.marksToNext != null
       ? `Next milestone: ${Math.round(((score.raw + score.marksToNext) / score.total) * 100)}% → Band ${score.nextBand}.`
-      : !score.banded && pct < 100
+      : (!score.banded || isPractice) && pct < 100
         ? `Next milestone: ${Math.min(100, Math.ceil((pct + 1) / 10) * 10)}%.`
         : null;
   const hasDrill = Boolean(plan.weakLabel && plan.drillHref);
