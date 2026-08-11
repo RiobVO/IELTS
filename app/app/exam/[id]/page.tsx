@@ -1,7 +1,7 @@
-import { notFound } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { notFound, redirect } from "next/navigation";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { contentItem } from "@/db/schema";
+import { contentItem, passage } from "@/db/schema";
 import { ModeStart } from "@/components/exam/ModeStart";
 import { getProfile, requireUser } from "@/lib/auth";
 import {
@@ -35,7 +35,7 @@ export default async function ExamPage({
   // попытка / была ли сдача) независимы → один параллельный слой. Незакрытая
   // попытка резюмится со СВОИМ mode; иначе режим берётся из ?mode=, а без него
   // рендерится экран выбора (attempt при этом НЕ создаётся).
-  const [[test], profile, existing, attempted] = await Promise.all([
+  const [[test], profile, existing, attempted, [atomized], [withAudio]] = await Promise.all([
     db
       .select({
         runnerHtml: contentItem.runnerHtml,
@@ -51,6 +51,18 @@ export default async function ExamPage({
     getProfile(),
     findInProgressAttempt(user.id, id),
     hasSubmittedAttempt(user.id, id),
+    // Стратегия A (PRACTICE_PLAN): practice живёт на атомизированной поверхности,
+    // mock — в iframe. Два EXISTS-факта решают, есть ли ей на чём жить.
+    db
+      .select({ id: passage.id })
+      .from(passage)
+      .where(and(eq(passage.contentItemId, id), ne(passage.bodyHtml, "")))
+      .limit(1),
+    db
+      .select({ id: passage.id })
+      .from(passage)
+      .where(and(eq(passage.contentItemId, id), isNotNull(passage.audioPath)))
+      .limit(1),
   ]);
   if (!test?.runnerHtml) notFound();
 
@@ -65,6 +77,17 @@ export default async function ExamPage({
   // Кап — только на создание НОВОГО mock; резюм существующей попытки не расходует
   // слот и не должен блокироваться (tier-гейт применяется всегда).
   await enforceAccess(user.id, userTier, test.tierRequired, existing ? null : modeParam);
+
+  // Practice → атомизированный раннер (стратегия A), если тесту есть на чём жить:
+  // пассажи с телом, а для listening ещё и привязанное аудио (легаси-раннер играет
+  // passage.audio_path; без него listening отрендерился бы как reading). Иначе —
+  // practice-lite в iframe. Mock всегда остаётся в iframe (fidelity). Attempt общий
+  // для обоих роутов (ensureAttempt по (user, test)), редирект ничего не теряет.
+  const practiceServable =
+    !!atomized && (test.section === "reading" || !!withAudio);
+  if (mode === "practice" && practiceServable) {
+    redirect(`/app/reading/${id}?mode=practice`);
+  }
 
   if (!mode) {
     return (
