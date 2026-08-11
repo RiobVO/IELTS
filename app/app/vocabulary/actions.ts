@@ -235,7 +235,10 @@ export async function answerCompletionAction(
     return {
       ok: true,
       correct: isAnswerAccepted(typedAnswer, card.acceptedAnswers ?? [card.word]),
-      correctWord: card.word,
+      // Эталон для reveal — ответ ПРОПУСКА, не headword: у коллокаций word — фраза
+      // («conduct research»), а gap требует конкретную форму («conducted»). Первая
+      // позиция accepted_answers — каноническая форма по контракту контента.
+      correctWord: card.acceptedAnswers?.[0] ?? card.word,
     };
   });
 }

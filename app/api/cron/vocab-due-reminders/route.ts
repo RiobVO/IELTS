@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { notification, vocabCard, vocabDeck, vocabProgress } from "@/db/schema";
+import { notification, profile, vocabCard, vocabDeck, vocabProgress } from "@/db/schema";
+import { effectiveTier, meetsTier } from "@/lib/tiers";
 import { cronSecret } from "@/env";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { logError } from "@/lib/monitoring/log-error";
@@ -36,9 +37,16 @@ async function selectDueReminderRows(): Promise<DueReminderRow[]> {
   // UTC-день строится в SQL через now(): без JS Date-параметров внутри raw sql``.
   const dayStart = sql`(date_trunc('day', now() at time zone 'UTC') at time zone 'UTC')`;
 
-  return db
+  // Группируем по (user, тир профиля, тир дека), а тир-фильтр применяем В JS точной
+  // app-логикой effectiveTier/meetsTier — SQL-дубликат семантики premium_until
+  // разъезжался бы с приложением. Иначе юзер с истёкшим premium получал бы
+  // напоминания о картах, ревью которых getReviewQueue ему уже не отдаст.
+  const rows = await db
     .select({
       userId: vocabProgress.userId,
+      profileTier: profile.tier,
+      premiumUntil: profile.premiumUntil,
+      deckTier: vocabDeck.tierRequired,
       dueCount: sql<number>`count(*)::int`,
     })
     .from(vocabProgress)
@@ -47,6 +55,7 @@ async function selectDueReminderRows(): Promise<DueReminderRow[]> {
       vocabDeck,
       and(eq(vocabDeck.id, vocabCard.deckId), eq(vocabDeck.status, "published")),
     )
+    .innerJoin(profile, eq(profile.id, vocabProgress.userId))
     .leftJoin(
       notification,
       and(
@@ -58,8 +67,15 @@ async function selectDueReminderRows(): Promise<DueReminderRow[]> {
       ),
     )
     .where(and(lte(vocabProgress.dueAt, sql`now()`), isNull(notification.id)))
-    .groupBy(vocabProgress.userId)
-    .having(sql`count(*) > 0`);
+    .groupBy(vocabProgress.userId, profile.tier, profile.premiumUntil, vocabDeck.tierRequired);
+
+  const byUser = new Map<string, number>();
+  for (const r of rows) {
+    const tier = effectiveTier({ tier: r.profileTier, premium_until: r.premiumUntil });
+    if (!meetsTier(tier, r.deckTier)) continue;
+    byUser.set(r.userId, (byUser.get(r.userId) ?? 0) + Number(r.dueCount));
+  }
+  return [...byUser.entries()].map(([userId, dueCount]) => ({ userId, dueCount }));
 }
 
 async function createDueReminders(): Promise<number> {
