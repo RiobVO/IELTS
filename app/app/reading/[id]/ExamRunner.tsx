@@ -166,6 +166,7 @@ export default function ExamRunner({
   category,
   initialAnnotations,
   questionsHtml,
+  focus,
 }: {
   attemptId: string;
   contentItemId: string;
@@ -185,6 +186,8 @@ export default function ExamRunner({
   initialAnnotations?: AnnotationRow[];
   /** Verbatim question-panel HTML (real-IELTS render); null → atomized fallback. */
   questionsHtml?: string | null;
+  /** P15 — номер вопроса для авто-скролла на маунте (deep-link practice). undefined в mock. */
+  focus?: number;
 }) {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>(initialAnswers);
   // Флаги «отметить на потом» — клиентские/эфемерные (review aid, не персистятся).
@@ -391,6 +394,18 @@ export default function ExamRunner({
     const wrap = qScrollRef.current;
     if (el && wrap) wrap.scrollTo({ top: el.offsetTop - 14, behavior: "smooth" });
   }, []);
+
+  // P15 — deep-link фокус: один раз на маунте проскроллить к вопросу (из mistakes/result).
+  // Переиспользуем jump (setCurrent + на мобильном открывает панель вопросов + скролл в
+  // qScrollRef). В mock focus===undefined → no-op, mock-путь не затронут. rAF: список
+  // вопросов уже смонтирован, offsetTop посчитан. didFocus гарантирует single-fire.
+  const didFocus = useRef(false);
+  useEffect(() => {
+    if (didFocus.current || focus == null) return;
+    didFocus.current = true;
+    const raf = requestAnimationFrame(() => jump(focus));
+    return () => cancelAnimationFrame(raf);
+  }, [focus, jump]);
 
   // submitRef держит свежий submit (с актуальными answers) для авто-сабмита из таймера.
   useEffect(() => {
