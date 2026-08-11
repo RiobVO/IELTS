@@ -263,3 +263,32 @@ describe("sanitizeEmbedCss — преамбула @media/@supports под кан
     expect(out).toContain("color:red");
   });
 });
+
+// Ревью 2026-08-11, шестой заход (HIGH): `<`/`>` разрешались ВНУТРИ CSS-строк, а
+// HTML-парсер про кавычки CSS не знает — `</style>` в строке закрывает raw-text тег.
+describe("sanitizeEmbedCss — угловые скобки запрещены и внутри строк", () => {
+  it("breakout из строки в ЗНАЧЕНИИ декларации отброшен, соседнее правило цело", () => {
+    const out = sanitizeEmbedCss(`.a{font-family:"</style><p>PWNED</p><style>"}.b{color:red}`) ?? "";
+    expect(out).not.toContain("PWNED");
+    expect(out).not.toMatch(/[<>]/);
+    expect(out).toContain("color:red");
+  });
+
+  it("breakout из строки в СЕЛЕКТОРЕ отброшен", () => {
+    const out = sanitizeEmbedCss(`.a[title="</style><p>PWNED</p>"]{color:red}.b{color:blue}`) ?? "";
+    expect(out).not.toContain("PWNED");
+    expect(out).not.toMatch(/[<>]/);
+    expect(out).toContain("color:blue");
+  });
+
+  it("breakout в инлайн-стиле фрагмента отброшен", () => {
+    expect(sanitizeInlineMapStyle(`font-family:"</style><p>x</p>"`)).toBeNull();
+    expect(sanitizeInlineMapStyle(`top:86px;font-family:"</style>"`)).toBe("top:86px");
+  });
+
+  it("в собранном стайлшите не остаётся ни одной угловой скобки", () => {
+    const out = sanitizeEmbedCss(`.mp{position:relative}@media (max-width:700px){.mp{width:100%}}`) ?? "";
+    expect(out).not.toMatch(/[<>]/);
+    expect(out).toContain("position:relative");
+  });
+});
