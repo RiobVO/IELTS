@@ -721,3 +721,70 @@ describe("captureListeningPart — map-embed (CSS-рисованная карт�
     expect(questionsHtmlCoversAll(out, [11])).toBe(true);
   });
 });
+
+describe("captureListeningPart — map-embed, находки третьего захода ревью", () => {
+  const mapPart2 = (mapInner: string) =>
+    part(
+      `<div class="map-layout"><div class="mp">${mapInner}</div>` +
+        `<div class="map-answers"><div class="mcq map-mcq" data-q="11"><div class="stem"><span class="opt-text">Cafe</span></div>` +
+        `<label><input type="radio" name="q11" value="A">A</label>` +
+        `<label><input type="radio" name="q11" value="B">B</label></div></div></div>`,
+    );
+  const CSS2 = `.mp{position:relative}.street{position:absolute}`;
+  const docOf = (out: string) => load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+
+  it("легаси-носители URL (table background) не переживают белый список атрибутов", () => {
+    const out = captureListeningPart(
+      mapPart2(`<table background="https://evil.example/p.png"><tbody><tr><td>Map</td></tr></tbody></table>`),
+      undefined,
+      CSS2,
+    );
+    const doc = docOf(out);
+    expect(doc).not.toContain("evil.example");
+    expect(doc).not.toContain("background=");
+    expect(doc).toContain("Map"); // сама разметка карты цела
+  });
+
+  it("class/style/геометрия таблицы сохраняются (карта продолжает рисоваться)", () => {
+    const out = captureListeningPart(
+      mapPart2(`<div class="street" style="top:86px"><table><tr><td colspan="2">Garden</td></tr></table></div>`),
+      undefined,
+      CSS2,
+    );
+    const doc = docOf(out);
+    expect(doc).toContain('class="street"');
+    expect(doc).toContain("top:86px");
+    expect(doc).toContain('colspan="2"');
+  });
+
+  it("легитимная подпись «Solutions Centre» НЕ роняет часть (ложное срабатывание ревью)", () => {
+    const leaks: string[] = [];
+    const out = captureListeningPart(
+      mapPart2(`<span class="blabel">Solutions Centre</span>`),
+      (t) => leaks.push(t),
+      CSS2,
+    );
+    expect(out).not.toBe("");
+    expect(leaks).toEqual([]);
+    expect(docOf(out)).toContain("Solutions Centre");
+  });
+
+  it("прямая формулировка ответа по-прежнему роняет часть", () => {
+    const leaks: string[] = [];
+    expect(
+      captureListeningPart(mapPart2(`<span>Correct answer: B</span>`), (t) => leaks.push(t), CSS2),
+    ).toBe("");
+    expect(leaks).toEqual(["map text"]);
+    const leaks2: string[] = [];
+    expect(captureListeningPart(mapPart2(`<span>Answer: B</span>`), (t) => leaks2.push(t), CSS2)).toBe("");
+    expect(leaks2).toEqual(["map text"]);
+  });
+
+  it("перенос строки внутри формулировки не прячет её от сканера", () => {
+    const leaks: string[] = [];
+    expect(
+      captureListeningPart(mapPart2(`<span>Correct\n   answer: B</span>`), (t) => leaks.push(t), CSS2),
+    ).toBe("");
+    expect(leaks).toEqual(["map text"]);
+  });
+});

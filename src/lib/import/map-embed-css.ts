@@ -146,8 +146,25 @@ function sanitizeDeclaration(decl: string): string | null {
   // Вендорные префиксы отбрасываем целиком: их поведение вне allowlist'а.
   if (!ALLOWED_PROPS.has(prop)) return null;
   if (prop === "content" && !isInertContentValue(value)) return null;
+  if (HIDING_DECLARATION[prop]?.test(value.replace(/\s*!important\s*$/i, ""))) return null;
   return `${prop}:${value}`;
 }
+
+/**
+ * Декларации, ПРЯЧУЩИЕ содержимое. Запрещены внутри embed'а осознанно: пока в карте
+ * нельзя ничего спрятать, «что видит сканер текста — то видит и студент». Иначе
+ * порционная обфускация (`<span>Correct an</span><i class="hidden">x</i><span>swer</span>`)
+ * рисует чистый ключ, оставаясь невидимой для конкатенации текста (ревью 2026-08-11,
+ * третий заход). Карта — это подписи зданий и улиц; прятать их незачем.
+ */
+const HIDING_DECLARATION: Record<string, RegExp> = {
+  display: /^\s*none\s*$/i,
+  visibility: /^\s*(hidden|collapse)\s*$/i,
+  opacity: /^\s*0*(\.0+)?\s*$/,
+  "font-size": /^\s*0(px|pt|em|rem|%)?\s*$/i,
+  color: /^\s*transparent\s*$/i,
+  "text-indent": /^\s*-/,
+};
 
 /**
  * Значение структурно безопасно: кавычки сбалансированы (иначе пересборка склеила бы
