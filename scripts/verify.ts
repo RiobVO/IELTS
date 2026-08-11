@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 31; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037)
+const APP_TABLE_COUNT = 32; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040)
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);
@@ -211,6 +211,7 @@ async function clientWriteLockdown(): Promise<{
   profileUpdateDenied: boolean;
   attemptInsertDenied: boolean;
   vocabProgressInsertDenied: boolean;
+  mistakeResolutionInsertDenied: boolean;
   ownerWriteWorks: boolean;
 }> {
   const email = `verify-lock+${Date.now()}@example.com`;
@@ -262,12 +263,20 @@ async function clientWriteLockdown(): Promise<{
         VALUES (${id}, gen_random_uuid())`,
     );
 
+    // (b3) mistake-resolution forgery: «отработано» пишет только owner-path экшен
+    // resolveMistake (P9-rich, 0040) — зеркало vocab_progress, denied на grant-слое.
+    const mistakeResolutionInsertDenied = await deniedAsAuthenticated(
+      (tx) => tx`
+        INSERT INTO mistake_resolution (user_id, content_item_id, question_number, qtype)
+        VALUES (${id}, gen_random_uuid(), 1, 'tfng')`,
+    );
+
     // (c) legit path: the server action writes via the Drizzle OWNER role (this
     // connection) — a safe-field update must still succeed.
     const owner = await sql`UPDATE profile SET display_name = 'verify' WHERE id = ${id}`;
     const ownerWriteWorks = owner.count === 1;
 
-    return { profileUpdateDenied, attemptInsertDenied, vocabProgressInsertDenied, ownerWriteWorks };
+    return { profileUpdateDenied, attemptInsertDenied, vocabProgressInsertDenied, mistakeResolutionInsertDenied, ownerWriteWorks };
   } finally {
     await sql`DELETE FROM auth.users WHERE id = ${id}`;
   }
@@ -481,7 +490,7 @@ async function main() {
   // ЕСТЬ по дизайну (select_own TO authenticated), поэтому ассертим только RLS-on +
   // anon-deny — против регресса «RLS выключили» или «anon снова granted» (0024/0028;
   // vocab_progress — 0037, запись только owner-path, INSERT-lock проверяется ниже).
-  for (const t of ["writing_submission", "writing_feedback", "speaking_submission", "speaking_feedback", "vocab_progress"] as const) {
+  for (const t of ["writing_submission", "writing_feedback", "speaking_submission", "speaking_feedback", "vocab_progress", "mistake_resolution"] as const) {
     const l = await tableLock(t);
     if (l.rlsEnabled && l.anonDenied)
       ok(`RLS — anon SELECT on ${t} denied (owner-read policy intact)`);
@@ -500,14 +509,16 @@ async function main() {
     lockdown.profileUpdateDenied &&
     lockdown.attemptInsertDenied &&
     lockdown.vocabProgressInsertDenied &&
+    lockdown.mistakeResolutionInsertDenied &&
     lockdown.ownerWriteWorks
   )
-    ok("RLS — authenticated denied profile.role patch + submitted-attempt forge + vocab_progress insert; owner write works");
+    ok("RLS — authenticated denied profile.role patch + submitted-attempt forge + vocab_progress/mistake_resolution insert; owner write works");
   else
     fail(
       `RLS — write-lockdown incomplete (profileUpdateDenied=${lockdown.profileUpdateDenied}, ` +
         `attemptInsertDenied=${lockdown.attemptInsertDenied}, ` +
-        `vocabProgressInsertDenied=${lockdown.vocabProgressInsertDenied}, ownerWriteWorks=${lockdown.ownerWriteWorks})`,
+        `vocabProgressInsertDenied=${lockdown.vocabProgressInsertDenied}, ` +
+        `mistakeResolutionInsertDenied=${lockdown.mistakeResolutionInsertDenied}, ownerWriteWorks=${lockdown.ownerWriteWorks})`,
     );
 
   // 7. health endpoint

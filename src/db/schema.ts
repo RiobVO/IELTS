@@ -930,3 +930,42 @@ export const vocabProgress = pgTable(
     index("vocab_progress_card_id_idx").on(t.cardId),
   ],
 );
+
+/* -------------------------------------------------------------------------- */
+/* mistake_resolution — P9-rich «вариант B» (migration 0040)                    */
+/* Хранит ТОЛЬКО факт «ошибка отработана»; открытые ошибки деривятся на чтении   */
+/* из attempt_review_snapshot + attempt.answers → gradeOne (submit/грейдинг не    */
+/* трогаются). Owner-стейт как vocab_progress: owner-read (RLS user_id =           */
+/* auth.uid()), запись ТОЛЬКО server-action owner-path — клиентских writes нет.    */
+/* -------------------------------------------------------------------------- */
+export const mistakeResolution = pgTable(
+  "mistake_resolution",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profile.id, { onDelete: "cascade" }),
+    contentItemId: uuid("content_item_id")
+      .notNull()
+      .references(() => contentItem.id, { onDelete: "cascade" }),
+    questionNumber: integer("question_number").notNull(),
+    // Денормализованный qtype-слаг на момент резолюции (text, не enum — канон
+    // валидирует серверный экшен). Открытый список берёт qtype из снапшота.
+    qtype: text("qtype").notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Одна резолюция на (юзер, тест, номер вопроса); leftmost user_id обслуживает
+    // owner-read + RLS-политику, отдельный (user_id)-индекс был бы избыточен.
+    unique("mistake_resolution_user_content_question_key").on(
+      t.userId,
+      t.contentItemId,
+      t.questionNumber,
+    ),
+    // FK-индекс content_item_id: cascade-delete при удалении теста (не leftmost
+    // в unique — как vocab_progress.card_id).
+    index("mistake_resolution_content_item_id_idx").on(t.contentItemId),
+  ],
+);
