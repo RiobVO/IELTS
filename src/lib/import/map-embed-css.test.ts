@@ -292,3 +292,35 @@ describe("sanitizeEmbedCss — угловые скобки запрещены и
     expect(out).toContain("position:relative");
   });
 });
+
+// Ревью 2026-08-11, седьмой заход (п.4): сплошной запрет обеих угловых скобок молча
+// выбрасывал `.a > .b`. Для выхода из <style> нужен именно `<`, поэтому `>` вернули.
+describe("sanitizeEmbedCss — дочерний комбинатор жив, breakout закрыт", () => {
+  it("`>` в селекторе сохраняется", () => {
+    const out = sanitizeEmbedCss(`.mp > .col{display:flex}.a>.b{color:red}`) ?? "";
+    expect(out).toContain(".mp > .col");
+    expect(out).toContain(".a>.b");
+    expect(out).toContain("display:flex");
+  });
+
+  it("`<` в селекторе — отказ, даже внутри строки", () => {
+    expect(sanitizeEmbedCss(`.a[title="</style>"]{color:red}`) ?? "").not.toContain("color:red");
+    expect(sanitizeEmbedCss(`.a[title="<b>"]{color:red}`) ?? "").not.toContain("color:red");
+  });
+
+  it("в значении декларации обе скобки по-прежнему запрещены", () => {
+    expect(sanitizeEmbedCss(`.a{font-family:"a>b"}`)).toBeNull();
+    expect(sanitizeEmbedCss(`.a{font-family:"</style>"}`)).toBeNull();
+  });
+
+  it("media range syntax с `>=` проходит", () => {
+    const out = sanitizeEmbedCss(`@media (width >= 600px){.mp{width:100%}}`) ?? "";
+    expect(out).toContain("@media (width >= 600px){");
+    expect(out).toContain("width:100%");
+  });
+
+  it("собранный стайлшит не содержит `<` ни в каком виде", () => {
+    const out = sanitizeEmbedCss(`.mp > .col{color:red}@media (max-width:700px){.mp{width:100%}}`) ?? "";
+    expect(out).not.toContain("<");
+  });
+});

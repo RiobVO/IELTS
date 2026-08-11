@@ -834,3 +834,23 @@ describe("captureListeningPart — map-embed, находки четвёртог�
     }
   });
 });
+
+describe("captureListeningPart — CSP внутри документа embed'а", () => {
+  const mapPart4 = (inner: string) =>
+    part(
+      `<div class="map-layout"><div class="mp">${inner}</div>` +
+        `<div class="map-answers"><div class="mcq map-mcq" data-q="11"><div class="stem"><span class="opt-text">Cafe</span></div>` +
+        `<label><input type="radio" name="q11" value="A">A</label>` +
+        `<label><input type="radio" name="q11" value="B">B</label></div></div></div>`,
+    );
+
+  it("документ несёт default-src 'none' со style-src 'unsafe-inline' (карта рисуется, сеть закрыта)", () => {
+    const out = captureListeningPart(mapPart4(`<div class="street">Garden</div>`), undefined, `.mp{position:relative}`);
+    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).toContain("Content-Security-Policy");
+    expect(doc).toContain("default-src 'none'");
+    expect(doc).toContain("style-src 'unsafe-inline'");
+    // CSP стоит ДО <style>, иначе не применится к нему
+    expect(doc.indexOf("Content-Security-Policy")).toBeLessThan(doc.indexOf("<style>"));
+  });
+});

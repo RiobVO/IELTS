@@ -293,8 +293,15 @@ export function captureListeningPart(
         $map.remove();
         return;
       }
+      // CSP внутри самого документа — структурный пояс поверх allowlist'а: даже если
+      // ресурсная форма когда-нибудь просочится мимо санитайзера, браузер не сделает
+      // запрос (sandbox без allow-scripts сеть НЕ запрещает — ревью 2026-08-11).
+      // `style-src 'unsafe-inline'` обязателен: карта это инлайн-стили и <style>.
+      const csp =
+        `<meta http-equiv="Content-Security-Policy" ` +
+        `content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">`;
       const doc =
-        `<!doctype html><html><head><meta charset="utf-8"><style>${embedCss}` +
+        `<!doctype html><html><head><meta charset="utf-8">${csp}<style>${embedCss}` +
         `\nhtml,body{margin:0;padding:0;background:transparent}</style></head>` +
         `<body>${frag.html(fragRoot) ?? ""}</body></html>`;
       if (doc.length > MAX_MAP_DOC) {
