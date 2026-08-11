@@ -54,7 +54,7 @@ export function CatalogNotice({
       <div style={{ flex: 1, minWidth: 200 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", letterSpacing: "var(--tracking-tight)" }}>
-            {limit ? `That's your ${BASIC_DAILY_LIMIT} free tests for today` : "One test at a time"}
+            {limit ? `That's your ${BASIC_DAILY_LIMIT} mock tests for today` : "One test at a time"}
           </span>
           {limit && (
             <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--warn-text)", background: "var(--warn-subtle)", borderRadius: "var(--radius-full)", padding: "2px 9px" }}>
@@ -64,7 +64,7 @@ export function CatalogNotice({
         </div>
         <div style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 3, lineHeight: 1.5 }}>
           {limit
-            ? `Basic includes ${BASIC_DAILY_LIMIT} tests a day — your next one unlocks tomorrow. Go Premium for unlimited practice.`
+            ? `Basic includes ${BASIC_DAILY_LIMIT} mock tests a day — your next one unlocks tomorrow. Practice stays unlimited; go Premium for unlimited mocks.`
             : "You're starting tests too quickly. Give it a minute, then try again."}
         </div>
       </div>
