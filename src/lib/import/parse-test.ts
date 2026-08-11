@@ -122,12 +122,21 @@ export async function parseTest(html: string): Promise<ParsedTest> {
     const num = Number.parseInt(name.slice(1), 10);
     if (!Number.isFinite(num)) return;
     const stem = $(el).closest('[id^="question-"]');
-    const ctx = stem.hasClass("blank-wrapper")
-      ? $(el).closest(".flow-row, .flow-box, .notes-item, li, p, td, .form-row")
-      : stem;
+    // Контейнер с id может покрывать ВСЮ группу (Inspera: `#question-20-22` на трёх
+    // `p.summary-line`) — тогда его текст это инструкция блока, а не вопрос, и в бот
+    // «вопрос дня» / разбор ошибок уезжала бы рубрика вместо предложения с пропуском
+    // (H3-аудит 2026-08-11). Сужаем до строки, когда в контейнере больше одного поля.
+    const groupContainer = stem.length > 0 && stem.find('input[type="text"][name^="q"]').length > 1;
+    const line = $(el).closest(".summary-line, .flow-row, .flow-box, .notes-item, li, p, td, .form-row");
+    const ctx = stem.hasClass("blank-wrapper") || groupContainer ? line : stem;
     const clone = (ctx.length ? ctx : $(el).parent()).clone();
     clone.find(".blank-wrapper").replaceWith(" ____ ");
-    clone.find(".review-flag, .cdi-placeholder").remove();
+    // Голое поле без `.blank-wrapper` (не-Inspera разметка) иначе оставляло в промпте
+    // НЕобозначенную дыру («The animal needs a to survive») — место пропуска должно быть
+    // видно и в боте, и в разборе ошибок.
+    clone.find('input[type="text"]').replaceWith(" ____ ");
+    // .qn — видимый номер вопроса строки summary-line (шум в prompt, как .cdi-placeholder).
+    clone.find(".review-flag, .cdi-placeholder, .qn").remove();
     const prompt = clone.text().replace(/\s+/g, " ").trim();
     byNumber.set(
       num,
@@ -179,9 +188,15 @@ export async function parseTest(html: string): Promise<ParsedTest> {
         const label = $(row).find("span").last().text().trim();
         return { value, label: label || value };
       });
-  // question stem shown above an MCQ block's options.
-  const promptOf = (block: cheerio.Cheerio<ReturnType<typeof $>[number]>) =>
-    block.closest(".question").find(".question-rubric p").last().text().trim();
+  // Формулировка вопроса над списком опций MCQ. Собственный стем блока (`.mcq-stem`
+  // канона Inspera) приоритетнее рубрики группы: рубрика — это инструкция
+  // («Write the correct letter in boxes 27–32»), одна на шесть вопросов, и попадая
+  // в prompt она делала вопрос неотличимым в боте и разборе (H3-аудит 2026-08-11).
+  const promptOf = (block: cheerio.Cheerio<ReturnType<typeof $>[number]>) => {
+    const stem = block.find(".mcq-stem").first().text().replace(/\s+/g, " ").trim();
+    if (stem) return stem;
+    return block.closest(".question").find(".question-rubric p").last().text().trim();
+  };
 
   // MCQ single: one radio block per question (.mcq-single, id="question-N").
   $(".mcq-single").each((_, el) => {
@@ -416,7 +431,10 @@ function warnEmptyPrompt(
   warnings: string[],
 ): void {
   if (qtype === "matching_headings") return;
-  if (promptHtml.trim().length < PROMPT_MIN_LEN) {
+  // Маркер пропуска (`____`) — не контент: он ровно добивает длину до порога, и
+  // вопрос без единого слова контекста перестал бы считаться пустым (поймано
+  // существующим тестом при добавлении маркера для голых полей, 2026-08-11).
+  if (promptHtml.replace(/_+/g, " ").trim().length < PROMPT_MIN_LEN) {
     warnings.push(`Q${num}: empty prompt`);
   }
 }

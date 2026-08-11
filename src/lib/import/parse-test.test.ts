@@ -249,7 +249,8 @@ describe("parseTest — пустой prompt из чужой вёрстки да�
     const t = await parseTest(FOREIGN_EMPTY_PROMPT_HTML);
     const q1 = t.questions.find((q) => q.number === 1)!;
     expect(q1).toBeDefined();
-    expect(q1.promptHtml.trim()).toBe("");
+    // Контекста нет: в prompt только маркер пропуска, слов вокруг него не осталось.
+    expect(q1.promptHtml.replace(/_+/g, "").trim()).toBe("");
     expect(q1.qtype).toBe("note_completion"); // тип НЕ unknown — type-гейт бы промолчал
     expect(t.warnings).toContain("Q1: empty prompt");
   });
@@ -410,5 +411,134 @@ describe("parseTest — Inspera DnD single-passage (headings + endings)", () => 
     expect(qh).not.toMatch(/analysis/i);
     expect(qh).not.toMatch(/draggable/i);
     expect(qh).not.toContain("ending-drop"); // цели заменены слотами
+  });
+});
+
+// H3-аудит 2026-08-11: у канона клиента формулировка вопроса лежит НЕ там, откуда её
+// брал парсер, и в prompt уезжала инструкция группы. Practice/mock не страдали
+// (verbatim-панель), но бот «вопрос дня» и разбор ошибок показывали рубрику.
+describe("parse-test — prompt берётся из формулировки вопроса, не из рубрики группы", () => {
+  const wrap = (questions: string, script: string) =>
+    `<!doctype html><html><head><title>Reading - Prompts</title></head><body>
+      <div class="sectionRubric">Reading Passage 3. You should spend about 20 minutes.</div>
+      <div id="passageContent"><h1>T</h1><p>Passage text.</p></div>
+      ${questions}
+      <script>${script}</script>
+    </body></html>`;
+
+  it("mcq-single: prompt = .mcq-stem блока, а не инструкция «Write the correct letter…»", async () => {
+    const html = wrap(
+      `<div class="question" id="question-group-27-28">
+        <div class="question-rubric"><p>Write the correct letter in boxes 27-28 on your answer sheet.</p></div>
+        <div class="mcq-single" id="question-27">
+          <div class="mcq-head"><span class="q-num-box">27</span>
+            <div class="mcq-stem">The writer states that dating the extinction is hard because</div></div>
+          <div class="mcq-options">
+            <div class="mcq-row"><input type="radio" name="q27" value="A"><span>alpha</span></div>
+            <div class="mcq-row"><input type="radio" name="q27" value="C"><span>gamma</span></div>
+          </div>
+        </div>
+      </div>`,
+      `const correctAnswers = { "27": "C" };
+       const questionTypes = { "27": "Multiple Choice" };`,
+    );
+    const t = await parseTest(html);
+    const q27 = t.questions.find((q) => q.number === 27);
+    expect(q27?.promptHtml).toBe("The writer states that dating the extinction is hard because");
+    expect(q27?.promptHtml).not.toMatch(/correct letter/i);
+  });
+
+  it("mcq-single без .mcq-stem: прежний фоллбэк на рубрику сохраняется", async () => {
+    const html = wrap(
+      `<div class="question" id="question-group-27-27">
+        <div class="question-rubric"><p>Which TWO features does the writer mention?</p></div>
+        <div class="mcq-single" id="question-27">
+          <div class="mcq-options">
+            <div class="mcq-row"><input type="radio" name="q27" value="A"><span>alpha</span></div>
+            <div class="mcq-row"><input type="radio" name="q27" value="B"><span>beta</span></div>
+          </div>
+        </div>
+      </div>`,
+      `const correctAnswers = { "27": "A" };
+       const questionTypes = { "27": "Multiple Choice" };`,
+    );
+    const t = await parseTest(html);
+    expect(t.questions.find((q) => q.number === 27)?.promptHtml).toBe(
+      "Which TWO features does the writer mention?",
+    );
+  });
+
+  it("summary-line: prompt = своя строка с пропуском, номер строки не попадает в текст", async () => {
+    const html = wrap(
+      `<div class="question" id="question-group-20-21">
+        <div class="question-rubric"><p>Complete the sentences below. Choose ONE WORD ONLY.</p></div>
+        <div class="question-content">
+          <p class="summary-line"><span class="qn">20</span> The world can have a food
+            <span class="blank-wrapper"><span class="inspera-input-wrapper">
+              <input type="text" class="sentence-input" name="q20" autocomplete="off">
+              <span class="cdi-placeholder">20</span></span></span> while some areas lack supplies.</p>
+          <p class="summary-line"><span class="qn">21</span> Later,
+            <span class="blank-wrapper"><span class="inspera-input-wrapper">
+              <input type="text" class="sentence-input" name="q21" autocomplete="off">
+              <span class="cdi-placeholder">21</span></span></span> provided greater efficiency.</p>
+        </div>
+      </div>`,
+      `const correctAnswers = { "20": "surplus", "21": "innovation" };
+       const questionTypes = { "20": "Sentence Completion", "21": "Sentence Completion" };`,
+    );
+    const t = await parseTest(html);
+    const q20 = t.questions.find((q) => q.number === 20);
+    const q21 = t.questions.find((q) => q.number === 21);
+    expect(q20?.promptHtml).toBe("The world can have a food ____ while some areas lack supplies.");
+    expect(q21?.promptHtml).toBe("Later, ____ provided greater efficiency.");
+    expect(q20?.promptHtml).not.toMatch(/ONE WORD ONLY/i);
+    // номера строк (.qn) вычищены — иначе prompt начинался бы с «20»
+    expect(q20?.promptHtml?.startsWith("20")).toBe(false);
+  });
+
+  it("одиночный вопрос со своим id: контекст не сужается (регрессия note_completion)", async () => {
+    const html = wrap(
+      `<div id="question-3" class="question">
+        <p>The animal needs a <input type="text" name="q3"> to survive in winter.</p>
+      </div>`,
+      `const correctAnswers = { "3": "habitat" };
+       const questionTypes = { "3": "Note Completion" };`,
+    );
+    const t = await parseTest(html);
+    expect(t.questions.find((q) => q.number === 3)?.promptHtml).toBe(
+      "The animal needs a ____ to survive in winter.",
+    );
+  });
+});
+
+// Маркер пропуска не должен «наполнять» пустой prompt: `____` ровно добивает длину до
+// PROMPT_MIN_LEN, и без вычитания маркера гейт «empty prompt» замолчал бы (2026-08-11).
+describe("parse-test — маркер пропуска не считается контекстом", () => {
+  it("голое поле без окружающего текста: prompt = маркер, warning на месте", async () => {
+    const html = `<!doctype html><html><head><title>Reading - Bare</title></head><body>
+      <div class="sectionRubric">Reading Passage 1. You should spend about 20 minutes.</div>
+      <div id="passageContent"><h1>T</h1><p>Passage text.</p></div>
+      <div class="question" id="question-1"><p><input type="text" name="q1"></p></div>
+      <script>
+        const correctAnswers = { "1": "x" };
+        const questionTypes = { "1": "Note Completion" };
+      </script></body></html>`;
+    const t = await parseTest(html);
+    expect(t.questions.find((q) => q.number === 1)?.promptHtml.replace(/_+/g, "").trim()).toBe("");
+    expect(t.warnings).toContain("Q1: empty prompt");
+  });
+
+  it("поле с контекстом: маркер виден, warning'а нет", async () => {
+    const html = `<!doctype html><html><head><title>Reading - Ctx</title></head><body>
+      <div class="sectionRubric">Reading Passage 1. You should spend about 20 minutes.</div>
+      <div id="passageContent"><h1>T</h1><p>Passage text.</p></div>
+      <div class="question" id="question-1"><p>The gas is <input type="text" name="q1"> in the air.</p></div>
+      <script>
+        const correctAnswers = { "1": "x" };
+        const questionTypes = { "1": "Note Completion" };
+      </script></body></html>`;
+    const t = await parseTest(html);
+    expect(t.questions.find((q) => q.number === 1)?.promptHtml).toBe("The gas is ____ in the air.");
+    expect(t.warnings).not.toContain("Q1: empty prompt");
   });
 });
