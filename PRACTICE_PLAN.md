@@ -45,8 +45,9 @@
 |---|---|---|---|---|
 | P0 | Режим — серверная сущность: ModeStart до создания attempt, `attempt.mode`, рейтинг mock-only-first, кап mock-only, sync внутреннего режима iframe | S–M | обе | ✅ срез 1 |
 | P1 | Format guard: live-подсказки лимита слов / числа выборов (ключ не трогается; `src/lib/exam/format-guard.ts`) | S/M | атомиз. | ✅ срез 2 |
-| P2a | Подсказки-стратегии по qtype (zero-key) | S | обе | фаза 3 |
-| P2b | Локатор абзаца из `evidence.para` (server action, слабый leak, practice-only) | M | атомиз. | фаза 3 |
+| P2a | Подсказки-стратегии по qtype (zero-key, `strategy-hints.ts`, collapsible в QuestionBlock) | S | атомиз. | ✅ фаза 3.A |
+| P2b-1 | Локатор абзаца ПОСЛЕ reveal («Show in passage»: CustomEvent → PassagePane резолвит `#para-N` / `.rp[data-letter]`, императивный пульс) | S | атомиз. | ✅ фаза 3.A |
+| P2b-2 | Локатор ДО reveal (отдельный action, qtype-гейт против para=answer) | M | атомиз. | отложен (сперва замер покрытия `evidence` на проде) |
 | P3 | Свобода таймера: practice = счёт вверх + пауза (Reading с P0; Listening — с P8) | S | атомиз. | ✅ срез 1–2 |
 | P4 | Комфорт чтения: шрифт/интерлиньяж/тема (панель «Aa», `bando-reading-prefs`) | S | атомиз. | ✅ срез 2 |
 | P5 | Микро-цели и брейки | S/M | обе | фаза 3 |
@@ -56,7 +57,11 @@
 | P9 | Повтор ошибок: lite — drill по `q_type` из result; rich — очередь (миграция) | S/L | обе | фаза 3 |
 | P10 | Confidence-метки → калибровка на result | M | атомиз. | фаза 3 |
 | P11 | Слово → Vocabulary (SM-2, новая owner-таблица, миграция; RLS + pg_policies!) | L | атомиз. | фаза 3 |
-| P12 | Practice-результат без band-давления | S | обе | фаза 3 |
+| P12 | Practice-результат без band-давления (learning-фрейм: диал в pct, без share/`→ Band N`) | S | обе | ✅ фаза 3.A |
+| P13 | Format-loss callout на practice-результате («Format cost you N» — `src/lib/result/format-loss.ts` поверх format-guard, server-side) | S/M | атомиз. | ✅ фаза 3.A |
+| P14 | Second try: reveal-ссылка после верного ИЛИ 2-го неверного чека («Check again») | S | атомиз. | ✅ фаза 3.A |
+| OwnA | Pacing coach: чип темпа у practice count-up (Reading; цель = duration/кол-во Q; выкл. в «Aa») | S | атомиз. | ✅ фаза 3.A |
+| P15 | Focus deep-link `?focus=QN` в practice-попытку (навигация для P9/result) | M | атомиз. | фаза 3.B |
 
 Tier: всё free (practice+разбор бесплатны). Premium-леверы потом: транскрипты,
 безлимит saved words, rich-очередь ошибок.
@@ -83,11 +88,26 @@ mid-test переключателя), бейдж режима в Listening.
    practice-lite в iframe). Mock всегда iframe.
 4. ✅ P6+P7 (deep-reasoner, Codex-ревью), P8+P1+P4 (deep-reasoner, Codex-ревью).
 
-**Хвосты среза 2 (не блокируют):** дубли публикаций (Cambridge 21 R Test 2/3/4
-×2) — зачистить в `/admin`; 2 listening без `audio_path` — привязать аудио;
+**Хвосты среза 2:** дубли публикаций — ✅ закрыто 2026-07-07 (3 старших копии
+Cambridge 21 R Test 2/3/4 от 07-01 депубликованы в `draft`, у каждой была лишь
+1 in_progress-попытка); баг highlight/note — ✅ закрыт `cb41db2` (тела пассажей
+за memo `PassageBodies`; визуальная приёмка на проде — за владельцем); 2
+listening без `audio_path` (C21 L Test 3 `4822778c…`, Test 4 `900bd8a4…`) —
+ждут mp3 от владельца (Telegram-бот, bucket `audio`, ключ `<id>.mp3`);
 транскрипты Listening — контента нет.
 
-**Фаза 3** — P2a, P2b, P5, P9-rich, P10, P11, P12, транскрипты.
+**Фаза 3 (2026-07-07, план от fan-out Opus+Codex, сведён):**
+- **Волна A — ✅ реализована** (без миграций, всё в practice-ветках):
+  P12+P13 (result-зона, коммит `590f515`), OwnA+P2a+P14+P2b-1 (runner-зона,
+  коммит `c09bd76`). Mock-рендер не тронут; server actions не менялись.
+- **Волна B** — P9-rich «вариант B» (submit НЕ трогаем: таблица
+  `0040_mistake_resolution` только с резолюциями, открытые ошибки деривятся
+  на чтении из `attempt_review_snapshot`+`attempt.answers`→`gradeOne`),
+  экран `/app/practice/mistakes`, P15.
+- **Волна C** — P11 saved words (`0041_saved_word`, SM-2 через `srs.ts`,
+  дек «My words», БЕЗ синтеза `vocab_card`).
+- Оппортунистически: P10 (localStorage-остров), OwnC weakness heatmap, P5
+  (локальная форма, без XP). P2b-2 — после замера покрытия `evidence`.
 
 ## Риски (актуальные)
 
