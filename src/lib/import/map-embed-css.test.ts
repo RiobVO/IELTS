@@ -178,3 +178,53 @@ describe("sanitizeEmbedCss — прятать содержимое запрещ�
     expect(out).toContain("visibility:visible");
   });
 });
+
+// Ревью 2026-08-11, четвёртый заход: одно проходное декодирование не даёт канон-формы
+// (`\75rl(` → `\75rl(` — санитайзер не видит url(, браузер декодирует после нас),
+// а сканеры не учитывали escape-состояние.
+describe("sanitizeEmbedCss — каноничность escape'ов и сканеры", () => {
+  // Однозначный обратный слеш: в шаблонных строках его легко потерять при правках.
+  const BS = String.fromCharCode(92);
+
+  it("одиночный escape декодируется и проверяется по декодированной форме", () => {
+    // `\\75rl(` → `url(` — запрет срабатывает уже по декодированному значению.
+    const out = sanitizeEmbedCss(`.mp{background:${BS}75rl("https://evil/x.png");color:red}`) ?? "";
+    expect(out).not.toMatch(/75rl|url\(/i);
+    expect(out).not.toContain("evil");
+    expect(out).toContain("color:red");
+    // легитимные одиночные escape'ы живут: `re\\64` → `red`, `.a\\3a hover` → `.a:hover`
+    expect(sanitizeEmbedCss(`.a{color:re${BS}64}`) ?? "").toContain("color:red");
+    expect(sanitizeEmbedCss(`.a${BS}3a hover{color:red}`) ?? "").toContain(".a:hover");
+  });
+
+  it("ДВОЙНОЙ escape (остаточный слеш после декодирования) отбрасывается", () => {
+    // `\\\\75rl(` декодируется в `\\75rl(` — санитайзер не увидел бы url(, но его
+    // доклеит браузер уже после пересборки; остаточный слеш = отказ.
+    expect(sanitizeEmbedCss(`.mp{background:${BS}${BS}75rl("https://evil/x.png")}`)).toBeNull();
+    expect(sanitizeEmbedCss(`.a{color:re${BS}${BS}64}`)).toBeNull();
+    expect(sanitizeEmbedCss(`.a{colo${BS}${BS}72:red}`)).toBeNull();
+    expect(sanitizeEmbedCss(`.a${BS}${BS}3a hover{color:red}`)).toBeNull();
+  });
+
+  it("комментарий внутри строки не съедает следующее правило", () => {
+    const out = sanitizeEmbedCss(`.a{font-family:"x/*y"}.b{color:red}`) ?? "";
+    expect(out).toContain("color:red");
+  });
+
+  it("незакрытый комментарий отбрасывает хвост, начало живёт", () => {
+    const out = sanitizeEmbedCss(`.a{color:red}/* unterminated .b{color:blue}`) ?? "";
+    expect(out).toContain("color:red");
+    expect(out).not.toContain("blue");
+  });
+
+  it("экранированная кавычка внутри строки не сдвигает границы деклараций", () => {
+    const out = sanitizeEmbedCss(`.a{font-family:"A\\"B";top:86px}`) ?? "";
+    // значение с остаточным слешем отбрасывается, но СЛЕДУЮЩАЯ декларация цела
+    expect(out).toContain("top:86px");
+  });
+
+  it("`;` внутри строки преамбулы не рвёт правило", () => {
+    const out = sanitizeEmbedCss(`.a[title="x;y"]{color:red}`) ?? "";
+    expect(out).toContain("color:red");
+  });
+});

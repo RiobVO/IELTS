@@ -13,6 +13,13 @@
  * Модель доверия: embed рендерится в sandbox-iframe БЕЗ allow-scripts, поэтому
  * скрипты не в счёт; ловим (а) отрисовку ответа текстом (`content`), (б) сетевые
  * маяки (`url()`/`@import`), (в) выход из `<style>` в HTML srcdoc.
+ *
+ * КАНОНИЧНОСТЬ: декодирование escape'ов одним проходом не даёт канон-формы —
+ * `\\75rl(…)` после прохода остаётся `\75rl(`, проверка не видит `url(`, а браузер
+ * декодирует его уже после нашей пересборки (ревью 2026-08-11, четвёртый заход).
+ * Поэтому декодированные имя/значение/селектор с ОСТАТОЧНЫМ обратным слешем
+ * отвергаются целиком: в CSS-рисунке карты escape'ам взяться неоткуда, а правило
+ * закрывает весь класс расхождений «санитайзер прочитал одно, браузер — другое».
  */
 
 /** Свойства, которым позволено пережить пересборку (CSS-рисунок карты + типографика). */
@@ -89,7 +96,20 @@ function splitDeclarations(block: string): string[] {
   let buf = "";
   let quote: string | null = null;
   let depth = 0;
+  let escaped = false;
   for (const ch of block) {
+    // `\"` внутри строки НЕ закрывает её — иначе границы деклараций уезжают и
+    // легитимные правила теряются при пересборке (ревью, четвёртый заход).
+    if (escaped) {
+      buf += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      buf += ch;
+      escaped = true;
+      continue;
+    }
     if (quote) {
       buf += ch;
       if (ch === quote) quote = null;
@@ -110,6 +130,47 @@ function splitDeclarations(block: string): string[] {
     buf += ch;
   }
   if (buf.trim()) out.push(buf);
+  return out;
+}
+
+/**
+ * Строко-осведомлённый стрип комментариев: `content:"/*"` не должен «открывать»
+ * комментарий и съедать следующее правило (ревью, четвёртый заход, MEDIUM).
+ */
+function stripComments(css: string): string {
+  let out = "";
+  let quote: string | null = null;
+  let escaped = false;
+  for (let i = 0; i < css.length; i++) {
+    const ch = css[i];
+    if (escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      out += ch;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      out += ch;
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      out += ch;
+      continue;
+    }
+    if (ch === "/" && css[i + 1] === "*") {
+      const end = css.indexOf("*/", i + 2);
+      if (end < 0) break; // незакрытый комментарий — хвост отбрасываем
+      i = end + 1;
+      continue;
+    }
+    out += ch;
+  }
   return out;
 }
 
@@ -138,6 +199,8 @@ function sanitizeDeclaration(decl: string): string | null {
   const prop = decodeCssEscapes(decl.slice(0, i)).trim().toLowerCase();
   const value = decodeCssEscapes(decl.slice(i + 1)).trim();
   if (!prop || !value) return null;
+  // Остаточный слеш = вторая ступень escape'а, которую доклеит уже браузер (см. док).
+  if (prop.includes("\\") || value.includes("\\")) return null;
   if (VALUE_FORBIDDEN.test(value) || !structurallySafeValue(value)) return null;
   if (prop.startsWith("--")) {
     if (!/^--[\w-]+$/.test(prop) || /["']/.test(value)) return null;
@@ -151,11 +214,17 @@ function sanitizeDeclaration(decl: string): string | null {
 }
 
 /**
- * Декларации, ПРЯЧУЩИЕ содержимое. Запрещены внутри embed'а осознанно: пока в карте
- * нельзя ничего спрятать, «что видит сканер текста — то видит и студент». Иначе
- * порционная обфускация (`<span>Correct an</span><i class="hidden">x</i><span>swer</span>`)
- * рисует чистый ключ, оставаясь невидимой для конкатенации текста (ревью 2026-08-11,
- * третий заход). Карта — это подписи зданий и улиц; прятать их незачем.
+ * Декларации, ПРЯЧУЩИЕ содержимое: типовые способы сделать вставленные символы
+ * невидимыми, из-за которых порционная обфускация (`<span>Correct an</span>` +
+ * скрытый узел + `<span>swer</span>`) рисовала бы чистый ключ, оставаясь невидимой
+ * для конкатенации текста (ревью 2026-08-11, третий заход). Карта — это подписи
+ * зданий и улиц, прятать их незачем, поэтому цена запрета низкая.
+ *
+ * ЧЕСТНАЯ ГРАНИЦА (ревью, четвёртый заход): это НЕ доказательство равенства
+ * «текст сканера == видимый текст». Разрешённая геометрия оставляет другие способы
+ * скрыть символ — нулевые размеры с overflow, `transform:scale(0)`, вынос за
+ * пределы вьюпорта, перекрытие соседом, прозрачная SVG-заливка. Список закрывает
+ * распространённые механизмы, а не класс целиком.
  */
 const HIDING_DECLARATION: Record<string, RegExp> = {
   display: /^\s*none\s*$/i,
@@ -172,7 +241,16 @@ const HIDING_DECLARATION: Record<string, RegExp> = {
  */
 function structurallySafeValue(value: string): boolean {
   let quote: string | null = null;
+  let escaped = false;
   for (const ch of value) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
     if (quote) {
       if (ch === quote) quote = null;
       continue;
@@ -180,13 +258,15 @@ function structurallySafeValue(value: string): boolean {
     if (ch === '"' || ch === "'") quote = ch;
     else if (VALUE_STRUCTURAL.test(ch)) return false;
   }
-  return quote === null;
+  return quote === null && !escaped;
 }
 
 /** Селектор безопасен, если после декодирования не несёт разметку/at-правила. */
 function safeSelector(sel: string): string | null {
   const s = decodeCssEscapes(sel).trim();
-  if (!s || /[<>{}@;]/.test(s)) return null;
+  // Структурные символы — только ВНЕ строк: `[title="x;y"]` легитимен, а прежняя
+  // сплошная проверка убивала такое правило целиком (ревью, четвёртый заход).
+  if (!s || s.includes("\\") || !structurallySafeValue(s)) return null;
   return s;
 }
 
@@ -204,7 +284,7 @@ function rebuild(css: string, depth: number): string {
     if (open < 0) break;
     // Всё до последнего `;` в преамбуле — безблочные at-правила (@import/@charset): вон.
     const preludeRaw = css.slice(i, open);
-    const lastSemi = preludeRaw.lastIndexOf(";");
+    const lastSemi = lastTopLevelSemicolon(preludeRaw);
     const prelude = (lastSemi >= 0 ? preludeRaw.slice(lastSemi + 1) : preludeRaw).trim();
     const close = matchingBrace(css, open);
     if (close < 0) break;
@@ -229,11 +309,20 @@ function rebuild(css: string, depth: number): string {
   return out.join("\n");
 }
 
-/** Индекс символа `ch` вне строк, начиная с `from`. */
+/** Индекс символа `ch` вне строк, начиная с `from` (escape'ы учитываются). */
 function indexOfTopLevel(s: string, ch: string, from: number): number {
   let quote: string | null = null;
+  let escaped = false;
   for (let i = from; i < s.length; i++) {
     const c = s[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c === "\\") {
+      escaped = true;
+      continue;
+    }
     if (quote) {
       if (c === quote) quote = null;
       continue;
@@ -244,12 +333,21 @@ function indexOfTopLevel(s: string, ch: string, from: number): number {
   return -1;
 }
 
-/** Индекс `}`, парного к `{` на позиции `open` (с учётом вложенности и строк). */
+/** Индекс `}`, парного к `{` на позиции `open` (вложенность, строки, escape'ы). */
 function matchingBrace(s: string, open: number): number {
   let quote: string | null = null;
   let depth = 0;
+  let escaped = false;
   for (let i = open; i < s.length; i++) {
     const c = s[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c === "\\") {
+      escaped = true;
+      continue;
+    }
     if (quote) {
       if (c === quote) quote = null;
       continue;
@@ -261,6 +359,13 @@ function matchingBrace(s: string, open: number): number {
   return -1;
 }
 
+/** Индекс последней `;` вне строк (граница безблочных at-правил в преамбуле). */
+function lastTopLevelSemicolon(s: string): number {
+  let last = -1;
+  for (let i = indexOfTopLevel(s, ";", 0); i >= 0; i = indexOfTopLevel(s, ";", i + 1)) last = i;
+  return last;
+}
+
 /**
  * Стайлшит источника → безопасный CSS для srcdoc, либо null («стилей нет /
  * безопасного не осталось» — вызывающий код тогда не собирает embed).
@@ -268,7 +373,7 @@ function matchingBrace(s: string, open: number): number {
  * выход в HTML закрыт тем, что `<`/`>` не переживают ни селектор, ни значение.
  */
 export function sanitizeEmbedCss(raw: string): string | null {
-  const withoutComments = raw.replace(/\/\*[\s\S]*?\*\//g, "");
+  const withoutComments = stripComments(raw);
   if (!withoutComments.trim()) return null;
   const rebuilt = rebuild(withoutComments, 0).trim();
   return rebuilt || null;
@@ -279,7 +384,7 @@ export function sanitizeEmbedCss(raw: string): string | null {
  * что у стайлшита (позиции `top:86px` живут, кастом-строки/`url(`/`content` — нет).
  */
 export function sanitizeInlineMapStyle(raw: string): string | null {
-  const decls = splitDeclarations(raw.replace(/\/\*[\s\S]*?\*\//g, ""))
+  const decls = splitDeclarations(stripComments(raw))
     .map(sanitizeDeclaration)
     .filter((d): d is string => d !== null);
   return decls.length ? decls.join(";") : null;
