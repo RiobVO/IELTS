@@ -176,6 +176,36 @@ function Slot({ q, qtype, value, options, members }: { q: number; qtype: string;
   );
 }
 
+/**
+ * MapEmbed — CSS-рисованная карта listening (`.lst-map-embed`, capture-listening
+ * шаг 6): самодостаточный документ (разметка карты + стили источника) из
+ * `data-map-doc` рендерится в sandbox-iframe. БЕЗ allow-scripts — внутри нечему
+ * исполняться by construction (embed собран импорт-тайм из очищенного
+ * фрагмента); allow-same-origin нужен только чтобы подогнать высоту под контент.
+ * Стили карты полностью изолированы от app-страницы (в этом и смысл iframe).
+ */
+function MapEmbed({ doc }: { doc: string }) {
+  const [height, setHeight] = useState(380);
+  return (
+    <iframe
+      title="Map"
+      sandbox="allow-same-origin"
+      srcDoc={doc}
+      className="q-map-embed"
+      style={{ width: "100%", height, border: 0, display: "block" }}
+      onLoad={(e) => {
+        try {
+          const body = (e.target as HTMLIFrameElement).contentDocument?.body;
+          if (body) setHeight(Math.min(Math.max(body.scrollHeight + 8, 220), 900));
+        } catch {
+          // contentDocument недоступен (ужесточённый sandbox/браузерная политика) —
+          // остаёмся на фоллбэк-высоте, карта скроллится внутри iframe.
+        }
+      }}
+    />
+  );
+}
+
 /** Ascending + deduped список чисел. Порядок отрисовки practice-аффордансов
  *  verbatim-панели: слоты одного вопроса (radio-группа) дают дубли, разные вопросы
  *  внутри блока — произвольный DOM-порядок; приводим к «1,2,3…» по номеру. */
@@ -235,6 +265,12 @@ function convert(
     const q = Number(el.getAttribute("data-q"));
     if (!Number.isFinite(q)) return null;
     return <Slot key={key} q={q} qtype={el.getAttribute("data-qtype") ?? "text"} value={el.getAttribute("data-value") ?? undefined} options={el.getAttribute("data-options") ?? undefined} members={el.getAttribute("data-members") ?? undefined} />;
+  }
+  // Map-embed (capture-listening шаг 6) — ДО SKIP: сам узел — div, но рендерится
+  // выделенным компонентом (sandbox-iframe), а не генерик-обходом.
+  if (el.classList && el.classList.contains("lst-map-embed")) {
+    const doc = el.getAttribute("data-map-doc");
+    return doc ? <MapEmbed key={key} doc={doc} /> : null;
   }
   const tag = el.tagName.toLowerCase();
   if (SKIP.has(tag)) return null;
@@ -427,6 +463,7 @@ const Q_CSS = `
 .q-verbatim .stem{display:flex;gap:8px;margin-bottom:10px;font-weight:600}
 .q-verbatim .materials-box,.q-verbatim .form-box,.q-verbatim .summary-wrap{margin:10px 0;padding:14px 16px;background:var(--surface-hover);border:1px solid var(--border);border-radius:8px}
 .q-verbatim .analysis{display:none}
+.q-verbatim .q-map-embed{margin:10px 0;border-radius:var(--radius-md);background:var(--surface-raised)}
 /* Matching Headings: банк-референс (список заголовков) остаётся read-only. */
 .q-verbatim .heading-bank,.q-verbatim .ending-bank{margin:10px 0;padding:12px 14px;background:var(--surface-hover);border:1px solid var(--border);border-radius:8px}
 .q-verbatim .heading-bank-title,.q-verbatim .ending-bank-title{font-weight:800;margin:0 0 8px}

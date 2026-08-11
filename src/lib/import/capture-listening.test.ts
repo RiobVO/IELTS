@@ -523,3 +523,88 @@ describe("captureListeningPart — fail-closed", () => {
     expect(captureListeningPart("")).toBe("");
   });
 });
+
+describe("captureListeningPart — map-embed (CSS-рисованная карта, шаг 6)", () => {
+  // Day 6-семейство: .map-layout содержит рисунок (.mp, позиции в inline-style и
+  // док-уровневом CSS) и answer-grid (.map-mcq radio). Радио уходят в слоты, рисунок —
+  // в самодостаточный srcdoc-документ data-map-doc (рендерит sandbox-iframe MapEmbed).
+  const mapPart = (mapInner: string) =>
+    part(
+      `<div class="map-layout"><div class="mp">${mapInner}</div>` +
+        `<div class="map-answers"><div class="mcq map-mcq" data-q="11"><div class="stem"><span class="qnum">11</span><span class="opt-text">Cafe</span></div>` +
+        `<label><input type="radio" name="q11" value="A"><span class="opt-letter">A</span></label>` +
+        `<label><input type="radio" name="q11" value="B"><span class="opt-letter">B</span></label></div></div></div>`,
+    );
+  const MAP_INNER =
+    `<div class="compass"><span class="lbl n">N</span></div>` +
+    `<div class="streets"><div class="street" style="top:86px"><span class="name">Garden Street</span></div></div>`;
+  const CSS = `.mp{position:relative}/* inline per-question feedback (+ correct answer) */.street{position:absolute}`;
+
+  it("карта → .lst-map-embed с самодостаточным документом; inline-style жив, слоты целы", () => {
+    const out = captureListeningPart(mapPart(MAP_INNER), undefined, CSS);
+    expect(out).not.toBe("");
+    expect(questionsHtmlCoversAll(out, [11])).toBe(true);
+    const $ = load(out, null, false);
+    expect($(".lst-map-embed").length).toBe(1);
+    expect($(".mp").length).toBe(0); // рисунок ушёл в embed, в панели не остался
+    const doc = $(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).toContain("<!doctype html>");
+    expect(doc).toContain("Garden Street");
+    expect(doc).toContain('style="top:86px"'); // inline-позиция сохранена (map-гигиена)
+    expect(doc).toContain(".street{position:absolute}"); // стили источника внутри
+    expect(doc).not.toContain("correct answer"); // CSS-комментарий отстрижен
+    expect($('.q-slot[data-qtype="radio"][data-q="11"]').length).toBe(2);
+  });
+
+  it("без styleText — прежнее поведение: рисунок остаётся в панели, embed'а нет", () => {
+    const out = captureListeningPart(mapPart(MAP_INNER));
+    const $ = load(out, null, false);
+    expect($(".lst-map-embed").length).toBe(0);
+    expect($(".mp").length).toBe(1);
+  });
+
+  it("reveal-маркер внутри карты → fail-closed + onLeak (утечка в части)", () => {
+    const leaks: string[] = [];
+    const out = captureListeningPart(
+      mapPart(`<div class="correct-answer">B</div>`),
+      (t) => leaks.push(t),
+      CSS,
+    );
+    expect(out).toBe("");
+    expect(leaks).toEqual(["correct-answer"]);
+  });
+
+  it("прямой текст ответа в CSS (вне комментариев) → карта выпадает, embed'а нет, слоты целы", () => {
+    const out = captureListeningPart(
+      mapPart(MAP_INNER),
+      undefined,
+      `.analysis::after{content:"Correct answer: B"}`,
+    );
+    expect(out).not.toBe("");
+    const $ = load(out, null, false);
+    expect($(".lst-map-embed").length).toBe(0);
+    expect($(".mp").length).toBe(0);
+    expect($('.q-slot[data-qtype="radio"][data-q="11"]').length).toBe(2);
+  });
+
+  it("скрипт/интерактив внутри карты вычищаются из документа embed'а", () => {
+    const out = captureListeningPart(
+      mapPart(MAP_INNER + `<script>alert(1)</script><input type="text"><span onclick="x()">y</span>`),
+      undefined,
+      CSS,
+    );
+    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).not.toContain("<script");
+    expect(doc).not.toContain("<input");
+    expect(doc).not.toContain("onclick");
+  });
+
+  it("раздутый документ (> кап) → карта выпадает, панель живёт", () => {
+    const out = captureListeningPart(mapPart(MAP_INNER), undefined, "x".repeat(300_000));
+    expect(out).not.toBe("");
+    const $ = load(out, null, false);
+    expect($(".lst-map-embed").length).toBe(0);
+    expect($(".mp").length).toBe(0);
+    expect(questionsHtmlCoversAll(out, [11])).toBe(true);
+  });
+});

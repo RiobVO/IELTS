@@ -59,7 +59,13 @@ const CLASS_LEAK_TOKENS = new Set(
  * очищенного видимого текста и легитимны.
  */
 const ANSWER_VALUE_RE = /correct\s*answer|answer\s*[:=]|solution/i;
-const SYNTH_SLOT_ATTRS = new Set(["data-q", "data-qtype", "data-value", "data-options", "data-members"]);
+// data-map-doc — срcdoc-документ map-embed'а (capture-listening шаг 6): синтезируется
+// нами же из фрагмента, прошедшего свой leak-скан + stripMapEmbedLeaks, и стилей,
+// проверенных hasAnswerText; по-атрибутный regex убил бы весь embed из-за легитимного
+// CSS-текста внутри.
+const SYNTH_SLOT_ATTRS = new Set([
+  "data-q", "data-qtype", "data-value", "data-options", "data-members", "data-map-doc",
+]);
 
 /**
  * Fail-closed детектор утечки ключа в захваченной панели: возвращает первый найденный
@@ -121,14 +127,46 @@ export function textWithoutLeaks(nodes: Cheerio<AnyNode>): string {
  *    сохранённый HTML).
  */
 export function stripCapturedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void {
-  root.find(LEAK_NODES).remove();
+  stripLeaksImpl($, root, { keepStyleAttr: false, extraRemoveSelector: "" });
+}
+
+/**
+ * Та же строгость для map-фрагмента, уезжающего в srcdoc-embed (`capture-listening`
+ * шаг 6): единственное отличие — инлайновый `style` СОХРАНЯЕТСЯ, потому что позиции
+ * CSS-рисованной карты живут именно в нём, а рендер идёт в изолированном
+ * sandbox-iframe без allow-scripts, где style-атрибут не исполняется и не течёт в
+ * app-страницу. Дополнительно выпиливается весь медийно-интерактивный остаток —
+ * embed обязан быть чисто статической картинкой.
+ */
+export function stripMapEmbedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void {
+  stripLeaksImpl($, root, {
+    keepStyleAttr: true,
+    extraRemoveSelector: ", input, select, textarea, audio, video, canvas",
+  });
+}
+
+/**
+ * true, если текст несёт ответ прямым словом («Correct answer», «answer: B»,
+ * «solution») — экспорт для проверки СТИЛЕЙ map-embed'а (CSS `content:"…"` мог бы
+ * отрисовать ключ прямо в iframe; комментарии вызывающий код стрипает до проверки).
+ */
+export function hasAnswerText(s: string): boolean {
+  return ANSWER_VALUE_RE.test(s);
+}
+
+function stripLeaksImpl(
+  $: CheerioAPI,
+  root: Cheerio<AnyNode>,
+  opts: { keepStyleAttr: boolean; extraRemoveSelector: string },
+): void {
+  root.find(LEAK_NODES + opts.extraRemoveSelector).remove();
   root.find("*").each((_, el) => {
     if (!("attribs" in el)) return;
     for (const name of Object.keys(el.attribs)) {
       const value = el.attribs[name];
       if (
         /^on/i.test(name) ||
-        name === "style" ||
+        (name === "style" && !opts.keepStyleAttr) ||
         /(correct|answer|solution)/i.test(name) ||
         // aria-label/title/alt источника могут нести ключ прямым текстом значения, а не
         // именем («aria-label="Correct answer: B"»); слоты, что синтезирует сам захват,
@@ -141,9 +179,11 @@ export function stripCapturedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void 
         /^\s*(javascript|data|vbscript):/i.test(value ?? "")
       ) {
         $(el).removeAttr(name);
-      } else if (!SYNTH_SLOT_ATTRS.has(name) && value != null && ANSWER_VALUE_RE.test(value)) {
+      } else if (name !== "style" && !SYNTH_SLOT_ATTRS.has(name) && value != null && ANSWER_VALUE_RE.test(value)) {
         // defense-in-depth: значение любого прочего атрибута источника несёт ответ прямым
-        // текстом (data-note="Correct answer: B") — снимаем. Свои слот-атрибуты исключены.
+        // текстом (data-note="Correct answer: B") — снимаем. Свои слот-атрибуты исключены;
+        // сохраняемый map-embed'ом style-атрибут — тоже (CSS-значения проверяет вызывающий
+        // код по всему styleText, а не по-атрибутно).
         $(el).removeAttr(name);
       }
     }
