@@ -4,6 +4,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { getVocabCatalog, getVocabOverview, type VocabDeckCard, type VocabOverview } from "@/lib/vocab/queries";
 import { getWeakTypeDeckRecommendation, type WeakTypeDeckRecommendation } from "@/lib/vocab/recommend";
+import { bandToCefr, LEVEL_ORDER, type CefrLevel } from "@/lib/vocab/level";
 import { Badge } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
 import { Icon } from "@/components/core/icons";
@@ -34,6 +35,8 @@ export default async function VocabularyPage() {
     getVocabCatalog(user.id),
     getWeakTypeDeckRecommendation(user.id),
   ]);
+  // Уровень под целевой band (0039) — для бейджа «Recommended» на совпавшей секции.
+  const recommendedLevel = bandToCefr(overview.targetBand);
 
   return (
     <AppShell active="vocabulary">
@@ -68,11 +71,7 @@ export default async function VocabularyPage() {
             </span>
           </div>
         ) : (
-          <div className="vc-grid" style={S.grid}>
-            {decks.map((d) => (
-              <DeckCard key={d.id} deck={d} />
-            ))}
-          </div>
+          <DeckSections decks={decks} recommendedLevel={recommendedLevel} targetBand={overview.targetBand} />
         )}
       </div>
     </AppShell>
@@ -234,6 +233,75 @@ function WeakTypeRail({ reco }: { reco: WeakTypeDeckRecommendation }) {
   );
 }
 
+/* ------------------------------ Deck sections ----------------------------- */
+
+/** Короткие EN-подписи уровневых секций каталога (0039). */
+const SECTION_LABELS: Record<CefrLevel, string> = {
+  B1: "B1 — Foundation",
+  B2: "B2 — Independent",
+  C1: "C1 — Advanced",
+};
+
+/**
+ * Грид деков, сгруппированный по CEFR-уровню (levelBand) в порядке LEVEL_ORDER.
+ * Деки без валидного уровня (null или значение вне канона) уходят в секцию
+ * «More decks» последней; пустые секции не рендерятся. Секция, чей уровень совпал
+ * с рекомендованным под целевой band пользователя, несёт бейдж «Recommended».
+ * Заголовки — обычный поток; грид переиспользует класс vc-grid per-секция (адаптив
+ * в CSS-классе, не inline — инвариант проекта).
+ */
+function DeckSections({
+  decks,
+  recommendedLevel,
+  targetBand,
+}: {
+  decks: VocabDeckCard[];
+  recommendedLevel: CefrLevel | null;
+  targetBand: number | null;
+}) {
+  const sections = LEVEL_ORDER.map((lvl) => ({
+    lvl,
+    items: decks.filter((d) => d.levelBand === lvl),
+  })).filter((s) => s.items.length > 0);
+  // Всё, что не попало в канон-уровни (null или неизвестное значение) → «More decks».
+  const more = decks.filter((d) => !(LEVEL_ORDER as readonly string[]).includes(d.levelBand ?? ""));
+
+  return (
+    <div style={S.sections}>
+      {sections.map((s) => (
+        <section key={s.lvl} style={S.section}>
+          <div style={S.sectionHead}>
+            <h2 style={S.sectionTitle}>{SECTION_LABELS[s.lvl]}</h2>
+            {s.lvl === recommendedLevel && targetBand != null && (
+              <span style={S.recoChip}>
+                <Icon name="target" size={13} strokeWidth={2.4} />
+                Recommended for your Band {targetBand.toFixed(1)} goal
+              </span>
+            )}
+          </div>
+          <div className="vc-grid" style={S.grid}>
+            {s.items.map((d) => (
+              <DeckCard key={d.id} deck={d} />
+            ))}
+          </div>
+        </section>
+      ))}
+      {more.length > 0 && (
+        <section style={S.section}>
+          <div style={S.sectionHead}>
+            <h2 style={S.sectionTitle}>More decks</h2>
+          </div>
+          <div className="vc-grid" style={S.grid}>
+            {more.map((d) => (
+              <DeckCard key={d.id} deck={d} />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
 /* -------------------------------- Deck card ------------------------------- */
 
 function DeckCard({ deck }: { deck: VocabDeckCard }) {
@@ -387,6 +455,13 @@ const S: Record<string, CSSProperties> = {
   emptyTitle: { fontFamily: "var(--font-ui)", fontSize: 17, fontWeight: 700, color: "var(--text-primary)" },
 
   grid: {},
+
+  // Уровневые секции (0039): заголовок в обычном потоке + бейдж «Recommended».
+  sections: { display: "flex", flexDirection: "column", gap: 30 },
+  section: { display: "flex", flexDirection: "column", gap: 14 },
+  sectionHead: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
+  sectionTitle: { margin: 0, fontFamily: "var(--font-ui)", fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em", color: "var(--text-primary)" },
+  recoChip: { display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 800 },
 
   card: { display: "flex", flexDirection: "column", gap: 12, textAlign: "left", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, color: "inherit", transition: "transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
   cardTop: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },

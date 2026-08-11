@@ -857,6 +857,9 @@ export const vocabDeck = pgTable("vocab_deck", {
   // Enrichment (0038): канон-слаги типов вопросов для quiz-режима дека. Nullable —
   // публичная мета каталога (как content_item.question_types), лока не требует.
   questionTypes: text("question_types").array(),
+  // Уровневый каталог (0039): CEFR-уровень дека для секций грида. Nullable — канон
+  // {B1,B2,C1} валидирует парсер, в БД без CHECK (как level / question_types).
+  levelBand: text("level_band"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

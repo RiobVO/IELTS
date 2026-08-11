@@ -175,6 +175,27 @@ describe("parseVocab — tier / level / лимиты / JSON", () => {
   });
 });
 
+describe("parseVocab — level_band (0039)", () => {
+  it("валидный уровень {B1,B2,C1} сохраняется", () => {
+    for (const b of ["B1", "B2", "C1"]) {
+      expect(parseVocab(deck({ level_band: b })).levelBand).toBe(b);
+    }
+  });
+  it("тримит уровень", () => {
+    expect(parseVocab(deck({ level_band: "  B2  " })).levelBand).toBe("B2");
+  });
+  it("отсутствие level_band → null (обратная совместимость)", () => {
+    expect(parseVocab(deck()).levelBand).toBeNull();
+  });
+  it("невалидный уровень → VocabParseError", () => {
+    expect(() => parseVocab(deck({ level_band: "A2" }))).toThrow(/level_band must be one of/i);
+    expect(() => parseVocab(deck({ level_band: "b1" }))).toThrow(VocabParseError); // регистрозависимо
+  });
+  it("level_band не строка → ошибка", () => {
+    expect(() => parseVocab(deck({ level_band: 2 }))).toThrow(/must be a string/i);
+  });
+});
+
 describe("parseVocab — enrichment (0038): валидный файл со всеми новыми полями", () => {
   const p = parseVocab(
     JSON.stringify({
