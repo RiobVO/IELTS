@@ -7,6 +7,7 @@ import { Icon } from "@/components/core/icons";
 import { Button } from "@/components/core/Button";
 import { Input } from "@/components/core/Input";
 import { buildParaphraseQuestion } from "@/lib/vocab/paraphrase";
+import { shouldShowCapBanner } from "@/lib/vocab/cap-banner";
 import { answerCardAction, answerCompletionAction, reviewCardAction } from "../actions";
 
 /**
@@ -64,9 +65,11 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
   const [flipped, setFlipped] = useState(false);
   const [pending, setPending] = useState(false);
   const [remaining, setRemaining] = useState(newRemainingToday);
-  // Дневной кап мог быть уже исчерпан ДО открытия сессии (0 новых при заходе) —
-  // тот же баннер тогда обслуживает и стартовое, и словленное в процессе состояние.
-  const [dailyCapHit, setDailyCapHit] = useState(newRemainingToday === 0);
+  // Баннер лимита — только когда кап реально мешает СЕЙЧАС: остаток 0 И в очереди
+  // ещё стоят новые карты (shouldShowCapBanner). Повторы начатых карт под кап не
+  // попадают, поэтому перезаход с исчерпанным лимитом (сессия из одних due-карт)
+  // идёт БЕЗ баннера — раньше он вылезал и читался как «лимит есть, но всё работает».
+  const [dailyCapHit, setDailyCapHit] = useState(shouldShowCapBanner(newRemainingToday, cards));
   const [errorHint, setErrorHint] = useState(false);
   const [transientMsg, setTransientMsg] = useState<string | null>(null);
   const [stats, setStats] = useState({ again: 0, good: 0 });
@@ -233,9 +236,9 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
         // rescue вводящий в заблуждение бейдж/баннер дневного лимита. Игнорируем.
         if (!rescueSession) {
           setRemaining(result.newRemainingToday);
-          // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
-          // тот же баннер, что сидируется на старте сессии, идемпотентно.
-          if (result.newRemainingToday === 0) setDailyCapHit(true);
+          // Баннер — только если остаток дошёл до 0 И впереди в очереди ещё стоят
+          // новые карты, которые кап реально отобьёт; на чистых повторах молчим.
+          if (shouldShowCapBanner(result.newRemainingToday, queue.slice(1))) setDailyCapHit(true);
         }
         // Easy — успех «знал сразу»: в сессионной статистике учитываем как good (карта
         // покидает сессию так же); отдельного счётчика Easy в итоге нет.
@@ -277,9 +280,9 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
         // См. комментарий в submitGrade: в rescue-сессии остаток лимита не адаптируем.
         if (!rescueSession) {
           setRemaining(result.newRemainingToday);
-          // Кап мог дойти до 0 именно ЭТИМ ответом (new-карта съела последний слот) —
-          // тот же баннер, что сидируется на старте сессии, идемпотентно.
-          if (result.newRemainingToday === 0) setDailyCapHit(true);
+          // Баннер — только если остаток дошёл до 0 И впереди в очереди ещё стоят
+          // новые карты, которые кап реально отобьёт; на чистых повторах молчим.
+          if (shouldShowCapBanner(result.newRemainingToday, queue.slice(1))) setDailyCapHit(true);
         }
         if (result.correct) {
           setTransientMsg("Correct!");
