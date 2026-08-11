@@ -55,6 +55,20 @@ export function isCorrect(
   return norm(accept[0] ?? "") === norm(single); // exact
 }
 
+/**
+ * Единичная проверка ответа по ключу вопроса (mode + accept) → boolean. Тот же
+ * нормализованный матч, что и в grade(), без дублирования (делегирует isCorrect).
+ * Ключ-образная обёртка для ОДНОГО вопроса: практис-экшены (P6 checkAnswer) читают
+ * ключ одного вопроса owner-path и не строят полный GradeKey[]. `grade()` тоже
+ * идёт через неё, поэтому submit-грейдинг и мгновенная проверка не разъедутся.
+ */
+export function gradeOne(
+  key: Pick<GradeKey, "mode" | "accept">,
+  value: string | string[] | null | undefined,
+): boolean {
+  return isCorrect(key.mode, key.accept, value);
+}
+
 export function grade(
   keys: GradeKey[],
   answers: Record<string, string | string[] | null>,
@@ -65,7 +79,7 @@ export function grade(
 
   for (const k of keys) {
     const given = answers[String(k.number)] ?? null;
-    const ok = isCorrect(k.mode, k.accept, given);
+    const ok = gradeOne(k, given);
     if (ok) rawScore++;
     (perType[k.qtype] ??= { correct: 0, total: 0 }).total++;
     if (ok) perType[k.qtype].correct++;
