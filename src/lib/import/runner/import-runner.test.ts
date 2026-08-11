@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // #12: importRunner must be atomic — a failure in the fallible pre-work (audio fetch,
 // anti-leak) must leave NO half-draft. We mock every dependency so the test asserts
 // only the control flow: persistTest is reached only after all validation passes.
-const { parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind } = vi.hoisted(() => ({
+const { parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind, uploadSourceHtml } = vi.hoisted(() => ({
   parseRunner: vi.fn(),
   fetchAudio: vi.fn(),
   uploadAudio: vi.fn(),
@@ -12,6 +12,7 @@ const { parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResid
   brandResidue: vi.fn(),
   persist: vi.fn(),
   dupFind: vi.fn(),
+  uploadSourceHtml: vi.fn(),
 }));
 
 vi.mock("./parse-runner", () => ({ parseRunner }));
@@ -29,6 +30,7 @@ vi.mock("../persist", () => ({
     }
   },
 }));
+vi.mock("../source-html-storage", () => ({ uploadSourceHtml }));
 
 import { importRunner } from "./import-runner";
 
@@ -41,11 +43,12 @@ const listeningParsed = () => ({
 });
 
 beforeEach(() => {
-  [parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind].forEach((m) => m.mockReset());
+  [parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind, uploadSourceHtml].forEach((m) => m.mockReset());
   sanitize.mockReturnValue("<runner/>");
   brandResidue.mockReturnValue([]);
   persist.mockResolvedValue("unused-return");
   dupFind.mockResolvedValue(null); // default: дубля нет
+  uploadSourceHtml.mockResolvedValue(undefined);
 });
 
 describe("importRunner atomicity (#12)", () => {
@@ -101,5 +104,18 @@ describe("importRunner atomicity (#12)", () => {
     expect(typeof opts.id).toBe("string");
     expect(res.id).toBe(opts.id);
     expect(res.hasAudio).toBe(true);
+  });
+
+  // Бэкап исходника — воспроизводимость, но best-effort: сбой не должен ронять
+  // уже успешный импорт (persist уже закоммичен).
+  it("грузит исходный HTML после persist; сбой бэкапа не ронял импорт", async () => {
+    parseRunner.mockReturnValue({ parsed: { ...listeningParsed(), section: "reading" }, externalAudioSrc: null });
+    uploadSourceHtml.mockRejectedValue(new Error("bucket unreachable"));
+    const res = await importRunner("<html raw/>", { sourceFilePath: "f.html" });
+    expect(persist).toHaveBeenCalledTimes(1);
+    expect(uploadSourceHtml).toHaveBeenCalledTimes(1);
+    const [idArg, htmlArg] = uploadSourceHtml.mock.calls[0] as [string, string];
+    expect(htmlArg).toBe("<html raw/>"); // необрезанный оригинал, не runnerHtml
+    expect(idArg).toBe(res.id);
   });
 });
