@@ -2,6 +2,7 @@
   "title": "Band 8 Collocations",
   "description": "High-register academic collocations that lift IELTS Writing and Speaking answers from band 6-7 phrasing to band 8+ — the fixed word partnerships examiners expect around problems, causes, policy, and argument.",
   "level": "B2–C1",
+  "level_band": "C1",
   "tier_required": "premium",
   "cards": [
     { "word": "pose a threat", "definition": "to represent a danger or risk to something; used when describing how serious a problem is.", "example": "Rising sea levels pose a threat to low-lying coastal cities.", "part_of_speech": "collocation", "quiz_prompt": "Rising sea levels ___ a threat to low-lying coastal cities.", "accepted_answers": ["pose"] },
