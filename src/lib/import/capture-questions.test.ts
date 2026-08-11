@@ -567,3 +567,20 @@ describe("captureQuestions — choose-TWO третьей формы (.mcq-checkb
     });
   });
 });
+
+// Codex-ревью 2026-08-11, блокер 1: исходник мог принести зарезервированные
+// synth-маркеры map-embed'а (.lst-map-embed/data-map-doc) — SYNTH-льгота data-map-doc
+// в stripCapturedLeaks пропустила бы их к MapEmbed. Скраб на входе капчера.
+describe("captureQuestions — зарезервированные embed-маркеры источника", () => {
+  it("source-supplied .lst-map-embed/data-map-doc вычищаются до захвата", () => {
+    const block =
+      `<div class="question"><div class="lst-map-embed" data-map-doc="&lt;p&gt;Correct answer: B&lt;/p&gt;">x</div>` +
+      `<p data-map-doc="smuggle">Statement <input type="text" name="q1"></p></div>`;
+    const out = captureQuestions([block]);
+    expect(out).not.toBe("");
+    expect(out).not.toContain("lst-map-embed");
+    expect(out).not.toContain("data-map-doc");
+    expect(out).not.toContain("Correct answer");
+    expect(load(out, null, false)('.q-slot[data-q="1"]').length).toBe(1);
+  });
+});

@@ -1,7 +1,8 @@
 import * as cheerio from "cheerio";
 import {
   findLeakMarkerToken,
-  hasAnswerText,
+  sanitizeEmbedCss,
+  scrubReservedEmbedMarkers,
   stripCapturedLeaks,
   stripMapEmbedLeaks,
   textWithoutLeaks,
@@ -49,6 +50,8 @@ export function captureListeningPart(
   const root = $(".q-panel");
   // Баннер части дублирует passage.body_html — не тащим его в панель.
   root.find(".part-banner").remove();
+  // Зарезервированные synth-маркеры map-embed'а из ИСТОЧНИКА — вон (см. док там же).
+  scrubReservedEmbedMarkers($, root);
 
   const MAX_Q = 500; // потолок номера (реальный IELTS ≤ 40; запас, как в capture-questions)
   const validQ = (n: number) => Number.isSafeInteger(n) && n > 0 && n <= MAX_Q;
@@ -259,12 +262,11 @@ export function captureListeningPart(
   // жив), leak-скан — ДО сериализации (после неё содержимое ушло бы из DOM-скана).
   // Легаси-семейство `.map-stage` (base64-img) остаётся вырезаемым: data:-URL режем,
   // embed целит только в CSS-рисованные карты. Без styleText поведение прежнее.
-  const embedCss = (styleText ?? "").replace(/\/\*[\s\S]*?\*\//g, "").trim();
-  if (embedCss) {
+  // undefined — стилей в источнике нет (рисунок остаётся как был);
+  // null — стили есть, но НЕбезопасны (sanitizeEmbedCss) → рисунок выпадает без embed'а.
+  const embedCss = styleText?.trim() ? sanitizeEmbedCss(styleText) : undefined;
+  if (embedCss !== undefined) {
     const MAX_MAP_DOC = 200_000;
-    // CSS мог бы отрисовать ключ прямо в iframe (`content:"Correct answer…"`) —
-    // комментарии уже отстрижены, оставшийся прямой текст ответа = нет embed'а.
-    const cssCarriesAnswer = hasAnswerText(embedCss);
     root.find(".map-layout .mp").each((_, el) => {
       if (bad) return;
       const $map = $(el);
@@ -279,7 +281,7 @@ export function captureListeningPart(
         return;
       }
       stripMapEmbedLeaks(frag, fragRoot);
-      if (cssCarriesAnswer) {
+      if (embedCss === null) {
         $map.remove();
         return;
       }

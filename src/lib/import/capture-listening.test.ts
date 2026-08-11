@@ -574,17 +574,99 @@ describe("captureListeningPart — map-embed (CSS-рисованная карт�
     expect(leaks).toEqual(["correct-answer"]);
   });
 
-  it("прямой текст ответа в CSS (вне комментариев) → карта выпадает, embed'а нет, слоты целы", () => {
+  it("текст ответа в content → декларация переписана в content:none, ответ в doc не попадает", () => {
     const out = captureListeningPart(
       mapPart(MAP_INNER),
       undefined,
-      `.analysis::after{content:"Correct answer: B"}`,
+      `.analysis::after{content:"Correct answer: B"}${CSS}`,
     );
+    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).toContain("content:none");
+    expect(doc).not.toContain("Correct answer");
+  });
+
+  it("текст ответа ВНЕ content (кастом-свойство стайлшита) → стили небезопасны, карта выпадает", () => {
+    const out = captureListeningPart(mapPart(MAP_INNER), undefined, `.mp{--x:"Answer: B"}${CSS}`);
     expect(out).not.toBe("");
     const $ = load(out, null, false);
     expect($(".lst-map-embed").length).toBe(0);
     expect($(".mp").length).toBe(0);
     expect($('.q-slot[data-qtype="radio"][data-q="11"]').length).toBe(2);
+  });
+
+  // Codex-ревью 2026-08-11, блокер 2: стрип комментариев синтезировал `</style>` и
+  // вырывался из тега в HTML srcdoc — теперь любое `</` в CSS = отказ от embed'а.
+  it("</sty/**/le>-breakout → embed'а нет, инъекция не попадает в панель", () => {
+    const out = captureListeningPart(
+      mapPart(MAP_INNER),
+      undefined,
+      `.mp{color:black}</sty/**/le><p>PWNED</p><style>${CSS}`,
+    );
+    expect(out).not.toBe("");
+    expect(out).not.toContain("PWNED");
+    const $ = load(out, null, false);
+    expect($(".lst-map-embed").length).toBe(0);
+    expect($(".mp").length).toBe(0);
+  });
+
+  // Блокер 3: обходы content-регекса — разрезание строк, CSS-escape, var()-индирекция.
+  it("content-обходы (разрезание строк / escape / var) → content:none", () => {
+    const css =
+      `.a::after{content:"Answer" ": B"}.b::after{content:"\\41nswer"}.c::after{content:var(--x)}${CSS}`;
+    const out = captureListeningPart(mapPart(MAP_INNER), undefined, css);
+    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).toContain("content:none");
+    expect(doc).not.toContain("Answer");
+    expect(doc).not.toContain("var(--x)");
+  });
+
+  it("content:\"→\" (стрелки Day 6) и кастом-свойства стайлшита без текста ответа выживают", () => {
+    const out = captureListeningPart(
+      mapPart(MAP_INNER),
+      undefined,
+      `.arrow::after{content:"→"}.mp{--line:#ccc}${CSS}`,
+    );
+    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).toContain('content:"→"');
+    expect(doc).toContain("--line:#ccc");
+  });
+
+  it("url(-декларации выброшены из CSS embed'а (сетевые маяки)", () => {
+    const out = captureListeningPart(
+      mapPart(MAP_INNER),
+      undefined,
+      `.mp{background:url(http://evil/x.png);color:red}${CSS}`,
+    );
+    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).not.toContain("url(");
+    expect(doc).toContain("color:red");
+  });
+
+  // Блокер 1: исходник сам принёс зарезервированные synth-маркеры — вычищаются на входе.
+  it("source-supplied .lst-map-embed/data-map-doc вычищаются до захвата", () => {
+    const out = captureListeningPart(
+      part(
+        `<div class="lst-map-embed" data-map-doc="&lt;p&gt;Correct answer: B&lt;/p&gt;">x</div>` +
+          `<div class="note-line" data-map-doc="smuggle">Name: <input class="gap" data-q="1"></div>`,
+      ),
+      undefined,
+      CSS,
+    );
+    expect(out).not.toBe("");
+    expect(out).not.toContain("lst-map-embed");
+    expect(out).not.toContain("data-map-doc");
+    expect(out).not.toContain("Correct answer");
+  });
+
+  it("inline style карты: кастом-свойства/url вырезаны, позиции сохранены", () => {
+    const inner =
+      `<div class="streets"><div class="street" style="top:86px;--x:&quot;Answer: B&quot;;background:url(http://e/x)">` +
+      `<span class="name">Garden Street</span></div></div>`;
+    const out = captureListeningPart(mapPart(inner), undefined, CSS);
+    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).toContain("top:86px");
+    expect(doc).not.toContain("--x");
+    expect(doc).not.toContain("url(");
   });
 
   it("скрипт/интерактив внутри карты вычищаются из документа embed'а", () => {

@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
-import { findLeakMarkerToken, stripCapturedLeaks } from "./capture-sanitize";
+import { findLeakMarkerToken, scrubReservedEmbedMarkers, stripCapturedLeaks } from "./capture-sanitize";
 import type { CaptureDnd, DropOption } from "./dnd-capture";
 
 /**
@@ -37,6 +37,9 @@ export function captureQuestions(
   if (blocks.length === 0) return "";
   const $ = cheerio.load(`<div class="q-panel">${blocks.join("\n")}</div>`, null, false);
   const root = $(".q-panel");
+
+  // Зарезервированные synth-маркеры map-embed'а из ИСТОЧНИКА — вон (см. док там же).
+  scrubReservedEmbedMarkers($, root);
 
   // Непроводимый drag-drop → фоллбэк (heading-drop/ending-drop проводятся ниже).
   if (root.find(".dropzone, .dd-drop, [data-dropzone]").length > 0) {

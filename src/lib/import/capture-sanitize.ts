@@ -61,11 +61,84 @@ const CLASS_LEAK_TOKENS = new Set(
 const ANSWER_VALUE_RE = /correct\s*answer|answer\s*[:=]|solution/i;
 // data-map-doc — срcdoc-документ map-embed'а (capture-listening шаг 6): синтезируется
 // нами же из фрагмента, прошедшего свой leak-скан + stripMapEmbedLeaks, и стилей,
-// проверенных hasAnswerText; по-атрибутный regex убил бы весь embed из-за легитимного
-// CSS-текста внутри.
+// прошедших sanitizeEmbedCss; по-атрибутный regex убил бы весь embed из-за легитимного
+// CSS-текста внутри. Льгота безопасна ТОЛЬКО вместе с scrubReservedEmbedMarkers на
+// входе обоих капчеров: всё, что доносит этот атрибут до финальной гигиены,
+// синтезировано нами (Codex-ревью 2026-08-11, блокер 1).
 const SYNTH_SLOT_ATTRS = new Set([
   "data-q", "data-qtype", "data-value", "data-options", "data-members", "data-map-doc",
 ]);
+
+/**
+ * Вычистка ЗАРЕЗЕРВИРОВАННЫХ synth-маркеров map-embed'а, пришедших из ИСТОЧНИКА.
+ * Обязательный первый шаг обоих капчеров (reading `captureQuestions` и listening
+ * `captureListeningPart`): без него исходный файл мог бы принести собственный
+ * `.lst-map-embed[data-map-doc]` c answer-reveal внутри — SYNTH-льгота data-map-doc
+ * пропустила бы его сквозь stripCapturedLeaks, а MapEmbed отрендерил бы srcdoc
+ * прямо клиенту (Codex-ревью 2026-08-11, блокер 1).
+ */
+export function scrubReservedEmbedMarkers($: CheerioAPI, root: Cheerio<AnyNode>): void {
+  root.find(".lst-map-embed").remove();
+  root.find("[data-map-doc]").removeAttr("data-map-doc");
+}
+
+/**
+ * Санитайзер CSS, уезжающего в srcdoc map-embed'а (capture-listening шаг 6).
+ * Возвращает безопасный CSS или null = «стили небезопасны, embed отменяется».
+ * Закрывает векторы Codex-ревью 2026-08-11 (блокеры 2–3):
+ *  - синтез `</style>` стрипом комментариев (`</sty/​**​/le>`) вырывался из тега в
+ *    HTML srcdoc — после стрипа ЛЮБОЕ `</` в тексте = отказ (легитимный CSS
+ *    последовательность `</` не использует);
+ *  - текст ответа в `content:"…"` в обход plain-regex: разрезание строк
+ *    (`"Answer" ": B"`), CSS-escape (`"\41nswer"`), var()/attr()-индирекция —
+ *    значение content допускается только инертной формы (см. isInertContentValue),
+ *    всё прочее переписывается в `content:none`;
+ *  - `url(…)`-декларации (сетевые маяки/раздувание) выбрасываются целиком.
+ * Поверх — hasAnswerText по остатку: прямой текст ответа где угодно = отказ.
+ */
+export function sanitizeEmbedCss(raw: string): string | null {
+  let css = raw.replace(/\/\*[\s\S]*?\*\//g, "");
+  if (!css.trim()) return null;
+  if (/<\//.test(css)) return null;
+  css = css.replace(/(^|[^-\w])content\s*:\s*([^;{}]*)/gi, (m, pre: string, val: string) =>
+    isInertContentValue(val) ? m : `${pre}content:none`,
+  );
+  css = css.replace(/(^|[;{])\s*[-\w]+\s*:[^;{}]*url\s*\([^;{}]*/gi, "$1");
+  if (hasAnswerText(css)) return null;
+  const out = css.trim();
+  return out ? out : null;
+}
+
+/**
+ * Инертные значения `content`: none/normal либо строка ≤3 символов без букв/цифр,
+ * CSS-экранов (`\41` = 'A') и амперсандов — стрелки/кавычки легитимных CSS-карт
+ * (Day 6: `content:"→"`) живут, любой текст — нет.
+ */
+function isInertContentValue(val: string): boolean {
+  const v = val.trim().replace(/\s*!important\s*$/i, "");
+  if (/^(none|normal)$/i.test(v)) return true;
+  const m = /^(["'])([\s\S]*)\1$/.exec(v);
+  if (!m) return false;
+  return m[2].length <= 3 && !/[A-Za-z0-9\\&"']/.test(m[2]);
+}
+
+/**
+ * Инлайновый style map-фрагмента: позиции (`top:86px`) сохраняем, но режем
+ * кастом-свойства (`--x:"Answer: B"` питал бы `content:var(--x)` стайлшита до его
+ * перезаписи — двойная защита), `content` и `url(` (маяки). Пустой остаток → null.
+ */
+function sanitizeInlineMapStyle(raw: string): string | null {
+  const kept = raw
+    .split(";")
+    .map((d) => d.trim())
+    .filter((d) => {
+      if (!d) return false;
+      const prop = d.slice(0, d.indexOf(":")).trim().toLowerCase();
+      if (!prop || prop.startsWith("--") || prop === "content") return false;
+      return !/url\s*\(/i.test(d);
+    });
+  return kept.length ? kept.join(";") : null;
+}
 
 /**
  * Fail-closed детектор утечки ключа в захваченной панели: возвращает первый найденный
@@ -164,6 +237,14 @@ function stripLeaksImpl(
     if (!("attribs" in el)) return;
     for (const name of Object.keys(el.attribs)) {
       const value = el.attribs[name];
+      if (name === "style" && opts.keepStyleAttr) {
+        // Сохраняемый map-embed'ом инлайн-style всё равно проходит свой санитайзер
+        // (кастом-свойства/content/url — вон), см. sanitizeInlineMapStyle.
+        const cleaned = sanitizeInlineMapStyle(value ?? "");
+        if (cleaned) $(el).attr("style", cleaned);
+        else $(el).removeAttr("style");
+        continue;
+      }
       if (
         /^on/i.test(name) ||
         (name === "style" && !opts.keepStyleAttr) ||
