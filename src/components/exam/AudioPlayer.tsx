@@ -113,9 +113,12 @@ export function AudioPlayer({
           ) : (
             <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-primary)" }}>Listening</span>
           )}
-          <span className="ap-plays-once" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--warn-text)", background: "var(--warn-subtle)", borderRadius: "var(--radius-full)", padding: "2px 9px" }}>
-            <Icon name="headphones" size={12} /> Plays once
-          </span>
+          {/* «Plays once» — инвариант single-pass; в разлоченном (practice) плеере честно скрыт. */}
+          {locked && (
+            <span className="ap-plays-once" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--warn-text)", background: "var(--warn-subtle)", borderRadius: "var(--radius-full)", padding: "2px 9px" }}>
+              <Icon name="headphones" size={12} /> Plays once
+            </span>
+          )}
         </div>
         {/* Waveform — НЕ кликабелен (single pass, без перемотки). Base-ряд (несыгранное)
             + fill-ряд (brand); заполнение задаёт clip-path по playedPct. */}

@@ -173,6 +173,8 @@ export default async function ReadingTestPage({
 
   return (
     <ExamRunner
+      // Смена попытки = свежий инстанс: refs single-pass/таймера не переживают attempt.
+      key={attemptId}
       attemptId={attemptId}
       contentItemId={id}
       mode={attemptMode}
@@ -185,7 +187,10 @@ export default async function ReadingTestPage({
       title={test.title}
       category={test.category}
       initialAnnotations={annotations as never}
-      questionsHtml={questionsHtml}
+      // Practice — учебная поверхность: всегда атомизированный рендер, иначе verbatim
+      // questions_html спрятал бы P6/P7 (check/reveal) и P1-подсказки, которые живут
+      // в QuestionBlock. Fidelity-verbatim остаётся mock/легаси-пути.
+      questionsHtml={attemptMode === "practice" ? null : questionsHtml}
     />
   );
 }
