@@ -13,6 +13,7 @@ import { PassagePane, type AnnotationRow } from "./PassagePane";
 import { saveProgress, submitAttempt } from "./actions";
 import { checkAnswer, revealQuestion, type RevealResult } from "./practice-actions";
 import { countWords, parseChoiceCount, parseWordLimit } from "@/lib/exam/format-guard";
+import { strategyHints } from "@/lib/exam/strategy-hints";
 
 interface Question {
   id: string;
@@ -92,13 +93,15 @@ interface ReaderPrefs {
   size: 0 | 1 | 2;
   leading: 0 | 1;
   theme: ReaderTheme;
+  /** Own-A — pacing coach (чип темпа у practice-таймера Reading). Дефолт вкл. */
+  pace: boolean;
 }
 /** Вход PassagePane: разрешённые размер/интерлиньяж/тема пассажа. */
 type ReaderInput = { fontPx: number; lineHeight: number; theme: "paper" | "sepia" };
 const READER_PREFS_KEY = "bando-reading-prefs";
 const READER_FONT_PX = [16, 19, 22];
 const READER_LEADING = [1.75, 2.05];
-const READER_DEFAULT: ReaderPrefs = { size: 1, leading: 0, theme: "default" };
+const READER_DEFAULT: ReaderPrefs = { size: 1, leading: 0, theme: "default", pace: true };
 
 function readReaderPrefs(): ReaderPrefs {
   try {
@@ -109,6 +112,8 @@ function readReaderPrefs(): ReaderPrefs {
       size: v.size === 0 || v.size === 1 || v.size === 2 ? v.size : 1,
       leading: v.leading === 0 || v.leading === 1 ? v.leading : 0,
       theme: v.theme === "sepia" ? "sepia" : "default",
+      // Дефолт коуча — вкл; выключается явно (persist false).
+      pace: v.pace === false ? false : true,
     };
   } catch {
     /* storage недоступен / битый JSON — дефолтные префы */
@@ -253,6 +258,10 @@ export default function ExamRunner({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [revealed, setRevealed] = useState<Record<string, RevealResult>>({});
   const [checkBusy, setCheckBusy] = useState<Record<string, boolean>>({});
+  // P14 — сколько раз ответ вопроса проверен и оказался неверным (клиентский счётчик,
+  // НЕ сбрасывается при смене ответа: одна повторная попытка на вопрос). После 2-го
+  // неверного чека открываем reveal-ссылку. В mock всегда пуст (PracticeCheck не рендерится).
+  const [wrongTries, setWrongTries] = useState<Record<string, number>>({});
 
   // P4 — комфорт чтения только в practice-reading (у Listening пассажа нет). Префы
   // глобальные (localStorage), применяются к PassagePane. mock/listening панель не рендерят.
@@ -281,7 +290,9 @@ export default function ExamRunner({
             theme: readerPrefs.theme === "sepia" ? "sepia" : "paper",
           }
         : undefined,
-    [readerActive, readerPrefs],
+    // Зависим ТОЛЬКО от визуальных полей: переключение pace-коуча не должно менять
+    // ссылку readerFor (иначе memo(PassagePane) зря ре-рендерится).
+    [readerActive, readerPrefs.size, readerPrefs.leading, readerPrefs.theme],
   );
 
   // Изменение ответа делает прежний вердикт устаревшим — снимаем его (раскрытый ключ
@@ -301,7 +312,10 @@ export default function ExamRunner({
       setCheckBusy((b) => ({ ...b, [n]: true }));
       void checkAnswer(attemptId, n, v)
         .then((res) => {
-          if (res) setChecked((c) => ({ ...c, [n]: res.correct }));
+          if (!res) return;
+          setChecked((c) => ({ ...c, [n]: res.correct }));
+          // P14: неверный чек копит попытку; на 2-й открывается reveal-ссылка.
+          if (!res.correct) setWrongTries((w) => ({ ...w, [n]: (w[n] ?? 0) + 1 }));
         })
         .catch((e) => console.error("checkAnswer call failed", e))
         .finally(() => setCheckBusy((b) => ({ ...b, [n]: false })));
@@ -348,6 +362,17 @@ export default function ExamRunner({
     [dropVerdict],
   );
   const flag = useCallback((n: number) => setFlags((f) => ({ ...f, [String(n)]: !f[String(n)] })), []);
+
+  // P2b-1 — локатор абзаца пассажа после reveal. Раннер лишь диспатчит событие; DOM-резолв
+  // и пульс-подсветка живут в PassagePane (владелец разметки пассажа). На мобильном сперва
+  // показываем панель пассажа, затем (следующий кадр — панель уже раскрыта из display:none)
+  // шлём событие. Десктоп игнорирует setPane (обе панели видны). Стабильна (deps пусты).
+  const locatePara = useCallback((para: string) => {
+    setPane("passage");
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent("exam:locate-para", { detail: { para } }));
+    });
+  }, []);
 
   const answered = Object.values(answers).filter(isAnswered).length;
   const remaining = durationSeconds != null ? Math.max(0, durationSeconds - elapsed) : null;
@@ -625,6 +650,11 @@ export default function ExamRunner({
           <span style={S.clock}>
             <Icon name={paused ? "pause" : "clock"} size={18} style={{ color: "var(--text-muted)" }} /> {fmt(practiceSeconds)}
           </span>
+          {/* Own-A — pacing coach: только Reading practice, при заданной длительности и
+              включённом префе. Listening practice (свой transport P8) не трогаем. */}
+          {!isListening && durationSeconds != null && questions.length > 0 && readerPrefs.pace && (
+            <PacingChip targetSec={durationSeconds / questions.length} elapsedSec={practiceSeconds} answered={answered} />
+          )}
           <button type="button" onClick={togglePause} aria-label={paused ? "Resume timer" : "Pause timer"} title={paused ? "Resume" : "Pause"} className="exam-ctrl" style={S.ctrlBtn}>
             <Icon name={paused ? "play" : "pause"} size={16} />
           </button>
@@ -663,11 +693,14 @@ export default function ExamRunner({
           verdict={checked[String(q.number)]}
           reveal={revealed[String(q.number)]}
           checkBusy={!!checkBusy[String(q.number)]}
+          wrongTry={wrongTries[String(q.number)] ?? 0}
           onCheck={runCheck}
           onReveal={runReveal}
+          // Listening → undefined: панели пассажа нет, локатор не рендерится.
+          onLocate={isListening ? undefined : locatePara}
         />
       )),
-    [questions, answers, flags, set, toggle, flag, isPractice, checked, revealed, checkBusy, runCheck, runReveal],
+    [questions, answers, flags, set, toggle, flag, isPractice, checked, revealed, checkBusy, wrongTries, runCheck, runReveal, isListening, locatePara],
   );
 
   return (
@@ -931,8 +964,10 @@ const QuestionBlock = memo(function QuestionBlock({
   verdict,
   reveal,
   checkBusy,
+  wrongTry,
   onCheck,
   onReveal,
+  onLocate,
 }: {
   q: Question;
   value: string | string[];
@@ -945,8 +980,12 @@ const QuestionBlock = memo(function QuestionBlock({
   verdict: boolean | undefined;
   reveal: RevealResult | undefined;
   checkBusy: boolean;
+  /** P14 — число неверных чеков этого вопроса. */
+  wrongTry: number;
   onCheck: (n: number, v: string | string[]) => void;
   onReveal: (n: number) => void;
+  /** P2b-1 — локатор абзаца (reading). undefined на listening. */
+  onLocate?: (para: string) => void;
 }) {
   const hasOptions = !!q.options && q.options.length > 0;
   // mcq_multi оценивается как набор букв (mcq_set) → нужен мультивыбор; остальные
@@ -1091,7 +1130,9 @@ const QuestionBlock = memo(function QuestionBlock({
         )}
         {/* P1 — только practice: мягкая проверка формата (лимит слов / число выборов). */}
         {practice && <FormatHint q={q} value={value} />}
-        {/* P6/P7 — только practice: проверка ответа + раскрытие ключа. mock не рендерит. */}
+        {/* P2b — только practice: сворачиваемая стратегия по типу вопроса (zero-key). */}
+        {practice && <StrategyHint qtype={q.qtype} />}
+        {/* P6/P7/P14 — только practice: проверка ответа + вторая попытка + раскрытие ключа. */}
         {practice && (
           <PracticeCheck
             number={q.number}
@@ -1099,8 +1140,10 @@ const QuestionBlock = memo(function QuestionBlock({
             verdict={verdict}
             reveal={reveal}
             busy={checkBusy}
+            wrongTry={wrongTry}
             onCheck={onCheck}
             onReveal={onReveal}
+            onLocate={onLocate}
           />
         )}
       </div>
@@ -1163,20 +1206,29 @@ const PracticeCheck = memo(function PracticeCheck({
   verdict,
   reveal,
   busy,
+  wrongTry,
   onCheck,
   onReveal,
+  onLocate,
 }: {
   number: number;
   value: string | string[];
   verdict: boolean | undefined;
   reveal: RevealResult | undefined;
   busy: boolean;
+  /** P14 — число неверных чеков этого вопроса. */
+  wrongTry: number;
   onCheck: (n: number, v: string | string[]) => void;
   onReveal: (n: number) => void;
+  /** P2b-1 — локатор абзаца (reading); undefined на listening → кнопка не рендерится. */
+  onLocate?: (para: string) => void;
 }) {
   // «Check» появляется только когда вопрос отвечён (непустой ответ).
   if (!isAnswered(value)) return null;
   const decided = verdict !== undefined;
+  // P14: reveal-ссылка — сразу при верном ответе ИЛИ после второго неверного чека.
+  const canReveal = verdict === true || wrongTry >= 2;
+  const para = reveal?.evidence?.para;
   return (
     <div className="exam-check">
       {!decided ? (
@@ -1187,9 +1239,16 @@ const PracticeCheck = memo(function PracticeCheck({
         <>
           <span className={`exam-verdict ${verdict ? "ok" : "no"}`}>
             <Icon name={verdict ? "check" : "x"} size={16} strokeWidth={2.8} />
-            {verdict ? "Correct" : "Not quite"}
+            {verdict ? "Correct" : wrongTry >= 2 ? "Not quite" : "Not quite — try once more"}
           </span>
-          {!reveal && (
+          {/* P14: после первого неверного — «Check again» (тот же или изменённый ответ),
+              чтобы не было тупика, если ученик уверен в ответе и не меняет его. */}
+          {verdict === false && wrongTry < 2 && (
+            <button type="button" className="exam-check-btn" disabled={busy} onClick={() => onCheck(number, value)}>
+              <Icon name="check" size={15} strokeWidth={2.6} /> Check again
+            </button>
+          )}
+          {canReveal && !reveal && (
             <button type="button" className="exam-reveal-link" disabled={busy} onClick={() => onReveal(number)}>
               Show answer &amp; why
             </button>
@@ -1207,12 +1266,73 @@ const PracticeCheck = memo(function PracticeCheck({
               <span>{reveal.evidence.snippet}</span>
             </div>
           )}
-          {reveal.evidence?.para && <div className="exam-reveal-ev-para">{reveal.evidence.para}</div>}
+          {/* P2b-1: reading → интерактивный локатор; без onLocate (listening) — прежний текст. */}
+          {para &&
+            (onLocate ? (
+              <button type="button" className="exam-locate-btn" onClick={() => onLocate(para)}>
+                <Icon name="map-pin" size={14} strokeWidth={2.4} /> Show in passage
+              </button>
+            ) : (
+              <div className="exam-reveal-ev-para">{para}</div>
+            ))}
         </div>
       )}
     </div>
   );
 });
+
+/**
+ * StrategyHint (P2b) — сворачиваемая стратегия по типу вопроса. Zero-key: контент
+ * зависит ТОЛЬКО от qtype (strategyHints). Свёрнут по умолчанию; стиль — рядом с
+ * FormatHint. Нет буллетов (неизвестный тип) → ничего не рендерим.
+ */
+const StrategyHint = memo(function StrategyHint({ qtype }: { qtype: string }) {
+  const [open, setOpen] = useState(false);
+  const bullets = strategyHints(qtype);
+  if (bullets.length === 0) return null;
+  return (
+    <div className="exam-strategy">
+      <button type="button" className="exam-strategy-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <Icon name="lightbulb" size={15} strokeWidth={2.4} />
+        <span>Strategy</span>
+        <Icon name="chevron-down" size={15} strokeWidth={2.4} className="exam-strategy-chevron" data-open={open ? "" : undefined} />
+      </button>
+      {open && (
+        <ul className="exam-strategy-list">
+          {bullets.map((b, i) => (
+            <li key={i}>{b}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+});
+
+/**
+ * PacingChip (Own-A) — ненавязчивый темп-коуч у practice count-up (только Reading).
+ * Целевой темп = durationSeconds / кол-во вопросов; статус — по дрейфу elapsed от
+ * answered × target. Без алармизма: «Behind» = warn (не error); до первого ответа
+ * статус нейтральный (на этапе чтения пассажа «behind» было бы ложной тревогой).
+ * Чисто клиентский, ключа/грейдинга не касается.
+ */
+function PacingChip({ targetSec, elapsedSec, answered }: { targetSec: number; elapsedSec: number; answered: number }) {
+  const perMin = Math.round((targetSec / 60) * 10) / 10;
+  const target = targetSec >= 60 ? `≈${perMin} min/Q` : `≈${Math.round(targetSec)}s/Q`;
+  const drift = elapsedSec - answered * targetSec; // >0 — идём медленнее бюджета
+  let status: "ahead" | "on" | "behind" = "on";
+  if (answered > 0) {
+    if (drift > targetSec) status = "behind";
+    else if (drift < -targetSec) status = "ahead";
+  }
+  const label = status === "ahead" ? "Ahead" : status === "behind" ? "Behind" : "On pace";
+  return (
+    <span className="exam-pace" data-status={status} title={`Target pace ${target} · ${label}`}>
+      <span className="exam-pace-dot" aria-hidden="true" />
+      <span className="exam-pace-target">{target}</span>
+      <span className="exam-pace-status">{label}</span>
+    </span>
+  );
+}
 
 /**
  * ListeningGate — оверлей старта/резюма записи Listening (single-pass). Показывает буфер
@@ -1370,6 +1490,17 @@ function ReaderPanel({
             ))}
           </div>
         </div>
+        {/* Own-A — вкл/выкл темп-коуч у practice-таймера. */}
+        <div className="exam-reader-row">
+          <span className="exam-reader-label">Pacing coach</span>
+          <div className="exam-reader-seg" role="group" aria-label="Pacing coach">
+            {([["On", true], ["Off", false]] as const).map(([lbl, val]) => (
+              <button key={lbl} type="button" className="exam-reader-opt" aria-pressed={prefs.pace === val} data-active={prefs.pace === val ? "" : undefined} onClick={() => onChange({ ...prefs, pace: val })}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </>
   );
@@ -1425,6 +1556,35 @@ const READING_CSS = `
 /* P1 format hint — мягкое предупреждение о формате (practice-only, ввод не блокирует). */
 .exam-fmt-hint{display:flex;align-items:center;gap:7px;margin-top:9px;padding-left:39px;font-family:var(--font-ui);font-size:var(--text-sm);font-weight:600;color:var(--warn-text)}
 .exam-fmt-hint svg{flex:none;color:var(--warn)}
+
+/* P2b Strategy — сворачиваемая подсказка по типу вопроса (practice-only). Единый стиль
+   с check/format-hint; отступ 39px = qNum(28)+gap(11). Тап-таргеты/reduced-motion в классах. */
+.exam-strategy{margin-top:10px;padding-left:39px}
+.exam-strategy-toggle{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:4px 2px 4px 0;border:none;background:none;color:var(--text-muted);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.exam-strategy-toggle:hover{color:var(--text-secondary)}
+.exam-strategy-chevron{transition:transform .18s ease}
+.exam-strategy-chevron[data-open]{transform:rotate(180deg)}
+.exam-strategy-list{list-style:disc;margin:8px 0 0;padding:0 0 0 57px;display:flex;flex-direction:column;gap:6px}
+.exam-strategy-list li{font-family:var(--font-ui);font-size:var(--text-sm);line-height:1.55;color:var(--text-secondary)}
+@media (prefers-reduced-motion:reduce){.exam-strategy-chevron{transition:none}}
+@media (pointer:coarse){.exam-strategy-toggle{min-height:44px}}
+
+/* P2b-1 locate — кнопка «Show in passage» внутри reveal (reading-practice only). */
+.exam-locate-btn{display:inline-flex;align-items:center;gap:6px;margin-top:9px;height:32px;padding:0 12px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--brand);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.exam-locate-btn:hover{background:var(--surface-hover)}
+@media (pointer:coarse){.exam-locate-btn{min-height:44px}}
+
+/* Own-A pacing chip — темп-коуч у practice count-up (reading). Subtle-токены, без алармизма:
+   behind = warn (не error). Статичный (без анимаций). Не интерактивен → без тап-таргета. */
+.exam-pace{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;white-space:nowrap;line-height:1}
+.exam-pace-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--text-muted)}
+.exam-pace-target{font-family:var(--font-mono);color:var(--text-secondary)}
+.exam-pace-status{letter-spacing:.02em;color:var(--text-secondary)}
+.exam-pace[data-status="ahead"] .exam-pace-dot{background:var(--success)}
+.exam-pace[data-status="ahead"] .exam-pace-status{color:var(--success-text)}
+.exam-pace[data-status="behind"] .exam-pace-dot{background:var(--warn)}
+.exam-pace[data-status="behind"] .exam-pace-status{color:var(--warn-text)}
+.exam-pace[data-status="on"] .exam-pace-dot{background:var(--brand)}
 
 /* P8 Listening Lab — practice-only аудио-контролы (mock: single-pass, блок не рендерится). */
 .lab{margin-top:12px}
