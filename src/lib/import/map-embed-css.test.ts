@@ -266,7 +266,7 @@ describe("sanitizeEmbedCss — преамбула @media/@supports под кан
 
 // Ревью 2026-08-11, шестой заход (HIGH): `<`/`>` разрешались ВНУТРИ CSS-строк, а
 // HTML-парсер про кавычки CSS не знает — `</style>` в строке закрывает raw-text тег.
-describe("sanitizeEmbedCss — угловые скобки запрещены и внутри строк", () => {
+describe("sanitizeEmbedCss — `<` запрещён и внутри строк", () => {
   it("breakout из строки в ЗНАЧЕНИИ декларации отброшен, соседнее правило цело", () => {
     const out = sanitizeEmbedCss(`.a{font-family:"</style><p>PWNED</p><style>"}.b{color:red}`) ?? "";
     expect(out).not.toContain("PWNED");
@@ -286,10 +286,11 @@ describe("sanitizeEmbedCss — угловые скобки запрещены и
     expect(sanitizeInlineMapStyle(`top:86px;font-family:"</style>"`)).toBe("top:86px");
   });
 
-  it("в собранном стайлшите не остаётся ни одной угловой скобки", () => {
-    const out = sanitizeEmbedCss(`.mp{position:relative}@media (max-width:700px){.mp{width:100%}}`) ?? "";
-    expect(out).not.toMatch(/[<>]/);
+  it("в собранном стайлшите не остаётся `<` (а `>` живёт как комбинатор)", () => {
+    const out = sanitizeEmbedCss(`.mp{position:relative}@media (max-width:700px){.mp > .col{width:100%}}`) ?? "";
+    expect(out).not.toContain("<");
     expect(out).toContain("position:relative");
+    expect(out).toContain(".mp > .col");
   });
 });
 
