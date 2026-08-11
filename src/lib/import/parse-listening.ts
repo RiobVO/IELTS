@@ -14,8 +14,9 @@ import type {
  * correctAnswers), the band scale is a threshold FUNCTION `band(r)`, and the
  * markup is 4 parts (.part[data-part]) with three answer mechanisms —
  * .gap[data-q] (completion), radio input[name=qN] (mcq), .dropzone[data-q]
- * (matching). There is no questionTypes object: the type is inferred from each
- * part's .q-instruction, exactly as a human reads it.
+ * (matching), .mcq.multi[data-qs] (choose-TWO/THREE), and .place-chip[data-q]
+ * (map labelling). There is no questionTypes object: the type is inferred from
+ * each part's .q-instruction, exactly as a human reads it.
  */
 export function parseListening(html: string): ParsedTest {
   const $ = cheerio.load(html);
@@ -25,9 +26,16 @@ export function parseListening(html: string): ParsedTest {
     .toArray()
     .map((s) => $(s).html() ?? "")
     .join("\n");
-  const key: Record<string, string[]> = extractData(script, "KEY") ?? {};
+  const keyRaw: Record<string, string | string[]> =
+    extractData(script, "KEY") ?? {};
+  const correctRaw: Record<string, string | string[]> =
+    extractData(script, "correctAnswers") ?? {};
+  const key =
+    Object.keys(keyRaw).length > 0 ? normalizeKey(keyRaw) : normalizeKey(correctRaw);
   if (Object.keys(key).length === 0) warnings.push("KEY answer object not found.");
-  const bandScale = extractFunctionTable(script, "band", 0, 40);
+  const bandScale =
+    extractFunctionTable(script, "band", 0, 40) ??
+    extractFunctionTable(script, "calculateIELTSScore", 0, 40);
   if (!bandScale) warnings.push("band(r) function not found — no band scale.");
 
   const title =
@@ -35,16 +43,26 @@ export function parseListening(html: string): ParsedTest {
       .text()
       .replace(/\s*[-–|].*$/, "")
       .trim() || "IELTS Listening";
-  const audioSrc = $("audio").attr("src") ?? null;
+  const audioSrc = $("audio").attr("src") ?? $("audio source").attr("src") ?? null;
   if (!audioSrc) warnings.push("No <audio> source found.");
 
   const passages: ParsedPassage[] = [];
   const questions: ParsedQuestion[] = [];
 
-  $(".part[data-part]").each((_, sec) => {
+  const partSections =
+    $(".part[data-part]").length > 0
+      ? $(".part[data-part]").toArray()
+      : $(".part-content[id^='part']").toArray();
+
+  for (const sec of partSections) {
     const $sec = $(sec);
-    const part = Number.parseInt($sec.attr("data-part") ?? "", 10);
-    if (!Number.isFinite(part)) return;
+    const part = Number.parseInt(
+      $sec.attr("data-part") ?? ($sec.attr("id") ?? "").replace(/\D+/g, ""),
+      10,
+    );
+    if (!Number.isFinite(part)) continue;
+    const hasQuestion = (num: number): boolean =>
+      questions.some((q) => q.number === num);
 
     const banner = $sec.find(".part-banner").text().replace(/\s+/g, " ").trim();
     passages.push({
@@ -81,6 +99,22 @@ export function parseListening(html: string): ParsedTest {
       );
     });
 
+    // Legacy listening template: text inputs use data-question instead of data-q.
+    $sec.find('input.answer-input[type="text"][data-question]').each((__, el) => {
+      const num = Number.parseInt($(el).attr("data-question") ?? "", 10);
+      if (!Number.isFinite(num) || hasQuestion(num)) return;
+      const inTable = $(el).closest("table").length > 0;
+      const scoped = $(el).closest("td, li, .form-row, .note-line");
+      const container = scoped.length ? scoped : $(el).closest("div");
+      const clone = (container.length ? container : $(el).parent()).clone();
+      clone.find(".qnum").remove();
+      clone.find("input").replaceWith(" ____ ");
+      const prompt = clone.text().replace(/\s+/g, " ").trim();
+      questions.push(
+        mk(num, part, inTable ? "table_completion" : completionType, prompt, null, null, key),
+      );
+    });
+
     // 2) single MCQ (.mcq[data-q] with radio options A/B/C)
     $sec.find(".mcq[data-q]").each((__, el) => {
       const $el = $(el);
@@ -96,11 +130,114 @@ export function parseListening(html: string): ParsedTest {
           const value = $(r).attr("value") ?? "";
           const label = $(r).closest("label").text().replace(/\s+/g, " ").trim();
           return { value, label: label || value };
-        });
+      });
       questions.push(mk(num, part, "mcq_single", prompt, options, null, key));
     });
 
-    // 3) matching (chip-bank letters dropped into .dropzone[data-q] rows)
+    // Legacy listening template: plain radio groups are keyed by data-question.
+    const radioNums = [
+      ...new Set(
+        $sec
+          .find('input.answer-input[type="radio"][data-question]')
+          .toArray()
+          .map((r) => Number.parseInt($(r).attr("data-question") ?? "", 10))
+          .filter((n) => Number.isFinite(n)),
+      ),
+    ];
+    for (const num of radioNums) {
+      if (hasQuestion(num)) continue;
+      const group = $sec.find(
+        `input.answer-input[type="radio"][data-question="${num}"]`,
+      );
+      if (group.length === 0) continue;
+      const labelParent = group.first().closest("label").parent();
+      const directPrompt = labelParent.children("div").first().clone();
+      directPrompt.find("label, input, select").remove();
+      const block = directPrompt.text().trim() ? labelParent : labelParent.parent();
+      const stem = block.children("div").first().clone();
+      stem.find("label, input, select").remove();
+      const prompt =
+        stem.text().replace(/\s+/g, " ").replace(new RegExp(`^${num}\\s*`), "").trim() ||
+        block
+          .clone()
+          .find("label, input, select")
+          .remove()
+          .end()
+          .text()
+          .replace(/\s+/g, " ")
+          .replace(new RegExp(`^${num}\\s*`), "")
+          .trim();
+      const options: ParsedOption[] = group.toArray().map((r) => {
+        const value = $(r).attr("value") ?? "";
+        const label = $(r).closest("label").text().replace(/\s+/g, " ").trim();
+        return { value, label: label || value };
+      });
+      questions.push(mk(num, part, "mcq_single", prompt, options, null, key));
+    }
+
+    // 3) choose TWO/THREE: one checkbox block covers multiple question numbers.
+    $sec.find(".mcq.multi[data-qs]").each((__, el) => {
+      const $el = $(el);
+      const nums = ($el.attr("data-qs")?.match(/\d+/g) ?? [])
+        .map((n) => Number.parseInt(n, 10))
+        .filter((n) => Number.isFinite(n));
+      if (nums.length === 0) return;
+      const groupKey = `${nums[0]}-${nums[nums.length - 1]}`;
+      const correct = [
+        ...new Set(nums.flatMap((n) => key[String(n)] ?? [])),
+      ];
+      const stem = $el.find(".stem").clone();
+      stem.find(".qnum").remove();
+      const prompt = stem.text().replace(/\s+/g, " ").trim();
+      const options: ParsedOption[] = $el
+        .find('input[type="checkbox"]')
+        .toArray()
+        .map((c) => {
+          const value = $(c).attr("value") ?? "";
+          const label = $(c).closest("label").text().replace(/\s+/g, " ").trim();
+          return { value, label: label || value };
+        });
+      for (const num of nums) {
+        const q = mk(num, part, "mcq_multi", prompt, options, groupKey, key);
+        q.answer = { mode: "mcq_set", accept: correct, explanation: null, evidence: null };
+        questions.push(q);
+      }
+    });
+
+    // Legacy listening template: select[data-question] matching tables.
+    const legacySelects = $sec.find("select[data-question]").toArray();
+    const legacySelectNums = legacySelects
+      .map((el) => Number.parseInt($(el).attr("data-question") ?? "", 10))
+      .filter((n) => Number.isFinite(n));
+    const legacySelectGroupKey =
+      legacySelectNums.length > 1
+        ? `${legacySelectNums[0]}-${legacySelectNums[legacySelectNums.length - 1]}`
+        : null;
+    for (const el of legacySelects) {
+      const num = Number.parseInt($(el).attr("data-question") ?? "", 10);
+      if (!Number.isFinite(num) || hasQuestion(num)) continue;
+      const row = $(el).closest("div");
+      const clone = (row.length ? row : $(el).parent()).clone();
+      clone.find("select").remove();
+      const prompt = clone
+        .text()
+        .replace(/\s+/g, " ")
+        .replace(new RegExp(`^${num}\\s*`), "")
+        .trim();
+      const options: ParsedOption[] = $(el)
+        .find("option[value]")
+        .toArray()
+        .map((opt) => ({
+          value: $(opt).attr("value") ?? "",
+          label: $(opt).text().replace(/\s+/g, " ").trim(),
+        }))
+        .filter((opt) => opt.value !== "");
+      questions.push(
+        mk(num, part, "matching_features", prompt, options, legacySelectGroupKey, key),
+      );
+    }
+
+    // 4) matching (chip-bank letters dropped into .dropzone[data-q] rows)
     const chips: ParsedOption[] = $sec
       .find(".chip-bank .chip[data-letter]")
       .toArray()
@@ -124,7 +261,64 @@ export function parseListening(html: string): ParsedTest {
         .trim();
       questions.push(mk(num, part, "matching_features", prompt, chips, groupKey, key));
     }
-  });
+
+    // Map/plan labelling rendered as letter selects in a map table.
+    const mapSelects = $sec.find("select.map-select[data-q]").toArray();
+    const mapSelectNums = mapSelects
+      .map((el) => Number.parseInt($(el).attr("data-q") ?? "", 10))
+      .filter((n) => Number.isFinite(n));
+    const mapSelectGroupKey =
+      mapSelectNums.length > 1
+        ? `${mapSelectNums[0]}-${mapSelectNums[mapSelectNums.length - 1]}`
+        : null;
+    for (const el of mapSelects) {
+      const num = Number.parseInt($(el).attr("data-q") ?? "", 10);
+      if (!Number.isFinite(num) || hasQuestion(num)) continue;
+      const labelCell = $(el).closest("tr").find("td").first().clone();
+      labelCell.find(".qnum").remove();
+      const prompt = labelCell.text().replace(/\s+/g, " ").trim();
+      const options: ParsedOption[] = $(el)
+        .find("option[value]")
+        .toArray()
+        .map((opt) => ({
+          value: $(opt).attr("value") ?? "",
+          label: $(opt).text().replace(/\s+/g, " ").trim(),
+        }))
+        .filter((opt) => opt.value !== "");
+      questions.push(
+        mk(num, part, "map_labelling", prompt, options, mapSelectGroupKey, key),
+      );
+    }
+
+    // 5) map/plan labelling: place chips are dropped onto lettered zones.
+    const mapOptions: ParsedOption[] = $sec
+      .find(".map-dz[data-letter]")
+      .toArray()
+      .map((z) => {
+        const value = $(z).attr("data-letter") ?? "";
+        return {
+          value,
+          label: $(z).attr("aria-label") ?? value,
+        };
+      });
+    const placeChips = $sec.find(".place-chip[data-q]").toArray();
+    const mapGroupKey =
+      placeChips.length > 1
+        ? `${$(placeChips[0]).attr("data-q")}-${$(
+            placeChips[placeChips.length - 1],
+          ).attr("data-q")}`
+        : null;
+    for (const chip of placeChips) {
+      const num = Number.parseInt($(chip).attr("data-q") ?? "", 10);
+      if (!Number.isFinite(num)) continue;
+      const clone = $(chip).clone();
+      clone.find(".pc-num").remove();
+      const prompt =
+        clone.find(".pc-text").text().replace(/\s+/g, " ").trim() ||
+        clone.text().replace(/\s+/g, " ").trim();
+      questions.push(mk(num, part, "map_labelling", prompt, mapOptions, mapGroupKey, key));
+    }
+  }
 
   questions.sort((a, b) => a.number - b.number);
 
@@ -175,6 +369,14 @@ function mk(
     evidenceRef: null,
     answer: toAnswer(key[String(number)]),
   };
+}
+
+function normalizeKey(raw: Record<string, string | string[]>): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    out[key] = Array.isArray(value) ? value.map(String) : [String(value)];
+  }
+  return out;
 }
 
 /**
