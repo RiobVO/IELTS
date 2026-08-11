@@ -574,29 +574,29 @@ describe("captureListeningPart — map-embed (CSS-рисованная карт�
     expect(leaks).toEqual(["correct-answer"]);
   });
 
-  it("текст ответа в content → декларация переписана в content:none, ответ в doc не попадает", () => {
+  // Стайлшит пересобирается из allowlist'а (map-embed-css.ts) — небезопасная
+  // декларация просто не переживает пересборку, остальная карта рисуется.
+  it("текст ответа в content → декларация не переживает пересборку", () => {
     const out = captureListeningPart(
       mapPart(MAP_INNER),
       undefined,
       `.analysis::after{content:"Correct answer: B"}${CSS}`,
     );
     const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
-    expect(doc).toContain("content:none");
     expect(doc).not.toContain("Correct answer");
+    expect(doc).toContain(".street{position:absolute}"); // безопасное правило цело
   });
 
-  it("текст ответа ВНЕ content (кастом-свойство стайлшита) → стили небезопасны, карта выпадает", () => {
+  it("текст ответа ВНЕ content (кастом-свойство стайлшита) → свойство выброшено", () => {
     const out = captureListeningPart(mapPart(MAP_INNER), undefined, `.mp{--x:"Answer: B"}${CSS}`);
-    expect(out).not.toBe("");
-    const $ = load(out, null, false);
-    expect($(".lst-map-embed").length).toBe(0);
-    expect($(".mp").length).toBe(0);
-    expect($('.q-slot[data-qtype="radio"][data-q="11"]').length).toBe(2);
+    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).not.toContain("--x");
+    expect(doc).not.toContain("Answer");
   });
 
   // Codex-ревью 2026-08-11, блокер 2: стрип комментариев синтезировал `</style>` и
-  // вырывался из тега в HTML srcdoc — теперь любое `</` в CSS = отказ от embed'а.
-  it("</sty/**/le>-breakout → embed'а нет, инъекция не попадает в панель", () => {
+  // вырывался из тега в HTML srcdoc.
+  it("</sty/**/le>-breakout: инъекция не попадает ни в doc, ни в панель", () => {
     const out = captureListeningPart(
       mapPart(MAP_INNER),
       undefined,
@@ -604,20 +604,51 @@ describe("captureListeningPart — map-embed (CSS-рисованная карт�
     );
     expect(out).not.toBe("");
     expect(out).not.toContain("PWNED");
-    const $ = load(out, null, false);
-    expect($(".lst-map-embed").length).toBe(0);
-    expect($(".mp").length).toBe(0);
+    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).not.toContain("PWNED");
+    // между <style> и </style> — только CSS без разметки
+    const css = doc.slice(doc.indexOf("<style>") + 7, doc.indexOf("</style>"));
+    expect(css).not.toContain("<");
+    expect(css).not.toContain(">");
   });
 
-  // Блокер 3: обходы content-регекса — разрезание строк, CSS-escape, var()-индирекция.
-  it("content-обходы (разрезание строк / escape / var) → content:none", () => {
+  // Блокер 3 (оба захода): разрезание строк, CSS-escape в значении И в имени
+  // свойства, var()-индирекция.
+  it("content-обходы (разрезание строк / escape / var / escape в имени) выброшены", () => {
     const css =
-      `.a::after{content:"Answer" ": B"}.b::after{content:"\\41nswer"}.c::after{content:var(--x)}${CSS}`;
-    const out = captureListeningPart(mapPart(MAP_INNER), undefined, css);
-    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
-    expect(doc).toContain("content:none");
-    expect(doc).not.toContain("Answer");
+      `.a::after{content:"Answer" ": B"}.b::after{content:"\\41nswer"}.c::after{content:var(--x)}` +
+      `.d::after{\\63ontent:"\\41nswer" "\\3a  B"}${CSS}`;
+    const doc =
+      load(captureListeningPart(mapPart(MAP_INNER), undefined, css), null, false)(".lst-map-embed").attr(
+        "data-map-doc",
+      ) ?? "";
+    expect(doc).not.toMatch(/answer/i);
     expect(doc).not.toContain("var(--x)");
+    expect(doc).not.toMatch(/content\s*:/i);
+  });
+
+  // Ревью, второй заход: ответ прямым текстом в нейтральной разметке карты
+  // (class/id-детектор его не видит) → утечка части, а не «просто выпавшая карта».
+  it("текст ответа в разметке карты → fail-closed + onLeak", () => {
+    const leaks: string[] = [];
+    const out = captureListeningPart(
+      mapPart(`${MAP_INNER}<span class="cap">Correct answer: B</span>`),
+      (t) => leaks.push(t),
+      CSS,
+    );
+    expect(out).toBe("");
+    expect(leaks).toEqual(["map text"]);
+  });
+
+  it("внешние ресурсы карты (img/href) вычищены — сетевых маяков в embed нет", () => {
+    const out = captureListeningPart(
+      mapPart(`${MAP_INNER}<img src="https://evil/x.png"><a href="https://evil/y">z</a>`),
+      undefined,
+      CSS,
+    );
+    const doc = load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+    expect(doc).not.toContain("<img");
+    expect(doc).not.toContain("https://evil");
   });
 
   it("content:\"→\" (стрелки Day 6) и кастом-свойства стайлшита без текста ответа выживают", () => {

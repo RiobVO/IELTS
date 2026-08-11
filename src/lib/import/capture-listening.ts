@@ -1,12 +1,13 @@
 import * as cheerio from "cheerio";
 import {
   findLeakMarkerToken,
-  sanitizeEmbedCss,
+  fragmentTextCarriesAnswer,
   scrubReservedEmbedMarkers,
   stripCapturedLeaks,
   stripMapEmbedLeaks,
   textWithoutLeaks,
 } from "./capture-sanitize";
+import { sanitizeEmbedCss } from "./map-embed-css";
 import type { DropOption } from "./dnd-capture";
 
 /**
@@ -281,6 +282,13 @@ export function captureListeningPart(
         return;
       }
       stripMapEmbedLeaks(frag, fragRoot);
+      // Ответ прямым текстом в нейтральной разметке карты (`<span>Correct answer: B</span>`)
+      // class/id-детектор не видит — сканируем сам текст фрагмента (ревью, второй заход).
+      if (fragmentTextCarriesAnswer(fragRoot)) {
+        onLeak?.("map text");
+        bad = true;
+        return;
+      }
       if (embedCss === null) {
         $map.remove();
         return;
