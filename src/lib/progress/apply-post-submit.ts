@@ -17,7 +17,7 @@
 import { and, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { attempt, contentItem, profile } from "@/db/schema";
-import { isTooFastToRate } from "@/lib/anti-cheat";
+import { shouldRateAttempt } from "@/lib/anti-cheat";
 import { createNotifications } from "@/lib/notifications/create";
 import { ELO_FLOOR, ratingDeltas } from "@/lib/rating/elo";
 import { type AwardedBadge, evaluateBadges } from "./badges";
@@ -27,6 +27,8 @@ export interface PostSubmitInput {
   userId: string;
   contentItemId: string;
   attemptId: string;
+  /** Режим попытки (P0): practice в рейтинг не идёт никогда. */
+  mode: "practice" | "mock";
   rawScore: number;
   total: number;
   /** Серверное время прохождения (submit − start) — для floor-guard рейтинга. */
@@ -102,10 +104,13 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
       const longestStreak = Math.max(p.longestStreak, currentStreak);
       const xpGain = 10 + input.rawScore;
 
-      // 3) RATED? Only the FIRST submitted attempt of this test counts (§4.6).
-      // The current attempt is already inserted as `submitted`, so a count of
-      // exactly 1 means this is that first attempt; retakes (count > 1) are
-      // practice-only.
+      // 3) RATED? mock + АБСОЛЮТНО первая сданная попытка теста (§4.6
+      // first-attempt-only, любой режим в счёте) + floor-guard по темпу — вся
+      // тройка условий в shouldRateAttempt (anti-cheat.ts, покрыта unit-тестами).
+      // Practice-прогон «сжигает» рейтингуемость теста: иначе practice-разбор
+      // делал бы последующий «первый mock» накруткой. Сама попытка уже вставлена
+      // как `submitted`, поэтому count === 1 означает «первая». Стрик/XP выше
+      // применяются всё равно (низкая ценность, не вектор лидерборда).
       const [c] = await tx
         .select({ n: count() })
         .from(attempt)
@@ -116,13 +121,12 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
             eq(attempt.status, "submitted"),
           ),
         );
-      // First-attempt-only И не подозрительно быстрый сабмит. Floor-guard
-      // (§4.6): инстант-сабмит (start→submit за секунды) не двигает Elo/difficulty
-      // — иначе мусорным быстрым прогоном можно фармить рейтинг. Стрик/XP ниже
-      // применяются всё равно (низкая ценность, не вектор лидерборда).
-      const rated =
-        (c?.n ?? 0) === 1 &&
-        !isTooFastToRate(input.timeUsedSeconds, input.total);
+      const rated = shouldRateAttempt({
+        mode: input.mode,
+        submittedCountForTest: c?.n ?? 0,
+        timeUsedSeconds: input.timeUsedSeconds,
+        totalQuestions: input.total,
+      });
 
       // Defaults carried into the profile write when not rated.
       let newRating = p.rating;

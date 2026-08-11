@@ -21,6 +21,9 @@ import { attempt, contentItem, profile } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
 import { BASIC_DAILY_LIMIT, effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 
+/** Режим попытки (P0): серверная сущность, выбирается ДО создания attempt. */
+export type AttemptMode = "practice" | "mock";
+
 /**
  * Read the access facts for (user, test) via the owner db: the user's effective
  * tier, the test's required tier, and the band scale (the last is submit-only but
@@ -70,13 +73,23 @@ export async function enforceAccess(
   userId: string,
   userTier: Tier,
   tierRequired: Tier,
+  /**
+   * P0: дневной кап Basic считает и гейтит ТОЛЬКО СОЗДАНИЕ НОВОГО mock
+   * (practice бесплатен и безлимитен; анти-абуз держит submit-throttle).
+   * `null` = tier-гейт без капа — три легитимных случая: экран выбора режима
+   * (mode ещё не выбран), резюм существующей попытки (новый слот не расходуется)
+   * и submit (кап гейтит старты, не завершения — иначе доделанный mock терялся
+   * бы на редиректе, у iframe-раннера ответы не автосейвятся).
+   */
+  mode: AttemptMode | null,
 ): Promise<void> {
   // (a) Tier gate — re-check entitlement against the test's required tier.
   if (!meetsTier(userTier, tierRequired)) redirect("/app/upgrade");
 
-  // (b) Basic daily limit — count THIS user's submitted attempts in the current
-  // UTC day. Premium/Ultra are unlimited, so only Basic pays the count query.
-  if (userTier === "basic") {
+  // (b) Basic daily limit — count THIS user's submitted MOCK attempts in the
+  // current UTC day. Premium/Ultra are unlimited, so only Basic pays the count
+  // query; practice never does.
+  if (userTier === "basic" && mode === "mock") {
     const now = new Date();
     const dayStart = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
@@ -88,6 +101,7 @@ export async function enforceAccess(
       .where(
         and(
           eq(attempt.userId, userId),
+          eq(attempt.mode, "mock"),
           eq(attempt.status, "submitted"),
           gte(attempt.submittedAt, dayStart),
           lt(attempt.submittedAt, dayEnd),
@@ -95,6 +109,54 @@ export async function enforceAccess(
       );
     if ((usage?.n ?? 0) >= BASIC_DAILY_LIMIT) redirect("/app/practice?limit=1");
   }
+}
+
+/**
+ * Незакрытая попытка этого (user, test) — страницы решают по ней, показывать ли
+ * экран выбора режима (нет попытки и нет ?mode= → выбор) или резюмить с режимом,
+ * зафиксированным при создании. Отдельный лёгкий SELECT по partial-индексу 0007,
+ * батчится страницей с остальными независимыми чтениями.
+ */
+export async function findInProgressAttempt(
+  userId: string,
+  contentItemId: string,
+): Promise<{ id: string; mode: AttemptMode } | null> {
+  const [row] = await db
+    .select({ id: attempt.id, mode: attempt.mode })
+    .from(attempt)
+    .where(
+      and(
+        eq(attempt.userId, userId),
+        eq(attempt.contentItemId, contentItemId),
+        eq(attempt.status, "in_progress"),
+      ),
+    )
+    .orderBy(desc(attempt.startedAt))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Была ли у юзера УЖЕ сданная попытка теста (любого режима). Нужна экрану выбора
+ * режима для честности: first-attempt-only (§4.6) — повторный mock в рейтинг не
+ * пойдёт, и юзер должен видеть это ДО старта, а не удивляться после.
+ */
+export async function hasSubmittedAttempt(
+  userId: string,
+  contentItemId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: attempt.id })
+    .from(attempt)
+    .where(
+      and(
+        eq(attempt.userId, userId),
+        eq(attempt.contentItemId, contentItemId),
+        eq(attempt.status, "submitted"),
+      ),
+    )
+    .limit(1);
+  return !!row;
 }
 
 /**
@@ -112,12 +174,15 @@ export async function enforceAccess(
 export async function startAttempt(
   userId: string,
   contentItemId: string,
+  /** Режим НОВОЙ попытки; существующая in_progress резюмится со СВОИМ mode. */
+  modeIfNew: AttemptMode,
 ): Promise<{
   attemptId: string;
   answers: Record<string, string | string[]>;
+  mode: AttemptMode;
 }> {
   const [existing] = await db
-    .select({ id: attempt.id, answers: attempt.answers })
+    .select({ id: attempt.id, answers: attempt.answers, mode: attempt.mode })
     .from(attempt)
     .where(
       and(
@@ -132,6 +197,7 @@ export async function startAttempt(
     return {
       attemptId: existing.id,
       answers: (existing.answers as Record<string, string | string[]>) ?? {},
+      mode: existing.mode,
     };
   }
 
@@ -140,7 +206,7 @@ export async function startAttempt(
     .values({
       userId,
       contentItemId,
-      mode: "practice",
+      mode: modeIfNew,
       status: "in_progress",
       answers: {},
       startedAt: new Date(), // SERVER time — authoritative for §4.6 timing
@@ -157,7 +223,7 @@ export async function startAttempt(
   // don't open a second one and don't double-fire test_start.
   if (inserted.length === 0) {
     const [winner] = await db
-      .select({ id: attempt.id, answers: attempt.answers })
+      .select({ id: attempt.id, answers: attempt.answers, mode: attempt.mode })
       .from(attempt)
       .where(
         and(
@@ -172,6 +238,7 @@ export async function startAttempt(
       return {
         attemptId: winner.id,
         answers: (winner.answers as Record<string, string | string[]>) ?? {},
+        mode: winner.mode,
       };
     }
     // Vanishingly rare: the winner's row was submitted between the conflict and
@@ -199,9 +266,9 @@ export async function startAttempt(
       section: meta?.section ?? "",
       category: meta?.category ?? "",
       tier_required: meta?.tierRequired ?? "",
-      mode: "practice",
+      mode: modeIfNew,
     });
   });
 
-  return { attemptId: inserted[0]!.id, answers: {} };
+  return { attemptId: inserted[0]!.id, answers: {}, mode: modeIfNew };
 }

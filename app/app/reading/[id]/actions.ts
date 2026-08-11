@@ -132,7 +132,10 @@ export async function submitAttempt(
   // Access gate (§4.8, defense-in-depth) — same enforcement as exam-start, fed by
   // the batched read so submit makes a single content_item round-trip.
   if (!accessData) redirect(`/app/reading/${contentItemId}`);
-  await enforceAccess(user.id, accessData.userTier, accessData.tierRequired);
+  // mode=null: на сабмите действует только tier-гейт (defense-in-depth). Дневной
+  // кап гейтит СТАРТЫ mock, не завершения — редирект здесь терял бы доделанную
+  // попытку (iframe-раннер не автосейвит ответы).
+  await enforceAccess(user.id, accessData.userTier, accessData.tierRequired, null);
 
   if (rows.length === 0) redirect(`/app/reading/${contentItemId}`);
 
@@ -212,6 +215,7 @@ export async function submitAttempt(
     userId: user.id,
     contentItemId,
     attemptId,
+    mode: att.mode,
     rawScore: result.rawScore,
     total: result.total,
     timeUsedSeconds,

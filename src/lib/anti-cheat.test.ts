@@ -7,6 +7,7 @@ import {
   exceedsSubmitRate,
   isHoneypotTripped,
   isTooFastToRate,
+  shouldRateAttempt,
   MIN_RATED_SECONDS_PER_QUESTION,
   SIGNUP_THROTTLE_MAX,
   SUBMIT_THROTTLE_MAX,
@@ -87,6 +88,43 @@ describe("isTooFastToRate", () => {
 
   it("нет вопросов (total 0) → НЕ too fast (нет делителя, не наказываем)", () => {
     expect(isTooFastToRate(0, 0)).toBe(false);
+  });
+});
+
+describe("shouldRateAttempt (P0 Practice/Mock)", () => {
+  // Честный базовый кейс: mock, первая сданная попытка, нормальный темп.
+  const base = {
+    mode: "mock" as const,
+    submittedCountForTest: 1,
+    timeUsedSeconds: 20 * 60,
+    totalQuestions: 40,
+  };
+
+  it("mock + абсолютно первая попытка + честный темп → рейтингуется", () => {
+    expect(shouldRateAttempt(base)).toBe(true);
+  });
+
+  it("practice НИКОГДА не рейтингуется, даже первая честная попытка", () => {
+    expect(shouldRateAttempt({ ...base, mode: "practice" })).toBe(false);
+  });
+
+  it("mock после любой прежней сдачи (practice или mock) → не рейтингуется", () => {
+    expect(shouldRateAttempt({ ...base, submittedCountForTest: 2 })).toBe(false);
+  });
+
+  it("слишком быстрый mock (floor-guard) → не рейтингуется", () => {
+    expect(
+      shouldRateAttempt({
+        ...base,
+        timeUsedSeconds: 40 * MIN_RATED_SECONDS_PER_QUESTION - 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("total 0 не наказывается floor-guard'ом (как isTooFastToRate)", () => {
+    expect(
+      shouldRateAttempt({ ...base, timeUsedSeconds: 0, totalQuestions: 0 }),
+    ).toBe(true);
   });
 });
 

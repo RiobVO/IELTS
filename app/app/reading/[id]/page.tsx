@@ -4,7 +4,15 @@ import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { annotation } from "@/db/schema";
-import { enforceAccess, startAttempt } from "@/lib/exam/access";
+import { ModeStart } from "@/components/exam/ModeStart";
+import {
+  type AttemptMode,
+  enforceAccess,
+  findInProgressAttempt,
+  hasSubmittedAttempt,
+  startAttempt,
+} from "@/lib/exam/access";
+import { categoryLabel } from "@/lib/labels";
 import { effectiveTier, type Tier } from "@/lib/tiers";
 import { normalizePassageHtml } from "@/lib/reading/normalize-passage";
 import ExamRunner from "./ExamRunner";
@@ -23,17 +31,23 @@ interface Question {
 
 export default async function ReadingTestPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ mode?: string; min?: string }>;
 }) {
   const user = await requireUser();
   const { id } = await params;
   const supabase = await createClient();
+  const sp = await searchParams;
+  const modeParam: AttemptMode | null =
+    sp.mode === "practice" || sp.mode === "mock" ? sp.mode : null;
 
-  // content_item, профиль, пассажи и вопросы независимы → один параллельный слой
-  // вместо «single, потом Promise.all» (content_item был отдельным RT перед батчем).
+  // content_item, профиль, пассажи, вопросы и attempt-факты (незакрытая попытка /
+  // была ли сдача) независимы → один параллельный слой вместо «single, потом
+  // Promise.all» (content_item был отдельным RT перед батчем).
   // answer_key намеренно НЕ выбирается (RLS-locked; не утекает до submit).
-  const [testRes, profile, passagesRes, questionsRes] = await Promise.all([
+  const [testRes, profile, passagesRes, questionsRes, existing, attempted] = await Promise.all([
     supabase
       .from("content_item")
       .select("id,title,category,duration_seconds,tier_required")
@@ -50,6 +64,8 @@ export default async function ReadingTestPage({
       .select("id,number,qtype,prompt_html,options,group_key,passage_id")
       .eq("content_item_id", id)
       .order("number"),
+    findInProgressAttempt(user.id, id),
+    hasSubmittedAttempt(user.id, id),
   ]);
   const test = testRes.data;
   if (!test) notFound();
@@ -71,15 +87,20 @@ export default async function ReadingTestPage({
   const questionsHtml =
     qHtmlParts.length > 0 && qHtmlParts.every(Boolean) ? qHtmlParts.join("\n") : null;
 
-  // Access gate (§4.8): tier entitlement + Basic daily limit, enforced server-side
-  // from the profile + content_item already read above (no extra round-trip).
-  // effectiveTier downgrades an expired premium to basic, so a stale profile.tier
-  // can't slip past. submitAttempt re-runs the same gate (defense in depth);
-  // startAttempt below assumes it has already passed.
+  // Access gate (§4.8): tier entitlement + Basic daily mock-cap (P0), enforced
+  // server-side from the profile + content_item already read above (no extra
+  // round-trip). effectiveTier downgrades an expired premium to basic, so a stale
+  // profile.tier can't slip past. submitAttempt re-runs the same gate (defense in
+  // depth); startAttempt below assumes it has already passed. Незакрытая попытка
+  // резюмится со СВОИМ mode; без попытки и без ?mode= — экран выбора (attempt не
+  // создаётся, кап на экране не применим: mode=null).
   const userTier = profile
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
     : "basic";
-  await enforceAccess(user.id, userTier, test.tier_required as Tier);
+  const mode = existing?.mode ?? modeParam;
+  // Кап — только на создание НОВОГО mock; резюм существующей попытки не расходует
+  // слот и не должен блокироваться (tier-гейт применяется всегда).
+  await enforceAccess(user.id, userTier, test.tier_required as Tier, existing ? null : modeParam);
 
   // Listening: one audio file for the whole test. Local public/ path now;
   // a full Storage URL (signed, §11) once audio lives in the cloud.
@@ -92,11 +113,47 @@ export default async function ReadingTestPage({
       : `/${rawAudio.replace(/^\/+/, "")}`
     : null;
 
+  // Дефолт лимита mock — из длительности теста, иначе по объёму (та же шкала,
+  // что жила в клиентском StartScreen до P0).
+  const questionCount = questionsData?.length ?? 0;
+  const defaultMockMinutes =
+    test.duration_seconds != null
+      ? Math.max(5, Math.round(test.duration_seconds / 60))
+      : questionCount >= 40
+        ? 60
+        : questionCount >= 27
+          ? 40
+          : 20;
+
+  if (!mode) {
+    return (
+      <ModeStart
+        title={test.title}
+        meta={`${categoryLabel(test.category)} · ${questionCount} questions`}
+        href={`/app/reading/${id}`}
+        mockPresets={
+          audioSrc
+            ? null // Listening: длительность задаёт запись, лимит не выбирается
+            : Array.from(new Set([20, 40, 60, defaultMockMinutes])).sort((a, b) => a - b)
+        }
+        defaultMinutes={defaultMockMinutes}
+        alreadyAttempted={attempted}
+        listening={!!audioSrc}
+      />
+    );
+  }
+
+  // Лимит mock из URL (?min=) — от пресетов ModeStart; clamp против ручных значений.
+  const minParam = Math.round(Number(sp.min));
+  const mockMinutes = Number.isFinite(minParam)
+    ? Math.min(180, Math.max(5, minParam))
+    : defaultMockMinutes;
+
   // Открытие/resume attempt и чтение аннотаций пользователя независимы → параллелим
   // (annotations был отдельным RT-слоем ПОСЛЕ старта). Доступ уже сгейчен выше
   // (enforceAccess), поэтому startAttempt не перечитывает content_item/profile.
-  const [{ attemptId, answers: savedAnswers }, annotations] = await Promise.all([
-    startAttempt(user.id, id),
+  const [{ attemptId, answers: savedAnswers, mode: attemptMode }, annotations] = await Promise.all([
+    startAttempt(user.id, id, mode),
     // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
     // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
     db
@@ -118,6 +175,8 @@ export default async function ReadingTestPage({
     <ExamRunner
       attemptId={attemptId}
       contentItemId={id}
+      mode={attemptMode}
+      mockMinutes={mockMinutes}
       initialAnswers={savedAnswers}
       passages={(passages ?? []) as never}
       questions={(questionsData ?? []) as Question[]}

@@ -117,6 +117,8 @@ function buildParts(
 export default function ExamRunner({
   attemptId,
   contentItemId,
+  mode,
+  mockMinutes,
   initialAnswers,
   passages,
   questions,
@@ -129,6 +131,10 @@ export default function ExamRunner({
 }: {
   attemptId: string;
   contentItemId: string;
+  /** Режим попытки (P0) — серверная истина из attempt.mode, клиент его не выбирает. */
+  mode: ExamMode;
+  /** Лимит mock в минутах (выбран на ModeStart, clamp на сервере). */
+  mockMinutes: number;
   initialAnswers: Record<string, string | string[]>;
   passages: Passage[];
   questions: Question[];
@@ -154,11 +160,12 @@ export default function ExamRunner({
   const qScrollRef = useRef<HTMLDivElement>(null);
 
   const isListening = !!audioSrc;
-  // Practice/Mock — клиентский режим (только Reading). Mock в БД НЕ пишется
-  // (ensureAttempt не трогаем): серверное время от started_at — истина; Mock-таймер и
-  // авто-сабмит чисто клиентские (авто-сабмит зовёт обычный submitAttempt).
+  // Practice/Mock (P0) — серверная сущность: mode приходит пропом из attempt.mode
+  // (рейтинг/дневной кап ветвятся на сервере). Клиенту остаётся только ТАЙМИНГ:
+  // wall-clock якоря (startedAt/deadline) живут в localStorage, чтобы refresh не
+  // сбрасывал Mock-отсчёт; серверное время от started_at — истина для anti-cheat,
+  // Mock-таймер и авто-сабмит чисто клиентские (авто-сабмит зовёт обычный submitAttempt).
   const [hydrated, setHydrated] = useState(false);
-  const [examMode, setExamMode] = useState<ExamMode>("practice");
   const [started, setStarted] = useState(false);
   const [paused, setPaused] = useState(false);
   const [practiceSeconds, setPracticeSeconds] = useState(0);
@@ -243,9 +250,10 @@ export default function ExamRunner({
     submitRef.current = submit;
   });
 
-  // Гидрация режима из localStorage (после mount — SSR не знает storage). Stored →
-  // продолжаем в том же режиме (refresh не сбрасывает Mock-дедлайн, реплея нет); есть
-  // прогресс без режима → resume в practice без start-screen; иначе → показать start-screen.
+  // Гидрация ТАЙМИНГА из localStorage (после mount — SSR не знает storage). Режим
+  // задан сервером; storage хранит только wall-clock якоря. Совпадающая запись →
+  // продолжаем отсчёт (refresh не сбрасывает Mock-дедлайн); нет записи или запись
+  // от другого режима (смена режима между попытками) → старт с чистых якорей.
   useEffect(() => {
     if (isListening) {
       // single-pass якорь: если запись уже запускали — продолжим с реальной позиции (эффекты ниже).
@@ -254,32 +262,37 @@ export default function ExamRunner({
       setHydrated(true);
       return;
     }
+    const now = Date.now();
     const stored = readStoredMode(attemptId);
-    if (stored) {
-      setExamMode(stored.mode);
+    if (stored && stored.mode === mode) {
       startedAtRef.current = stored.startedAt;
       deadlineRef.current = stored.deadline;
-      if (stored.mode === "practice") {
-        setPracticeSeconds(Math.max(0, Math.floor((Date.now() - stored.startedAt) / 1000)));
+      if (mode === "practice") {
+        setPracticeSeconds(Math.max(0, Math.floor((now - stored.startedAt) / 1000)));
       }
-      setStarted(true);
-    } else if (Object.keys(initialAnswers).length > 0) {
-      startedAtRef.current = Date.now();
-      setStarted(true);
+    } else {
+      const deadline = mode === "mock" ? now + mockMinutes * 60_000 : null;
+      startedAtRef.current = now;
+      deadlineRef.current = deadline;
+      writeStoredMode(attemptId, { mode, startedAt: now, deadline });
     }
+    if (mode === "mock" && deadlineRef.current != null) {
+      setMockRemaining(Math.max(0, Math.round((deadlineRef.current - now) / 1000)));
+    }
+    setStarted(true);
     setHydrated(true);
-  }, [attemptId, isListening, initialAnswers]);
+  }, [attemptId, isListening, mode, mockMinutes]);
 
   // Practice: счёт вверх, замирает на паузе (интервал гейтится paused).
   useEffect(() => {
-    if (isListening || !started || examMode !== "practice" || paused) return;
+    if (isListening || !started || mode !== "practice" || paused) return;
     const t = setInterval(() => setPracticeSeconds((s) => s + 1), 1000);
     return () => clearInterval(t);
-  }, [isListening, started, examMode, paused]);
+  }, [isListening, started, mode, paused]);
 
   // Mock: обратный отсчёт от wall-clock дедлайна (refresh-корректно).
   useEffect(() => {
-    if (isListening || !started || examMode !== "mock") return;
+    if (isListening || !started || mode !== "mock") return;
     const tick = () => {
       const dl = deadlineRef.current;
       if (dl != null) setMockRemaining(Math.max(0, Math.round((dl - Date.now()) / 1000)));
@@ -287,38 +300,16 @@ export default function ExamRunner({
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [isListening, started, examMode]);
+  }, [isListening, started, mode]);
 
   // Mock авто-сабмит при 0 (единожды). Клиент лишь инициирует — сервер считает время и грейдит.
   useEffect(() => {
-    if (examMode === "mock" && started && mockRemaining === 0 && !autoSubmitted.current) {
+    if (mode === "mock" && started && mockRemaining === 0 && !autoSubmitted.current) {
       autoSubmitted.current = true;
       submitRef.current();
     }
-  }, [examMode, started, mockRemaining]);
+  }, [mode, started, mockRemaining]);
 
-  const beginPractice = () => {
-    const now = Date.now();
-    startedAtRef.current = now;
-    deadlineRef.current = null;
-    autoSubmitted.current = false;
-    setExamMode("practice");
-    setPaused(false);
-    setPracticeSeconds(0);
-    setStarted(true);
-    writeStoredMode(attemptId, { mode: "practice", startedAt: now, deadline: null });
-  };
-  const beginMock = (minutes: number) => {
-    const now = Date.now();
-    const deadline = now + minutes * 60_000;
-    startedAtRef.current = now;
-    deadlineRef.current = deadline;
-    autoSubmitted.current = false;
-    setExamMode("mock");
-    setMockRemaining(minutes * 60);
-    setStarted(true);
-    writeStoredMode(attemptId, { mode: "mock", startedAt: now, deadline });
-  };
   const togglePause = () => setPaused((p) => !p);
   const restart = () => {
     if (typeof window !== "undefined" && !window.confirm("Restart this test? Your answers and timing will be cleared.")) return;
@@ -330,7 +321,8 @@ export default function ExamRunner({
     autoSubmitted.current = false;
     setPaused(false);
     setPracticeSeconds(0);
-    writeStoredMode(attemptId, { mode: "practice", startedAt: now, deadline: null });
+    // Кнопка живёт только в practice-ветке — mode здесь всегда "practice".
+    writeStoredMode(attemptId, { mode, startedAt: now, deadline: null });
   };
   const mockTotalSeconds = () => {
     const dl = deadlineRef.current;
@@ -422,16 +414,6 @@ export default function ExamRunner({
   // ре-рендерится 1/сек (на Listening — до ~4/сек из-за onTimeUpdate).
   const partGroups = useMemo(() => buildParts(questions, answers, flags), [questions, answers, flags]);
 
-  const defaultMockMinutes =
-    durationSeconds != null
-      ? Math.max(5, Math.round(durationSeconds / 60))
-      : questions.length >= 40
-        ? 60
-        : questions.length >= 27
-          ? 40
-          : 20;
-  const mockPresets = Array.from(new Set([20, 40, 60, defaultMockMinutes])).sort((a, b) => a - b);
-
   // Таймер шапки: Listening — по записи (audio remaining → transfer); Reading после
   // гидрации/старта — по режиму; до гидрации Reading — прежнее поведение.
   let timerArea: React.ReactNode;
@@ -450,10 +432,17 @@ export default function ExamRunner({
         </>
       );
     } else {
-      timerArea = <ExamTimer remainingSeconds={audRemaining ?? audioDur} totalSeconds={audioDur} />;
+      timerArea = (
+        <>
+          {/* P0: режим — серверная истина; в Listening поведение пока одинаковое
+              (single-pass), но рейтинг/кап различаются — бейдж показывает честно. */}
+          <span className="exam-mode-badge" style={badge(mode === "mock")}>{mode === "mock" ? "Mock" : "Practice"}</span>
+          <ExamTimer remainingSeconds={audRemaining ?? audioDur} totalSeconds={audioDur} />
+        </>
+      );
     }
   } else if (hydrated && started) {
-    if (examMode === "mock") {
+    if (mode === "mock") {
       const total = mockTotalSeconds();
       timerArea = (
         <>
@@ -477,8 +466,6 @@ export default function ExamRunner({
         </>
       );
     }
-  } else if (hydrated && !started) {
-    timerArea = null; // start-screen открыт — таймер не показываем
   } else {
     timerArea =
       durationSeconds != null && remaining != null ? (
@@ -640,17 +627,6 @@ export default function ExamRunner({
           onPlay={playAudio}
         />
       )}
-
-      {!isListening && hydrated && !started && (
-        <StartScreen
-          title={title}
-          meta={meta}
-          defaultMinutes={defaultMockMinutes}
-          presets={mockPresets}
-          onPractice={beginPractice}
-          onMock={beginMock}
-        />
-      )}
     </div>
   );
 }
@@ -726,21 +702,6 @@ const badge = (mock: boolean): React.CSSProperties => ({
   fontWeight: 800,
   letterSpacing: "0.06em",
   textTransform: "uppercase",
-});
-
-// Кнопка-пресет минут на start-screen (Mock).
-const presetBtn = (sel: boolean): React.CSSProperties => ({
-  flex: 1,
-  height: 38,
-  borderRadius: "var(--radius-sm)",
-  cursor: "pointer",
-  border: `1.5px solid ${sel ? "var(--brand)" : "var(--border)"}`,
-  background: sel ? "var(--brand-subtle)" : "var(--surface-raised)",
-  color: sel ? "var(--text-primary)" : "var(--text-secondary)",
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--text-sm)",
-  fontWeight: 600,
-  transition: "var(--transition-colors)",
 });
 
 const QuestionBlock = memo(function QuestionBlock({
@@ -905,70 +866,6 @@ const QuestionBlock = memo(function QuestionBlock({
 });
 
 /**
- * StartScreen — выбор режима перед стартом (Reading): Practice (без таймера, пауза/рестарт)
- * или Mock (обратный отсчёт + авто-сабмит). Overlay поверх раннера; показывается только на
- * свежей попытке (resume/refresh минует его — режим восстановлен из localStorage).
- */
-function StartScreen({
-  title,
-  meta,
-  defaultMinutes,
-  presets,
-  onPractice,
-  onMock,
-}: {
-  title: string;
-  meta: string;
-  defaultMinutes: number;
-  presets: number[];
-  onPractice: () => void;
-  onMock: (minutes: number) => void;
-}) {
-  const [minutes, setMinutes] = useState(defaultMinutes);
-  return (
-    <div className="exam-overlay" style={SS.overlay} role="dialog" aria-modal="true" aria-label="Choose how to take this test">
-      <div style={SS.panel}>
-        <span style={SS.kicker}>Ready to begin</span>
-        <h1 style={SS.startTitle}>{title}</h1>
-        <p style={SS.startMeta}>{meta}</p>
-        <div className="exam-start-cards" style={SS.cards}>
-          <div style={SS.card}>
-            <span style={SS.cardIcon}>
-              <Icon name="pencil-check" size={22} />
-            </span>
-            <div style={SS.cardTitle}>Practice</div>
-            <p style={SS.cardDesc}>Untimed. Pause, restart, and work at your own pace — no exam pressure.</p>
-            <Button variant="secondary" fullWidth trailingIcon="arrow-right" onClick={onPractice}>
-              Start practice
-            </Button>
-          </div>
-          <div style={SS.card}>
-            <span style={{ ...SS.cardIcon, background: "var(--brand-subtle)", color: "var(--brand)" }}>
-              <Icon name="clock" size={22} />
-            </span>
-            <div style={SS.cardTitle}>Mock exam</div>
-            <p style={SS.cardDesc}>Timed countdown that auto-submits at zero — just like the real test.</p>
-            <div className="exam-presets" style={SS.presets} role="group" aria-label="Time limit in minutes">
-              {presets.map((m) => {
-                const sel = m === minutes;
-                return (
-                  <button key={m} type="button" onClick={() => setMinutes(m)} aria-pressed={sel} style={presetBtn(sel)}>
-                    {m} min
-                  </button>
-                );
-              })}
-            </div>
-            <Button variant="primary" fullWidth trailingIcon="arrow-right" onClick={() => onMock(minutes)}>
-              Start mock · {minutes} min
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
  * ListeningGate — оверлей старта/резюма записи Listening (single-pass). Показывает буфер
  * загрузки; Play активна когда хватает буфера. Resume-вариант — после refresh: продолжить
  * с реальной позиции (без реплея).
@@ -1008,18 +905,14 @@ function ListeningGate({
   );
 }
 
+// Стили оверлея ListeningGate (после P0 выбор режима уехал на серверный ModeStart,
+// здесь остался только gate записи).
 const SS: Record<string, React.CSSProperties> = {
   overlay: { position: "fixed", inset: 0, zIndex: 50, display: "grid", placeItems: "center", overflowY: "auto", padding: 20, background: "color-mix(in oklab, var(--bg-base) 82%, transparent)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" },
   panel: { width: "100%", maxWidth: 620, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-lg)", padding: "28px 26px" },
-  kicker: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" },
   startTitle: { margin: "8px 0 4px", fontFamily: "var(--font-reading)", fontSize: "var(--text-2xl)", fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.15 },
   startMeta: { margin: "0 0 20px", fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)" },
-  cards: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 },
-  card: { display: "flex", flexDirection: "column", gap: 9, padding: 18, borderRadius: "var(--radius-lg)", border: "1.5px solid var(--border)", background: "var(--surface-raised)" },
   cardIcon: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: "var(--radius-md)", background: "var(--surface-hover)", color: "var(--text-secondary)" },
-  cardTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 800, color: "var(--text-primary)" },
-  cardDesc: { margin: 0, flex: 1, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: 1.5 },
-  presets: { display: "flex", gap: 6 },
   bufferTrack: { height: 6, borderRadius: 999, background: "var(--surface-hover)", overflow: "hidden", margin: "6px 0" },
   bufferFill: { height: "100%", background: "var(--brand)", borderRadius: 999, transition: "width 200ms linear" },
   bufferLabel: { margin: "0 0 16px", fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", color: "var(--text-muted)" },
@@ -1073,8 +966,6 @@ const READING_CSS = `
   .exam-gap-input{min-width:80px!important;max-width:100%!important;min-height:44px!important;font-size:16px!important}
   .exam-answer-input{font-size:16px!important}
   .exam-overlay{align-items:start!important}
-  .exam-start-cards{grid-template-columns:1fr!important}
-  .exam-presets{flex-wrap:wrap!important}
   /* Бейдж режима (Practice/Mock/Transfer) — смысловой лейбл, поднимаем до 12px. */
   .exam-mode-badge{font-size:12px!important}
 }
