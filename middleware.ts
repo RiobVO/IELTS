@@ -12,8 +12,9 @@ export const config = {
   // evaluate routes authenticate by their own signature/secret, §2D). Excluding the
   // latter lets the server→route fetch through without the user-session redirect; the
   // routes are still secret-gated (writing/speakingInternalSecret, fail-closed) — this
-  // only drops auth.
+  // only drops auth. api/email/unsubscribe is the same shape: a one-click link clicked
+  // by a logged-out email recipient, auth'd by its own HMAC token, not a session.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/health|api/webhooks/|api/cron/|api/telegram/|api/writing/evaluate|api/speaking/evaluate|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/health|api/webhooks/|api/cron/|api/telegram/|api/writing/evaluate|api/speaking/evaluate|api/email/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
