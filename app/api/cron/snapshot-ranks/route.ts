@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { leaderboardEntry, leaderboardSnapshot } from "@/db/schema";
 import { cronSecret } from "@/env";
+import { logError } from "@/lib/monitoring/log-error";
+import { runWeeklyDigest } from "@/lib/email/weekly-digest";
 
 /**
  * Cron-снапшот рангов лидерборда для движения ▲/▼ (League). `leaderboard_entry`
@@ -55,6 +57,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
   const snapshotted = await snapshotRanks();
+  // Piggyback weekly digest на тот же дневной cron — best-effort: дайджест НИКОГДА
+  // не роняет снапшот рангов и не меняет его ответ (env-gated no-op без ключей).
+  try {
+    await runWeeklyDigest();
+  } catch (e) {
+    await logError({
+      source: "server",
+      message: `weekly digest piggyback failed: ${e instanceof Error ? e.message : String(e)}`,
+      stack: e instanceof Error ? e.stack : null,
+      url: request.url,
+      context: { route: "/api/cron/snapshot-ranks", stage: "weekly-digest" },
+    });
+  }
   return NextResponse.json({ ok: true, snapshotted }, { status: 200 });
 }
 
