@@ -33,8 +33,10 @@ type Section = "reading" | "listening";
 type Test = Awaited<ReturnType<typeof getPublishedTests>>[number];
 
 interface SubmittedRow {
+  content_item_id: string;
   per_type_breakdown: Breakdown;
   band_score: string | null;
+  raw_score: number | null;
   content_item: { section: Section } | null;
 }
 interface InProgressRow {
@@ -110,14 +112,15 @@ export default async function PracticePage({
   const notice = sp.limit === "1" ? "limit" : sp.throttled === "1" ? "throttled" : null;
   const supabase = await createClient();
 
-  // Профиль (тир) / submitted-попытки (слабый тип + best band) / in_progress
-  // (resume + прогресс строк) / оба published-списка / Weak-spots виджет — параллельно.
-  // Прогрев шапки конкурентно (cache()'d, AppShell переиспользует).
+  // Профиль (тир) / submitted-попытки (слабый тип + best band + best raw score
+  // для карточки «Done») / in_progress (resume + прогресс строк) / оба
+  // published-списка / Weak-spots виджет — параллельно. Прогрев шапки конкурентно
+  // (cache()'d, AppShell переиспользует).
   const [profile, submittedRes, inProgressRes, readingTests, listeningTests, weaknessRows] = await Promise.all([
     getProfile(),
     supabase
       .from("attempt")
-      .select("per_type_breakdown,band_score,content_item:content_item_id(section)")
+      .select("content_item_id,per_type_breakdown,band_score,raw_score,content_item:content_item_id(section)")
       .eq("status", "submitted")
       .order("submitted_at", { ascending: false })
       .limit(50),
@@ -158,14 +161,23 @@ export default async function PracticePage({
   const weakSpots: WeaknessRow[] = aggregateWeakness(
     weaknessRows.map((r) => r.perTypeBreakdown as PerTypeBreakdown),
   );
+  // Тот же (reliability-filtered) набор типов даёт бейдж «weak spot» на карточке
+  // каталога — переиспользуем weakSpots, не считаем заново (шире `weak` ниже,
+  // который без порога надёжности годится только для hero/drill).
+  const weakTypeSet = new Set(weakSpots.map((w) => w.qtype));
 
   // Слабые типы — агрегируем per_type_breakdown, помня секцию потери очков (как на
   // дашборде/каталоге), чтобы рекомендация и drill-чип вели в правильную секцию.
   const agg: Record<string, { correct: number; total: number; rLost: number; lLost: number }> = {};
   const bestBand: Record<Section, number> = { reading: 0, listening: 0 };
+  // Лучший raw_score по тесту (для карточки «Done · X/Y») — тот же submitted-набор.
+  const bestRawById = new Map<string, number>();
   for (const a of submitted) {
     const sec: Section = a.content_item?.section ?? "reading";
     if (a.band_score != null) bestBand[sec] = Math.max(bestBand[sec], Number(a.band_score));
+    if (a.raw_score != null) {
+      bestRawById.set(a.content_item_id, Math.max(bestRawById.get(a.content_item_id) ?? 0, a.raw_score));
+    }
     const b = a.per_type_breakdown;
     if (!b) continue;
     for (const [type, v] of Object.entries(b)) {
@@ -200,6 +212,7 @@ export default async function PracticePage({
   const tests: PracticeTest[] = all.map(({ t, section }) => {
     const locked = !meetsTier(userTier, t.tier_required);
     const answered = answeredById.get(t.id);
+    const bestRaw = bestRawById.get(t.id);
     return {
       id: t.id,
       title: t.title,
@@ -210,7 +223,9 @@ export default async function PracticePage({
       durationMin: t.duration_seconds ? Math.round(t.duration_seconds / 60) : null,
       locked,
       href: locked ? "/app/upgrade" : examHref(t),
-      progress: answered != null && t.question_count > 0 ? `${answered} / ${t.question_count}` : null,
+      progress: answered != null && t.question_count > 0 ? `Resume · ${answered} / ${t.question_count}` : null,
+      done: bestRaw != null && t.question_count > 0 ? `Done · ${bestRaw} / ${t.question_count}` : null,
+      isWeakType: t.question_types.some((qt) => weakTypeSet.has(qt)),
     };
   });
 

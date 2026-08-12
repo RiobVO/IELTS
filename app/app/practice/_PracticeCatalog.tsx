@@ -7,6 +7,7 @@ import { Badge } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
 import { QuestionFilter } from "@/components/exam/QuestionFilter";
 import { CatalogNotice } from "@/components/app/CatalogNotice";
+import { Input } from "@/components/core/Input";
 import { qtypeLabel, categoryLabel, qtypeDescription } from "@/lib/labels";
 import { setTargetBand } from "./actions";
 
@@ -50,7 +51,12 @@ export interface PracticeTest {
   durationMin: number | null;
   locked: boolean;
   href: string;
+  /** "Resume · 8 / 40" при живой in_progress-попытке, иначе null. */
   progress: string | null;
+  /** "Done · 32 / 40" — лучший raw_score по submitted-попыткам, иначе null. */
+  done: string | null;
+  /** questionTypes пересекается со слабейшими типами юзера (weakSpots из page.tsx). */
+  isWeakType: boolean;
 }
 export interface HeroData {
   kind: "resume" | "recommended" | "first";
@@ -158,6 +164,8 @@ export function PracticeCatalog({
   const [selTypes, setSelTypes] = useState<string[]>(initialFilter?.types ?? []);
   const [skill, setSkill] = useState<Skill | null>(initialFilter?.skill ?? null);
   const [sort, setSort] = useState<Sort>(initialFilter?.sort ?? "default");
+  // Клиентский текстовый поиск по названию — массив тестов уже в памяти, дебаунс не нужен.
+  const [query, setQuery] = useState("");
   // Мобильный фильтр свёрнут по умолчанию (стена чипов не загораживает список);
   // на десктопе (≥1024) всегда раскрыт. matchMedia — как бургер-паттерн проекта.
   const [filtersOpen, setFiltersOpen] = useState(true);
@@ -210,6 +218,7 @@ export function PracticeCatalog({
   const clearFilter = () => {
     setSelCats([]);
     setSelTypes([]);
+    setQuery("");
   };
   const selectSkill = (k: Skill) => {
     setSkill((s) => (s === k ? null : k));
@@ -228,11 +237,13 @@ export function PracticeCatalog({
   const skillSection: Section | null = skill === "reading" || skill === "listening" ? skill : null;
   const lockedSkill = skill === "writing" || skill === "speaking" ? skill : null;
 
+  const q = query.trim().toLowerCase();
   const filtered = tests.filter(
     (t) =>
       (!skillSection || t.section === skillSection) &&
       (selCats.length === 0 || selCats.includes(t.category)) &&
-      (selTypes.length === 0 || t.questionTypes.some((x) => selTypes.includes(x))),
+      (selTypes.length === 0 || t.questionTypes.some((x) => selTypes.includes(x))) &&
+      (q === "" || t.title.toLowerCase().includes(q)),
   );
   const catalogLabel = skillSection ? `${cap(skillSection)} tests` : "All tests";
   // Сортировка. «Recommended» (default) теперь честная: при известном слабом типе
@@ -384,6 +395,16 @@ export function PracticeCatalog({
       {/* Catalog — фильтр (сворачиваемый на мобиле) + список. Ведём фокус сюда при
           выборе скилла, чтобы действие выше сгиба не было «невидимым». */}
       <section ref={catalogRef}>
+        <div style={S.searchRow}>
+          <Input
+            icon="search"
+            size="lg"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search tests by title"
+            aria-label="Search tests by title"
+          />
+        </div>
         <div className="pc-catalog" style={S.catalog}>
           <div className="pc-filter" style={S.filterCol}>
             <button
@@ -787,18 +808,22 @@ function TestRow({ t }: { t: PracticeTest }) {
         <Icon name={sec.icon} size={22} strokeWidth={2.25} />
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 4, gap: 9, marginBottom: 4 }}>
           <span className="pc-row-pill" style={{ ...S.rowPill, color: sec.tileFg, background: sec.tileBg }}>{sec.label}</span>
           <span style={S.rowMeta}>{cat(t.category)} · {t.questionCount} Q</span>
+          {t.isWeakType && <Badge tone="warn">Weak spot</Badge>}
         </div>
         <div style={S.rowTitle}>{t.title}</div>
         {typesLabel && <div style={S.rowTypes}>{typesLabel}</div>}
       </div>
       <div style={S.rowRight}>
-        {/* Начатый тест → прогресс; непройденный → длительность (продаёт тест),
-            а не опаковый «—», который скринридер читает как «em dash». */}
+        {/* Живая попытка → Resume; иначе лучший прошлый результат → Done; иначе для
+            непройденного — длительность (продаёт тест), не опаковый «—» (скринридер
+            читает его как «em dash»). */}
         {t.progress ? (
           <span style={S.rowProgress}>{t.progress}</span>
+        ) : t.done ? (
+          <span style={S.rowDone}>{t.done}</span>
         ) : t.durationMin ? (
           <span style={S.rowDuration}>
             <Icon name="clock" size={13} strokeWidth={2.5} /> {t.durationMin}m
@@ -1014,6 +1039,7 @@ const S: Record<string, CSSProperties> = {
   glossDef: { margin: "2px 0 0", fontSize: 13, lineHeight: 1.5, color: "var(--text-secondary)" },
 
   // Catalog
+  searchRow: { marginBottom: 20 },
   catalog: {},
   filterCol: {},
   listHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", rowGap: 10, outline: "none" },
@@ -1036,6 +1062,7 @@ const S: Record<string, CSSProperties> = {
   rowTypes: { fontSize: 12, color: "var(--text-muted)", marginTop: 4 },
   rowRight: { flex: "none", textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 },
   rowProgress: { fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-secondary)" },
+  rowDone: { fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--success-text)" },
   rowDuration: { display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--text-muted)" },
   startFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
   lockFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700 },
