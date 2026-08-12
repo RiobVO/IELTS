@@ -4,7 +4,7 @@ Ambiguities in BRIEF.md §5/§6.1 resolved while building the schema + migration
 The brief wins; where it was silent or self-conflicting, a sane choice was made
 and logged here. No tables were invented beyond what the brief implies.
 
-## Table count: 32 (Phase 1 shipped 13; +19 added in later phases)
+## Table count: 33 (Phase 1 shipped 13; +20 added in later phases)
 
 §5 enumerates 12 tables (`badge`/`user_badge` are two). The Phase-1 worked example
 expected **13 tables** — the 13th is **`notification`**, defined in **§11**
@@ -41,10 +41,19 @@ attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
   derived at read-time from `attempt_review_snapshot` + `attempt.answers` via `gradeOne`,
   so `submitAttempt`/grading/rating are untouched. Owner-read + server-only writes like
   `vocab_progress`. See the "0040" section below.
+- `saved_word` — migration `0041_saved_word` (P11 «Saved words»: personal word bank,
+  Practice wave C). A word bookmarked from a reading passage (practice only) + its
+  context sentence + source content_item, with its OWN SM-2 state (same `reviewCard`
+  core as `vocab_progress`). LLM-free / no external dictionaries — no auto-definitions,
+  `vocab_card` is never synthesized. Owner-read (RLS `user_id = auth.uid()`) + server-only
+  writes (owner-path `saveWord`/`reviewSavedWord`/`deleteSavedWord`), exactly like
+  `vocab_progress`/`mistake_resolution`. Unique on `(user_id, lower(word))` (expression →
+  unique INDEX). Vocab is OUTSIDE the rating/leaderboard loop; this table too.
 
-The DB has **32** tables. `verify.ts` `APP_TABLE_COUNT` must track it — bump **31 → 32**
-with the `0040` companion edit (see the "0040" section for the required verify.ts changes).
-`src/db/schema.ts` types **31** of them: the legacy `topic` table (migration `0000`, Phase 1)
+The DB has **33** tables. `verify.ts` `APP_TABLE_COUNT` must track it — bump **32 → 33**
+with the `0041` companion edit (`saved_word` added to the owner-read cohort in check 4i +
+a `savedWordInsertDenied` case in the write-lockdown). `src/db/schema.ts` types **32** of
+them: the legacy `topic` table (migration `0000`, Phase 1)
 is unused since Phase 3 moved to `writing_task`/`speaking_task`, so its Drizzle export +
 `topic_skill` enum were dropped as dead code (#26) while the empty table lingers in the DB
 (no destructive drop). Re-add a typed export only if `topic` is ever revived.
