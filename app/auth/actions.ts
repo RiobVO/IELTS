@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { signupThrottle } from "@/db/schema";
+import { publicSiteUrl } from "@/env";
 import { captureServer } from "@/lib/analytics/server";
 import {
   exceedsSignupRate,
@@ -14,6 +15,7 @@ import {
   SIGNUP_THROTTLE_WINDOW_SECONDS,
 } from "@/lib/anti-cheat";
 import { verifyTurnstile } from "@/lib/anti-bot/turnstile";
+import { isEmailNotConfirmed } from "@/lib/auth/email-confirm";
 import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,7 +34,16 @@ export async function signIn(formData: FormData) {
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) fail(error.message, { mode: "login", email });
+  if (error) {
+    // Тумблер «Confirm email» ВКЛ + почта не подтверждена → Supabase отдаёт
+    // «Email not confirmed». Вместо сырой ошибки в форме уводим на экран
+    // подтверждения с кнопкой resend. При ВЫКЛ тумблере эта ошибка не возникает —
+    // ветка мёртвая, вход работает как прежде.
+    if (isEmailNotConfirmed(error.message)) {
+      redirect(`/auth/check-email?email=${encodeURIComponent(email)}`);
+    }
+    fail(error.message, { mode: "login", email });
+  }
 
   revalidatePath("/", "layout");
   redirect(next);
@@ -65,8 +76,8 @@ export async function signUp(formData: FormData) {
   // окне — поверх captcha (fail-open без ключей). IP из x-forwarded-for (на Vercel
   // ставит платформа); для rate-limit достаточно — defense-in-depth, не
   // security-граница. Храним sha256(ip), не сам адрес.
-  const ipRaw =
-    (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const h = await headers();
+  const ipRaw = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const ipHash = createHash("sha256").update(ipRaw).digest("hex");
   const since = new Date(Date.now() - SIGNUP_THROTTLE_WINDOW_SECONDS * 1000);
   const [recent] = await db
@@ -81,13 +92,25 @@ export async function signUp(formData: FormData) {
   await db.insert(signupThrottle).values({ ipHash });
 
   const supabase = await createClient();
+  // Куда вести браузер после клика по ссылке подтверждения (актуально ТОЛЬКО когда
+  // тумблер «Confirm email» в Supabase ВКЛ; при ВЫКЛ письмо не шлётся и опция
+  // инертна). Тот же callback, что обслуживает OAuth и reset-пароль: он обменяет
+  // code на сессию и уведёт в /app (safeNextPath по умолчанию). Origin — ТОЛЬКО
+  // доверенный NEXT_PUBLIC_SITE_URL: fallback на Origin/Host-заголовок дал бы
+  // attacker-controllable ссылку подтверждения (спуф Host → кража PKCE-кода). Нет
+  // env → не передаём emailRedirectTo, Supabase берёт Site URL из дашборда (safe).
+  const origin = publicSiteUrl();
+
   // The inviter's referral_code rides in auth user metadata under "ref_code".
   // The on_auth_user_created trigger reads it (NEW.raw_user_meta_data ->>
   // 'ref_code') to set profile.referred_by and insert the referral row.
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: ref ? { data: { ref_code: ref } } : undefined,
+    options: {
+      ...(origin ? { emailRedirectTo: `${origin}/auth/callback` } : {}),
+      ...(ref ? { data: { ref_code: ref } } : {}),
+    },
   });
   if (error) fail(error.message, { mode: "signup", email });
 
@@ -108,8 +131,22 @@ export async function signUp(formData: FormData) {
 
   // profile row is created server-side by the on_auth_user_created trigger
   // (migrations/0002_auth) — no client write needed.
+
+  // Confirm-email seam (fail-open, БЕЗ env-флага — авто-адаптация под тумблер
+  // Supabase «Confirm email»). Исход различаем по наличию сессии в ответе signUp:
+  if (data.session) {
+    // Тумблер ВЫКЛ (текущий прод): signUp вернул сессию — пользователь уже вошёл,
+    // cookies выставлены server-клиентом. Поведение БЕЗ ИЗМЕНЕНИЙ — тот же
+    // success-редирект, что и раньше.
+    redirect(
+      `/auth?message=${encodeURIComponent("A confirmation email has been sent to your inbox.")}`,
+    );
+  }
+  // Тумблер ВКЛ: сессии нет — письмо с подтверждением ушло (или это анти-энумерация
+  // Supabase для уже существующего email: тот же экран, наличие аккаунта не палим).
+  // Ведём на «Check your email» с адресом; sent=1 → resend стартует с cooldown.
   redirect(
-    `/auth?message=${encodeURIComponent("A confirmation email has been sent to your inbox.")}`,
+    `/auth/check-email?email=${encodeURIComponent(email)}&sent=1`,
   );
 }
 

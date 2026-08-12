@@ -38,10 +38,20 @@ export async function GET(request: Request) {
       // должна ломать вход. has_ref=false: OAuth-поток пока не переносит ref_code
       // (referral через OAuth — отдельный, ещё не подключённый gap).
       const u = data.user;
+      const provider = analyticsProvider(u?.app_metadata?.provider);
       const createdMs = u?.created_at ? new Date(u.created_at).getTime() : 0;
-      if (u && createdMs > 0 && Date.now() - createdMs < FRESH_SIGNUP_WINDOW_MS) {
+      // Считаем здесь ТОЛЬКО OAuth: email/password-регистрация уже засчитана в
+      // signUp server action. Когда включён тумблер «Confirm email», ссылка
+      // подтверждения приводит email-юзера в этот же callback — без guard'а быстро
+      // (< окна) подтвердивший email считался бы дважды (signUp + callback).
+      if (
+        u &&
+        provider !== "email" &&
+        createdMs > 0 &&
+        Date.now() - createdMs < FRESH_SIGNUP_WINDOW_MS
+      ) {
         await captureServer("signup", u.id, {
-          auth_provider: analyticsProvider(u.app_metadata?.provider),
+          auth_provider: provider,
           has_ref: false,
         });
       }
