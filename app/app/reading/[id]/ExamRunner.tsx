@@ -851,6 +851,9 @@ export default function ExamRunner({
               passages={passages}
               initialAnnotations={initialAnnotations ?? []}
               reader={readerFor}
+              // P11 — жест «Save word» только в practice-чтении (стабильный boolean:
+              // mode/isListening — серверные пропы, не меняются → memo(PassagePane) держится).
+              canSaveWords={isPractice && !isListening}
             />
 
             {/* Questions pane (навигатор вынесен в нижнюю полосу) */}
