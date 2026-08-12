@@ -1,11 +1,17 @@
 import Link from "next/link";
+import { and, desc, eq } from "drizzle-orm";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { db } from "@/db";
+import { attempt as attemptTable } from "@/db/schema";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { getPublishedTests } from "@/lib/content/published";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { writingFeatureEnabled, speakingFeatureEnabled } from "@/env";
 import { qtypeLabel, categoryLabel, QTYPE_LABELS, CATEGORY_LABELS, READING_CATEGORIES, LISTENING_CATEGORIES } from "@/lib/labels";
+import { aggregateWeakness, type PerTypeBreakdown, type WeaknessRow } from "@/lib/practice/weakness";
+import { Icon } from "@/components/core/icons";
+import { Badge } from "@/components/core/Badge";
 import { AppShell } from "../_AppShell";
 import { PracticeCatalog, type HeroData, type PracticeTest, type FilterOption, type DrillWeakest, type InitialFilter } from "./_PracticeCatalog";
 
@@ -96,7 +102,7 @@ export default async function PracticePage({
     throttled?: string;
   }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const sp = await searchParams;
   const initialFilter = buildInitialFilter(sp);
   // Почему отбросило в практику: дневной лимит Basic (access.ts) или throttle сабмита
@@ -105,9 +111,9 @@ export default async function PracticePage({
   const supabase = await createClient();
 
   // Профиль (тир) / submitted-попытки (слабый тип + best band) / in_progress
-  // (resume + прогресс строк) / оба published-списка — параллельно. Прогрев шапки
-  // конкурентно (cache()'d, AppShell переиспользует).
-  const [profile, submittedRes, inProgressRes, readingTests, listeningTests] = await Promise.all([
+  // (resume + прогресс строк) / оба published-списка / Weak-spots виджет — параллельно.
+  // Прогрев шапки конкурентно (cache()'d, AppShell переиспользует).
+  const [profile, submittedRes, inProgressRes, readingTests, listeningTests, weaknessRows] = await Promise.all([
     getProfile(),
     supabase
       .from("attempt")
@@ -122,6 +128,17 @@ export default async function PracticePage({
       .order("started_at", { ascending: false }),
     getPublishedTests("reading"),
     getPublishedTests("listening"),
+    // Weak-spots виджет (P-OwnC): отдельный owner-path запрос (Drizzle, как дашборд
+    // app/app/page.tsx), ТОЛЬКО per_type_breakdown, шире окно (300 vs 50 у submittedRes
+    // выше — тому хватает недавнего для hero/drill, здесь нужна надёжная статистика по
+    // типам за всю историю). Drizzle обходит RLS (owner role) — скоуп по user.id ставим
+    // сами, как в mistakes.ts/дашборде.
+    db
+      .select({ perTypeBreakdown: attemptTable.perTypeBreakdown })
+      .from(attemptTable)
+      .where(and(eq(attemptTable.userId, user.id), eq(attemptTable.status, "submitted")))
+      .orderBy(desc(attemptTable.submittedAt))
+      .limit(300),
     getHeaderData(),
   ]);
 
@@ -134,6 +151,13 @@ export default async function PracticePage({
   const targetBand = rawTarget != null ? Number(rawTarget) : null;
   const submitted = (submittedRes.data ?? []) as unknown as SubmittedRow[];
   const inProgress = (inProgressRes.data ?? []) as unknown as InProgressRow[];
+
+  // Weak-spots виджет — 3–5 слабейших типов с min-порогом надёжности (total >= 4,
+  // дефолт aggregateWeakness). Ниже порога / нет попыток → пустой массив, виджет не
+  // рендерится (не пустая коробка).
+  const weakSpots: WeaknessRow[] = aggregateWeakness(
+    weaknessRows.map((r) => r.perTypeBreakdown as PerTypeBreakdown),
+  );
 
   // Слабые типы — агрегируем per_type_breakdown, помня секцию потери очков (как на
   // дашборде/каталоге), чтобы рекомендация и drill-чип вели в правильную секцию.
@@ -245,6 +269,14 @@ export default async function PracticePage({
         initialFilter={initialFilter}
         notice={notice}
       />
+      {/* Weak spots (OwnC) — над ссылкой mistakes: чипы слабейших типов, тап ведёт
+          в существующий фильтр каталога (?q_type=). Нет данных выше порога → секция
+          отсутствует целиком (не пустая коробка). Free для всех тиров. */}
+      {weakSpots.length > 0 && (
+        <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 24px" }}>
+          <WeakSpotsWidget rows={weakSpots} />
+        </div>
+      )}
       {/* P9 — ненавязчивая точка входа в очередь ошибок (не count-запрос: пустое
           состояние обслуживает экран сам). */}
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px 40px", textAlign: "center" }}>
@@ -339,3 +371,64 @@ function buildHero({
     meta: null,
   };
 }
+
+/**
+ * Weak spots — компактный ряд чипов, слабейшие типы первыми. Тап открывает тот же
+ * каталог с предвыбранным фильтром типа (buildInitialFilter читает ?q_type). Цвет
+ * чипа — по надёжности, не по алармизму: <50% warn (жёлто-золотой), 50%+ нейтрально.
+ */
+function WeakSpotsWidget({ rows }: { rows: WeaknessRow[] }) {
+  return (
+    <div style={WS.card}>
+      <div style={WS.header}>
+        <Icon name="bar-chart" size={15} strokeWidth={2.4} style={{ color: "var(--text-muted)" }} />
+        <span style={WS.title}>Weak spots</span>
+      </div>
+      <div style={WS.chips}>
+        {rows.map((row) => (
+          <Link
+            key={row.qtype}
+            href={`/app/practice?q_type=${encodeURIComponent(row.qtype)}`}
+            style={WS.chip}
+          >
+            <span style={WS.chipLabel}>{qtypeLabel(row.qtype)}</span>
+            <Badge tone={row.pct < 50 ? "warn" : "neutral"} mono>{row.pct}%</Badge>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const WS: Record<string, React.CSSProperties> = {
+  card: {
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-lg)",
+    background: "var(--surface-raised)",
+    padding: "16px 18px",
+  },
+  header: { display: "flex", alignItems: "center", gap: 7, marginBottom: 12 },
+  title: {
+    fontFamily: "var(--font-ui)",
+    fontSize: "var(--text-sm)",
+    fontWeight: 800,
+    color: "var(--text-primary)",
+  },
+  chips: { display: "flex", flexWrap: "wrap", gap: 10 },
+  chipLabel: { whiteSpace: "nowrap" },
+  chip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 44,
+    padding: "0 14px",
+    borderRadius: "var(--radius-full)",
+    border: "1px solid var(--border)",
+    background: "var(--surface-inset, transparent)",
+    color: "var(--text-primary)",
+    fontFamily: "var(--font-ui)",
+    fontSize: "var(--text-sm)",
+    fontWeight: 700,
+    textDecoration: "none",
+  },
+};
