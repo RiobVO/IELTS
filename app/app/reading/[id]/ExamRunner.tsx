@@ -2001,7 +2001,12 @@ const READING_CSS = `
 @media (min-width:1024px){
   .exam-top{padding:12px 20px;gap:14px}
   .exam-tabs{display:none}
-  .exam-pane-p{flex:1.15}
+  /* W2-7: панель пассажа капается по ширине читаемой колонки (article maxWidth:900
+     в PassagePane.tsx) — иначе flex:1.15 растягивает фон панели шире текста и
+     оставшееся пространство висит пустым проёмом перед разделителем. Излишек
+     (если он есть на очень широких вьюпортах) уходит вправо за панель вопросов,
+     а не между текстом и вопросами. */
+  .exam-pane-p{flex:1.15;max-width:900px}
   .exam-pane-q{flex:none;width:460px}
   .exam-split[data-pane="passage"] .exam-pane-q,
   .exam-split[data-pane="questions"] .exam-pane-p{display:flex}
