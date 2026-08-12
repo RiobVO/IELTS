@@ -54,9 +54,9 @@
 | P6 | Мгновенная проверка ответа: `checkAnswer` → только boolean; owner+in_progress+practice в WHERE; нормализация = `gradeOne` (общая с submit) | M | атомиз. | ✅ срез 2 |
 | P7 | Ответ+объяснение по клику: `revealQuestion` — accept/explanation/evidence ОДНОГО вопроса | S–M | атомиз. | ✅ срез 2 |
 | P8 | Listening Lab: пауза/seek/replay/скорость в practice; mock single-pass байт-в-байт | M | атомиз. | ✅ срез 2 |
-| P9 | Повтор ошибок: lite — drill по `q_type` из result; rich — очередь (миграция) | S/L | обе | фаза 3 |
+| P9 | Повтор ошибок: rich-очередь «вариант B» (`0040`, деривация из снапшота, `/app/practice/mistakes`) | S/L | обе | ✅ фаза 3.B |
 | P10 | Confidence-метки → калибровка на result | M | атомиз. | фаза 3 |
-| P11 | Слово → Vocabulary (SM-2, новая owner-таблица, миграция; RLS + pg_policies!) | L | атомиз. | фаза 3 |
+| P11 | Слово → Vocabulary («Save word» капсула → `saved_word` 0041, SM-2, «My words») | L | атомиз. | ✅ фаза 3.C |
 | P12 | Practice-результат без band-давления (learning-фрейм: диал в pct, без share/`→ Band N`) | S | обе | ✅ фаза 3.A |
 | P13 | Format-loss callout на practice-результате («Format cost you N» — `src/lib/result/format-loss.ts` поверх format-guard, server-side) | S/M | атомиз. | ✅ фаза 3.A |
 | P14 | Second try: reveal-ссылка после верного ИЛИ 2-го неверного чека («Check again») | S | атомиз. | ✅ фаза 3.A |
@@ -108,8 +108,16 @@ listening без `audio_path` (C21 L Test 3 `4822778c…`, Test 4 `900bd8a4…`)
   экран `/app/practice/mistakes` (href по каталожному правилу через диспетчер
   `/app/exam`), P15 `?focus=QN`. `0040` применена на прод ДО пуша, постура
   `pg_policies` проверена ([OK]).
-- **Волна C** — P11 saved words (`0041_saved_word`, SM-2 через `srs.ts`,
-  дек «My words», БЕЗ синтеза `vocab_card`).
+- **Волна C — ✅ реализована** (коммиты `c9f731e`/`f28fffe`/`4bd8542`; Codex
+  adversarial-ревью SHIP, 3 находки пофикшены до пуша: source только
+  существующий published-тест, честный delete-ok, без хвостовых дефисов):
+  P11 saved words — `0041_saved_word` (unique `(user_id, lower(word))`, RLS
+  по образцу 0040, применена на прод до пуша, постура [OK]), actions
+  `saveWord`/`reviewSavedWord` (общий SM-2 `reviewCard`, easy только новым)/
+  `deleteSavedWord`, капсула «Save word» в practice-пассаже (аддитивно к
+  highlight, memo-инварианты целы), экран `/app/vocabulary/my-words`
+  (список + flashcard-повтор, отдельно от deck-сессий). `vocab_card` не
+  синтезируется, LLM-free.
 - Оппортунистически: P10 (localStorage-остров), OwnC weakness heatmap, P5
   (локальная форма, без XP). P2b-2 — после замера покрытия `evidence`.
 
