@@ -273,6 +273,13 @@ export interface DebriefData {
   /** attempt.mode === 'practice' (P12) — Hero/Dock скрывают band-вердикт и
    *  переходят на learning-тон; mock (false) рендерится как раньше, байт-в-байт. */
   isPractice: boolean;
+  /** Id этой попытки — клиентский остров калибровки (P10) читает по нему
+   *  per-attempt localStorage `bando-confidence-<attemptId>`. */
+  attemptId: string;
+  /** Practice-only (P10) — вердикты по вопросам (number/correct, БЕЗ ключа) для
+   *  калибровки уверенности на клиенте; пусто для mock (инвариант 1). Владелец
+   *  сданной попытки и так видит эти вердикты в разборе (инвариант 2). */
+  perQuestionCorrect: { number: number; correct: boolean }[];
 
   score: {
     raw: number;

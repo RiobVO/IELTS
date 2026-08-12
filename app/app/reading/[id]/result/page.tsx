@@ -465,6 +465,12 @@ export default async function ResultPage({
     catalogBase,
     retryHref,
     isPractice,
+    attemptId,
+    // P10: вердикты для клиентской калибровки уверенности — ТОЛЬКО в practice
+    // (mock → пусто, инвариант 1). Это number/correct, не ключ (инвариант 2).
+    perQuestionCorrect: isPractice
+      ? result.perQuestion.map((q) => ({ number: q.number, correct: q.correct }))
+      : [],
     score: {
       raw: result.rawScore,
       total: result.total,

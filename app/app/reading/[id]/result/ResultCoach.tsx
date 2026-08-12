@@ -16,6 +16,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { Button } from "@/components/core/Button";
 import { categoryLabel } from "@/lib/labels";
+import {
+  computeConfidenceCalibration,
+  parseConfidenceMap,
+  type CalibrationResult,
+} from "@/lib/practice/confidence-calibration";
 import type { DebriefData } from "@/lib/result/debrief";
 import BadgeUnlock from "./BadgeUnlock";
 import { ShareResult } from "./ShareResult";
@@ -147,6 +152,13 @@ export default function ResultCoach({
         <div style={{ margin: "14px 0" }}>
           <FormatCostCallout items={data.formatLoss} />
         </div>
+      )}
+
+      {/* P10 (practice-only) — калибровка уверенности. Клиентский остров читает
+          per-attempt localStorage (метки из раннера) и джойнит с вердиктами;
+          нет меток → рендерит null (сам управляет своим верхним отступом). */}
+      {data.isPractice && (
+        <ConfidenceCalibration attemptId={data.attemptId} perQuestionCorrect={data.perQuestionCorrect} />
       )}
 
       <div className="rc-tabs" ref={tabsRef}>
@@ -323,6 +335,62 @@ const FORMAT_LOSS_REASON_LABEL: Record<DebriefData["formatLoss"][number]["reason
   "word-limit": "over the word limit",
   "choice-count": "wrong number of choices",
 };
+
+/* P10 — «Confidence calibration» (practice-only). Клиентский остров: читает
+   per-attempt localStorage-метки (bando-confidence-<attemptId>), джойнит с
+   вердиктами (чистая функция computeConfidenceCalibration). SSR-безопасен —
+   первый рендер null (как на клиенте до эффекта), без hydration-mismatch.
+   Переиспользует карточные классы .rc-rr* (как FormatCostCallout) — нового CSS нет. */
+function ConfidenceCalibration({
+  attemptId,
+  perQuestionCorrect,
+}: {
+  attemptId: string;
+  perQuestionCorrect: { number: number; correct: boolean }[];
+}) {
+  const [result, setResult] = useState<CalibrationResult | null>(null);
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(`bando-confidence-${attemptId}`);
+    } catch {
+      raw = null; // storage недоступен (private mode) — калибровки просто нет
+    }
+    setResult(computeConfidenceCalibration(perQuestionCorrect, parseConfidenceMap(raw)));
+  }, [attemptId, perQuestionCorrect]);
+
+  if (!result) return null;
+  const { overconfident, underconfident } = result;
+  const over = overconfident.length;
+
+  // Формулировка по факту: сперва переоценка (дороже всего), иначе недооценка,
+  // иначе «в точку». Тон — коуч, без алармизма.
+  const lead =
+    over > 0
+      ? `You felt sure on ${over} question${over === 1 ? "" : "s"} you actually missed. When your certainty is highest, spend five seconds checking it against the text — that's where confidence quietly costs marks.`
+      : underconfident > 0
+        ? `You doubted yourself on ${underconfident} question${underconfident === 1 ? "" : "s"} you got right — your first read is better than you think. Trust it.`
+        : `Your confidence lined up with your results — well-calibrated judgement. Keep marking it as you practise.`;
+
+  return (
+    <div className="rc-rr" style={{ marginTop: 14 }}>
+      <div className="rc-rr-title">Confidence calibration</div>
+      <p className="rc-rr-lead" style={{ marginTop: 8 }}>{lead}</p>
+      {over > 0 && (
+        <div className="rc-rr-chips">
+          {overconfident.map((n) => (
+            <span className="rc-rr-chip" key={n}>Q{n} · sure, but missed</span>
+          ))}
+        </div>
+      )}
+      {over > 0 && underconfident > 0 && (
+        <p className="rc-rr-lead" style={{ marginTop: 12 }}>
+          You were also right on {underconfident} you weren&rsquo;t sure about — trust that instinct next time.
+        </p>
+      )}
+    </div>
+  );
+}
 
 function FormatCostCallout({ items }: { items: DebriefData["formatLoss"] }) {
   return (

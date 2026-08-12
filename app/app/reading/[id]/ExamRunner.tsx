@@ -11,9 +11,10 @@ import { QuestionNavigator, type NavPart } from "@/components/exam/QuestionNavig
 import { QuestionHtml } from "@/components/exam/QuestionHtml";
 import { PassagePane, type AnnotationRow } from "./PassagePane";
 import { saveProgress, submitAttempt } from "./actions";
-import { checkAnswer, revealQuestion, type RevealResult } from "./practice-actions";
+import { checkAnswer, locateEvidence, revealQuestion, type RevealResult } from "./practice-actions";
 import { countWords, parseChoiceCount, parseWordLimit } from "@/lib/exam/format-guard";
 import { strategyHints } from "@/lib/exam/strategy-hints";
+import { parseConfidenceMap, type ConfidenceLevel } from "@/lib/practice/confidence-calibration";
 
 interface Question {
   id: string;
@@ -121,6 +122,60 @@ function readReaderPrefs(): ReaderPrefs {
   }
 }
 
+/* --- P10 Confidence-метки (practice-only, reading+listening атомизированные).
+   Клиентские, per-attempt: карта {номер вопроса → уровень} в localStorage
+   `bando-confidence-<attemptId>`. Читается на /result островом калибровки. Сервера
+   нет. Мусор отбрасывает parseConfidenceMap (общий с /result). --- */
+const CONFIDENCE_KEY = (id: string) => `bando-confidence-${id}`;
+function readConfidence(id: string): Record<string, ConfidenceLevel> {
+  try {
+    return parseConfidenceMap(localStorage.getItem(CONFIDENCE_KEY(id)));
+  } catch {
+    return {}; // storage недоступен — метки просто не восстановим
+  }
+}
+function writeConfidence(id: string, map: Record<string, ConfidenceLevel>): void {
+  try {
+    localStorage.setItem(CONFIDENCE_KEY(id), JSON.stringify(map));
+  } catch {
+    /* storage недоступен (private/quota) — метки не сохранятся, не критично */
+  }
+}
+
+/* --- P5 Микро-цели/брейки (practice-only, локальная форма). Prefs ГЛОБАЛЬНЫЕ
+   (не per-attempt) в отдельном ключе — применимы и к reading, и к listening
+   practice. Без XP/стриков/персиста на сервер. --- */
+const PRACTICE_GOAL_KEY = "bando-practice-goal";
+const GOAL_CHOICES = [5, 10, 20] as const;
+const BREAK_CHOICES = [15, 25] as const;
+type GoalValue = 5 | 10 | 20 | "all";
+interface GoalPrefs {
+  goal: GoalValue | null;
+  breakMin: 15 | 25 | null;
+}
+const GOAL_DEFAULT: GoalPrefs = { goal: null, breakMin: null };
+function readGoalPrefs(): GoalPrefs {
+  try {
+    const raw = localStorage.getItem(PRACTICE_GOAL_KEY);
+    // Кап длины перед парсом: prefs — десятки байт, гигантская строка = мусор/self-DoS.
+    if (!raw || raw.length > 1024) return GOAL_DEFAULT;
+    const v = JSON.parse(raw) as Partial<GoalPrefs>;
+    const goal: GoalValue | null =
+      v.goal === "all" || v.goal === 5 || v.goal === 10 || v.goal === 20 ? v.goal : null;
+    const breakMin: 15 | 25 | null = v.breakMin === 15 || v.breakMin === 25 ? v.breakMin : null;
+    return { goal, breakMin };
+  } catch {
+    return GOAL_DEFAULT;
+  }
+}
+function writeGoalPrefs(v: GoalPrefs): void {
+  try {
+    localStorage.setItem(PRACTICE_GOAL_KEY, JSON.stringify(v));
+  } catch {
+    /* storage недоступен — цель/брейки не сохранятся, не критично */
+  }
+}
+
 /** Вопрос отвечен: непустая строка ИЛИ непустой набор букв (mcq_multi). */
 function isAnswered(v: string | string[] | undefined): boolean {
   return Array.isArray(v) ? v.length > 0 : !!(v && v.trim());
@@ -167,6 +222,7 @@ export default function ExamRunner({
   initialAnnotations,
   questionsHtml,
   focus,
+  locatable,
 }: {
   attemptId: string;
   contentItemId: string;
@@ -188,6 +244,9 @@ export default function ExamRunner({
   questionsHtml?: string | null;
   /** P15 — номер вопроса для авто-скролла на маунте (deep-link practice). undefined в mock. */
   focus?: number;
+  /** P2b-2 — номера вопросов с локатором ДО reveal (practice-reading). undefined в
+   *  mock/listening → «Where to look?» не рендерится. Булево «есть локатор», не para. */
+  locatable?: number[];
 }) {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>(initialAnswers);
   // Флаги «отметить на потом» — клиентские/эфемерные (review aid, не персистятся).
@@ -265,6 +324,33 @@ export default function ExamRunner({
   // НЕ сбрасывается при смене ответа: одна повторная попытка на вопрос). После 2-го
   // неверного чека открываем reveal-ссылку. В mock всегда пуст (PracticeCheck не рендерится).
   const [wrongTries, setWrongTries] = useState<Record<string, number>>({});
+
+  // P10 — метки уверенности (practice-only): клиентские, per-attempt, персист в
+  // localStorage. Гидрация из storage на маунте; запись гейтится confHydrated
+  // (state, не ref) — иначе первый write эффекта на маунте затёр бы сохранённое
+  // пустой картой (эффект видит confidence={} до применения setState). В mock
+  // всегда пуст (isPractice=false → эффекты no-op, чип не рендерится).
+  const [confidence, setConfidence] = useState<Record<string, ConfidenceLevel>>({});
+  const [confHydrated, setConfHydrated] = useState(false);
+  useEffect(() => {
+    if (!isPractice) return;
+    setConfidence(readConfidence(attemptId));
+    setConfHydrated(true);
+  }, [isPractice, attemptId]);
+  useEffect(() => {
+    if (!isPractice || !confHydrated) return;
+    writeConfidence(attemptId, confidence);
+  }, [isPractice, attemptId, confidence, confHydrated]);
+  // Тап по уровню: тот же уровень снова → снять метку (метка опциональна). Стабильна.
+  const setConf = useCallback((n: number, level: ConfidenceLevel) => {
+    setConfidence((c) => {
+      const k = String(n);
+      const next = { ...c };
+      if (next[k] === level) delete next[k];
+      else next[k] = level;
+      return next;
+    });
+  }, []);
 
   // P4 — комфорт чтения только в practice-reading (у Listening пассажа нет). Префы
   // глобальные (localStorage), применяются к PassagePane. mock/listening панель не рендерят.
@@ -376,6 +462,30 @@ export default function ExamRunner({
       window.dispatchEvent(new CustomEvent("exam:locate-para", { detail: { para } }));
     });
   }, []);
+
+  // P2b-2 — множество вопросов с локатором ДО reveal (сервер уже отгейтил qtype и
+  // наличие evidence.para). Стабильная ссылка → memo(QuestionBlock) держится; в mock/
+  // listening проп undefined → пустое множество → кнопка нигде не рендерится.
+  const locatableSet = useMemo(() => new Set(locatable ?? []), [locatable]);
+  // «Where to look?» → тянет para ОДНОГО вопроса owner-path (тот же гейт, что reveal),
+  // диспатчит существующий локатор (P2b-1 locatePara). true = para нашли; false → кнопку
+  // тихо прячем (best-effort: сервер мог вернуть null на гонке/ошибке). Стабильна.
+  const runLocate = useCallback(
+    (n: number): Promise<boolean> =>
+      locateEvidence(attemptId, n)
+        .then((res) => {
+          if (res?.para) {
+            locatePara(res.para);
+            return true;
+          }
+          return false;
+        })
+        .catch((e) => {
+          console.error("locateEvidence call failed", e);
+          return false;
+        }),
+    [attemptId, locatePara],
+  );
 
   const answered = Object.values(answers).filter(isAnswered).length;
   const remaining = durationSeconds != null ? Math.max(0, durationSeconds - elapsed) : null;
@@ -670,6 +780,9 @@ export default function ExamRunner({
           {!isListening && durationSeconds != null && questions.length > 0 && readerPrefs.pace && (
             <PacingChip targetSec={durationSeconds / questions.length} elapsedSec={practiceSeconds} answered={answered} />
           )}
+          {/* P5 — микро-цель/брейки (practice-only). Общий и для reading, и для
+              listening practice (обе ветки сюда попадают); mock не рендерит. */}
+          <GoalControl answered={answered} total={questions.length} practiceSeconds={practiceSeconds} />
           <button type="button" onClick={togglePause} aria-label={paused ? "Resume timer" : "Pause timer"} title={paused ? "Resume" : "Pause"} className="exam-ctrl" style={S.ctrlBtn}>
             <Icon name={paused ? "play" : "pause"} size={16} />
           </button>
@@ -713,9 +826,14 @@ export default function ExamRunner({
           onReveal={runReveal}
           // Listening → undefined: панели пассажа нет, локатор не рендерится.
           onLocate={isListening ? undefined : locatePara}
+          // P10 — метка уверенности (per-question); P2b-2 — локатор ДО reveal.
+          confidence={confidence[String(q.number)]}
+          onConfidence={setConf}
+          canLocate={locatableSet.has(q.number)}
+          onWhereToLook={isListening ? undefined : runLocate}
         />
       )),
-    [questions, answers, flags, set, toggle, flag, isPractice, checked, revealed, checkBusy, wrongTries, runCheck, runReveal, isListening, locatePara],
+    [questions, answers, flags, set, toggle, flag, isPractice, checked, revealed, checkBusy, wrongTries, runCheck, runReveal, isListening, locatePara, confidence, setConf, locatableSet, runLocate],
   );
 
   return (
@@ -986,6 +1104,10 @@ const QuestionBlock = memo(function QuestionBlock({
   onCheck,
   onReveal,
   onLocate,
+  confidence,
+  onConfidence,
+  canLocate,
+  onWhereToLook,
 }: {
   q: Question;
   value: string | string[];
@@ -1004,6 +1126,13 @@ const QuestionBlock = memo(function QuestionBlock({
   onReveal: (n: number) => void;
   /** P2b-1 — локатор абзаца (reading). undefined на listening. */
   onLocate?: (para: string) => void;
+  /** P10 — метка уверенности этого вопроса (practice). undefined = не отмечено. */
+  confidence?: ConfidenceLevel;
+  onConfidence: (n: number, level: ConfidenceLevel) => void;
+  /** P2b-2 — у вопроса есть локатор ДО reveal (сервер отгейтил qtype/наличие para). */
+  canLocate: boolean;
+  /** P2b-2 — запросить para ДО reveal (reading). undefined на listening. */
+  onWhereToLook?: (n: number) => Promise<boolean>;
 }) {
   const hasOptions = !!q.options && q.options.length > 0;
   // mcq_multi оценивается как набор букв (mcq_set) → нужен мультивыбор; остальные
@@ -1150,6 +1279,12 @@ const QuestionBlock = memo(function QuestionBlock({
         {practice && <FormatHint q={q} value={value} />}
         {/* P2b — только practice: сворачиваемая стратегия по типу вопроса (zero-key). */}
         {practice && <StrategyHint qtype={q.qtype} />}
+        {/* P2b-2 — локатор ДО reveal: reading (onWhereToLook задан), вопрос locatable,
+            ещё не раскрыт. После reveal кнопка «Show in passage» живёт внутри
+            PracticeCheck (P2b-1) → здесь гейтим !reveal, чтобы не дублировать. */}
+        {practice && onWhereToLook && canLocate && !reveal && (
+          <WhereToLook number={q.number} onWhereToLook={onWhereToLook} />
+        )}
         {/* P6/P7/P14 — только practice: проверка ответа + вторая попытка + раскрытие ключа. */}
         {practice && (
           <PracticeCheck
@@ -1162,6 +1297,8 @@ const QuestionBlock = memo(function QuestionBlock({
             onCheck={onCheck}
             onReveal={onReveal}
             onLocate={onLocate}
+            confidence={confidence}
+            onConfidence={onConfidence}
           />
         )}
       </div>
@@ -1228,6 +1365,8 @@ const PracticeCheck = memo(function PracticeCheck({
   onCheck,
   onReveal,
   onLocate,
+  confidence,
+  onConfidence,
 }: {
   number: number;
   value: string | string[];
@@ -1240,6 +1379,9 @@ const PracticeCheck = memo(function PracticeCheck({
   onReveal: (n: number) => void;
   /** P2b-1 — локатор абзаца (reading); undefined на listening → кнопка не рендерится. */
   onLocate?: (para: string) => void;
+  /** P10 — метка уверенности этого вопроса (practice). undefined = не отмечено. */
+  confidence?: ConfidenceLevel;
+  onConfidence: (n: number, level: ConfidenceLevel) => void;
 }) {
   // «Check» появляется только когда вопрос отвечён (непустой ответ).
   if (!isAnswered(value)) return null;
@@ -1295,6 +1437,24 @@ const PracticeCheck = memo(function PracticeCheck({
             ))}
         </div>
       )}
+      {/* P10 — метка уверенности (опциональна). Тот же answered-гейт, что у Check
+          (PracticeCheck выше вернул null для неотвеченных). Своя строка (flex-basis:100%). */}
+      <div className="exam-conf" role="group" aria-label={`How sure were you about question ${number}?`}>
+        <span className="exam-conf-label">How sure?</span>
+        {(["low", "med", "high"] as const).map((lvl) => (
+          <button
+            key={lvl}
+            type="button"
+            className="exam-conf-opt"
+            data-level={lvl}
+            aria-pressed={confidence === lvl}
+            data-active={confidence === lvl ? "" : undefined}
+            onClick={() => onConfidence(number, lvl)}
+          >
+            {lvl === "low" ? "Unsure" : lvl === "med" ? "Maybe" : "Sure"}
+          </button>
+        ))}
+      </div>
     </div>
   );
 });
@@ -1349,6 +1509,168 @@ function PacingChip({ targetSec, elapsedSec, answered }: { targetSec: number; el
       <span className="exam-pace-target">{target}</span>
       <span className="exam-pace-status">{label}</span>
     </span>
+  );
+}
+
+/**
+ * WhereToLook (P2b-2) — практис-кнопка «Where to look?» ДО reveal (reading). Тянет
+ * para одного вопроса owner-path (тот же гейт, что reveal) и подсвечивает абзац в
+ * пассаже (переиспользует локатор P2b-1). Сервер вернул null (гонка/ошибка/qtype-
+ * гейт) → кнопку тихо прячем. Локальные hidden/busy живут в детях, чтобы пережить
+ * ре-рендеры memo(QuestionBlock).
+ */
+const WhereToLook = memo(function WhereToLook({
+  number,
+  onWhereToLook,
+}: {
+  number: number;
+  onWhereToLook: (n: number) => Promise<boolean>;
+}) {
+  const [hidden, setHidden] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (hidden) return null;
+  return (
+    <div className="exam-wtl">
+      <button
+        type="button"
+        className="exam-locate-btn"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void onWhereToLook(number)
+            .then((ok) => {
+              if (!ok) setHidden(true);
+            })
+            .finally(() => setBusy(false));
+        }}
+      >
+        <Icon name="search" size={14} strokeWidth={2.4} /> Where to look?
+      </button>
+    </div>
+  );
+});
+
+/**
+ * GoalControl (P5) — практис-цель сессии + брейк-ремайндер (локальная форма).
+ * Чип answered/goal у таймера + поповер настроек (цель 5/10/20/All, брейк 15/25м).
+ * Цель достигнута → ненавязчивое поздравление; брейк каждые X минут → мягкий ремайндер
+ * (оба через reduced-motion-aware тост). Prefs глобальные в localStorage; без XP/
+ * стриков/сервера. Рендерится ТОЛЬКО в practice-ветке таймера (mock не монтирует).
+ */
+function GoalControl({
+  answered,
+  total,
+  practiceSeconds,
+}: {
+  answered: number;
+  total: number;
+  practiceSeconds: number;
+}) {
+  const [prefs, setPrefs] = useState<GoalPrefs>(GOAL_DEFAULT);
+  const [hydrated, setHydrated] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const celebrated = useRef(false);
+  const breakAck = useRef(0);
+
+  // Гидрация/персист префов — client-only (как reader-prefs), гейт hydrated не даёт
+  // маунт-записи затереть storage до чтения.
+  useEffect(() => {
+    setPrefs(readGoalPrefs());
+    setHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (hydrated) writeGoalPrefs(prefs);
+  }, [hydrated, prefs]);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 6000);
+  }, []);
+
+  const goalCount = prefs.goal === "all" ? total : prefs.goal;
+  const reached = goalCount != null && goalCount > 0 && answered >= goalCount;
+
+  // Поздравление один раз на достижение; сбрасывается, если цель отодвинули/сменили.
+  useEffect(() => {
+    if (reached && !celebrated.current) {
+      celebrated.current = true;
+      showToast(prefs.breakMin != null ? "Goal reached — nice work. Time for a short break?" : "Goal reached — nice work!");
+    } else if (!reached) {
+      celebrated.current = false;
+    }
+  }, [reached, prefs.breakMin, showToast]);
+
+  // Брейк-ремайндер каждые breakMin минут practice-времени (счётчик, не тик-в-тик).
+  useEffect(() => {
+    if (prefs.breakMin == null) return;
+    const passed = Math.floor(practiceSeconds / (prefs.breakMin * 60));
+    if (passed > breakAck.current && passed > 0) {
+      breakAck.current = passed;
+      showToast(`You've been at it ${passed * prefs.breakMin} min — a short break helps focus.`);
+    }
+  }, [practiceSeconds, prefs.breakMin, showToast]);
+
+  const setGoal = (goal: GoalValue | null) => setPrefs((p) => ({ ...p, goal }));
+  // Смена интервала: якорим ack на текущее время, чтобы не выстрелить ретро-ремайндерами.
+  const setBreak = (breakMin: 15 | 25 | null) => {
+    breakAck.current = breakMin != null ? Math.floor(practiceSeconds / (breakMin * 60)) : 0;
+    setPrefs((p) => ({ ...p, breakMin }));
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        className="exam-goal-chip"
+        data-reached={reached ? "" : undefined}
+        aria-expanded={open}
+        aria-label="Session goal"
+        title="Session goal"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Icon name="target" size={15} strokeWidth={2.4} />
+        <span className="exam-goal-count">{goalCount != null ? `${Math.min(answered, goalCount)}/${goalCount}` : "Goal"}</span>
+      </button>
+      {open && (
+        <>
+          <button type="button" className="exam-goal-backdrop" aria-label="Close session goal" onClick={() => setOpen(false)} />
+          <div className="exam-goal-panel" role="dialog" aria-label="Session goal">
+            <div className="exam-reader-row">
+              <span className="exam-reader-label">Session goal</span>
+              <div className="exam-reader-seg" role="group" aria-label="Session goal">
+                <button type="button" className="exam-reader-opt" aria-pressed={prefs.goal == null} data-active={prefs.goal == null ? "" : undefined} onClick={() => setGoal(null)}>Off</button>
+                {GOAL_CHOICES.map((g) => (
+                  <button key={g} type="button" className="exam-reader-opt" aria-pressed={prefs.goal === g} data-active={prefs.goal === g ? "" : undefined} onClick={() => setGoal(g)}>{g}</button>
+                ))}
+                <button type="button" className="exam-reader-opt" aria-pressed={prefs.goal === "all"} data-active={prefs.goal === "all" ? "" : undefined} onClick={() => setGoal("all")}>All</button>
+              </div>
+            </div>
+            <div className="exam-reader-row">
+              <span className="exam-reader-label">Break reminder</span>
+              <div className="exam-reader-seg" role="group" aria-label="Break reminder">
+                <button type="button" className="exam-reader-opt" aria-pressed={prefs.breakMin == null} data-active={prefs.breakMin == null ? "" : undefined} onClick={() => setBreak(null)}>Off</button>
+                {BREAK_CHOICES.map((b) => (
+                  <button key={b} type="button" className="exam-reader-opt" aria-pressed={prefs.breakMin === b} data-active={prefs.breakMin === b ? "" : undefined} onClick={() => setBreak(b)}>{b}m</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+      {toast && (
+        <div className="exam-goal-toast" role="status" aria-live="polite">
+          <Icon name="bell" size={15} strokeWidth={2.4} />
+          <span className="exam-goal-toast-msg">{toast}</span>
+          <button type="button" className="exam-goal-toast-x" aria-label="Dismiss" onClick={() => setToast(null)}>
+            <Icon name="x" size={14} strokeWidth={2.6} />
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1592,6 +1914,21 @@ const READING_CSS = `
 .exam-locate-btn:hover{background:var(--surface-hover)}
 @media (pointer:coarse){.exam-locate-btn{min-height:44px}}
 
+/* P2b-2 «Where to look?» ДО reveal — обёртка держит отступ 39px как check/strategy;
+   кнопка переиспользует .exam-locate-btn (тап-таргет уже там). */
+.exam-wtl{margin-top:10px;padding-left:39px}
+
+/* P10 confidence — метка уверенности (practice-only), своя строка под check
+   (flex-basis:100% внутри .exam-check). Токены; тап-таргеты в @media coarse. */
+.exam-conf{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:2px}
+.exam-conf-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.exam-conf-opt{display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);font-family:var(--font-ui);font-size:var(--text-xs);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.exam-conf-opt:hover{background:var(--surface-hover);color:var(--text-primary)}
+.exam-conf-opt[data-active][data-level="low"]{background:var(--warn-subtle);border-color:var(--warn);color:var(--warn-text)}
+.exam-conf-opt[data-active][data-level="med"]{background:var(--brand-subtle);border-color:var(--brand);color:var(--brand)}
+.exam-conf-opt[data-active][data-level="high"]{background:var(--brand);border-color:var(--brand);color:var(--text-on-brand)}
+@media (pointer:coarse){.exam-conf-opt{min-height:44px}}
+
 /* Own-A pacing chip — темп-коуч у practice count-up (reading). Subtle-токены, без алармизма:
    behind = warn (не error). Статичный (без анимаций). Не интерактивен → без тап-таргета. */
 .exam-pace{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;white-space:nowrap;line-height:1}
@@ -1629,6 +1966,23 @@ const READING_CSS = `
 @media (min-width:1024px){.exam-reader-panel{top:64px}}
 @media (prefers-reduced-motion:reduce){.exam-reader-panel{animation:none}}
 @media (pointer:coarse){.exam-reader-opt{min-height:44px}}
+
+/* P5 goal — чип цели у practice-таймера + поповер (контент переиспользует
+   .exam-reader-row/-label/-seg/-opt) + reduced-motion-aware тост поздравления/брейка. */
+.exam-goal-chip{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 12px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);cursor:pointer;transition:var(--transition-colors)}
+.exam-goal-chip:hover{background:var(--surface-hover);color:var(--text-primary)}
+.exam-goal-chip[data-reached]{border-color:var(--success);color:var(--success-text)}
+.exam-goal-count{font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;letter-spacing:.02em}
+.exam-goal-backdrop{position:fixed;inset:0;z-index:39;border:none;background:transparent;cursor:default;padding:0}
+.exam-goal-panel{position:fixed;top:60px;right:12px;z-index:40;width:min(280px,calc(100vw - 24px));display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-lg);animation:exam-reveal-in .2s cubic-bezier(.16,1,.3,1) both}
+.exam-goal-toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:55;display:flex;align-items:center;gap:9px;max-width:min(440px,calc(100vw - 24px));padding:11px 12px 11px 15px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-lg);animation:exam-reveal-in .24s cubic-bezier(.16,1,.3,1) both}
+.exam-goal-toast svg{flex:none;color:var(--brand)}
+.exam-goal-toast-msg{font-family:var(--font-ui);font-size:var(--text-sm);font-weight:600;color:var(--text-primary);line-height:1.4}
+.exam-goal-toast-x{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;background:transparent;border-radius:8px;color:var(--text-muted);cursor:pointer;transition:var(--transition-colors)}
+.exam-goal-toast-x:hover{background:var(--surface-hover);color:var(--text-primary)}
+@media (min-width:1024px){.exam-goal-panel{top:64px}}
+@media (prefers-reduced-motion:reduce){.exam-goal-panel,.exam-goal-toast{animation:none}}
+@media (pointer:coarse){.exam-goal-chip{min-height:44px}.exam-goal-toast-x{width:44px;height:44px}}
 @keyframes nine-blink{0%,100%{opacity:1}50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){[style*="nine-blink"]{animation:none!important}}
 
