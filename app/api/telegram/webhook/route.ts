@@ -17,6 +17,7 @@ import { uploadAudio } from "@/lib/telegram/storage";
 import { importRunner } from "@/lib/import/runner/import-runner";
 import { setRunnerAudioSrc } from "@/lib/import/runner/sanitize-runner";
 import { RegradeRequiredError, DuplicateTestError } from "@/lib/import/persist";
+import { contentTag } from "@/lib/content/exam-content";
 import { publishReviewedContentItem } from "@/lib/content/publish";
 import { importVocabDeck } from "@/lib/import/vocab/persist-vocab";
 import { MAX_FILE_BYTES, VocabParseError } from "@/lib/import/vocab/parse-vocab";
@@ -176,6 +177,11 @@ async function handleHtmlUpload(
     // createdBy опущен -> persistTest пишет null (у бота нет Supabase-сессии).
     // sourceFilePath даёт идемпотентность.
     const r = await importRunner(html, { sourceFilePath: name });
+    // Реимпорт published-теста меняет id (persist: DELETE+INSERT) — без сброса тега
+    // кэш каталога/exam-контента держал бы удалённый id до TTL (start → FK-500).
+    // Зеркало uploadTest в /admin: широкий тег гасит все per-id энтри разом.
+    revalidateTag("content_item");
+    revalidateTag(contentTag(r.id));
     const warn = r.warnings ? `\n⚠️ предупреждений: ${r.warnings}` : "";
     const brand = r.brandWarnings.length
       ? `\n🚩 бренд не вычищен (новый источник?): ${r.brandWarnings.join("; ")} — проверь шапку в раннере.`
@@ -283,7 +289,10 @@ async function handleAudioUpload(chatId: number, file: TgFile): Promise<void> {
         .set({ runnerHtml: setRunnerAudioSrc(test.runnerHtml, url) })
         .where(eq(contentItem.id, test.id));
     }
+    // Аудио-привязка меняет кэшируемый passage.audio_path — сбрасываем каталог
+    // (content_item) и per-id контент-кэши этого теста (getExamContent).
     revalidateTag("content_item");
+    revalidateTag(contentTag(test.id));
     await sendUploadResult(
       chatId,
       `🎧 Аудио привязано к «${test.title}». Тест готов.`,

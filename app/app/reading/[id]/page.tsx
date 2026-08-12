@@ -1,9 +1,9 @@
 import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { annotation, answerKey, question } from "@/db/schema";
+import { getExamContent } from "@/lib/content/exam-content";
 import { ModeStart } from "@/components/exam/ModeStart";
 import {
   type AttemptMode,
@@ -14,6 +14,7 @@ import {
 } from "@/lib/exam/access";
 import { categoryLabel } from "@/lib/labels";
 import { effectiveTier, type Tier } from "@/lib/tiers";
+import { isUuid } from "@/lib/uuid";
 import { normalizePassageHtml } from "@/lib/reading/normalize-passage";
 import ExamRunner from "./ExamRunner";
 
@@ -38,52 +39,42 @@ export default async function ReadingTestPage({
 }) {
   const user = await requireUser();
   const { id } = await params;
-  const supabase = await createClient();
+  // Malformed id не должен доезжать до uuid-каста в Drizzle (invalid input syntax →
+  // 500); раньше 404 давал anon-клиент `.single()`, теперь гейтим сами (зеркало result).
+  if (!isUuid(id)) notFound();
   const sp = await searchParams;
   const modeParam: AttemptMode | null =
     sp.mode === "practice" || sp.mode === "mock" ? sp.mode : null;
 
-  // content_item, профиль, пассажи, вопросы и attempt-факты (незакрытая попытка /
-  // была ли сдача) независимы → один параллельный слой вместо «single, потом
-  // Promise.all» (content_item был отдельным RT перед батчем).
-  // answer_key намеренно НЕ выбирается (RLS-locked; не утекает до submit).
-  const [testRes, profile, passagesRes, questionsRes, existing, attempted] = await Promise.all([
-    supabase
-      .from("content_item")
-      .select("id,title,category,duration_seconds,tier_required")
-      .eq("id", id)
-      .single(),
+  // Статичный published-контент (метаданные теста + пассажи + вопросы) вынесен в
+  // unstable_cache (W2-6): под нагрузкой рендер экзамена не бьёт БД за ним на каждый
+  // старт — сбрасывается тегом на (ре)импорте/публикации. Профиль и attempt-факты
+  // (незакрытая попытка / была ли сдача) — per-user, считаются ВНЕ кэша, на каждый
+  // запрос, параллельно с чтением контента. answer_key намеренно НЕ читается (в кэш
+  // не попадает; не утекает до submit).
+  const [content, profile, existing, attempted] = await Promise.all([
+    getExamContent(id),
     getProfile(),
-    supabase
-      .from("passage")
-      .select('title,body_html,"order",audio_path,questions_html')
-      .eq("content_item_id", id)
-      .order("order"),
-    supabase
-      .from("question")
-      .select("id,number,qtype,prompt_html,options,group_key,passage_id")
-      .eq("content_item_id", id)
-      .order("number"),
     findInProgressAttempt(user.id, id),
     hasSubmittedAttempt(user.id, id),
   ]);
-  const test = testRes.data;
-  if (!test) notFound();
+  // getExamContent гейтит status='published' (owner-путь обходит RLS) → draft/
+  // отсутствие = null = 404, тот же гейт, что раньше давал anon-клиент.
+  if (!content) notFound();
+  const { test } = content;
   // Нормализуем разметку абзацев каждого пассажа к единому контракту (.rp +
   // data-letter) на read-time — вся разнородность форматов в одной тестируемой
   // функции, PassagePane рисует один CSS-путь. audio_path/order/title сохраняются.
-  const passages = passagesRes.data?.map((p) => ({
+  const passages = content.passages.map((p) => ({
     ...p,
-    body_html: normalizePassageHtml((p as { body_html: string }).body_html, test.title),
+    body_html: normalizePassageHtml(p.body_html, test.title),
   }));
-  const questionsData = questionsRes.data;
+  const questionsData = content.questions;
 
   // Verbatim question-panel HTML (real-IELTS render). Используем, только если ВСЕ
   // пассажи его несут (иначе — фоллбэк на атомизированный список). Listening и
   // старые/непокрытые тесты → null → текущий рендер.
-  const qHtmlParts = (passagesRes.data ?? []).map(
-    (p) => (p as { questions_html: string | null }).questions_html,
-  );
+  const qHtmlParts = content.passages.map((p) => p.questions_html);
   const questionsHtml =
     qHtmlParts.length > 0 && qHtmlParts.every(Boolean) ? qHtmlParts.join("\n") : null;
 

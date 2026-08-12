@@ -1,8 +1,9 @@
 import { and, asc, desc, eq, exists, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
-import { answerKey, attempt, attemptReviewSnapshot, contentItem, question } from "@/db/schema";
+import { answerKey, attempt, attemptReviewSnapshot, question } from "@/db/schema";
 import { getActiveBadges } from "@/lib/content/badges";
+import { getContentMeta } from "@/lib/content/exam-content";
 import { getProfile, getUser } from "@/lib/auth";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { grade, type GradeKey } from "@/lib/grading/grade";
@@ -162,22 +163,12 @@ export default async function ResultPage({
         ),
       )
       .limit(1),
-    db
-      .select({
-        title: contentItem.title,
-        category: contentItem.category,
-        section: contentItem.section,
-        durationSeconds: contentItem.durationSeconds,
-        // Только флаг наличия раннера для маршрутизации «Try again» — НЕ сам
-        // runner_html (~200КБ); как в каталоге (getPublishedTests).
-        hasRunner: sql<boolean>`${contentItem.runnerHtml} IS NOT NULL`,
-        // Debrief near-miss (S1): шкала raw→band для computeNearMiss. Только
-        // Full-тесты (40Q) её имеют; одиночный passage/part -> null (только %).
-        bandScale: contentItem.bandScale,
-      })
-      .from(contentItem)
-      .where(eq(contentItem.id, id))
-      .limit(1),
+    // Статичные метаданные теста (title/category/section/duration/has_runner +
+    // band-шкала raw→band для computeNearMiss) вынесены в unstable_cache (W2-6):
+    // published-static, не-user-scoped, без answer_key — /result не бьёт БД за ними
+    // на каждый визит. БЕЗ published-гейта СПЕЦИАЛЬНО: разбор сданной попытки виден,
+    // даже если тест позже депубликовали (доступ гейтит владение попыткой ниже).
+    getContentMeta(id),
     // Percentile vs other students: сколько ДРУГИХ набрали строго меньше этой
     // попытки. att.raw_score берётся коррелированным подзапросом по attemptId
     // (NULL → сравнение false → below=0; JS-гард ниже прячет метрику для legacy).
@@ -272,16 +263,16 @@ export default async function ResultPage({
 
   const banded = att.bandScore != null;
   const correctPct = result.total > 0 ? result.rawScore / result.total : 0;
-  const title = ci[0]?.title ?? "Your report";
-  const category = ci[0]?.category ?? null;
+  const title = ci?.title ?? "Your report";
+  const category = ci?.category ?? null;
   // Result-роут общий для обеих секций (reading/listening). Drill- и catalog-ссылки
   // должны вести в каталог ЭТОЙ секции — иначе после Listening-теста «Drill»/«Back to
   // catalog» уходили в Reading-фильтр, где listening-типов нет (AUDIT P2).
-  const section = ci[0]?.section === "listening" ? "listening" : "reading";
+  const section = ci?.section === "listening" ? "listening" : "reading";
   const catalogBase = `/app/${section}`;
   // «Try again» повторяет маршрутизацию каталога: тесты с очищенным runner_html идут
   // в iframe-обёртку (/app/exam), legacy без раннера — в React-раннер (/app/reading).
-  const retryHref = ci[0]?.hasRunner ? `/app/exam/${id}` : `/app/reading/${id}`;
+  const retryHref = ci?.hasRunner ? `/app/exam/${id}` : `/app/reading/${id}`;
 
   // Honest key metrics — only those backed by real data are rendered. Colour is
   // semantic: green ONLY when the number is genuinely good; neutral otherwise.
@@ -293,7 +284,7 @@ export default async function ResultPage({
   // Anything far past the test's allotted time is unreliable, not real reading
   // time — omit it rather than display garbage. (A cap at submit-write is the
   // separate root follow-up; this guards every legacy row already in the DB.)
-  const allottedSec = ci[0]?.durationSeconds ?? 3600;
+  const allottedSec = ci?.durationSeconds ?? 3600;
   const timeReliable = att.timeUsedSeconds != null && att.timeUsedSeconds <= allottedSec * 3;
   if (timeReliable) {
     metrics.push({ value: fmtDuration(att.timeUsedSeconds!), label: "Time taken", color: "var(--sky-500)" });
@@ -368,7 +359,7 @@ export default async function ResultPage({
   // queries. `missed` is the safe subset (number/qtype only, no answer key) —
   // rendered even when gated; `replay` carries answer/why/evidence and is
   // built ONLY when fullReview, mirroring the akItems gate above.
-  const bandScale = (ci[0]?.bandScale as Record<string, number> | null) ?? null;
+  const bandScale = ci?.bandScale ?? null;
   const nearMiss = computeNearMiss(bandScale, result.rawScore);
   // computeGeneralizedBlindSpot гейтит генерализацию средним по остальным
   // типам (P1 fix) — на all-miss/ровной ничьей результат null, а не
