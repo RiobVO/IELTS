@@ -46,9 +46,11 @@ jobs:
       - name: pg_dump (read-only) → gzip
         env:
           BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
-        # Run pg_dump from the official postgres:17 image — the client major must be
-        # >= the server major (Supabase runs 17.x; the old postgres:16 client refused
-        # with "server version mismatch" and every artifact was an empty gzip). The
+        # Run pg_dump from the official postgres:17 image — keep the pin in LOCKSTEP
+        # with the Supabase server major (17.x today): an older client refuses with
+        # "server version mismatch" (that bug produced empty gzips for days), while a
+        # newer client's dump isn't guaranteed to restore into a same-major DR target.
+        # When Supabase upgrades its major, this step fails loud — bump the pin then. The
         # secret is passed into the container by name (-e VAR without a value), so it
         # never appears in the process argv. `shell: bash` is explicit because only
         # the explicit form enables pipefail — the implicit default is plain `bash -e`,
