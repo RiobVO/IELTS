@@ -17,7 +17,9 @@ export type Criteria =
       minQuestions: number;
       minPct: number;
     }
-  | { type: "first_place"; scope: string; period: string };
+  | { type: "first_place"; scope: string; period: string }
+  | { type: "mistakes_closed"; count: number }
+  | { type: "weak_type_cleared"; perType: number };
 
 /** Per-qtype aggregate (summed correct/total across submitted attempts). */
 export interface QtypeAgg {
@@ -33,6 +35,17 @@ export interface UserStats {
   hasPerfect: boolean;
   perQtype: Map<string, QtypeAgg>;
   isFirstPlaceGlobalAllTime: boolean;
+  /** Total `mistake_resolution` rows across all qtypes (W2-5 study-loop badges). */
+  closedMistakesTotal: number;
+  /** `mistake_resolution` rows per qtype — feeds the "cleared one weak type" badge. */
+  closedByQtype: Map<string, number>;
+}
+
+/** Best (highest) per-qtype closed count, or 0 when nothing is closed yet. */
+function bestClosedByQtype(closedByQtype: Map<string, number>): number {
+  let best = 0;
+  for (const n of closedByQtype.values()) best = Math.max(best, n);
+  return best;
 }
 
 /** Does `stats` satisfy `criteria`? Unknown type => not met. */
@@ -61,6 +74,10 @@ export function isMet(criteria: Criteria, stats: UserStats): boolean {
         criteria.period === "all_time" &&
         stats.isFirstPlaceGlobalAllTime
       );
+    case "mistakes_closed":
+      return stats.closedMistakesTotal >= criteria.count;
+    case "weak_type_cleared":
+      return bestClosedByQtype(stats.closedByQtype) >= criteria.perType;
     default:
       // Unknown discriminant — never award.
       return false;
@@ -103,6 +120,18 @@ export function badgeProgress(criteria: Criteria, stats: UserStats): BadgeProgre
         pct: stats.isFirstPlaceGlobalAllTime ? 1 : 0,
         hint: stats.isFirstPlaceGlobalAllTime ? "Earned" : "Reach #1 globally",
       };
+    case "mistakes_closed":
+      return {
+        pct: clamp01(stats.closedMistakesTotal / criteria.count),
+        hint: `${stats.closedMistakesTotal} / ${criteria.count} mistakes closed`,
+      };
+    case "weak_type_cleared": {
+      const best = bestClosedByQtype(stats.closedByQtype);
+      return {
+        pct: clamp01(best / criteria.perType),
+        hint: `${best} / ${criteria.perType} closed in one weak type`,
+      };
+    }
     default:
       return { pct: 0, hint: "" };
   }

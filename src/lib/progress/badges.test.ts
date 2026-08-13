@@ -11,6 +11,8 @@ const base: UserStats = {
   hasPerfect: false,
   perQtype: new Map(),
   isFirstPlaceGlobalAllTime: false,
+  closedMistakesTotal: 0,
+  closedByQtype: new Map(),
 };
 
 describe("isMet", () => {
@@ -96,6 +98,38 @@ describe("isMet", () => {
     });
   });
 
+  describe("mistakes_closed", () => {
+    const c: Criteria = { type: "mistakes_closed", count: 15 };
+    it("met на пороге и выше (>=, не >)", () => {
+      expect(isMet(c, { ...base, closedMistakesTotal: 15 })).toBe(true);
+      expect(isMet(c, { ...base, closedMistakesTotal: 16 })).toBe(true);
+    });
+    it("не-met ниже порога", () => {
+      expect(isMet(c, { ...base, closedMistakesTotal: 14 })).toBe(false);
+    });
+  });
+
+  describe("weak_type_cleared", () => {
+    const c: Criteria = { type: "weak_type_cleared", perType: 5 };
+    it("met, если хотя бы один qtype достиг порога", () => {
+      const closedByQtype = new Map([
+        ["tfng", 2],
+        ["matching_headings", 5],
+      ]);
+      expect(isMet(c, { ...base, closedByQtype })).toBe(true);
+    });
+    it("не-met, если закрытия размазаны по типам ниже порога", () => {
+      const closedByQtype = new Map([
+        ["tfng", 3],
+        ["matching_headings", 4],
+      ]);
+      expect(isMet(c, { ...base, closedByQtype })).toBe(false);
+    });
+    it("не-met без закрытий вовсе", () => {
+      expect(isMet(c, base)).toBe(false);
+    });
+  });
+
   it("неизвестный criteria.type → false (defensive)", () => {
     // невалидный дискриминант из jsonb не должен выдавать бейдж
     const bogus = { type: "galaxy_brain", min: 1 } as unknown as Criteria;
@@ -165,6 +199,34 @@ describe("badgeProgress", () => {
     const earned = badgeProgress(c, { ...base, isFirstPlaceGlobalAllTime: true });
     expect(earned.pct).toBe(1);
     expect(earned.hint).toBe("Earned");
+  });
+
+  it("mistakes_closed: ратио + hint 'N / M mistakes closed'", () => {
+    const r = badgeProgress({ type: "mistakes_closed", count: 15 }, { ...base, closedMistakesTotal: 3 });
+    expect(r.pct).toBeCloseTo(0.2);
+    expect(r.hint).toBe("3 / 15 mistakes closed");
+  });
+
+  it("mistakes_closed: клиппинг сверху до 1 при превышении порога", () => {
+    const r = badgeProgress({ type: "mistakes_closed", count: 15 }, { ...base, closedMistakesTotal: 40 });
+    expect(r.pct).toBe(1);
+    expect(r.hint).toBe("40 / 15 mistakes closed");
+  });
+
+  it("weak_type_cleared: трекает лучший qtype, а не сумму по всем", () => {
+    const closedByQtype = new Map([
+      ["tfng", 2],
+      ["matching_headings", 4],
+    ]);
+    const r = badgeProgress({ type: "weak_type_cleared", perType: 5 }, { ...base, closedByQtype });
+    expect(r.pct).toBeCloseTo(0.8);
+    expect(r.hint).toBe("4 / 5 closed in one weak type");
+  });
+
+  it("weak_type_cleared: без закрытий → 0 / perType, без падения", () => {
+    const r = badgeProgress({ type: "weak_type_cleared", perType: 5 }, base);
+    expect(r.pct).toBe(0);
+    expect(r.hint).toBe("0 / 5 closed in one weak type");
   });
 
   it("неизвестный criteria.type → pct 0, пустой hint (defensive)", () => {
