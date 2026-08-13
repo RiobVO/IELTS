@@ -20,21 +20,31 @@ plain-SQL артефакт `db-backup-YYYYMMDD-HHMMSS.sql.gz`, retention 30 дн
 
 1. Скачать артефакт последнего УСПЕШНОГО рана:
    `gh run list --workflow=db-backup.yml --status success -L 5`, взять верхний,
-   `gh run download <id> -D <scratchdir>`. Из метаданных рана взять `createdAt`
-   (дата бэкапа) — она же аргумент валидатора. Если артефакт старше 48ч —
-   зафиксировать находку (workflow, возможно, падает), но репетицию продолжить.
+   `gh run download <id> -D <scratchdir>`. `<scratchdir>` — временный каталог
+   ВНЕ репозитория и вне облачно-синхронизируемых папок (Downloads/OneDrive/
+   Google Drive): до cleanup там лежат файлы с прод-PII. Дату бэкапа взять
+   командой `gh run view <id> --json createdAt -q .createdAt` — она же аргумент
+   валидатора. Если артефакт старше 48ч — зафиксировать находку (workflow,
+   возможно, падает), но репетицию продолжить.
 2. Пересоздать БД: `DROP DATABASE IF EXISTS ielts_restore_test WITH (FORCE);`
    `CREATE DATABASE ielts_restore_test;` (psql к базе `postgres`).
 3. Прогнать `scripts/bootstrap-supabase-local.sql` в `ielts_restore_test`
    (роли anon/authenticated/service_role, схема auth, auth.uid, стаб auth.users).
    Локально-безопасно; НИКОГДА не гнать против Supabase.
-4. Restore: `gunzip -c <dump>.sql.gz > dump.sql` → `psql -f dump.sql`
-   **без** `ON_ERROR_STOP` (ошибки ролей/auth/extensions ожидаемы), stderr в лог.
+4. Restore: `gunzip -c <dump>.sql.gz > dump.sql` →
+   `psql -h localhost -p 5432 -U postgres -d ielts_restore_test -f dump.sql`
+   (цель указывать явно — без `-d` psql возьмёт дефолт из окружения и дамп
+   уедет не туда) — **без** `ON_ERROR_STOP` (ошибки ролей/auth/extensions
+   ожидаемы), stderr в лог.
 5. Валидировать: `npx tsx scripts/_restore-drill.ts <createdAt>` — печатает
    `[OK]`/`[FAIL]`, exit 0 при полном успехе. Скрипт standalone (см. Appendix
    ниже — полный исходник), проверяет: 34 таблицы public
    (фильтр `!~ '^_'`), row count > 0 для profile/attempt/answer_key/content_item,
-   freshness: новейшая строка не старше 30 дней от даты бэкапа.
+   freshness: новейшая строка не старше 30 дней от даты бэкапа (и не новее её).
+   Порога «ожидаемое число строк» нет намеренно: `COPY` пер-таблично атомарен
+   (упал — 0 строк + ошибка в stderr-логе), поэтому частичная потеря данных
+   без следа в скрине ошибок `COPY`/`CREATE TABLE` по `public` невозможна —
+   `> 0` вместе с этим скрином достаточен.
 6. Cleanup (ОБЯЗАТЕЛЬНО — в дампе прод-PII): `DROP DATABASE ielts_restore_test`,
    удалить `.sql.gz`, `dump.sql`, лог ошибок и `scripts/_restore-drill.ts`.
 
@@ -165,12 +175,14 @@ async function main() {
     fail("freshness — no timestamp in attempt/profile/notification (empty DB?)");
   } else {
     const ageDays = (backupDate.getTime() - newest.getTime()) / 86_400_000;
-    if (ageDays <= FRESHNESS_MAX_AGE_DAYS)
+    // Данные «новее бэкапа» = неверный <backup-date-ISO> или не тот артефакт —
+    // это провал репетиции, а не заметка (допуск -2d на clock skew).
+    if (ageDays < -2)
+      fail(`freshness — newest row ${newest.toISOString()} is ${(-ageDays).toFixed(1)}d AFTER the backup date: wrong <backup-date-ISO> argument or wrong artifact`);
+    else if (ageDays <= FRESHNESS_MAX_AGE_DAYS)
       ok(`freshness — newest row ${newest.toISOString()} is ${ageDays.toFixed(1)}d before backup (<= ${FRESHNESS_MAX_AGE_DAYS}d)`);
     else
       fail(`freshness — newest row ${newest.toISOString()} is ${ageDays.toFixed(1)}d before backup (> ${FRESHNESS_MAX_AGE_DAYS}d): stale/frozen dump?`);
-    if (ageDays < -2)
-      console.log(`[note] newest row is ${(-ageDays).toFixed(1)}d AFTER the backup date — check the <backup-date-ISO> argument.`);
   }
 }
 
