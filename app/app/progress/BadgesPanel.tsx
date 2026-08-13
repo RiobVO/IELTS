@@ -39,6 +39,10 @@ const BADGE_ICON: Record<string, IconName> = {
   tfng_sniper: "target",
   completion_pro: "pencil-check",
   champion: "crown",
+  mistakes_cleared_5: "circle-check",
+  mistakes_cleared_15: "shield-check",
+  mistakes_cleared_40: "graduation-cap",
+  weakness_crusher: "target",
 };
 const iconFor = (code: string): IconName => BADGE_ICON[code] ?? "award";
 
@@ -48,6 +52,14 @@ const TRACK_DEF: { key: string; name: string; icon: IconName; codes: string[] }[
   { key: "volume", name: "Volume", icon: "dumbbell", codes: ["first_test", "tests_10", "tests_50"] },
   { key: "mastery", name: "Mastery", icon: "target", codes: ["tfng_sniper", "completion_pro", "perfect"] },
   { key: "rating", name: "Rating", icon: "star", codes: ["rating_1200", "rating_1500", "champion"] },
+  // Учебная петля (W2-5, сид 0045): закрытие ошибок вместо объёма. Лестница 5→15→40
+  // + Weakness Crusher (5 закрытий одного qtype) финальным узлом.
+  {
+    key: "study",
+    name: "Study loop",
+    icon: "circle-check",
+    codes: ["mistakes_cleared_5", "mistakes_cleared_15", "mistakes_cleared_40", "weakness_crusher"],
+  },
 ];
 
 const DEFAULT_GOAL = 5; // tests / week — стартовый таргет, пока у юзера нет истории недель
