@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/db";
 import { notification, notificationType } from "@/db/schema";
+import { logError } from "@/lib/monitoring/log-error";
 
 /** Значения совпадают с pgEnum notification_type (schema) — синхронизированы. */
 type NotificationType = (typeof notificationType.enumValues)[number];
@@ -35,7 +36,11 @@ export async function createNotifications(
       })),
     );
   } catch (e) {
-    console.error("createNotifications failed", e);
+    await logError({
+      source: "server",
+      message: `createNotifications failed: ${e instanceof Error ? e.message : String(e)}`,
+      stack: e instanceof Error ? e.stack : null,
+    });
   }
 }
 

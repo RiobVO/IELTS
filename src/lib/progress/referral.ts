@@ -31,6 +31,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { notification, profile, referral } from "@/db/schema";
+import { logError } from "@/lib/monitoring/log-error";
 
 export async function maybeRewardReferral(
   userId: string,
@@ -88,7 +89,11 @@ export async function maybeRewardReferral(
         body: "Your friend completed their first test — you earned +100 XP",
       });
     } catch (e) {
-      console.error("maybeRewardReferral: inviter notification failed", e);
+      await logError({
+        source: "server",
+        message: `maybeRewardReferral: inviter notification failed: ${e instanceof Error ? e.message : String(e)}`,
+        userId: inviterId,
+      });
     }
 
     try {
@@ -99,10 +104,19 @@ export async function maybeRewardReferral(
         body: "You earned +50 XP for signing up via an invite",
       });
     } catch (e) {
-      console.error("maybeRewardReferral: invitee notification failed", e);
+      await logError({
+        source: "server",
+        message: `maybeRewardReferral: invitee notification failed: ${e instanceof Error ? e.message : String(e)}`,
+        userId,
+      });
     }
   } catch (e) {
-    console.error("maybeRewardReferral failed", e);
+    await logError({
+      source: "server",
+      message: `maybeRewardReferral failed: ${e instanceof Error ? e.message : String(e)}`,
+      stack: e instanceof Error ? e.stack : null,
+      userId,
+    });
     return;
   }
 }

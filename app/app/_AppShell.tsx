@@ -1,6 +1,6 @@
 import { AppHeader, type ActivePage } from "@/components/app/AppHeader";
 import { getHeaderData } from "@/lib/notifications/header-data";
-import { markAllRead } from "@/lib/notifications/actions";
+import { markAllRead, markOneRead } from "@/lib/notifications/actions";
 import { signOut } from "../auth/actions";
 
 function computeInitials(name: string, email?: string | null): string {
@@ -43,6 +43,7 @@ export async function AppShell({
         unread={unread}
         recent={recent}
         markAllRead={markAllRead}
+        markOneRead={markOneRead}
         signOut={signOut}
       />
       {/* overflow-x:clip на контейнере контента — страховка мобильного бургер-drawer.
