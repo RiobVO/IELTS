@@ -8,6 +8,7 @@ import { payment } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { captureServer } from "@/lib/analytics/server";
 import { findPlan, PENDING_TTL_MS } from "@/lib/payments/plans";
+import { paymentsLive } from "@/lib/payments";
 import type { PaymentProviderKey } from "@/env";
 
 const VALID_PROVIDERS: readonly PaymentProviderKey[] = ["payme", "click", "uzum"];
@@ -33,9 +34,27 @@ export async function initiatePayment(formData: FormData): Promise<void> {
 
   const user = await requireUser();
 
+  // Валидация ДО гейта: гейт зависит от провайдера, а события воронки не должны
+  // уносить сырой client-input в телеметрию — только канонические значения плана.
   if (!isProvider(provider)) redirect("/app/upgrade?error=provider");
   const plan = findPlan(tier, months);
   if (!plan) redirect("/app/upgrade?error=plan");
+
+  // Гейт §12: без мерчант-ключа ЭТОГО провайдера в production платёжный флоу
+  // недоступен — вебхук всё равно fail-closed (400). Fail-closed ЗДЕСЬ: не плодим
+  // pending-строку в тупик, уводим на pricing с честным статусом. checkout_blocked
+  // — в after() (не блокирует редирект, как checkout_start).
+  if (!paymentsLive(provider)) {
+    after(() =>
+      captureServer("checkout_blocked", user.id, {
+        provider,
+        tier: plan.tier,
+        period_months: plan.months,
+        reason: "payments_unavailable",
+      }),
+    );
+    redirect("/app/upgrade?error=unavailable");
+  }
 
   // Стаб transaction_id — он же idempotency-ключ для будущего вебхука. При
   // реальном онбординге сюда ляжет id, который вернёт провайдер на init-вызов.
@@ -70,4 +89,23 @@ export async function initiatePayment(formData: FormData): Promise<void> {
 
   // Страница чекаута — зона ответственности Agent U; просто уводим туда с pid.
   redirect(`/app/upgrade/checkout?pid=${row!.id}`);
+}
+
+/**
+ * Waitlist-лайт (§12): пока оплата не запущена, кнопка на pricing регистрирует
+ * интерес к платному тарифу. Никакой новой таблицы и никакого owner-path — это
+ * только продуктовая телеметрия (спрос до онбординга мерчанта). distinctId =
+ * user.id (сервер-авторитетно). tier/months нормализуются через findPlan — сырой
+ * client-input в телеметрию не уходит (кривые значения схлопываются в unknown).
+ */
+export async function joinPaymentWaitlist(input: {
+  tier: string;
+  months: number;
+}): Promise<void> {
+  const user = await requireUser();
+  const plan = findPlan(String(input.tier), Number(input.months));
+  await captureServer("payment_waitlist", user.id, {
+    tier: plan?.tier ?? "unknown",
+    period_months: plan?.months ?? 0,
+  });
 }

@@ -15,6 +15,9 @@ export const AnalyticsEvent = {
   OnboardingComplete: "onboarding_complete",
   ResultView: "result_view",
   CheckoutStart: "checkout_start",
+  CheckoutBlocked: "checkout_blocked",
+  PaymentFailed: "payment_failed",
+  PaymentWaitlist: "payment_waitlist",
 } as const;
 
 /** Свойства каждого события (ключ объекта = имя события в PostHog). */
@@ -41,6 +44,21 @@ export type EventProperties = {
   onboarding_complete: { target_band: number; has_region: boolean };
   result_view: { content_item_id: string; mode: "practice" | "mock"; banded: boolean; raw_score: number; total: number };
   checkout_start: { provider: string; tier: string; period_months: number; amount: number };
+  /** Оплата недоступна на гейте (paymentsLive=false) — воронка не должна молча
+   *  терять этот отвал. `reason` — почему заблокировано (сейчас единственная
+   *  причина: мерчант-ключ не сконфигурирован в production). */
+  checkout_blocked: {
+    provider: string;
+    tier: string;
+    period_months: number;
+    reason: "payments_unavailable";
+  };
+  /** Неуспешный исход применения платежа (webhook): невалидная сумма/пара,
+   *  протухший pending или внутренняя ошибка. Слепая зона воронки до этого шага. */
+  payment_failed: { provider: string; reason: "invalid" | "expired" | "error" };
+  /** Клик по «Notify me when paid plans launch» пока оплата не запущена —
+   *  измеряем спрос на платные тарифы до онбординга мерчанта. */
+  payment_waitlist: { tier: string; period_months: number };
 };
 
 /** Имена событий — производны от контракта свойств, чтобы не разъехались. */

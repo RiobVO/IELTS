@@ -22,7 +22,13 @@ import { captureError } from "@/lib/monitoring/capture";
 import { db } from "@/db";
 import { payment, profile } from "@/db/schema";
 import { type PaymentProviderKey, paymentSecret } from "@/env";
-import { isPaymentExpired, validateEntitlement, stacksOnExistingPeriod } from "./plans";
+import {
+  isPaymentExpired,
+  validateEntitlement,
+  stacksOnExistingPeriod,
+  paymentFailureReason,
+  type PaymentOutcome,
+} from "./plans";
 import { hmacHexValid } from "./webhook-signature";
 
 /** true в боевом окружении — там stub-режим вебхука запрещён (fail closed). */
@@ -31,6 +37,24 @@ function isProduction(): boolean {
     process.env.VERCEL_ENV === "production" ||
     process.env.NODE_ENV === "production"
   );
+}
+
+/**
+ * Доступен ли пользователю реальный платёжный флоу.
+ *
+ * Зеркалит условие приёма verifyWebhook: показывать чекаут можно ТОЛЬКО когда
+ * последующий вебхук его завершит. В production для этого нужен мерчант-ключ
+ * провайдера — без него verifyWebhook fail-closed вернёт 400, и юзер упрётся в
+ * тупик оплаты (сырой HTTP-400). Вне production sandbox-стаб принимает вебхук без
+ * ключа, поэтому флоу остаётся рабочим инструментом разработки.
+ *
+ * Гейт ПО-ПРОВАЙДЕРНО: сконфигурированный payme-ключ не делает живыми click/uzum
+ * (иначе кованая форма с provider=click создала бы pending в тупик). Дефолт
+ * "payme" — единственный провайдер, который pricing-CTA реально инициирует.
+ */
+export function paymentsLive(provider: PaymentProviderKey = "payme"): boolean {
+  if (!isProduction()) return true;
+  return paymentSecret(provider) !== null;
 }
 
 /**
@@ -92,13 +116,16 @@ export function verifyWebhook(
 export async function applyCompletedPayment(
   provider: PaymentProviderKey,
   providerTransactionId: string,
-): Promise<
-  "applied" | "duplicate" | "not_found" | "invalid" | "expired" | "error"
-> {
+): Promise<PaymentOutcome> {
   // Захваченная выдача для пост-коммит телеметрии (§11). Заполняется ТОЛЬКО на
   // успешном applied внутри транзакции, читается после её коммита.
   let granted: { userId: string; tier: string; periodMonths: number } | null =
     null;
+  // Владелец платежа для события payment_failed. Выставляется, как только найдена
+  // доверенная строка (до любой ветки-неуспеха и до возможного throw), чтобы отвал
+  // можно было атрибутировать. Остаётся null, если строки нет (not_found) или сбой
+  // случился раньше её чтения — тогда атрибутировать некому, событие не шлём.
+  let subjectUserId: string | null = null;
   try {
     const outcome = await db.transaction(async (tx) => {
       // 1. Доверенная строка: создана initiatePayment (userId из сессии, цена из
@@ -122,7 +149,12 @@ export async function applyCompletedPayment(
         .limit(1);
 
       if (!row) return "not_found";
-      if (row.status === "completed") return "duplicate";
+      subjectUserId = row.userId; // владелец найден — можно атрибутировать отвал
+      // Любой НЕ-pending статус терминален: completed — платёж уже применён,
+      // failed — уже отклонён (expired/invalid, single-fire события отправлены).
+      // Идемпотентный ack, иначе ретрай вебхука повторно гнал бы failed-строку
+      // через expired/invalid ветки и дублировал payment_failed.
+      if (row.status !== "pending") return "duplicate";
 
       // Срок жизни pending: устаревший abandoned-чекаут больше не выдаёт доступ.
       // Проверка ПОСЛЕ duplicate — уже applied-платёж остаётся идемпотентным даже
@@ -228,12 +260,27 @@ export async function applyCompletedPayment(
       });
     }
 
+    // payment_failed — событие воронки на неуспешных исходах (§11). ПОСЛЕ коммита
+    // (best-effort, как upgrade) и только когда известен владелец. Атомарную логику
+    // не трогает — читает исход уже завершённой транзакции.
+    const reason = paymentFailureReason(outcome);
+    if (reason && subjectUserId) {
+      await captureServer("payment_failed", subjectUserId, { provider, reason });
+    }
+
     return outcome;
   } catch (e) {
     // Денежный путь: ошибка глотается в "error" (провайдер ретраит), но молча
     // терять её из мониторинга нельзя — шлём в Sentry с ключом платежа (§11).
     console.error("applyCompletedPayment failed", e);
     captureError(e, { provider, providerTransactionId });
+    // Тот же отвал — в продуктовую воронку, если владелец успел определиться до сбоя.
+    if (subjectUserId) {
+      await captureServer("payment_failed", subjectUserId, {
+        provider,
+        reason: "error",
+      });
+    }
     return "error";
   }
 }

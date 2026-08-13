@@ -90,6 +90,45 @@ export function stacksOnExistingPeriod(
 }
 
 /**
+ * Все возможные исходы applyCompletedPayment. Именованный union — единый источник
+ * правды и для webhook-роута (маппинг в HTTP-код), и для нормализации в событие
+ * воронки (paymentFailureReason).
+ */
+export type PaymentOutcome =
+  | "applied"
+  | "duplicate"
+  | "not_found"
+  | "invalid"
+  | "expired"
+  | "error";
+
+/** Причина неуспеха для события `payment_failed`. */
+export type PaymentFailureReason = "invalid" | "expired" | "error";
+
+/**
+ * Нормализация исхода применения платежа в причину неуспеха для воронки (§11).
+ * Чистая функция — тестируется без БД. Событие НЕ порождают:
+ *   applied   — успех (его меряет `upgrade`);
+ *   duplicate — идемпотентный ретрай провайдера, не отдельный отвал;
+ *   not_found — нет доверенной строки → некого атрибутировать (нет userId).
+ * Остальные (invalid/expired/error) — реальные потери на денежном пути.
+ */
+export function paymentFailureReason(
+  outcome: PaymentOutcome,
+): PaymentFailureReason | null {
+  switch (outcome) {
+    case "invalid":
+      return "invalid";
+    case "expired":
+      return "expired";
+    case "error":
+      return "error";
+    default:
+      return null;
+  }
+}
+
+/**
  * Срок жизни PENDING-чекаута. После него незавершённый платёж нельзя применить:
  * webhook переводит устаревший pending в `failed` и доступ НЕ выдаёт (см.
  * applyCompletedPayment). Это закрывает бессрочно-применимые abandoned-строки
