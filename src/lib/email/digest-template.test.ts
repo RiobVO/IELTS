@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildDigestEmail, type DigestStats } from "./digest-template";
+import type { BandPlan } from "@/lib/progress/band-plan";
 
 const BASE: DigestStats = {
   testsCount: 3,
@@ -10,6 +11,23 @@ const BASE: DigestStats = {
   weekStart: "2026-06-30",
   weekEnd: "2026-07-06",
   unsubscribeUrl: null,
+};
+
+const SAMPLE_PLAN: BandPlan = {
+  currentBand: 6,
+  targetBand: 7,
+  distance: 1,
+  reached: false,
+  weakTypes: [
+    { qtype: "true_false_ng", label: "True/False/Not Given", section: "reading", correct: 3, total: 10, pct: 30 },
+  ],
+  drill: {
+    qtype: "true_false_ng",
+    label: "True/False/Not Given",
+    section: "reading",
+    estMinutes: 15,
+    bandGain: 0.5,
+  },
 };
 
 describe("buildDigestEmail", () => {
@@ -85,5 +103,52 @@ describe("buildDigestEmail", () => {
   it("одна тестовая совместимость с множественным числом (1 test)", () => {
     const { html } = buildDigestEmail({ ...BASE, testsCount: 1 });
     expect(html).toContain("<strong>1</strong> test completed this week");
+  });
+
+  it("bandPlan с targetBand → секция плана с дистанцией и лейблом дрилла", () => {
+    const { html } = buildDigestEmail({
+      ...BASE,
+      bandPlan: SAMPLE_PLAN,
+      practiceUrl: "https://example.com/app/practice",
+    });
+    expect(html).toContain("Your plan to band 7");
+    expect(html).toContain("1 away");
+    expect(html).toContain("Weakest area: True/False/Not Given");
+    expect(html).toContain("This week's drill: True/False/Not Given (~15 min, +0.5 band)");
+    expect(html).toContain('href="https://example.com/app/practice"');
+  });
+
+  it("bandPlan.reached → «Target reached» вместо дистанции", () => {
+    const { html } = buildDigestEmail({
+      ...BASE,
+      bandPlan: { ...SAMPLE_PLAN, reached: true, distance: 0 },
+      practiceUrl: null,
+    });
+    expect(html).toContain("Target reached");
+    expect(html).not.toContain("0 away");
+  });
+
+  it("bandPlan не передан → секции плана нет", () => {
+    const { html } = buildDigestEmail(BASE);
+    expect(html).not.toContain("Your plan to band");
+  });
+
+  it("bandPlan.targetBand == null → секция плана опускается", () => {
+    const { html } = buildDigestEmail({
+      ...BASE,
+      bandPlan: { ...SAMPLE_PLAN, targetBand: null, distance: null, reached: false },
+    });
+    expect(html).not.toContain("Your plan to band");
+  });
+
+  it("label в weakTypes/drill экранируется (защита от инъекции разметки)", () => {
+    const evilPlan: BandPlan = {
+      ...SAMPLE_PLAN,
+      weakTypes: [{ ...SAMPLE_PLAN.weakTypes[0], label: "<script>alert(1)</script>" }],
+      drill: { ...SAMPLE_PLAN.drill!, label: "<script>alert(1)</script>" },
+    };
+    const { html } = buildDigestEmail({ ...BASE, bandPlan: evilPlan });
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
   });
 });

@@ -7,6 +7,7 @@ import { buildDigestEmail, type DigestStats } from "@/lib/email/digest-template"
 import { isoWeekKey } from "@/lib/email/iso-week";
 import { sendEmail } from "@/lib/email/send";
 import { signUnsubscribeToken } from "@/lib/email/unsubscribe-token";
+import { getBandPlan } from "@/lib/progress/band-plan";
 
 // Чистый ключ недели живёт в отдельном модуле (без server-only/@/db) ради unit-теста;
 // реэкспорт держит его доступным и с публичной поверхности оркестратора.
@@ -271,11 +272,27 @@ export async function runWeeklyDigest(
       }
       if (!c.email) continue;
 
+      // Секция "план до target band" — общий билдер с дашбордом (band-plan.ts).
+      // N+1 приемлем (RUN_CAP=250/прогон). План — украшение письма, не ядро:
+      // ledger уже заклеймен выше (ре-рана в эту неделю не будет), поэтому сбой
+      // билдера не должен стоить юзеру всего digest — шлём письмо без секции.
+      let plan: DigestStats["bandPlan"];
+      try {
+        plan = await getBandPlan(c.userId, now);
+      } catch (e) {
+        // Без PII, как per-user catch ниже.
+        console.error("runWeeklyDigest: band-plan failure, sending without plan", {
+          userId: c.userId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+
       // site/secret отсутствуют → unsubscribeUrl null, письмо всё равно шлём.
       const unsubscribeUrl =
         site && secret
           ? `${site}/api/email/unsubscribe?u=${c.userId}&t=${signUnsubscribeToken(c.userId, secret)}`
           : null;
+      const practiceUrl = site ? `${site}/app/practice` : null;
 
       const digestStats: DigestStats = {
         testsCount: stats.testsCount,
@@ -286,6 +303,8 @@ export async function runWeeklyDigest(
         weekStart,
         weekEnd,
         unsubscribeUrl,
+        bandPlan: plan,
+        practiceUrl,
       };
       const { subject, html } = buildDigestEmail(digestStats);
       const ok = await sendEmail(cfg, { to: c.email, subject, html, unsubscribeUrl });
