@@ -14,11 +14,13 @@ Next.js (App Router) + Drizzle + Supabase. IELTS-платформа. UI/тест
   `mode='practice'`, mock не тронут).
 - **[BACKLOG.md](./BACKLOG.md)** — продуктовый бэклог. История фаз — в git / BRIEF §9.
 
-**Следующая работа — BRIEF §12 (Roadmap Next):** новая сессия начинает с §12.3,
-шаг 2 — учебная петля (W2-5 бейджи за слабый тип + план до target band + SR-повтор
-ошибок). Шаг 1 (email-блок) закрыт кодом; доводка после активации Brevo-аккаунта —
-чеклист в BRIEF §12.1 п.2. Порядок: план с acceptance → «делай» от пользователя →
-реализация. Открытые W2-пункты и гипотезы — BACKLOG.md.
+**Следующая работа — BRIEF §12 (Roadmap Next):** шаг 2 (учебная петля: W2-5 бейджи +
+план до target band + SR-повтор ошибок) закрыт 2026-07-08 (`320217a..53e9968`).
+Следующее по §12.3 — п.3 контент-процесс W2-3 (BACKLOG; процессный: ритм пополнения
++ витрина «новое»). Шаг 1 (email-блок) закрыт кодом; доводка после активации
+Brevo-аккаунта — чеклист в BRIEF §12.1 п.2, триггер — слово владельца. Порядок:
+план с acceptance → «делай» от пользователя → реализация. Открытые W2-пункты и
+гипотезы — BACKLOG.md.
 
 ## Commands
 
@@ -60,9 +62,9 @@ anon/authenticated); the exam page never selects it; grading is server-only (cli
 never a score). **`attempt_review_snapshot`** (`0021`) holds correct answers + explanation/evidence
 captured at submit, locked the same way — `/result` reads it owner-path; a client read would bypass
 both the answer_key lock and the tier gate. New owner-state tables (`vocab_progress`,
-`mistake_resolution` `0040`, `saved_word` `0041`) follow this posture: RLS on, `REVOKE ALL` from
-client roles (kills Supabase default-priv grants), `GRANT SELECT` + `SELECT`-own policy, writes only
-via owner-path server actions. After deploying such a table, verify `pg_policies` on prod (local
+`mistake_resolution` `0040`, `saved_word` `0041`, `mistake_review` `0044`) follow this posture: RLS on,
+`REVOKE ALL` from client roles (kills Supabase default-priv grants), `GRANT SELECT` + `SELECT`-own
+policy, writes only via owner-path server actions. After deploying such a table, verify `pg_policies` on prod (local
 verify misses default-priv grants).
 
 ## Exam architecture — TWO runners
@@ -88,8 +90,8 @@ the daily cap. Mock path must not change when adding practice features.
 
 ## Migrations & schema
 
-- `src/db/schema.ts` (Drizzle) is the **typed source of truth**: **33 DB tables** as of
-  `0041_saved_word` (`verify.ts` `APP_TABLE_COUNT = 33` asserts it; schema.ts types **32** — the legacy
+- `src/db/schema.ts` (Drizzle) is the **typed source of truth**: **34 DB tables** as of
+  `0044_mistake_review` (`verify.ts` `APP_TABLE_COUNT = 34` asserts it; schema.ts types **33** — the legacy
   `topic` table lingers in the DB, its export dropped as dead code). Keep schema.ts and the SQL in
   **lockstep**; per-table provenance + RLS in **SCHEMA_NOTES.md**.
 - Executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by
