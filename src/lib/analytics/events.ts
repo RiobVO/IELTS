@@ -12,6 +12,9 @@ export const AnalyticsEvent = {
   TestStart: "test_start",
   TestSubmit: "test_submit",
   Upgrade: "upgrade",
+  OnboardingComplete: "onboarding_complete",
+  ResultView: "result_view",
+  CheckoutStart: "checkout_start",
 } as const;
 
 /** Свойства каждого события (ключ объекта = имя события в PostHog). */
@@ -35,6 +38,9 @@ export type EventProperties = {
     mode: "practice" | "mock";
   };
   upgrade: { provider: string; tier: string; period_months: number };
+  onboarding_complete: { target_band: number; has_region: boolean };
+  result_view: { content_item_id: string; mode: "practice" | "mock"; banded: boolean; raw_score: number; total: number };
+  checkout_start: { provider: string; tier: string; period_months: number; amount: number };
 };
 
 /** Имена событий — производны от контракта свойств, чтобы не разъехались. */

@@ -1,7 +1,9 @@
 import { and, asc, desc, eq, exists, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
+import { after } from "next/server";
 import { db } from "@/db";
 import { answerKey, attempt, attemptReviewSnapshot, question } from "@/db/schema";
+import { captureServer } from "@/lib/analytics/server";
 import { getActiveBadges } from "@/lib/content/badges";
 import { getContentMeta } from "@/lib/content/exam-content";
 import { getProfile, getUser } from "@/lib/auth";
@@ -262,6 +264,17 @@ export default async function ResultPage({
   const weakest = perType.length ? perType[0] : null;
 
   const banded = att.bandScore != null;
+  // result_view — событие воронки (§11), best-effort в after() (как test_start),
+  // не блокирует рендер страницы.
+  after(() =>
+    captureServer("result_view", user.id, {
+      content_item_id: id,
+      mode: att.mode,
+      banded,
+      raw_score: result.rawScore,
+      total: result.total,
+    }),
+  );
   const correctPct = result.total > 0 ? result.rawScore / result.total : 0;
   const title = ci?.title ?? "Your report";
   const category = ci?.category ?? null;

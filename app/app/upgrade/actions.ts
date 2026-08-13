@@ -2,9 +2,11 @@
 
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { db } from "@/db";
 import { payment } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { captureServer } from "@/lib/analytics/server";
 import { findPlan, PENDING_TTL_MS } from "@/lib/payments/plans";
 import type { PaymentProviderKey } from "@/env";
 
@@ -54,6 +56,17 @@ export async function initiatePayment(formData: FormData): Promise<void> {
       expiresAt: new Date(Date.now() + PENDING_TTL_MS),
     })
     .returning({ id: payment.id });
+
+  // checkout_start — событие воронки (§11), best-effort в after() (как test_start),
+  // не блокирует редирект. Значения из доверенного findPlan(), не с клиента.
+  after(() =>
+    captureServer("checkout_start", user.id, {
+      provider,
+      tier: plan.tier,
+      period_months: plan.months,
+      amount: plan.amount,
+    }),
+  );
 
   // Страница чекаута — зона ответственности Agent U; просто уводим туда с pid.
   redirect(`/app/upgrade/checkout?pid=${row!.id}`);
