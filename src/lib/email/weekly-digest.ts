@@ -4,9 +4,13 @@ import { db } from "@/db";
 import { attempt, authUsers, notification, profile } from "@/db/schema";
 import { cronSecret, emailDigestConfig, publicSiteUrl } from "@/env";
 import { buildDigestEmail, type DigestStats } from "@/lib/email/digest-template";
+import { isoWeekKey } from "@/lib/email/iso-week";
 import { sendEmail } from "@/lib/email/send";
 import { signUnsubscribeToken } from "@/lib/email/unsubscribe-token";
-import { createNotification } from "@/lib/notifications/create";
+
+// Чистый ключ недели живёт в отдельном модуле (без server-only/@/db) ради unit-теста;
+// реэкспорт держит его доступным и с публичной поверхности оркестратора.
+export { isoWeekKey };
 
 /**
  * Ядро weekly email digest (BRIEF §11/§12.1). Оркестрирует один прогон рассылки:
@@ -217,6 +221,7 @@ export async function runWeeklyDigest(
 
   const weekStart = windowStartIso.slice(0, 10);
   const weekEnd = windowEndIso.slice(0, 10);
+  const weekKey = isoWeekKey(now); // ключ атомарного claim: одно письмо на (user, ISO-week)
   const site = publicSiteUrl();
   const secret = cronSecret();
 
@@ -231,19 +236,33 @@ export async function runWeeklyDigest(
       const prior = priorRating.get(c.userId);
       const ratingDelta = prior !== undefined ? c.rating - prior : null;
 
-      // Ledger ДО отправки: гарантирует, что ретрай прогона не пошлёт письмо дважды.
+      // Атомарный claim ДО отправки: INSERT ... ON CONFLICT DO NOTHING по partial
+      // unique (user_id, data->>'week') (миграция 0043). Закрывает TOCTOU — параллельный
+      // cron + ручной прогон не отправят письмо дважды: побеждает ровно одна вставка.
+      // Форма values зеркалит notifications/create.ts (in-app-уведомление идентично);
       // rating обязателен в data — источник Δ следующей недели.
-      await createNotification({
-        userId: c.userId,
-        type: DIGEST_TYPE,
-        title: "Your weekly IELTS digest",
-        data: {
-          rating: c.rating,
-          testsCount: stats.testsCount,
-          avgBand: stats.avgBand,
-          avgPercent: stats.avgPercent,
-        },
-      });
+      const [claimed] = await db
+        .insert(notification)
+        .values({
+          userId: c.userId,
+          type: DIGEST_TYPE,
+          title: "Your weekly IELTS digest",
+          body: null,
+          data: {
+            week: weekKey,
+            rating: c.rating,
+            testsCount: stats.testsCount,
+            avgBand: stats.avgBand,
+            avgPercent: stats.avgPercent,
+          },
+        })
+        .onConflictDoNothing()
+        .returning({ id: notification.id });
+
+      // Пустой returning → юзера уже заклеймил параллельный прогон → не письмо, не счётчик.
+      // Ошибка вставки (не конфликт) уйдёт в catch ниже → тоже без отправки (fail-closed:
+      // нет ledger — нет письма).
+      if (!claimed) continue;
       notified += 1;
 
       if (c.optOut) {
