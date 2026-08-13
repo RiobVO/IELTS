@@ -55,10 +55,12 @@ attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
   state sitting ON TOP of `mistake_resolution` (0040), which still owns the terminal
   "resolved" fact. Open mistakes stay derived at read-time; this table only attaches a
   `due_at`/`ease`/`repetitions` schedule so the queue can prioritize what's due. Owner-read
-  (RLS `user_id = auth.uid()`) + server-only writes (owner-path `reviewMistake`, landing in
-  a follow-up change), exactly like `saved_word`/`mistake_resolution`. This migration only
-  bumps `APP_TABLE_COUNT`; the owner-read cohort (§4i) and write-lockdown companion
-  assertions are deferred to the change that adds the `reviewMistake` write path.
+  (RLS `user_id = auth.uid()`) + server-only writes (owner-path `reviewMistake` in
+  `app/app/reading/[id]/practice-actions.ts` — gated by `loadPracticeKey`, grades on the
+  server, UPSERTs the SM-2 state, and best-effort auto-resolves at `repetitions >= 3`),
+  exactly like `saved_word`/`mistake_resolution`. `verify.ts` covers it in full now: added to
+  the owner-read cohort (§4i loop: RLS on + anon SELECT denied) and a `mistake_review`
+  `INSERT`-denied case in `clientWriteLockdown` (§6), mirroring `saved_word`.
 
 The DB has **34** tables. `verify.ts` `APP_TABLE_COUNT` must track it — bump **33 → 34**
 for `0044` (`mistake_review`; count-only this round, see above). `src/db/schema.ts` types

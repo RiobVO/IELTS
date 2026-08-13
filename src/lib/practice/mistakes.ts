@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { attempt, attemptReviewSnapshot, contentItem, mistakeResolution } from "@/db/schema";
+import { attempt, attemptReviewSnapshot, contentItem, mistakeResolution, mistakeReview } from "@/db/schema";
 import type { AnswerMode } from "@/lib/grading/grade";
 import {
   deriveOpenMistakes,
@@ -68,7 +68,7 @@ export async function getOpenMistakes(
   // Сданные попытки + их снапшот + мета теста; параллельно — резолюции пользователя.
   // Inner join к снапшоту отсекает legacy; desc(submittedAt) — свежие сверху (важно
   // для дедупа в deriveOpenMistakes: он берёт первую встреченную попытку с вопросом).
-  const [rows, resolutions] = await Promise.all([
+  const [rows, resolutions, reviews] = await Promise.all([
     db
       .select({
         attemptId: attempt.id,
@@ -95,6 +95,17 @@ export async function getOpenMistakes(
       })
       .from(mistakeResolution)
       .where(eq(mistakeResolution.userId, userId)),
+    // SR-расписание (mistake_review) пользователя — только несекретные поля срока/интервала.
+    db
+      .select({
+        contentItemId: mistakeReview.contentItemId,
+        questionNumber: mistakeReview.questionNumber,
+        dueAt: mistakeReview.dueAt,
+        intervalDays: mistakeReview.intervalDays,
+        lastReviewedAt: mistakeReview.lastReviewedAt,
+      })
+      .from(mistakeReview)
+      .where(eq(mistakeReview.userId, userId)),
   ]);
 
   const attempts: AttemptForMistakes[] = rows.map((r) => ({
@@ -109,5 +120,6 @@ export async function getOpenMistakes(
     questions: readSnapshotQuestions(r.snapshot),
   }));
 
-  return deriveOpenMistakes(attempts, resolutions).slice(offset, offset + limit);
+  // now един для деривации — due-статус считается на чтении (cron не нужен).
+  return deriveOpenMistakes(attempts, resolutions, reviews, new Date()).slice(offset, offset + limit);
 }

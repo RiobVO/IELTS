@@ -213,6 +213,7 @@ async function clientWriteLockdown(): Promise<{
   vocabProgressInsertDenied: boolean;
   mistakeResolutionInsertDenied: boolean;
   savedWordInsertDenied: boolean;
+  mistakeReviewInsertDenied: boolean;
   ownerWriteWorks: boolean;
 }> {
   const email = `verify-lock+${Date.now()}@example.com`;
@@ -280,12 +281,20 @@ async function clientWriteLockdown(): Promise<{
         VALUES (${id}, 'x')`,
     );
 
+    // (b5) mistake-review forgery: SR-расписание ошибок (учебная петля, 0044) пишет только
+    // owner-path экшен reviewMistake — авторитетный SM-2, denied на grant-слое (как saved_word).
+    const mistakeReviewInsertDenied = await deniedAsAuthenticated(
+      (tx) => tx`
+        INSERT INTO mistake_review (user_id, content_item_id, question_number, qtype)
+        VALUES (${id}, gen_random_uuid(), 1, 'tfng')`,
+    );
+
     // (c) legit path: the server action writes via the Drizzle OWNER role (this
     // connection) — a safe-field update must still succeed.
     const owner = await sql`UPDATE profile SET display_name = 'verify' WHERE id = ${id}`;
     const ownerWriteWorks = owner.count === 1;
 
-    return { profileUpdateDenied, attemptInsertDenied, vocabProgressInsertDenied, mistakeResolutionInsertDenied, savedWordInsertDenied, ownerWriteWorks };
+    return { profileUpdateDenied, attemptInsertDenied, vocabProgressInsertDenied, mistakeResolutionInsertDenied, savedWordInsertDenied, mistakeReviewInsertDenied, ownerWriteWorks };
   } finally {
     await sql`DELETE FROM auth.users WHERE id = ${id}`;
   }
@@ -499,7 +508,7 @@ async function main() {
   // ЕСТЬ по дизайну (select_own TO authenticated), поэтому ассертим только RLS-on +
   // anon-deny — против регресса «RLS выключили» или «anon снова granted» (0024/0028;
   // vocab_progress — 0037, запись только owner-path, INSERT-lock проверяется ниже).
-  for (const t of ["writing_submission", "writing_feedback", "speaking_submission", "speaking_feedback", "vocab_progress", "mistake_resolution", "saved_word"] as const) {
+  for (const t of ["writing_submission", "writing_feedback", "speaking_submission", "speaking_feedback", "vocab_progress", "mistake_resolution", "saved_word", "mistake_review"] as const) {
     const l = await tableLock(t);
     if (l.rlsEnabled && l.anonDenied)
       ok(`RLS — anon SELECT on ${t} denied (owner-read policy intact)`);
@@ -520,16 +529,18 @@ async function main() {
     lockdown.vocabProgressInsertDenied &&
     lockdown.mistakeResolutionInsertDenied &&
     lockdown.savedWordInsertDenied &&
+    lockdown.mistakeReviewInsertDenied &&
     lockdown.ownerWriteWorks
   )
-    ok("RLS — authenticated denied profile.role patch + submitted-attempt forge + vocab_progress/mistake_resolution/saved_word insert; owner write works");
+    ok("RLS — authenticated denied profile.role patch + submitted-attempt forge + vocab_progress/mistake_resolution/saved_word/mistake_review insert; owner write works");
   else
     fail(
       `RLS — write-lockdown incomplete (profileUpdateDenied=${lockdown.profileUpdateDenied}, ` +
         `attemptInsertDenied=${lockdown.attemptInsertDenied}, ` +
         `vocabProgressInsertDenied=${lockdown.vocabProgressInsertDenied}, ` +
         `mistakeResolutionInsertDenied=${lockdown.mistakeResolutionInsertDenied}, ` +
-        `savedWordInsertDenied=${lockdown.savedWordInsertDenied}, ownerWriteWorks=${lockdown.ownerWriteWorks})`,
+        `savedWordInsertDenied=${lockdown.savedWordInsertDenied}, ` +
+        `mistakeReviewInsertDenied=${lockdown.mistakeReviewInsertDenied}, ownerWriteWorks=${lockdown.ownerWriteWorks})`,
     );
 
   // 7. health endpoint
