@@ -15,9 +15,16 @@
  * вопроса. Оба best-effort: любой сбой/невалидный вход → null (в клиент не бросаем).
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { answerKey, attempt, mistakeResolution, mistakeReview, question } from "@/db/schema";
+import {
+  answerKey,
+  attempt,
+  attemptReviewSnapshot,
+  mistakeResolution,
+  mistakeReview,
+  question,
+} from "@/db/schema";
 import { getUser } from "@/lib/auth";
 import { gradeOne, type AnswerMode } from "@/lib/grading/grade";
 import { isUuid } from "@/lib/uuid";
@@ -198,6 +205,61 @@ export async function revealQuestion(
  */
 const GRADUATE_REPETITIONS = 3;
 
+/** Ровно те поля snapshot.questions (D3), которых достаточно для gradeOne одного вопроса. */
+interface StoredSnapshotQuestion {
+  number?: unknown;
+  mode?: unknown;
+  accept?: unknown;
+}
+
+/**
+ * ФИКС «SR-строка только для реальных ошибок»: reviewMistake публичен на ЛЮБОЙ вопрос
+ * practice-попытки (гейт loadPracticeKey — owner∧in_progress∧practice, но НЕ «юзер тут
+ * ошибся») — без этой проверки можно было бы накрутить закрытие вопросов, которые юзер
+ * никогда не проваливал. Вызывается ТОЛЬКО на пути создания SR-строки (state ещё нет) —
+ * не горячий путь. Берём свежайшую СДАННУЮ попытку этого юзера по этому тесту (кроме
+ * текущей practice-попытки — она ещё in_progress и снапшота не имеет), её
+ * attempt_review_snapshot + answers (та же выборка, что getOpenMistakes) и грейдим ТОЛЬКО
+ * запрошенный номер. Нет подходящей попытки/вопроса в снапшоте → трактуем как
+ * «не подтверждено» (безопаснее, чем доверять отсутствию данных).
+ */
+async function wasQuestionMissed(
+  userId: string,
+  contentItemId: string,
+  excludeAttemptId: string,
+  questionNumber: number,
+): Promise<boolean> {
+  const [row] = await db
+    .select({
+      answers: attempt.answers,
+      snapshot: attemptReviewSnapshot.snapshot,
+    })
+    .from(attempt)
+    .innerJoin(attemptReviewSnapshot, eq(attemptReviewSnapshot.attemptId, attempt.id))
+    .where(
+      and(
+        eq(attempt.userId, userId),
+        eq(attempt.contentItemId, contentItemId),
+        eq(attempt.status, "submitted"),
+        ne(attempt.id, excludeAttemptId),
+      ),
+    )
+    .orderBy(desc(attempt.submittedAt))
+    .limit(1);
+  if (!row) return false;
+
+  const snap = row.snapshot as { questions?: StoredSnapshotQuestion[] } | null;
+  const q = snap?.questions?.find((item) => item.number === questionNumber);
+  if (!q || typeof q.mode !== "string") return false;
+
+  const answers = (row.answers as Record<string, string | string[] | null>) ?? {};
+  const given = answers[String(questionNumber)] ?? null;
+  return !gradeOne(
+    { mode: q.mode as AnswerMode, accept: Array.isArray(q.accept) ? (q.accept as string[]) : [] },
+    given,
+  );
+}
+
 /**
  * SR-ревью ошибки из очереди (учебная петля, BRIEF §12.3 шаг 2). Тот же гейт, что у
  * checkAnswer/reveal (loadPracticeKey: owner ∧ in_progress ∧ practice в WHERE) — mock/
@@ -229,6 +291,7 @@ export async function reviewMistake(
         intervalDays: mistakeReview.intervalDays,
         repetitions: mistakeReview.repetitions,
         lapses: mistakeReview.lapses,
+        dueAt: mistakeReview.dueAt,
       })
       .from(mistakeReview)
       .where(
@@ -239,6 +302,27 @@ export async function reviewMistake(
         ),
       )
       .limit(1);
+
+    // ГЕЙТ против спам-градуации: строка УЖЕ существует, её плановый срок ещё не
+    // наступил, и досрочный повтор ВЕРНЫЙ — не двигаем лестницу (ничего не пишем).
+    // Классическое SR-поведение: ранний "good" не удивляет систему, карта и так
+    // считается известной, интервал/серия остаются как есть. Без этого гейта 3 клика
+    // Check за минуту двигали бы SM-2 три раза подряд и давали мгновенную graduation.
+    // "again" (провал) НЕ гейтуется — досрочная ошибка ценный сигнал, всегда применяется.
+    if (state && grade === "good" && state.dueAt.getTime() > now.getTime()) {
+      return { correct, dueAt: state.dueAt.toISOString() };
+    }
+
+    // ГЕЙТ «SR-строка только для реальных ошибок»: строки ЕЩЁ НЕТ — значит сейчас её
+    // создание. Публичный экшен доступен на любой вопрос practice-попытки, поэтому перед
+    // первым созданием подтверждаем факт ошибки по последней сданной попытке (см.
+    // wasQuestionMissed). Если не подтвердилось — no-op: ни строки, ни graduation.
+    if (!state) {
+      const wasWrong = await wasQuestionMissed(key.userId, key.contentItemId, attemptId, questionNumber);
+      if (!wasWrong) {
+        return { correct, dueAt: now.toISOString() };
+      }
+    }
 
     const { state: next, dueAt } = reviewCard(state ?? null, grade, now);
 
@@ -274,8 +358,11 @@ export async function reviewMistake(
 
     // T7 — graduation: серия «good» достигла порога → авто-закрытие ошибки (кормит
     // W2-5-бейджи через mistake_resolution). Best-effort: сбой этой записи НЕ роняет
-    // ревью (как соседние best-effort в post-submit pipeline). ON CONFLICT DO NOTHING —
-    // идемпотентно; qtype тот же авторитетный снимок с сервера.
+    // ревью (как соседние best-effort в post-submit pipeline). ON CONFLICT DO UPDATE
+    // resolved_at: переоткрытая ошибка (новая wrong-попытка после старого закрытия)
+    // должна перегасить свежим resolved_at — DO NOTHING оставлял бы старую дату и
+    // карточка зависала бы открытой навсегда (resolved_at >= submitted_at не выполнялось
+    // бы для новой попытки). qtype на конфликте НЕ трогаем — тот же авторитетный снимок.
     if (next.repetitions >= GRADUATE_REPETITIONS) {
       try {
         await db
@@ -286,7 +373,10 @@ export async function reviewMistake(
             questionNumber,
             qtype: key.qtype,
           })
-          .onConflictDoNothing();
+          .onConflictDoUpdate({
+            target: [mistakeResolution.userId, mistakeResolution.contentItemId, mistakeResolution.questionNumber],
+            set: { resolvedAt: now },
+          });
       } catch (e) {
         console.error("reviewMistake graduation insert failed", e);
       }
