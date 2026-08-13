@@ -59,5 +59,11 @@ npm-debug.log*
 .codex-tmp/
 /photo_*.jpg
 
+# Playwright output — regenerated per run (traces/screenshots on failure)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 .vercel
 .env*
