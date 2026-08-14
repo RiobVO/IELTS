@@ -1015,7 +1015,7 @@ export default function ExamRunner({
 
             {/* Questions pane (навигатор вынесен в нижнюю полосу) */}
             <div className="exam-pane exam-pane-q" style={S.qPane}>
-              <div ref={qScrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 20px 28px" }}>
+              <div ref={qScrollRef} className="exam-qscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
               {questionsHtml ? (
                 <QuestionHtml html={questionsHtml} answers={answers} onAnswer={set} onToggle={toggle} fallback={questionList} />
               ) : (
@@ -1253,7 +1253,7 @@ const QuestionBlock = memo(function QuestionBlock({
           </button>
         </div>
         {!inlineGap && (
-        <div style={{ marginTop: 13, paddingLeft: 39 }}>
+        <div className="exam-q-body" style={{ marginTop: 13 }}>
           {multi ? (
             <div role="group" aria-label={`Answer for question ${q.number} — choose one or more`} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {q.options!.map((o) => {
@@ -2035,6 +2035,10 @@ const READING_CSS = `
 .exam-pane-p,.exam-pane-q{display:flex;flex-direction:column}
 .exam-pane-p{flex:1}
 .exam-pane-q{flex:1}
+/* Тело ответа/подсказок вопроса: отступ 39px (qNum 28 + gap 11) выравнивает контент
+   под промпт на десктопе; на телефоне он съедал ~11% ширины → зануляем ниже (≤640). */
+.exam-q-body{padding-left:39px}
+.exam-qscroll{padding:12px 20px 28px}
 .exam-split[data-pane="passage"] .exam-pane-q{display:none}
 .exam-split[data-pane="questions"] .exam-pane-p{display:none}
 /* Правый кластер шапки: wrap-контейнер с двумя nowrap-детьми → максимум 2 ряда на
@@ -2057,6 +2061,13 @@ const READING_CSS = `
   .exam-top{flex-wrap:wrap;row-gap:10px}
   .exam-top>div:first-of-type{flex:1 1 auto;min-width:0}
   .exam-top-right{flex-basis:100%;flex-wrap:nowrap;justify-content:space-between}
+  /* Мобильный: контент вопроса на всю ширину карточки (39px-отступ под номер убираем). */
+  .exam-q-body,.exam-check,.exam-fmt-hint,.exam-strategy,.exam-wtl{padding-left:0}
+  .exam-strategy-list{padding-left:22px}
+  /* Вторичные practice-контролы (Aa/badge/pace/goal/pause/restart) собираем в один
+     контейнер-тулбар с фоном/рамкой — вместо разрозненных элементов, «плавающих»
+     рядом с clock+Submit. Скроллится внутри себя, clock+Submit фиксированы справа. */
+  .exam-top-right .etr-secondary{gap:10px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-inset)}
 }
 @media (min-width:1024px){
   .exam-top{padding:12px 20px;gap:14px}
@@ -2087,6 +2098,7 @@ const READING_CSS = `
    Планшет/десктоп (>430px) не затрагиваются. */
 @media (max-width:430px){
   .exam-top-right,.exam-top-right .etr-secondary,.exam-top-right .etr-primary{gap:8px!important}
+  .exam-qscroll{padding-left:14px;padding-right:14px}
   /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
   .exam-gap-input{min-width:80px!important;max-width:100%!important;font-size:16px!important}
   .exam-answer-input{font-size:16px!important}
