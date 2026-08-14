@@ -247,6 +247,7 @@ export async function runWeeklyDigest(
         .values({
           userId: c.userId,
           type: DIGEST_TYPE,
+          kind: DIGEST_TYPE, // 0046: без явного kind прямой insert дал бы '' (дрейф с backfill)
           title: "Your weekly IELTS digest",
           body: null,
           data: {

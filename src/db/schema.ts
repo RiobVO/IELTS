@@ -531,9 +531,15 @@ export const notification = pgTable(
       .notNull()
       .references(() => profile.id, { onDelete: "cascade" }),
     type: notificationType("type").notNull(),
+    // Дискриминатор подтипа поверх крупного `type` (migration 0046). Для system —
+    // подтип (vocab_due_reminder/…), иначе = type. DEFAULT '' для строк без явного kind.
+    kind: text("kind").notNull().default(""),
     title: text("title").notNull(),
     body: text("body"),
     data: jsonb("data"),
+    // Ключ атомарного дедупа для периодических продюсеров (migration 0046) — см.
+    // партиальный уникальный индекс ниже.
+    dedupKey: text("dedup_key"),
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -553,6 +559,12 @@ export const notification = pgTable(
     uniqueIndex("notification_weekly_digest_week_uidx")
       .on(t.userId, sql`((${t.data}->>'week'))`)
       .where(sql`${t.type} = 'weekly_digest'`),
+    // Унифицированный атомарный дедуп (migration 0046): один INSERT ... ON CONFLICT
+    // DO NOTHING по (user, dedup_key) для любого периодического продюсера (vocab-due,
+    // streak). Партиальный — строки без ключа (badges/referral) не ограничены.
+    uniqueIndex("notification_user_dedup_key_uidx")
+      .on(t.userId, t.dedupKey)
+      .where(sql`${t.dedupKey} is not null`),
   ],
 );
 

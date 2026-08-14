@@ -792,3 +792,49 @@ resolutions / mapping / ordering / unanswered-as-wrong). Migration round-trip on
 throwaway DB: `db:up:local` → `db:down:local` → `db:up:local` clean + idempotent. Supabase
 application (additive; apply before the code push to avoid a deploy-window break) follows the
 plan's deploy sequencing.
+
+## 0046 — notification kind + unified dedup + UPDATE-column lock
+
+Notifications-инфраструктура, волна 2. **Column-only, без новой таблицы** (count стоит
+на 34) и **без нового enum** (расширять `notification_type` через `ADD VALUE` необратимо —
+сломало бы down-контракт; подтип живёт в новой колонке `kind`, а не в enum).
+
+- **`notification.kind text NOT NULL DEFAULT ''`** — first-class дискриминатор подтипа
+  поверх крупного `type`. Раньше подтип system-уведомлений жил только в `data->>'kind'`
+  (`vocab_due_reminder`), что мешало индексации/дедупу. Backfill детерминированный: для
+  `type='system'` → `coalesce(data->>'kind','system')`, иначе → `type::text`. Продюсеры
+  теперь передают `kind` явно (`vocab_due_reminder`, `streak_reminder`, `referral`,
+  `badge_unlocked`); при отсутствии — `create.ts` подставляет `kind = type`. *Легаси-дрейф
+  (принят):* существующие referral-строки (`type='system'`, `data=null`) бэкфилятся в
+  `kind='system'`, тогда как новые пишутся `kind='referral'` — их не отличить в backfill,
+  и `kind='referral'` пока никто не читает (безвредно).
+- **`notification.dedup_key text NULL` + partial UNIQUE `(user_id, dedup_key) WHERE
+  dedup_key IS NOT NULL`** — обобщение ledger'а 0043 на любой периодический продюсер.
+  `createNotifications` добавляет `ON CONFLICT DO NOTHING` (без target — конфликтовать
+  может лишь этот partial-индекс) когда в батче есть ключи. Ключи: `vocab_due:<UTC-день>`,
+  `streak:<UTC-день>` (одно на user/день). Индекс 0043
+  (`notification_weekly_digest_week_uidx`) и weekly-digest ledger **не тронуты** —
+  сосуществуют (у digest свой ключ по `data->>'week'`, у остальных — `dedup_key`).
+- **RLS-ужесточение UPDATE.** 0001 давал `authenticated` табличный `UPDATE` — клиент мог
+  переписать `title`/`body`/`data`/`kind` СВОИХ строк (owner-политика ограничивает только
+  *чьи*, не *что*). 0046: `REVOKE UPDATE ON notification FROM authenticated` +
+  `GRANT UPDATE (read_at)` — теперь клиент может лишь пометить прочитанным. Политика
+  `notification_update_own` (0001) остаётся. Owner-путь `markAllRead`/`markOneRead`
+  (Supabase anon, RLS) пишет только `read_at` — продолжает работать; INSERT по-прежнему
+  только серверный (owner Drizzle), клиенту не выдан. `down` возвращает табличный `UPDATE`
+  (постура 0001).
+- **verify.ts не трогали:** гейт не ассертит гранты/политики notification (нет notification
+  в `verify.ts`), а `APP_TABLE_COUNT` без изменений (34). Постуру UPDATE-гранта колоночного
+  уровня локальный verify всё равно не проверяет (как и другие default-priv нюансы — см.
+  «Supabase default-priv grants»); на проде сверять `pg_policies`/гранты после применения.
+
+**Cron.** `/api/cron/vocab-due-reminders` стал единым ежедневным роутом уведомлений
+(Vercel Hobby — один cron на роут, отдельные не плодим): vocab-due (дедуп через `dedup_key`
+вместо неатомарного leftJoin), streak-продюсер (§11 `streak_reminder`: `current_streak > 0`
+∧ `last_activity_date = вчера` UTC, best-effort), ретеншен прочитанных > 90 дней (owner-путь,
+батчами). Streak/ретеншен не роняют vocab-блок.
+
+**Verification.** `tsc` clean; vitest green (pure `schedule.ts` — UTC-даты + dedup_key).
+`npm run verify` green (34 tables; up→down→up clean + idempotent). Supabase application
+(additive колонки + грант — применить до пуша кода, читающего `kind`/`dedup_key`, чтобы
+не словить deploy-window break) следует общей последовательности.
