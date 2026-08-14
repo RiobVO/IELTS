@@ -46,8 +46,9 @@ nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 80%,
   .ndrawer a{display:block;padding:13px 28px;font-size:15px;font-weight:700;color:var(--ink-2);border-bottom:1px solid var(--rule)}
   .ndrawer a:last-child{border-bottom:0}
 }
-/* Тап-таргет бургера 40x40 < 44px на узких телефонах. */
-@media(max-width:430px){.nburger{width:44px;height:44px}}
+/* Тап-таргет бургера 40x40 < 44px; бургер виден только <920px (см. выше) —
+   фикс должен покрывать весь этот диапазон, а не только узкие телефоны. */
+@media(max-width:920px){.nburger{width:44px;height:44px}}
 .btn{display:inline-flex;align-items:center;gap:9px;font-family:var(--sans);font-weight:700;font-size:15px;border-radius:13px;padding:12px 21px;cursor:pointer;border:1.5px solid transparent;transition:transform .22s var(--ease),box-shadow .28s,background .2s,border-color .2s}
 .btn .ico{width:17px;height:17px}
 .btn-v{background:var(--v2);color:#fff;box-shadow:0 10px 24px -10px rgba(129,112,234,.6)}
@@ -197,6 +198,10 @@ a.bar:hover{background:var(--vtint)}
 .sst .n.acc,.sst .acc{color:var(--v2)}
 .sst .l{font-size:12.5px;color:var(--ink-3);font-weight:600;margin-top:6px;max-width:24ch}
 @media(max-width:640px){.sheet{padding:20px 18px}.qgrid{grid-template-columns:repeat(8,1fr);gap:6px}.q span{font-size:8px}.stamp{right:-6px;bottom:-10px;font-size:13px;padding:6px 11px}.targ{flex-direction:column;align-items:flex-start;gap:7px}.targ .tlab{white-space:normal}.targ .tbar{flex:none;width:100%}.card-foot{flex-direction:column;align-items:flex-start;gap:10px}.fcard,.fcard.lead{flex-direction:column;align-items:stretch}.fcard .minishot,.fcard.lead .minishot{width:100%;max-width:140px}}
+/* На ≤430px 8 колонок дают ячейку ~23-30px — 44px invisible-hitzone (см. выше)
+   тогда перекрывает хит-зоны соседних ячеек и тап уводит на чужой drill-линк.
+   5 колонок держат шаг ячейки выше 44px. */
+@media(max-width:430px){.qgrid{grid-template-columns:repeat(5,1fr)}}
 
 .types{columns:2;column-gap:56px;margin-top:8px}
 .tfilter{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 24px}
