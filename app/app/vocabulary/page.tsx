@@ -147,13 +147,16 @@ function PlanPanel({ overview, ctaHref }: { overview: VocabOverview; ctaHref: st
             value={<>~{sessionMinutes}<small style={S.statSmall}> min</small></>}
             label="Session"
           />
+          {/* Two distinct metrics on two timescales — a persistent day-streak and
+              today's review goal — kept as separate stat cells, not fused in one. */}
           <div style={S.stat}>
             <span style={{ ...S.statNum, ...S.streakNum }}>
               {streak}
               <Icon name="flame" size={20} strokeWidth={2.2} style={{ color: "var(--streak)" }} />
             </span>
-            <span style={S.statLabel}>Streak · goal {reviewedToday}/{goal}</span>
+            <span style={S.statLabel}>Day streak</span>
           </div>
+          <Stat value={`${reviewedToday}/${goal}`} label="Reviewed today" />
         </div>
         {/* flex-строка CTA: rescue-очередь трудных слов + Start review. */}
         <div style={S.planCta}>
