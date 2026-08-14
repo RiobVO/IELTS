@@ -67,6 +67,15 @@ export function ModeStart({
                 ? "Real exam conditions — the recording plays once, no pause or replay."
                 : "Timed countdown that auto-submits at zero — just like the real test."}
             </p>
+            {!listening && (
+              <p className="mode-mock-hint">
+                <Icon name="info" size={15} strokeWidth={2.2} />
+                <span>
+                  On a phone this runs in a compact, stacked layout. A tablet or computer gives you
+                  the full side-by-side view — closer to the real exam. You can still start below.
+                </span>
+              </p>
+            )}
             {mockPresets && mockPresets.length > 0 && (
               <div className="mode-start-presets" style={MS.presets} aria-label="Time limit in minutes">
                 {mockPresets.map((m) => (
@@ -111,6 +120,13 @@ const MODE_START_CSS = `
 .mode-start-chip{transition:var(--transition-colors)}
 .mode-start-chip:hover{background:var(--surface-hover)}
 .mode-start-presets{flex-wrap:wrap}
+/* Мягкий совет для mock на узком экране: <1024px раннер теряет двух-панельный вид
+   (atomized → табы; iframe → сжатая верстка). Порог парный к min-width:1024px раннера,
+   поэтому 1023 (на ровно 1024 совет уже неуместен). Не блокирует старт. display
+   переключается ТОЛЬКО здесь (не inline) — иначе media не победит. */
+.mode-mock-hint{display:none;gap:9px;align-items:flex-start;margin:2px 0 2px;padding:10px 12px;border-radius:var(--radius-md);background:var(--surface-hover);border:1px solid var(--border);font-family:var(--font-ui);font-size:var(--text-xs);line-height:1.45;color:var(--text-secondary)}
+.mode-mock-hint svg{margin-top:1px;color:var(--text-muted)}
+@media (max-width:1023px){.mode-mock-hint{display:flex}}
 /* Чипы выбора лимита времени — единственный способ выбрать mock-таймер, 34px < 44px на touch. */
 @media (pointer:coarse){.mode-start-chip{min-height:44px}}
 @media (prefers-reduced-motion:reduce){.mode-start-btn,.mode-start-chip{transition:none}}
