@@ -142,7 +142,16 @@ function PlanPanel({ overview, ctaHref }: { overview: VocabOverview; ctaHref: st
       <div style={S.planMain}>
         <div style={S.planStats}>
           <Stat value={dueToday} label="Due today" />
-          <Stat value={newRemainingToday === null ? "∞" : newRemainingToday} label="New left today" />
+          <Stat
+            value={
+              newRemainingToday === null ? (
+                <span title="Unlimited new cards on your plan" aria-label="Unlimited new cards on your plan">∞</span>
+              ) : (
+                newRemainingToday
+              )
+            }
+            label="New left today"
+          />
           <Stat
             value={<>~{sessionMinutes}<small style={S.statSmall}> min</small></>}
             label="Session"
@@ -182,9 +191,9 @@ function PlanPanel({ overview, ctaHref }: { overview: VocabOverview; ctaHref: st
       <div style={S.planFoot}>
         <Spark forecast={forecast7} />
         <div style={S.bank}>
-          <BankDot color="var(--success)" label={`${bank.mastered} mastered`} />
-          <BankDot color="var(--brand)" label={`${bank.learning} learning`} />
-          <BankDot color="var(--text-disabled)" label={`${bank.newCount} new`} />
+          <BankDot color="var(--success)" label={`${bank.mastered} mastered`} title="Locked in — long review intervals" />
+          <BankDot color="var(--brand)" label={`${bank.learning} learning`} title="Seen before, still in active rotation" />
+          <BankDot color="var(--text-disabled)" label={`${bank.newCount} new`} title="Not started yet" />
           <span style={S.bankTotal}>{bank.total} words total</span>
         </div>
       </div>
@@ -239,9 +248,9 @@ function Spark({ forecast }: { forecast: number[] }) {
   );
 }
 
-function BankDot({ color, label }: { color: string; label: string }) {
+function BankDot({ color, label, title }: { color: string; label: string; title?: string }) {
   return (
-    <span style={S.bankItem}>
+    <span style={S.bankItem} title={title}>
       <i style={{ ...S.bankDotI, background: color }} />
       {label}
     </span>
