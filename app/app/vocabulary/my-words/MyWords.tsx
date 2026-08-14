@@ -246,6 +246,7 @@ export function MyWords({ words }: { words: SavedWordRow[] }) {
 
 const CSS = `
 .mw-wrap{padding:24px 16px 64px}
+.mw-del{width:38px;height:38px}
 .mw-del:hover{color:var(--error-text);background:var(--error-subtle)}
 @media (pointer:coarse){.mw-del{width:44px;height:44px}}
 @media (min-width:768px){.mw-wrap{padding:32px 24px 72px}}
@@ -275,7 +276,7 @@ const S: Record<string, CSSProperties> = {
   rowWord: { display: "inline-flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em", color: "var(--text-primary)" },
   dueDot: { width: 8, height: 8, borderRadius: "var(--radius-full)", background: "var(--brand)", flex: "none" },
   rowContext: { fontSize: 13, lineHeight: 1.45, color: "var(--text-muted)", fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  del: { width: 38, height: 38, flex: "none", display: "grid", placeItems: "center", borderRadius: "var(--radius-md)", border: "none", background: "transparent", color: "var(--text-muted)", cursor: "pointer", transition: "var(--transition-colors)" },
+  del: { flex: "none", display: "grid", placeItems: "center", borderRadius: "var(--radius-md)", border: "none", background: "transparent", color: "var(--text-muted)", cursor: "pointer", transition: "var(--transition-colors)" },
 
   progressRow: { display: "flex", alignItems: "center", gap: 12 },
   progressTrack: { position: "relative", flex: 1, display: "block", height: 8, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
@@ -284,13 +285,13 @@ const S: Record<string, CSSProperties> = {
 
   card: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 16, minHeight: 200, padding: "28px 22px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
   word: { fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
-  flipBtn: { appearance: "none", cursor: "pointer", padding: "10px 20px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
+  flipBtn: { minHeight: 44, appearance: "none", cursor: "pointer", padding: "10px 20px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
   context: { fontSize: 16, lineHeight: 1.55, color: "var(--text-primary)", maxWidth: "44ch" },
   noContext: { color: "var(--text-muted)", fontStyle: "italic" },
 
   actions: { display: "flex", gap: 12 },
   easyBtn: { flex: 1, background: "var(--brand-subtle)", color: "var(--text-link)", border: "2px solid var(--brand-border)" },
-  exitLink: { alignSelf: "center", appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 6 },
+  exitLink: { alignSelf: "center", display: "inline-flex", alignItems: "center", minHeight: 44, appearance: "none", border: "none", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "0 12px" },
 
   summary: { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10, padding: "40px 24px", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-solid)" },
   summaryIcon: { display: "grid", placeItems: "center", width: 56, height: 56, borderRadius: "50%", background: "var(--success-subtle)", color: "var(--success-text)", marginBottom: 4 },

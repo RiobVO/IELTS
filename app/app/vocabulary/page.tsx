@@ -543,7 +543,7 @@ const S: Record<string, CSSProperties> = {
   statSmall: { fontSize: 13, color: "var(--text-muted)", fontWeight: 700 },
   statLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" },
   planCta: { marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
-  rescueCta: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 40, padding: "8px 14px", borderRadius: "var(--radius-full)", border: "2px solid transparent", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 13, fontWeight: 800, textDecoration: "none", transition: "var(--transition-colors)" },
+  rescueCta: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 44, padding: "8px 14px", borderRadius: "var(--radius-full)", border: "2px solid transparent", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 13, fontWeight: 800, textDecoration: "none", transition: "var(--transition-colors)" },
   caughtUp: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: "var(--success-text)" },
   // Без фикс-высоты: колонка = столбик (до 38px) + зазор + подпись (~14px) ≈ 56px,
   // жёсткие 44px резали подписи дней нижней кромкой панели (overflow:hidden).
