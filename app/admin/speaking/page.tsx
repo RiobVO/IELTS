@@ -18,6 +18,12 @@ const DONE_NOTICE: Record<string, string> = {
   unpublished: "Cue card unpublished — hidden from the catalog.",
   deleted: "Cue card deleted.",
 };
+
+// Form grid stacks to one column below 640px — no @media existed at all before.
+const ADMIN_RESP_CSS = `
+.adm-grid3{grid-template-columns:1fr}
+@media (min-width:640px){.adm-grid3{grid-template-columns:1fr 1fr 1fr}}
+`;
 const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 /**
@@ -37,6 +43,7 @@ export default async function AdminSpeakingPage({
 
   return (
     <main style={S.page}>
+      <style>{ADMIN_RESP_CSS}</style>
       <div style={S.wrap}>
         <div style={S.head}>
           <h1 style={S.h1}>New Part 2 cue card</h1>
@@ -91,7 +98,7 @@ export default async function AdminSpeakingPage({
             <option value="3">Stretch</option>
           </select>
 
-          <div style={S.grid3}>
+          <div className="adm-grid3" style={S.grid3}>
             <div>
               <label style={S.label} htmlFor="prep_seconds">Prep (seconds)</label>
               <input id="prep_seconds" name="prep_seconds" type="number" min={15} max={120} step={5} defaultValue={60} style={S.input} />
@@ -203,7 +210,7 @@ const S: Record<string, CSSProperties> = {
   label: { fontSize: 12, fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6, display: "block" },
   textarea: { width: "100%", resize: "vertical", minHeight: 60, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, lineHeight: 1.5, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", outline: "none", marginBottom: 18 },
   input: { width: "100%", height: 44, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0 12px", outline: "none" },
-  grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 18 },
+  grid3: { display: "grid", gap: 14, marginBottom: 18 },
   select: { width: "100%", height: 44, background: "var(--surface-raised)", color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 15, border: "2px solid var(--border)", borderRadius: "var(--radius-md)", padding: "0 12px", cursor: "pointer" },
   actions: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
   caption: { fontSize: 12, color: "var(--text-muted)" },
@@ -220,5 +227,5 @@ const S: Record<string, CSSProperties> = {
   previewDot: { width: 5, height: 5, borderRadius: "50%", background: "var(--brand)", flex: "none" },
   closing: { margin: 0, fontSize: 13, fontStyle: "italic", color: "var(--text-muted)" },
   meta: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 },
-  rowActions: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  rowActions: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" },
 };
