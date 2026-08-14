@@ -460,7 +460,7 @@ Claude Design; (3) выдать готовый ПРОМТ со всеми реш
 
 | # | Что | Где в брифе | Severity | Блокирует |
 |---|---|---|---|---|
-| 1 | Платёжные подписи Payme/Click/Uzum — webhook стоит на generic HMAC-заглушке (fail-closed), деньги не принимаются | §4.8 | **blocker** (revenue) | владелец: merchant-ключи |
+| 1 | Платёжные подписи Payme/Click/Uzum — webhook стоит на generic HMAC-заглушке (fail-closed), деньги не принимаются. 2026-07-08: прод-тупик UI закрыт гейтом `paymentsLive(provider)` — без ключа CTA = waitlist «Notify me» (`payment_waitlist`-события), pending-строки не создаются, sandbox-чекаут недостижим; копирайт /pricing приведён к правде (без 1:1 call / money-back / prorated). Осталось ровно: ключи → провайдер-специфичные адаптеры вебхука + redirect-back/поллинг чекаута (L) | §4.8 | **blocker** (revenue) | владелец: merchant-ключи |
 | 2 | ✅ Email-блок — закрыт 2026-07-08: Brevo-аккаунт активирован (support-тикет #5451764), ключ ротирован (Vercel Production + `.env.local`), 2 pre-activation тестовые `weekly_digest`-строки удалены, живой прогон digest (3/3 доставлено в inbox, подтверждено визуально). Smoke реальной регистрацией на проде прошёл end-to-end (письмо → клик → сессия → `/app/onboarding`). Побочно найден и починен баг: дефолтный Supabase Confirm-signup шаблон (голый текст + sender name `IELTS Weekly` вместо бренда) ловил `otp_expired` и падал в спам — заменён на брендированный HTML + sender name `bando` (Supabase Dashboard → Auth → Email Templates/SMTP Settings, вне репо). Оговорка: ретест шёл на аккаунте, где владелец уже пометил первое письмо «не спам» — чистая репутация домена для незнакомых получателей подтверждена частично, дальше только органика + мониторинг bounce/complaint в Brevo dashboard | §11 | done | нет — мониторить репутацию по мере роста живых регистраций |
 | 3 | Apple/Facebook OAuth (сейчас только email) | §4.5 | important | владелец: dev-аккаунты/ключи |
 | 4 | ✅ Лимиты Basic — механизм готов целиком: `BASIC_DAILY_LIMIT = 25` (`src/lib/tiers.ts`) + гейт по submitted-мокам за день (`src/lib/exam/access.ts` → redirect `?limit=1`). 25 выставлено осознанно свободным до монетизации; «затянуть» при запуске платных тиров = правка одной константы | §4.8 | done (ручка) | продуктовое решение о значении — вместе с мерч-ключами (п.1) |
@@ -480,6 +480,18 @@ Claude Design; (3) выдать готовый ПРОМТ со всеми реш
    (3×good) авто-закрывает ошибку в `mistake_resolution` → кормит W2-5-бейджи (0045).
 3. **Student Telegram-бот (W1-5b, BACKLOG)** — вернуть в очередь: условие «после
    Волн 2–3» выполнено (Волна 2 закрыта 6/7).
+4. ✅ **Notifications-переработка + upgrade-разруливание** — закрыто 2026-07-08
+   (`ad6b475..72407ab`, миграции 0046/0047): уведомления действенные (typed payload,
+   `data.href`, поштучное прочтение), страница `/app/notifications` (keyset-пагинация,
+   фильтр), focus-refetch бейджа, атомарный дедуп (`dedup_key`), streak-reminder (§11 —
+   был мёртвым enum), retention 90д, RLS UPDATE ужат до `read_at` + снят default-priv
+   дрейф; digest получил outbox-retry (atomic claim-before-send). Upgrade: гейт
+   `paymentsLive` + waitlist (12.1 п.1), truth-pass копирайта, события
+   `checkout_blocked`/`payment_failed`. **Trial-лейн §4.8 реализован**: Basic — ровно
+   один бесплатный gated full-mock (`src/lib/exam/trial.ts`, advisory-lock против гонок,
+   каталог ведёт в тест с бейджем «Free trial»); все full-моки на проде закрыты
+   `tier_required='premium'` (data-fix). Каждая волна прошла Codex-ревью (2 critical
+   в trial-лейне зачинены до пуша).
 
 ### 12.3 Рекомендованный порядок
 
