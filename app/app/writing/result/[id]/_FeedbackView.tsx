@@ -91,9 +91,11 @@ const CSS = `
   .wf-annogrid{grid-template-columns:1.45fr 1fr}
   .wf-plotrow{grid-template-columns:1fr 240px}
 }
-/* Тап-таргет пилюли истории 38px < 44px на узких телефонах. */
-@media (max-width:430px){
+/* Тап-таргет пилюли истории 38px < 44px на touch (не только узкий телефон). */
+@media (pointer:coarse){
   .wf-pill{min-height:44px}
+}
+@media (max-width:430px){
   /* CriteriaPlot/BandHero микро-текст: цифры оси → 11px минимум, смысловые
      лейблы (TARGET-метка, Strength/Watch/Next, "Biggest blocker") → 12px. */
   .wf-plot-tick{font-size:11px!important}

@@ -475,7 +475,11 @@ function CenteredState({
 const CSS = `
 .wa-wrap{padding:20px 16px 40px}
 .wa-grid{display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
-.wa-actionbar{flex-direction:column;gap:16px;align-items:stretch}
+/* Sticky, пока рейл (chart/prompt/target/structure) стоит ПЕРЕД editor в потоке —
+   без этого счётчик слов и Submit уходят за фолд под открытой клавиатурой. Тот же
+   приём, что у .sa-recpanel в Speaking _Attempt.tsx. padding живёт целиком тут (не в
+   инлайне) — иначе inline style={S.actionBar} перебивает safe-area-паддинг снизу. */
+.wa-actionbar{flex-direction:column;gap:16px;align-items:stretch;padding:18px;position:sticky;bottom:0;z-index:5;padding-bottom:calc(18px + env(safe-area-inset-bottom))}
 .wa-back:hover{color:var(--text-primary)!important}
 .wa-timer:hover{background:var(--surface-hover)!important}
 /* Editor body: textarea + coach stacked on narrow/tablet, side-by-side on wide
@@ -489,6 +493,10 @@ const CSS = `
      too cramped to read; it splits only once there's room (≥1024). */
   .wa-grid[data-part="task1"]{grid-template-columns:1fr}
   .wa-actionbar{flex-direction:row;align-items:center;justify-content:space-between}
+  /* Task 2 здесь уже двухколоночный (рейл — сайдбар) — экшнбар в зоне видимости,
+     sticky не нужен. Task 1 остаётся одноколоночным до 1024px (см. ниже) — там
+     рейл всё ещё стоит перед editor, sticky должен работать и здесь. */
+  .wa-grid:not([data-part="task1"]) .wa-actionbar{position:static;padding-bottom:18px}
 }
 @media (min-width:1024px){
   .wa-editmain{flex-direction:row;align-items:flex-start;gap:14px}
@@ -498,6 +506,8 @@ const CSS = `
   .wa-grid[data-part="task1"]{grid-template-columns:minmax(340px,1fr) 1fr;gap:22px}
   .wa-grid[data-part="task1"] .wa-editmain{flex-direction:column}
   .wa-grid[data-part="task1"] .wa-coach{width:100%;position:static}
+  /* Task 1 наконец разбился на 2 колонки — рейл больше не стоит перед editor. */
+  .wa-grid[data-part="task1"] .wa-actionbar{position:static;padding-bottom:18px}
 }
 /* Coach tip — colour morphs in place; entry/float/glow/spark are motion-gated. */
 .ct-card{transition:background .35s ease,border-color .35s ease}
@@ -518,10 +528,12 @@ const CSS = `
   .ct-spark1{animation:ct-spark .9s ease-out both}
   .ct-spark2{animation:ct-spark 1.1s ease-out .15s both}
 }
-/* Тап-таргеты ≥44px на узких телефонах: "Back to catalog" (padding:4) и таймер (height:40). */
-@media (max-width:430px){
+/* Тап-таргеты ≥44px на touch: "Back to catalog" (padding:4) и таймер (height:40). */
+@media (pointer:coarse){
   .wa-back{min-height:44px}
   .wa-timer{min-height:44px}
+}
+@media (max-width:430px){
   /* Криterion-чип в live-коуче — смысловой uppercase-лейбл, 12px. */
   .ct-chip{font-size:12px!important}
 }
@@ -591,7 +603,7 @@ const S: Record<string, CSSProperties> = {
   ctSpark1: { position: "absolute", right: 16, top: 12, fontSize: 14, pointerEvents: "none" },
   ctSpark2: { position: "absolute", right: 30, top: 22, fontSize: 10, pointerEvents: "none" },
 
-  actionBar: { display: "flex", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-solid)", padding: 18 },
+  actionBar: { display: "flex", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-solid)" },
   ringRow: { display: "flex", alignItems: "center", gap: 16 },
   ringStatus: { fontSize: 15, fontWeight: 700 },
   ringMeta: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", marginTop: 2 },

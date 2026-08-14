@@ -556,11 +556,15 @@ const CSS = `
   .wl-card:hover .wl-arrow{transform:none}
 }
 .mob-back{display:none}
-/* iOS зумит вьюпорт при фокусе поля с font-size <16px; крестик очистки/селекты — до 44px тап-таргета. */
+/* iOS зумит вьюпорт при фокусе поля с font-size <16px — узко-мобильный фикс. */
 @media (max-width:430px){
-  .wl-sort{font-size:16px!important;min-height:44px!important}
-  .wl-clear{width:44px!important;height:44px!important}
+  .wl-sort{font-size:16px!important}
   .mob-back{display:block}
+}
+/* Крестик очистки/селект сортировки — до 44px тап-таргета на touch (не только узкий телефон). */
+@media (pointer:coarse){
+  .wl-sort{min-height:44px!important}
+  .wl-clear{width:44px!important;height:44px!important}
 }
 `;
 

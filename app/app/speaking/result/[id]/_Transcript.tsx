@@ -389,11 +389,13 @@ const CSS = `
 .st-wave:focus-visible{box-shadow:0 0 0 2px var(--brand-border);border-radius:6px}
 .st-bar{flex:1;border-radius:2px;align-self:center;transition:background .15s,height .15s}
 @media (prefers-reduced-motion:reduce){.st-bar,.st-sentence{transition:none}}
-/* Тап-таргеты ≥44px на узких телефонах: волна (role=slider, 34px) растит хит-зону
+/* Тап-таргеты ≥44px на touch: волна (role=slider, 34px) растит хит-зону
    псевдоэлементом — визуал волны не трогаем; "Delete recording" был padding:4. */
-@media (max-width:430px){
+@media (pointer:coarse){
   .st-wave::before{content:"";position:absolute;top:50%;left:0;transform:translateY(-50%);width:100%;height:44px}
   .st-delete{min-height:44px}
+}
+@media (max-width:430px){
   /* Сноска-индекс аннотации — цифровой микро-лейбл, минимум 11px. */
   .st-sup{font-size:11px!important}
 }
