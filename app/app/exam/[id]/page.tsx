@@ -12,7 +12,7 @@ import {
   startAttempt,
 } from "@/lib/exam/access";
 import { categoryLabel } from "@/lib/labels";
-import { effectiveTier, type Tier } from "@/lib/tiers";
+import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import ExamFrame from "./ExamFrame";
 
@@ -81,7 +81,7 @@ export default async function ExamPage({
   const mode = existing?.mode ?? modeParam;
   // Кап — только на создание НОВОГО mock; резюм существующей попытки не расходует
   // слот и не должен блокироваться (tier-гейт применяется всегда).
-  await enforceAccess(user.id, userTier, test.tierRequired, existing ? null : modeParam);
+  await enforceAccess(user.id, userTier, test.tierRequired, test.category, id, existing ? null : modeParam);
 
   // Practice → атомизированный раннер (стратегия A), если тесту есть на чём жить:
   // пассажи с телом, а для listening ещё и привязанное аудио (легаси-раннер играет
@@ -106,6 +106,9 @@ export default async function ExamPage({
     );
   }
 
-  const { attemptId } = await startAttempt(user.id, id, mode);
+  // Пройти enforceAccess с !meetsTier можно только по trial-лейну (§4.8) → это
+  // trial-старт: H3-атомарный claim в startAttempt.
+  const isTrial = !meetsTier(userTier, test.tierRequired);
+  const { attemptId } = await startAttempt(user.id, id, mode, isTrial);
   return <ExamFrame attemptId={attemptId} contentItemId={id} />;
 }

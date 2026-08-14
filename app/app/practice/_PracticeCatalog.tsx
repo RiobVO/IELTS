@@ -50,6 +50,8 @@ export interface PracticeTest {
   /** Длительность в минутах — продаёт непройденный тест вместо опакового «—». */
   durationMin: number | null;
   locked: boolean;
+  /** Trial-лейн (§4.8): полный gated-тест, доступный Basic как единственный бесплатный. */
+  trial: boolean;
   href: string;
   /** "Resume · 8 / 40" при живой in_progress-попытке, иначе null. */
   progress: string | null;
@@ -811,6 +813,7 @@ function TestRow({ t }: { t: PracticeTest }) {
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 4, gap: 9, marginBottom: 4 }}>
           <span className="pc-row-pill" style={{ ...S.rowPill, color: sec.tileFg, background: sec.tileBg }}>{sec.label}</span>
           <span style={S.rowMeta}>{cat(t.category)} · {t.questionCount} Q</span>
+          {t.trial && <Badge tone="brand">Free trial</Badge>}
           {t.isWeakType && <Badge tone="warn">Weak spot</Badge>}
         </div>
         <div style={S.rowTitle}>{t.title}</div>

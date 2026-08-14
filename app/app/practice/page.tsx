@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
-import { attempt as attemptTable } from "@/db/schema";
+import { attempt as attemptTable, contentItem } from "@/db/schema";
+import { FULL_CATEGORIES, isFullCategory, trialConsumedBy, type TrialAttemptRow } from "@/lib/exam/trial";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { getPublishedTests } from "@/lib/content/published";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
@@ -155,6 +156,27 @@ export default async function PracticePage({
   const submitted = (submittedRes.data ?? []) as unknown as SubmittedRow[];
   const inProgress = (inProgressRes.data ?? []) as unknown as InProgressRow[];
 
+  // Trial-лейн (§4.8): Basic получает ОДИН бесплатный полный gated-тест. Один owner-
+  // запрос (Drizzle, скоуп по user.id сами) — (content_item_id, status) попыток на
+  // полных gated-тестах; правило расхода per-card считает trialConsumedBy (единый
+  // источник с hasConsumedTrial). Только Basic платит RT: premium/ultra проходят
+  // обычным tier-гейтом.
+  const trialAttempts: TrialAttemptRow[] = [];
+  if (userTier === "basic") {
+    const rows = await db
+      .selectDistinct({ id: attemptTable.contentItemId, status: attemptTable.status })
+      .from(attemptTable)
+      .innerJoin(contentItem, eq(contentItem.id, attemptTable.contentItemId))
+      .where(
+        and(
+          eq(attemptTable.userId, user.id),
+          ne(contentItem.tierRequired, "basic"),
+          inArray(contentItem.category, [...FULL_CATEGORIES]),
+        ),
+      );
+    for (const r of rows) trialAttempts.push({ contentItemId: r.id, status: r.status });
+  }
+
   // Weak-spots виджет — 3–5 слабейших типов с min-порогом надёжности (total >= 4,
   // дефолт aggregateWeakness). Ниже порога / нет попыток → пустой массив, виджет не
   // рендерится (не пустая коробка).
@@ -210,7 +232,16 @@ export default async function PracticePage({
   for (const ip of inProgress) answeredById.set(ip.content_item_id, countAnswers(ip.answers));
 
   const tests: PracticeTest[] = all.map(({ t, section }) => {
-    const locked = !meetsTier(userTier, t.tier_required);
+    const gated = !meetsTier(userTier, t.tier_required);
+    // Trial-лейн (§4.8): Basic видит ОДИН полный gated-тест как бесплатный. Карта
+    // кликабельна, только если единственные попытки юзера на ней — in_progress (свой
+    // недосданный trial); submitted этого item или попытка на другом full → 🔒/upgrade.
+    const trialEligible =
+      gated &&
+      userTier === "basic" &&
+      isFullCategory(t.category) &&
+      !trialConsumedBy(trialAttempts, t.id);
+    const locked = gated && !trialEligible;
     const answered = answeredById.get(t.id);
     const bestRaw = bestRawById.get(t.id);
     return {
@@ -222,6 +253,7 @@ export default async function PracticePage({
       questionCount: t.question_count,
       durationMin: t.duration_seconds ? Math.round(t.duration_seconds / 60) : null,
       locked,
+      trial: trialEligible,
       href: locked ? "/app/upgrade" : examHref(t),
       progress: answered != null && t.question_count > 0 ? `Resume · ${answered} / ${t.question_count}` : null,
       done: bestRaw != null && t.question_count > 0 ? `Done · ${bestRaw} / ${t.question_count}` : null,
@@ -359,7 +391,11 @@ function buildHero({
     const matches = pool.filter((t) => t.question_types.includes(w.type));
     if (!matches.length) continue;
     const pick = matches.find((t) => meetsTier(userTier, t.tier_required)) ?? matches[0];
-    const locked = !meetsTier(userTier, pick.tier_required);
+    // Переиспользуем уже посчитанные locked/href из tests (учитывают trial-лейн),
+    // а не считаем tier-гейт заново — иначе hero звал бы на upgrade для доступного
+    // по trial теста. Fallback на прямой расчёт защищает от отсутствия строки.
+    const row = tests.find((t) => t.id === pick.id);
+    const locked = row ? row.locked : !meetsTier(userTier, pick.tier_required);
     const mins = pick.duration_seconds ? Math.round(pick.duration_seconds / 60) : null;
     return {
       kind: "recommended",
@@ -367,7 +403,7 @@ function buildHero({
       title: pick.title,
       sub: `Targets your weakest type: ${qtypeLabel(w.type)}`,
       cta: locked ? "Unlock" : "Start",
-      href: locked ? "/app/upgrade" : (pick.has_runner ? `/app/exam/${pick.id}` : `/app/reading/${pick.id}`),
+      href: row ? row.href : (pick.has_runner ? `/app/exam/${pick.id}` : `/app/reading/${pick.id}`),
       progress: null,
       meta: pick.question_count > 0 ? `${pick.question_count} Q${mins ? ` · ${mins}m` : ""}` : mins ? `${mins}m` : null,
     };

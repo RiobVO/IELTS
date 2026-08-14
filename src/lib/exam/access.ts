@@ -13,16 +13,20 @@
  * keep their own gate.
  */
 import "server-only";
-import { and, count, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
 import { attempt, contentItem, profile } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
 import { BASIC_DAILY_LIMIT, effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
+import { FULL_CATEGORIES, isFullCategory, trialAllows } from "./trial";
 
 /** Режим попытки (P0): серверная сущность, выбирается ДО создания attempt. */
 export type AttemptMode = "practice" | "mock";
+
+/** `db` ИЛИ активная транзакция — чтобы запросы гейта работали и внутри db.transaction. */
+type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Read the access facts for (user, test) via the owner db: the user's effective
@@ -37,6 +41,7 @@ export async function loadAccessData(
 ): Promise<{
   userTier: Tier;
   tierRequired: Tier;
+  category: string;
   bandScale: Record<string, number> | null;
 } | null> {
   const [[prof], [item]] = await Promise.all([
@@ -47,6 +52,7 @@ export async function loadAccessData(
     db
       .select({
         tierRequired: contentItem.tierRequired,
+        category: contentItem.category,
         bandScale: contentItem.bandScale,
       })
       .from(contentItem)
@@ -59,6 +65,7 @@ export async function loadAccessData(
   return {
     userTier: effectiveTier({ tier: prof.tier, premium_until: prof.premiumUntil }),
     tierRequired: item.tierRequired,
+    category: item.category,
     bandScale: (item.bandScale as Record<string, number> | null) ?? null,
   };
 }
@@ -73,6 +80,11 @@ export async function enforceAccess(
   userId: string,
   userTier: Tier,
   tierRequired: Tier,
+  /** Категория теста — из content_item (owner-path), НЕ из client-input: решает,
+   *  применим ли trial-лейн (только полный тест). */
+  category: string,
+  /** id текущего теста — trial-запрос исключает его попытки (свой trial не расход). */
+  contentItemId: string,
   /**
    * P0: дневной кап Basic считает и гейтит ТОЛЬКО СОЗДАНИЕ НОВОГО mock
    * (practice бесплатен и безлимитен; анти-абуз держит submit-throttle).
@@ -83,8 +95,19 @@ export async function enforceAccess(
    */
   mode: AttemptMode | null,
 ): Promise<void> {
-  // (a) Tier gate — re-check entitlement against the test's required tier.
-  if (!meetsTier(userTier, tierRequired)) redirect("/app/upgrade");
+  // (a) Tier gate + trial-лейн (§4.8). Обычный tier-гейт закрыл бы полный тест для
+  // Basic — trial-лейн пропускает ОДИН (лендинг «first full test is free»).
+  // DB-запрос «израсходован ли trial» делаем ТОЛЬКО когда он реально может помочь
+  // (Basic + полный тест); иначе лишний RT не нужен — trialAllows и так даст deny.
+  if (!meetsTier(userTier, tierRequired)) {
+    const maybeTrial = userTier === "basic" && isFullCategory(category);
+    const trialConsumed = maybeTrial
+      ? await hasConsumedTrial(userId, contentItemId)
+      : true;
+    if (!trialAllows({ userTier, tierRequired, category, trialConsumed })) {
+      redirect("/app/upgrade");
+    }
+  }
 
   // (b) Basic daily limit — count THIS user's submitted MOCK attempts in the
   // current UTC day. Premium/Ultra are unlimited, so only Basic pays the count
@@ -109,6 +132,39 @@ export async function enforceAccess(
       );
     if ((usage?.n ?? 0) >= BASIC_DAILY_LIMIT) redirect("/app/practice?limit=1");
   }
+}
+
+/**
+ * Израсходован ли trial-лейн (§4.8): есть ли у юзера attempt на полном tier-
+ * гейтнутом тесте (category full_*, tier_required выше basic), считающийся расходом.
+ * Расход = попытка на ДРУГОМ таком тесте ЛИБО СДАННАЯ (submitted) на ТЕКУЩЕМ item.
+ * Исключается только СОБСТВЕННАЯ in_progress текущего item — чтобы резюм/submit
+ * своего trial жили; submitted текущего = расход (иначе бесконечные бесплатные
+ * ретейки того же full mock). owner-path (Drizzle bypass RLS); attempt.user_id
+ * индексирован, JOIN по PK, LIMIT 1 — один RT. `exec` — db или tx (H3 recheck под локом).
+ */
+export async function hasConsumedTrial(
+  userId: string,
+  currentContentItemId: string,
+  exec: DbExecutor = db,
+): Promise<boolean> {
+  const [row] = await exec
+    .select({ id: attempt.id })
+    .from(attempt)
+    .innerJoin(contentItem, eq(contentItem.id, attempt.contentItemId))
+    .where(
+      and(
+        eq(attempt.userId, userId),
+        ne(contentItem.tierRequired, "basic"),
+        inArray(contentItem.category, [...FULL_CATEGORIES]),
+        or(
+          ne(attempt.contentItemId, currentContentItemId),
+          eq(attempt.status, "submitted"),
+        ),
+      ),
+    )
+    .limit(1);
+  return !!row;
 }
 
 /**
@@ -171,16 +227,25 @@ export async function hasSubmittedAttempt(
  * pages (never a client-callable action), so the gate cannot be bypassed by calling
  * it directly.
  */
+type StartResult = {
+  attemptId: string;
+  answers: Record<string, string | string[]>;
+  mode: AttemptMode;
+};
+
 export async function startAttempt(
   userId: string,
   contentItemId: string,
   /** Режим НОВОЙ попытки; существующая in_progress резюмится со СВОИМ mode. */
   modeIfNew: AttemptMode,
-): Promise<{
-  attemptId: string;
-  answers: Record<string, string | string[]>;
-  mode: AttemptMode;
-}> {
+  /**
+   * H3: доступ выдан trial-лейном (§4.8), не по тиру. Создание НОВОЙ попытки тогда
+   * атомарно по юзеру — advisory-xact-lock + перепроверка расхода в транзакции,
+   * иначе два параллельных старта РАЗНЫХ full mock оба пройдут (unique-индекс
+   * держит только (user,item)). Резюм существующей попытки — БЕЗ лока.
+   */
+  isTrial = false,
+): Promise<StartResult> {
   const [existing] = await db
     .select({ id: attempt.id, answers: attempt.answers, mode: attempt.mode })
     .from(attempt)
@@ -201,7 +266,33 @@ export async function startAttempt(
     };
   }
 
-  const inserted = await db
+  // Trial-старт: атомарный claim под advisory-xact-lock (снимается на commit/rollback
+  // — не течёт через pgbouncer). Внутри лока перепроверяем расход: параллельный старт
+  // ДРУГОГО full mock мог занять единственный слот, пока ждали лок → проигравший
+  // на upgrade (redirect роняет транзакцию, попытка не создаётся). Ключ — hashtext
+  // (text→int4→bigint), raw sql без Date-параметров (prepare:false safe).
+  if (isTrial) {
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`trial:${userId}`}))`);
+      if (await hasConsumedTrial(userId, contentItemId, tx)) redirect("/app/upgrade");
+      return openNewAttempt(tx, userId, contentItemId, modeIfNew);
+    });
+  }
+  return openNewAttempt(db, userId, contentItemId, modeIfNew);
+}
+
+/**
+ * Вставляет новую in_progress-попытку (или резюмит победителя гонки того же item) и
+ * фейрит `test_start`. Выделено из startAttempt, чтобы non-trial и trial-под-локом
+ * пути делили ОДНУ логику вставки; `exec` = db или транзакция (для trial-клейма).
+ */
+async function openNewAttempt(
+  exec: DbExecutor,
+  userId: string,
+  contentItemId: string,
+  modeIfNew: AttemptMode,
+): Promise<StartResult> {
+  const inserted = await exec
     .insert(attempt)
     .values({
       userId,
@@ -222,7 +313,7 @@ export async function startAttempt(
   // Lost the race: another call created the in_progress row first — resume IT,
   // don't open a second one and don't double-fire test_start.
   if (inserted.length === 0) {
-    const [winner] = await db
+    const [winner] = await exec
       .select({ id: attempt.id, answers: attempt.answers, mode: attempt.mode })
       .from(attempt)
       .where(
