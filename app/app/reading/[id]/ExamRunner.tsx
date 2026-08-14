@@ -510,7 +510,15 @@ export default function ExamRunner({
     setPane("questions"); // на мобильном гарантируем, что таб вопросов активен
     const el = document.getElementById(`q-${n}`);
     const wrap = qScrollRef.current;
-    if (el && wrap) wrap.scrollTo({ top: el.offsetTop - 14, behavior: "smooth" });
+    // offsetTop считается от offsetParent, а не от скролл-контейнера: у .exam-qscroll
+    // нет position → offsetParent всплывал к body, и scrollTo перелетал на высоту
+    // шапки (вопрос уезжал под верхнюю панель, первым видимым становился следующий).
+    // Реальную дельту берём через rect — верно при любом позиционировании и вложенности
+    // (в т.ч. listening, где список обёрнут ещё одним контейнером).
+    if (el && wrap) {
+      const top = wrap.scrollTop + el.getBoundingClientRect().top - wrap.getBoundingClientRect().top - 14;
+      wrap.scrollTo({ top, behavior: "smooth" });
+    }
   }, []);
 
   // P15 — deep-link фокус: один раз на маунте проскроллить к вопросу (из mistakes/result).
