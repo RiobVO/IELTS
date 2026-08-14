@@ -384,7 +384,13 @@ function DeckCard({ deck }: { deck: VocabDeckCard }) {
       <div style={S.cardTitle}>{deck.title}</div>
       {deck.description && <p style={S.cardDesc}>{deck.description}</p>}
 
-      {deck.totalCards > 0 ? (
+      {deck.locked ? (
+        // Locked decks cluster at the end of the catalog — end the scroll on aspiration
+        // (what's inside), not an empty 0% bar. Tier gate stays; this only reframes it.
+        <div style={S.lockTeaser}>
+          {deck.totalCards > 0 ? `${deck.totalCards} words` : "New deck"} · {tierLabel} plan
+        </div>
+      ) : deck.totalCards > 0 ? (
         <div style={S.progressRow}>
           <span style={S.progressTrack}>
             <span
@@ -539,6 +545,7 @@ const S: Record<string, CSSProperties> = {
   progressFill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: "var(--radius-full)", background: "var(--brand)" },
   progressLabel: { fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text-muted)" },
   progressEmpty: { marginTop: "auto", fontSize: 12.5, color: "var(--text-disabled)" },
+  lockTeaser: { marginTop: "auto", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text-muted)" },
 
   cardFoot: { marginTop: 4, display: "flex", alignItems: "center", gap: 14 },
   startFoot: { display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800, textDecoration: "none" },
