@@ -101,9 +101,9 @@ export const QuestionNavigator = memo(function QuestionNavigator({ parts, curren
   );
 });
 
-// Тап-таргет: ячейки навигатора 32px → ≥44px на узком экране (горизонтальный скроллер уже есть).
+// Тап-таргет: ячейки навигатора 32px → ≥44px на touch (горизонтальный скроллер уже есть).
 // partLabel ("Part 1"/"Part 2") — смысловой лейбл, поднимаем до 12px на узком экране.
-const NAV_CSS = `@media (max-width:430px){.nav-cell{width:44px!important;height:44px!important}.nav-partlabel{font-size:12px!important}}`;
+const NAV_CSS = `@media (pointer:coarse){.nav-cell{width:44px!important;height:44px!important}}@media (max-width:430px){.nav-partlabel{font-size:12px!important}}`;
 
 const S: Record<string, CSSProperties> = {
   bar: {

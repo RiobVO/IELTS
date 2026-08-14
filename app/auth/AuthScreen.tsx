@@ -269,9 +269,10 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
           .auth-toggle{display:block}
           .auth-mbrand{display:flex;align-items:center;justify-content:center;gap:9px;margin:26px 0 -8px}
         }
-        /* Тап-таргеты ≥44px на узких телефонах: тоггл signup/login и "Forgot password?"
-           были обычным текстом (~16-20px). */
-        @media (max-width:430px){
+        /* Тап-таргеты ≥44px на touch: тоггл signup/login и "Forgot password?" были
+           обычным текстом (~16-20px). pointer:coarse — не max-width — иначе touch-
+           планшеты шире 759px (двухпанельный layout) остаются с мелким текстом. */
+        @media (pointer:coarse){
           .auth-toggle-btn{display:inline-flex;align-items:center;min-height:44px}
           .auth-forgot{display:inline-flex;align-items:center;min-height:44px}
         }

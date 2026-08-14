@@ -27,8 +27,8 @@ export default function LeaderboardControls({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 4 }}>
-      {/* Тап-таргет чипов 8px 15px (~32px) < 44px на узких телефонах. */}
-      <style>{"@media (max-width:430px){.lc-tab{min-height:44px}}"}</style>
+      {/* Тап-таргет чипов 8px 15px (~32px) < 44px на touch — не только узкие телефоны. */}
+      <style>{"@media (pointer:coarse){.lc-tab{min-height:44px}}"}</style>
       <div style={ROW}>
         {periodOptions.map((o) => (
           <Tab key={o.value} href={href(o.value, scope)} active={period === o.value} label={o.label} />

@@ -9,7 +9,7 @@ import type { NotifCursor, NotifPage } from "@/lib/notifications/list";
    классах (inline не держит :hover/@media). Список переиспользует .nb-row из
    NB_CSS, поэтому unread-стайлинг идентичен dropdown'у колокольчика. */
 const NL_CSS = `
-.nl-chip{border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);font-family:var(--font-ui);font-size:var(--text-xs);font-weight:700;padding:7px 14px;min-height:36px;border-radius:var(--radius-full);cursor:pointer;transition:background-color var(--duration-fast) var(--ease-standard),color var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard)}
+.nl-chip{display:inline-flex;align-items:center;border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);font-family:var(--font-ui);font-size:var(--text-xs);font-weight:700;padding:7px 14px;min-height:44px;border-radius:var(--radius-full);cursor:pointer;transition:background-color var(--duration-fast) var(--ease-standard),color var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard)}
 .nl-chip:hover{background:var(--surface-hover)}
 .nl-chip.is-active{background:var(--brand-subtle);color:var(--text-link);border-color:var(--brand-border)}
 .nl-loadmore{width:100%;min-height:44px;border:1px solid var(--border);background:var(--surface);color:var(--text-link);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;border-radius:var(--radius-md);cursor:pointer;transition:background-color var(--duration-fast) var(--ease-standard)}
