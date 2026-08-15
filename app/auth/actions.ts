@@ -55,13 +55,20 @@ async function checkAuthThrottle(scope: AuthThrottleScope, identifier?: string):
   const ipHash = createHash("sha256").update(`${scope}:${key}`).digest("hex");
   const since = new Date(Date.now() - windowSeconds * 1000);
   // COUNT и INSERT атомарны под advisory-xact-lock (тот же паттерн, что trial-лейн
-  // в src/lib/exam/access.ts ~274): без лока параллельный burst запросов все видят
-  // один и тот же count < limit и все проходят — для scope "resetEmail" это
-  // почтовая бомбардировка жертвы вместо реального капа. Лок снимается на
-  // commit/rollback, не течёт через pgbouncer; ключ — ipHash (уже несёт префикс
-  // scope), не raw identifier.
+  // в src/lib/exam/access.ts ~274), но здесь лок — TRY, не блокирующий: под burst'ом
+  // попыток на один и тот же ключ конкурирующие вызовы не встают в очередь ожидания
+  // (waiter держит server-connection пула PgBouncer в transaction-режиме — burst
+  // может выесть пул). Если лок занят — значит для этого же ключа прямо сейчас уже
+  // идёт другой COUNT→INSERT; не читаем устаревший count, а сразу считаем попытку
+  // throttled (fail closed — безопасно, просто отклоняем тем же нейтральным
+  // сообщением). Лок снимается на commit/rollback, не течёт через pgbouncer;
+  // ключ — ipHash (уже несёт префикс scope), не raw identifier.
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${ipHash}))`);
+    const [lockRow] = await tx.execute(
+      sql`select pg_try_advisory_xact_lock(hashtext(${ipHash})) as locked`,
+    );
+    const locked = Boolean((lockRow as { locked: boolean }).locked);
+    if (!locked) return true;
     const [recent] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(signupThrottle)
