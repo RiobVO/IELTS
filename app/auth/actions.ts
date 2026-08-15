@@ -19,6 +19,7 @@ import {
 } from "@/lib/anti-cheat";
 import { verifyTurnstile } from "@/lib/anti-bot/turnstile";
 import { isEmailNotConfirmed } from "@/lib/auth/email-confirm";
+import { logError } from "@/lib/monitoring/log-error";
 import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
 
@@ -34,18 +35,24 @@ function fail(message: string, extra?: Record<string, string>): never {
 const AUTH_THROTTLE_MESSAGE = "Too many attempts. Try again later.";
 
 /**
- * IP-throttle для login/reset (§11 anti-abuse), переиспользующий signup-механизм:
+ * IP/email-throttle для login/reset (§11 anti-abuse), переиспользующий signup-механизм:
  * та же таблица signup_throttle и тот же паттерн (COUNT в скользящем окне → insert
  * только если ещё не превышен), но без новой миграции под колонку scope — вместо
- * неё scope едет префиксом в самом хешируемом ключе (sha256(`${scope}:${ip}`)),
- * поэтому счётчики login/reset/signup не пересекаются несмотря на общую таблицу.
- * true → лимит исчерпан, вызывающий отклоняет попытку.
+ * неё scope едет префиксом в самом хешируемом ключе (sha256(`${scope}:${identifier}`)),
+ * поэтому счётчики login/reset/resetEmail/signup не пересекаются несмотря на общую
+ * таблицу. `identifier` по умолчанию — IP звонящего; reset password дополнительно
+ * зовёт с per-email identifier (см. requestPasswordReset) — общий IP за NAT (офис/
+ * университет) не должен душить per-email лимит и наоборот. true → лимит исчерпан,
+ * вызывающий отклоняет попытку.
  */
-async function checkAuthThrottle(scope: AuthThrottleScope): Promise<boolean> {
+async function checkAuthThrottle(scope: AuthThrottleScope, identifier?: string): Promise<boolean> {
   const { windowSeconds } = AUTH_THROTTLE_LIMITS[scope];
-  const h = await headers();
-  const ipRaw = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const ipHash = createHash("sha256").update(`${scope}:${ipRaw}`).digest("hex");
+  let key = identifier;
+  if (!key) {
+    const h = await headers();
+    key = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  }
+  const ipHash = createHash("sha256").update(`${scope}:${key}`).digest("hex");
   const since = new Date(Date.now() - windowSeconds * 1000);
   const [recent] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -197,7 +204,12 @@ export async function signOut() {
  * Запрос ссылки сброса пароля (app/auth/reset). Раньше форма звала
  * supabase.auth.resetPasswordForEmail напрямую из браузера — здесь у неё не было
  * доступа ни к IP, ни к троттлингу. Перенесено на сервер ИМЕННО чтобы навесить
- * IP-throttle (строже login: 3/10мин — живой юзер жмёт "send" один раз, не трижды).
+ * throttle. Двойной ключ (NAT-фикс: общий IP офиса/университета не должен банить
+ * легитимных юзеров четвёртым запросом):
+ *  - per-IP (scope "reset") — щедрый порог вровень с login, отсекает только
+ *    автоматизированный спам с одного адреса;
+ *  - per-email (scope "resetEmail") — строгий 3/10мин, тот же живой-юзер-жмёт-once
+ *    довод, что раньше был на IP, но не размывается общим IP за NAT.
  * Вызывается напрямую как функция (не через <form action>) — страница держит
  * своё sending/sent-состояние, это не рвёт её флоу. redirectTo — ТОЛЬКО через
  * доверенный publicSiteUrl() (не location.origin/Host) — та же анти-спуф причина,
@@ -205,12 +217,27 @@ export async function signOut() {
  * email (error обычно null) — мы это поведение не трогаем.
  */
 export async function requestPasswordReset(email: string): Promise<{ error: string | null }> {
-  if (await checkAuthThrottle("reset")) {
+  const normalizedEmail = email.toLowerCase().trim();
+  const [ipExceeded, emailExceeded] = await Promise.all([
+    checkAuthThrottle("reset"),
+    checkAuthThrottle("resetEmail", normalizedEmail),
+  ]);
+  if (ipExceeded || emailExceeded) {
     return { error: AUTH_THROTTLE_MESSAGE };
   }
 
   const supabase = await createClient();
   const origin = publicSiteUrl();
+  if (!origin) {
+    // Без доверенного origin redirectTo не передаётся — ссылка из письма приземлится
+    // на дефолтный Supabase Site URL, мимо /auth/callback, и сброс не доработает.
+    // Fallback-поведение (как у signUp) оставляем, но фиксируем инцидент в логах.
+    await logError({
+      source: "server",
+      message:
+        "requestPasswordReset: NEXT_PUBLIC_SITE_URL is not set, reset link will land on Supabase Site URL root",
+    });
+  }
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     ...(origin ? { redirectTo: `${origin}/auth/callback?next=/auth/update-password` } : {}),
   });
