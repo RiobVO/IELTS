@@ -67,3 +67,10 @@ npm-debug.log*
 
 .vercel
 .env*
+
+# корневой мусор (ad-hoc превью/дампы, не для гита)
+/result-magnetic-2.html
+/vocab-upgrade-preview.html
+/smoke-deck.json
+/brand-kit/
+/.codex-screenshots/

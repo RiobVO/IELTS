@@ -31,10 +31,10 @@ export default async function AdminErrorsPage() {
       <div style={S.wrap}>
         <h1 style={S.h1}>Error log</h1>
         <p style={S.sub}>
-          Последние {rows.length} ошибок (server + client) — свой sink, без внешнего сервиса.
+          Last {rows.length} errors (server + client) — self-hosted sink, no external service.
         </p>
         {rows.length === 0 ? (
-          <p style={S.hint}>Пусто — ошибок не зафиксировано.</p>
+          <p style={S.hint}>No errors logged yet.</p>
         ) : (
           <ul style={S.list}>
             {rows.map((r) => (
