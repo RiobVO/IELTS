@@ -34,20 +34,36 @@ import type { AKItem, AKType } from "./InsightReport";
 export const dynamic = "force-dynamic";
 
 // Динамический title вкладки — заголовок теста вместо статичного дефолта из layout.tsx.
-// Чистый read-only запрос (без grade()/getContentMeta и прочей бизнес-логики страницы):
-// generateMetadata не должна триггерить сайд-эффекты и не обязана знать про владение
-// попыткой — название теста публично видно на /app/exam и /app/reading точно так же.
+// В отличие от /app/exam и /app/reading, здесь published-гейт НЕ подходит: страница
+// тела сама читает разбор БЕЗ published-фильтра (комментарий у getContentMeta ниже —
+// «разбор сданной попытки виден, даже если тест позже депубликовали»), доступ гейтит
+// ВЛАДЕНИЕ попыткой (attempt.user_id === user.id && attempt.content_item_id === id,
+// см. JS-гард на notFound ниже в теле страницы). Поэтому здесь — тот же owner-check,
+// не published: без юзера/attemptId или на чужую попытку — нейтральный fallback,
+// никогда реальный title чужого/непройденного теста.
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ a?: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  if (!isUuid(id)) return { title: "Result | bando" };
+  const { a: attemptId } = await searchParams;
+  if (!isUuid(id) || !isUuid(attemptId)) return { title: "Result | bando" };
+  const user = await getUser();
+  if (!user) return { title: "Result | bando" };
   const [row] = await db
     .select({ title: contentItem.title })
-    .from(contentItem)
-    .where(eq(contentItem.id, id))
+    .from(attempt)
+    .innerJoin(contentItem, eq(contentItem.id, attempt.contentItemId))
+    .where(
+      and(
+        eq(attempt.id, attemptId),
+        eq(attempt.userId, user.id),
+        eq(attempt.contentItemId, id),
+      ),
+    )
     .limit(1);
   return { title: `${row?.title ?? "Result"} | bando` };
 }
