@@ -388,6 +388,43 @@ async function notificationLock(): Promise<{
   };
 }
 
+/**
+ * Writing/Speaking grant-постура (0023/0024/0027/0028 → 0048). Контракт раздавал этим 7
+ * таблицам клиенту ровно SELECT (0023/0027); 0024/0028 сняли INSERT/UPDATE/DELETE. Прод-
+ * дрейф Supabase default-priv оставил у authenticated ещё REFERENCES/TRIGGER/TRUNCATE (те
+ * ревоки были точечными, не REVOKE ALL) — снято 0048. Держим: authenticated — ровно SELECT,
+ * anon — без грантов. Табличные гранты из role_table_grants (grantee = сама роль; PUBLIC
+ * туда не попадает). Локально дрейфа нет — ассерт работает против регресса постуры.
+ */
+const WRITING_SPEAKING_TABLES = [
+  "writing_task",
+  "writing_submission",
+  "writing_feedback",
+  "speaking_task",
+  "speaking_submission",
+  "speaking_feedback",
+  "speaking_audio_event",
+] as const;
+
+async function writingSpeakingGrants(): Promise<
+  { table: string; authTableGrants: string[]; anonGrants: string[] }[]
+> {
+  const rows = await sql<{ table_name: string; grantee: string; privilege_type: string }[]>`
+    SELECT table_name, grantee, privilege_type
+    FROM information_schema.role_table_grants
+    WHERE table_schema = 'public' AND grantee IN ('anon', 'authenticated')`;
+  return WRITING_SPEAKING_TABLES.map((t) => ({
+    table: t,
+    authTableGrants: rows
+      .filter((r) => r.table_name === t && r.grantee === "authenticated")
+      .map((r) => r.privilege_type)
+      .sort(),
+    anonGrants: rows
+      .filter((r) => r.table_name === t && r.grantee === "anon")
+      .map((r) => r.privilege_type),
+  }));
+}
+
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer();
@@ -634,6 +671,22 @@ async function main() {
         `authWritable=[${nl.authWritable.join(",")}], policies=[${nl.policies.join(",")}], ` +
         `nonReadAtUpdateDenied=${nl.nonReadAtUpdateDenied}, readAtUpdateAllowed=${nl.readAtUpdateAllowed})`,
     );
+
+  // 4k. Writing/Speaking grant-постура (0023/0024/0027/0028 → 0048): у authenticated —
+  // ровно SELECT (контракт), anon — без грантов. 0048 снял прод-дрейф default-priv
+  // (REFERENCES/TRIGGER/TRUNCATE у authenticated, недоснятые точечными ревоками 0024/0028).
+  // Локально дрейфа нет — ассерт против регресса. Дополняет 4i (там RLS-on + anon-deny).
+  for (const g of await writingSpeakingGrants()) {
+    const authOk = g.authTableGrants.length === 1 && g.authTableGrants[0] === "SELECT";
+    const anonOk = g.anonGrants.length === 0;
+    if (authOk && anonOk)
+      ok(`RLS — ${g.table} client grants locked (authenticated SELECT only; anon none)`);
+    else
+      fail(
+        `RLS — ${g.table} grant drift (authTableGrants=[${g.authTableGrants.join(",")}], ` +
+          `anonGrants=[${g.anonGrants.join(",")}])`,
+      );
+  }
 
   // 5. auth trigger: a new auth.users row auto-creates a profile
   if (await profileAutoCreated())
