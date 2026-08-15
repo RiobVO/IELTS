@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth";
 import { Badge, type BadgeTone } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
@@ -7,6 +8,7 @@ import { listAllTasks, type AdminSpeakingTaskRow } from "@/lib/speaking/admin";
 import { createSpeakingTask, publishSpeakingTask, removeSpeakingTask, unpublishSpeakingTask } from "./actions";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Admin speaking | bando" };
 
 const TIER_LABEL: Record<AdminSpeakingTaskRow["tierRequired"], string> = {
   basic: "Basic",

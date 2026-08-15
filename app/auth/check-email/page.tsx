@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { CheckEmail } from "./CheckEmail";
+
+export const metadata: Metadata = { title: "Check your email | bando" };
 
 /**
  * Экран «Check your email». Показывается в двух случаях (оба — только когда тумблер

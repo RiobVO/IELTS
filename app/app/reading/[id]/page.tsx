@@ -30,13 +30,13 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  if (!isUuid(id)) return { title: "Practice" };
+  if (!isUuid(id)) return { title: "Practice | bando" };
   const [row] = await db
     .select({ title: contentItem.title })
     .from(contentItem)
     .where(eq(contentItem.id, id))
     .limit(1);
-  return { title: row?.title ?? "Practice" };
+  return { title: `${row?.title ?? "Practice"} | bando` };
 }
 
 interface Question {
