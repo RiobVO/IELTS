@@ -19,29 +19,69 @@ import vm from "node:vm";
 // closes the realistic OOM vectors.
 const MAX_VM_INPUT = 4 * 1024 * 1024; // 4 MB
 
+/** Пропускает whitespace + //- и /* *​/-комментарии начиная с i. Нужен и в пре-скане
+ * между `=` и `{`, и был бы уязвим без него: комментарий там ронял extractObjectLiteral
+ * в null ДО баланс-цикла (adversarial 2026-07-09), а blankObject молча пропускал ключ. */
+function skipTrivia(src: string, i: number): number {
+  for (;;) {
+    const c = src[i];
+    if (c === undefined) return i;
+    if (/\s/.test(c)) i++;
+    else if (c === "/" && src[i + 1] === "/") {
+      i += 2;
+      while (i < src.length && src[i] !== "\n") i++;
+    } else if (c === "/" && src[i + 1] === "*") {
+      i += 2;
+      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i++;
+      i += 2; // проглотить закрывающие */
+    } else return i;
+  }
+}
+
 /** Find `const NAME = { ... }` and return the balanced-brace literal text. */
 export function extractObjectLiteral(src: string, name: string): string | null {
   const re = new RegExp(`(?:const|let|var)\\s+${name}\\s*=\\s*`);
   const m = re.exec(src);
   if (!m) return null;
 
-  let i = m.index + m[0].length;
-  while (i < src.length && /\s/.test(src[i]!)) i++;
+  let i = skipTrivia(src, m.index + m[0].length);
   if (src[i] !== "{") return null;
 
   const start = i;
   let depth = 0;
   let inStr: string | null = null;
   let esc = false;
+  // Комментарии обязаны трекаться наравне со строками: апостроф в `// don't` иначе
+  // открыл бы фантомную строку, а `}` в комментарии — сбил бы depth (P2, security:
+  // тот же сканер чистит ключи из runner_html через blankObject).
+  let inComment: "line" | "block" | null = null;
   for (; i < src.length; i++) {
     const c = src[i]!;
+    if (inComment === "line") {
+      if (c === "\n") inComment = null;
+      continue;
+    }
+    if (inComment === "block") {
+      if (c === "*" && src[i + 1] === "/") {
+        inComment = null;
+        i++;
+      }
+      continue;
+    }
     if (inStr) {
       if (esc) esc = false;
       else if (c === "\\") esc = true;
       else if (c === inStr) inStr = null;
       continue;
     }
-    if (c === "'" || c === '"' || c === "`") inStr = c;
+    // Комментарий распознаём только ВНЕ строки: `//` в "http://x" — не комментарий.
+    if (c === "/" && src[i + 1] === "/") {
+      inComment = "line";
+      i++;
+    } else if (c === "/" && src[i + 1] === "*") {
+      inComment = "block";
+      i++;
+    } else if (c === "'" || c === '"' || c === "`") inStr = c;
     else if (c === "{") depth++;
     else if (c === "}") {
       depth--;

@@ -115,6 +115,37 @@ function ui(){ const btn = { html: 'Q31' + ' Evidence' }; return btn; }</script>
     expect(() => assertNoKeyLeak(out, rr.parsed)).not.toThrow();
   });
 
+  // P2 (2026-07-09): апостроф в комментарии ВНУТРИ объекта ключей рвал баланс скобок в
+  // extractObjectLiteral → blankObject молча возвращал src без изменений → сырой
+  // correctAnswers уезжал в runner_html (view-source утечка ключа mock-iframe). Правка
+  // сканера (comment-aware) чинит обоих потребителей; здесь — санитайзер-потребитель.
+  it("вырезает correctAnswers несмотря на апостроф в комментарии внутри объекта (P2)", () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>const correctAnswers = { // don't touch — validated
+"1":"mining","2":"tourism","3":"granite","4":"delta" };</script></body></html>`;
+    const rr = parseRunner(html);
+    const out = sanitizeRunner(html, { contentItemId: "cid-p2", section: "reading" });
+    expect(out).toMatch(/const correctAnswers\s*=\s*\{\}/);
+    expect(out).not.toContain("mining"); // ключ НЕ уехал в браузер
+    expect(out).not.toContain("tourism");
+    expect(() => assertNoKeyLeak(out, rr.parsed)).not.toThrow();
+  });
+
+  // Adversarial (Codex, 2026-07-09): комментарий МЕЖДУ `=` и `{` ронял extractObjectLiteral
+  // в null до comment-aware цикла → blankObject молча пропускал mcqGroups → correct-набор
+  // букв уезжал в runner_html (assertNoKeyLeak не ловит: layer1-regex не матчит `= /*..*/ {`,
+  // буквы A/C короче 3 символов). Пре-скан теперь comment-aware — объект вырезается.
+  it("вырезает mcqGroups с комментарием между `=` и `{` (P2 vector A)", () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>const correctAnswers = {"1":"A","2":"B","3":"C","4":"D"};
+const mcqGroups = /* between */ {"1-4":{"qs":[1,2,3,4],"correct":["A","C"]}};</script></body></html>`;
+    const rr = parseRunner(html);
+    const out = sanitizeRunner(html, { contentItemId: "cid-va", section: "reading" });
+    expect(out).toMatch(/const mcqGroups\s*=\s*\/\* between \*\/\s*\{\}/);
+    expect(out).not.toContain(`"correct":["A","C"]`); // ключ-набор НЕ уехал в браузер
+    expect(() => assertNoKeyLeak(out, rr.parsed)).not.toThrow();
+  });
+
   it("время в строках не даёт ложного срабатывания детектора", () => {
     const benign = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"1":"TRUE"};
