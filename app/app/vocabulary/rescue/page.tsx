@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getRescueQueue } from "@/lib/vocab/queries";
@@ -5,6 +6,7 @@ import { AppShell } from "../../_AppShell";
 import { ReviewSession } from "../[deckId]/ReviewSession";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Rescue review | bando" };
 
 /** Rescue-сессия трудных слов: только уже начатые карты, без добора новых. */
 export default async function VocabRescuePage() {

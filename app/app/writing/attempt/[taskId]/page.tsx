@@ -1,12 +1,39 @@
+import type { Metadata } from "next";
+import { eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
+import { db } from "@/db";
+import { writingTask } from "@/db/schema";
 import { writingFeatureEnabled } from "@/env";
 import { isUuid } from "@/lib/uuid";
+import { coerceTopic, writingTopicLabel } from "@/lib/writing/topic-meta";
 import { loadPublishedTask } from "@/lib/writing/read";
 import { AppShell } from "../../../_AppShell";
 import { Attempt } from "./_Attempt";
 
 export const dynamic = "force-dynamic";
+
+// Динамический title вкладки — тема+часть задания вместо статичного дефолта. Чистый
+// read-only запрос (без loadPublishedTask/writingFeatureEnabled): generateMetadata не
+// должна триггерить редиректы/бизнес-гейты самой страницы (принцип reading/[id]).
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ taskId: string }>;
+}): Promise<Metadata> {
+  const { taskId } = await params;
+  if (!isUuid(taskId)) return { title: "Writing practice | bando" };
+  const [row] = await db
+    .select({ topic: writingTask.topic, taskPart: writingTask.taskPart })
+    .from(writingTask)
+    .where(eq(writingTask.id, taskId))
+    .limit(1);
+  if (!row) return { title: "Writing practice | bando" };
+  const topic = coerceTopic(row.topic);
+  const partLabel = row.taskPart === "task1" ? "Task 1" : "Task 2";
+  const title = topic ? `${writingTopicLabel[topic]} — ${partLabel}` : `Writing ${partLabel}`;
+  return { title: `${title} | bando` };
+}
 
 /**
  * Attempt screen (`/app/writing/attempt/[taskId]`). Disabled-safe redirect to

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getProfile, requireUser } from "@/lib/auth";
 import { speakingFeatureEnabled } from "@/env";
@@ -7,6 +8,7 @@ import { AppShell } from "../_AppShell";
 import { SpeakingCatalog } from "./_Catalog";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Speaking | bando" };
 
 /**
  * Speaking Lab catalog (`/app/speaking`). Disabled-safe: with SPEAKING_EVAL_MODEL

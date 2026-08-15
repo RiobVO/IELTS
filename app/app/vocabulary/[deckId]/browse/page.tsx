@@ -1,14 +1,34 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { db } from "@/db";
+import { vocabDeck } from "@/db/schema";
 import { getDeckBrowse, getVocabCatalog } from "@/lib/vocab/queries";
 import { isUuid } from "@/lib/uuid";
 import { Button } from "@/components/core/Button";
 import { AppShell } from "../../../_AppShell";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Browse deck" };
+
+// Динамический title вкладки — имя дека вместо статичного дефолта, тот же read-only
+// принцип, что в [deckId]/page.tsx (без getVocabCatalog/getDeckBrowse — та бизнес-
+// логика гейтит published/tier для тела страницы, метаданным она не нужна).
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ deckId: string }>;
+}): Promise<Metadata> {
+  const { deckId } = await params;
+  if (!isUuid(deckId)) return { title: "Browse deck | bando" };
+  const [row] = await db
+    .select({ title: vocabDeck.title })
+    .from(vocabDeck)
+    .where(eq(vocabDeck.id, deckId))
+    .limit(1);
+  return { title: row ? `${row.title} — Browse | bando` : "Browse deck | bando" };
+}
 
 /** Цвет статус-точки: нет прогресса → нейтральный, начата → brand, освоена → success. */
 const STATUS_COLOR: Record<string, string> = {

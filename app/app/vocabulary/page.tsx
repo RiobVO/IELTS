@@ -14,7 +14,7 @@ import { Icon } from "@/components/core/icons";
 import { AppShell } from "../_AppShell";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Vocabulary" };
+export const metadata: Metadata = { title: "Vocabulary | bando" };
 
 const TIER_LABEL: Record<string, string> = {
   basic: "Basic",

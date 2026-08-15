@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
@@ -9,6 +10,7 @@ import { AppShell } from "../../_AppShell";
 import { Button } from "@/components/core/Button";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Writing history | bando" };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const fmtDate = (d: Date) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;

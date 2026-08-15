@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
 import { speakingFeatureEnabled } from "@/env";
@@ -6,6 +7,7 @@ import { AppShell } from "../../_AppShell";
 import { SpeakingHistory } from "./_History";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Speaking history | bando" };
 
 /**
  * Speaking attempt history (`/app/speaking/history`). Owner-scoped grid of completed

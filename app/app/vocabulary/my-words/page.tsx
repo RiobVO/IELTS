@@ -7,7 +7,7 @@ import { AppShell } from "../../_AppShell";
 import { MyWords, type SavedWordRow } from "./MyWords";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "My words" };
+export const metadata: Metadata = { title: "My words | bando" };
 
 /**
  * `/app/vocabulary/my-words` — личный словарь P11. Owner-path чтение своих saved_word
