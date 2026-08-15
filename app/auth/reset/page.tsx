@@ -4,7 +4,7 @@ import { type CSSProperties, type FormEvent, useEffect, useRef, useState } from 
 import { Button } from "@/components/core/Button";
 import { Input } from "@/components/core/Input";
 import { Logo } from "@/components/core/Logo";
-import { createClient } from "@/lib/supabase/client";
+import { requestPasswordReset } from "../actions";
 
 /** Персистентная подпись поля (htmlFor) — recall + скринридер; плейсхолдер её не заменяет. */
 const labelStyle: CSSProperties = {
@@ -52,12 +52,11 @@ export default function ResetPasswordPage() {
 
     setStatus("sending");
     setError(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${location.origin}/auth/callback?next=/auth/update-password`,
-    });
+    // Серверный action (не браузерный supabase-вызов): нужен доступ к IP для
+    // троттлинга (§11 anti-abuse) — см. requestPasswordReset в ../actions.
+    const { error } = await requestPasswordReset(email);
     if (error) {
-      setError(error.message);
+      setError(error);
       setStatus("idle");
       return;
     }

@@ -2,7 +2,9 @@
 // (без I/O) — окно и решение проверяются без БД. Полностью inline.
 import { describe, it, expect } from "vitest";
 import {
+  AUTH_THROTTLE_LIMITS,
   countSubmitsInWindow,
+  exceedsAuthThrottle,
   exceedsSignupRate,
   exceedsSubmitRate,
   isHoneypotTripped,
@@ -64,6 +66,24 @@ describe("exceedsSignupRate", () => {
   });
   it("больше потолка → true", () => {
     expect(exceedsSignupRate(SIGNUP_THROTTLE_MAX + 1)).toBe(true);
+  });
+});
+
+describe("exceedsAuthThrottle", () => {
+  it("login: меньше потолка → false", () => {
+    expect(exceedsAuthThrottle("login", AUTH_THROTTLE_LIMITS.login.max - 1)).toBe(false);
+  });
+  it("login: ровно потолок → true (граница включительна, >=)", () => {
+    expect(exceedsAuthThrottle("login", AUTH_THROTTLE_LIMITS.login.max)).toBe(true);
+  });
+  it("reset: меньше потолка → false", () => {
+    expect(exceedsAuthThrottle("reset", AUTH_THROTTLE_LIMITS.reset.max - 1)).toBe(false);
+  });
+  it("reset: ровно потолок → true (граница включительна, >=)", () => {
+    expect(exceedsAuthThrottle("reset", AUTH_THROTTLE_LIMITS.reset.max)).toBe(true);
+  });
+  it("scope-пороги независимы (reset строже login)", () => {
+    expect(AUTH_THROTTLE_LIMITS.reset.max).toBeLessThan(AUTH_THROTTLE_LIMITS.login.max);
   });
 });
 
