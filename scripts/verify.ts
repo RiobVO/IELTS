@@ -307,9 +307,14 @@ async function clientWriteLockdown(): Promise<{
  *   - RLS включён; anon без политик = deny-all и вообще без табличных грантов (0047);
  *   - authenticated: табличный грант ТОЛЬКО SELECT (табличный UPDATE снят 0046 →
  *     заменён колоночным UPDATE(read_at); INSERT/DELETE/… снят 0047);
- *   - политики select_own + update_own (0001) на месте;
- *   - живая проба: под authenticated UPDATE не-read_at колонки падает 42501 (нет
- *     колоночного гранта — до RLS), а UPDATE(read_at) проходит.
+ *   - политики select_own + update_own (0001): cmd/roles/qual/with_check СОВПАДАЮТ с
+ *     owner-паттерном `user_id = auth.uid()` (не только имя политики — заглушка с тем
+ *     же именем, но другим cmd/qual раньше прошла бы), и других permissive-политик на
+ *     таблице нет (count = 2);
+ *   - живая проба на РЕАЛЬНЫХ identity A/B и реальной строке (не WHERE по случайному
+ *     uid — «0 affected» там выглядел одинаково и под deny, и под честный мисматч):
+ *     UPDATE(read_at) под чужим B → 0 строк; под владельцем A → 1 строка; UPDATE
+ *     не-read_at колонки под A → 42501 (нет колоночного гранта, до RLS).
  * Табличные гранты берём из role_table_grants (колоночные там НЕ отражаются), колоночный
  * UPDATE — из column_privileges (при снятом табличном UPDATE там останется лишь read_at).
  */
@@ -319,9 +324,12 @@ async function notificationLock(): Promise<{
   anonNoGrants: boolean;
   authTableGrants: string[];
   authWritable: string[];
-  policies: string[];
+  policyCount: number;
+  selectPolicyOk: boolean;
+  updatePolicyOk: boolean;
+  crossUserUpdateAffected: number;
+  ownUserUpdateAffected: number;
   nonReadAtUpdateDenied: boolean;
-  readAtUpdateAllowed: boolean;
 }> {
   const [{ rls }] = await sql<{ rls: boolean }[]>`
     SELECT relrowsecurity AS rls FROM pg_class
@@ -352,29 +360,93 @@ async function notificationLock(): Promise<{
     WHERE table_schema = 'public' AND table_name = 'notification'
       AND grantee = 'authenticated' AND privilege_type = 'UPDATE'`;
 
-  const pols = await sql<{ policyname: string }[]>`
-    SELECT policyname FROM pg_policies
+  // cmd/roles/qual/with_check каждой политики, не только имя — pg_policies.roles это
+  // name[], приводим к text[]; qual/with_check уже реконструированы Postgres в текст.
+  const pols = await sql<
+    {
+      policyname: string;
+      permissive: string;
+      cmd: string;
+      roles: string[];
+      qual: string | null;
+      with_check: string | null;
+    }[]
+  >`
+    SELECT policyname, permissive, cmd, roles::text[] AS roles, qual, with_check
+    FROM pg_policies
     WHERE schemaname = 'public' AND tablename = 'notification'`;
 
-  // Живая проба под authenticated: title (не read_at) → 42501 (нет колоночного гранта,
-  // проверяется до RLS); read_at → успех. WHERE по случайному uid не матчит строк, так
-  // что грант-слой рубит title ещё до обработки строк, а read_at обновляет 0 строк без ошибки.
-  const probeDenied = async (setClause: string): Promise<boolean> => {
-    try {
-      await sql.begin(async (tx) => {
-        await tx.unsafe("SET LOCAL ROLE authenticated");
-        await tx.unsafe(
-          `UPDATE notification SET ${setClause} WHERE user_id = gen_random_uuid()`,
-        );
-      });
-      return false;
-    } catch (e: unknown) {
-      const err = e as { code?: string; message?: string };
-      return err?.code === "42501" || /permission denied/i.test(String(err?.message ?? e));
-    }
-  };
-  const nonReadAtUpdateDenied = await probeDenied("title = 'x'");
-  const readAtUpdateAllowed = !(await probeDenied("read_at = now()"));
+  // Owner-check из migrations/0001_rls: `user_id = auth.uid()` (у select/update
+  // одинаковый qual; update дополнительно несёт тот же WITH CHECK).
+  const isOwnerExpr = (expr: string | null): boolean =>
+    !!expr && /user_id\s*=\s*auth\.uid\(\)/.test(expr);
+  const permissivePolicies = pols.filter((p) => p.permissive === "PERMISSIVE");
+
+  const selectPolicy = pols.find((p) => p.policyname === "notification_select_own");
+  const selectPolicyOk =
+    !!selectPolicy &&
+    selectPolicy.permissive === "PERMISSIVE" &&
+    selectPolicy.cmd === "SELECT" &&
+    selectPolicy.roles.includes("authenticated") &&
+    isOwnerExpr(selectPolicy.qual);
+
+  const updatePolicy = pols.find((p) => p.policyname === "notification_update_own");
+  const updatePolicyOk =
+    !!updatePolicy &&
+    updatePolicy.permissive === "PERMISSIVE" &&
+    updatePolicy.cmd === "UPDATE" &&
+    updatePolicy.roles.includes("authenticated") &&
+    isOwnerExpr(updatePolicy.qual) &&
+    isOwnerExpr(updatePolicy.with_check);
+
+  // Живая проба: два настоящих auth-юзера (A/B, owner-путь как в clientWriteLockdown)
+  // и одна notification-строка A. gen_random_uuid() в WHERE раньше маскировал
+  // «успех» — 0 affected rows выглядели одинаково что под deny, что под честный
+  // owner-мисматч. Теперь строка реальна, и affected-count различает три исхода.
+  const emailA = `verify-notif-a+${Date.now()}@example.com`;
+  const emailB = `verify-notif-b+${Date.now()}@example.com`;
+  const [{ id: userA }] = await sql<{ id: string }[]>`
+    INSERT INTO auth.users (email, raw_app_meta_data)
+    VALUES (${emailA}, ${sql.json({ provider: "email" })})
+    RETURNING id`;
+  const [{ id: userB }] = await sql<{ id: string }[]>`
+    INSERT INTO auth.users (email, raw_app_meta_data)
+    VALUES (${emailB}, ${sql.json({ provider: "email" })})
+    RETURNING id`;
+
+  let crossUserUpdateAffected = -1;
+  let ownUserUpdateAffected = -1;
+  let nonReadAtUpdateDenied = false;
+
+  try {
+    const [{ id: notifId }] = await sql<{ id: string }[]>`
+      INSERT INTO notification (user_id, type, kind, title)
+      VALUES (${userA}, 'system', 'verify', 'x')
+      RETURNING id`;
+
+    // affected-count при успехе; null при 42501 (колоночный/табличный deny, до RLS).
+    const updateAs = async (uid: string, setClause: string): Promise<number | null> => {
+      try {
+        const result = await sql.begin(async (tx) => {
+          await tx`SELECT set_config('request.jwt.claim.sub', ${uid}, true)`;
+          await tx.unsafe("SET LOCAL ROLE authenticated");
+          return tx.unsafe(`UPDATE notification SET ${setClause} WHERE id = '${notifId}'`);
+        });
+        return result.count;
+      } catch (e: unknown) {
+        const err = e as { code?: string; message?: string };
+        if (err?.code === "42501" || /permission denied/i.test(String(err?.message ?? e))) return null;
+        throw e;
+      }
+    };
+
+    crossUserUpdateAffected = (await updateAs(userB, "read_at = now()")) ?? -1;
+    ownUserUpdateAffected = (await updateAs(userA, "read_at = now()")) ?? -1;
+    nonReadAtUpdateDenied = (await updateAs(userA, "title = 'hacked'")) === null;
+  } finally {
+    await sql`DELETE FROM auth.users WHERE id = ${userA}`;
+    await sql`DELETE FROM auth.users WHERE id = ${userB}`;
+  }
 
   return {
     rlsEnabled: rls === true,
@@ -382,9 +454,12 @@ async function notificationLock(): Promise<{
     anonNoGrants: anonGrants.length === 0,
     authTableGrants: authTable.map((r) => r.privilege_type).sort(),
     authWritable: authCols.map((r) => r.column_name).sort(),
-    policies: pols.map((r) => r.policyname),
+    policyCount: permissivePolicies.length,
+    selectPolicyOk,
+    updatePolicyOk,
+    crossUserUpdateAffected,
+    ownUserUpdateAffected,
     nonReadAtUpdateDenied,
-    readAtUpdateAllowed,
   };
 }
 
@@ -642,34 +717,42 @@ async function main() {
   }
 
   // 4j. notification (0001 → 0046 → 0047): гейт её раньше не ассертил — а именно эти
-  // миграции закрывали её постуру. Клиенту оставлены SELECT (policy-scoped) + колоночный
-  // UPDATE(read_at); табличный UPDATE снят 0046, прод-дрейф грантов (anon — всё,
-  // authenticated — INSERT/DELETE/TRUNCATE/…) снят 0047. Ассертим целиком.
+  // миграции закрывали её постуру. Ревью усилило проверку дважды: (1) раньше сверялись
+  // только ИМЕНА политик — заглушка с тем же именем, но другим cmd/qual прошла бы
+  // незамеченной, теперь сверяем cmd/roles/qual/with_check против owner-паттерна 0001
+  // и требуем ровно 2 permissive-политики на таблице; (2) живая проба раньше била по
+  // WHERE user_id = gen_random_uuid() — «успех» UPDATE(read_at) ничего не доказывал
+  // (0 affected rows одинаково и под deny, и под честный мисматч), теперь три реальных
+  // исхода на реальных identity A/B и реальной строке.
   const nl = await notificationLock();
   const authGrantsOk = nl.authTableGrants.length === 1 && nl.authTableGrants[0] === "SELECT";
   const authWritableOk = nl.authWritable.length === 1 && nl.authWritable[0] === "read_at";
-  const policiesOk =
-    nl.policies.includes("notification_select_own") &&
-    nl.policies.includes("notification_update_own");
   if (
     nl.rlsEnabled &&
     nl.anonDenied &&
     nl.anonNoGrants &&
     authGrantsOk &&
     authWritableOk &&
-    policiesOk &&
-    nl.nonReadAtUpdateDenied &&
-    nl.readAtUpdateAllowed
+    nl.policyCount === 2 &&
+    nl.selectPolicyOk &&
+    nl.updatePolicyOk &&
+    nl.crossUserUpdateAffected === 0 &&
+    nl.ownUserUpdateAffected === 1 &&
+    nl.nonReadAtUpdateDenied
   )
     ok(
-      "RLS — notification locked (anon no grants; authenticated SELECT + UPDATE(read_at) only; select_own/update_own policies; non-read_at UPDATE denied, read_at UPDATE allowed)",
+      "RLS — notification locked (anon no grants; authenticated SELECT + UPDATE(read_at) only; " +
+        "select_own/update_own policies match owner-check cmd/roles/qual with no extra permissive " +
+        "policies; cross-user UPDATE affects 0 rows, own-user UPDATE affects 1, non-read_at UPDATE denied 42501)",
     );
   else
     fail(
       `RLS — notification lockdown incomplete (rlsEnabled=${nl.rlsEnabled}, anonDenied=${nl.anonDenied}, ` +
         `anonNoGrants=${nl.anonNoGrants}, authTableGrants=[${nl.authTableGrants.join(",")}], ` +
-        `authWritable=[${nl.authWritable.join(",")}], policies=[${nl.policies.join(",")}], ` +
-        `nonReadAtUpdateDenied=${nl.nonReadAtUpdateDenied}, readAtUpdateAllowed=${nl.readAtUpdateAllowed})`,
+        `authWritable=[${nl.authWritable.join(",")}], policyCount=${nl.policyCount}, ` +
+        `selectPolicyOk=${nl.selectPolicyOk}, updatePolicyOk=${nl.updatePolicyOk}, ` +
+        `crossUserUpdateAffected=${nl.crossUserUpdateAffected}, ownUserUpdateAffected=${nl.ownUserUpdateAffected}, ` +
+        `nonReadAtUpdateDenied=${nl.nonReadAtUpdateDenied})`,
     );
 
   // 4k. Writing/Speaking grant-постура (0023/0024/0027/0028 → 0048): у authenticated —
