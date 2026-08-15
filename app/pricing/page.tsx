@@ -5,7 +5,7 @@ import { speakingFeatureEnabled } from "@/env";
 import PricingScreen from "../app/upgrade/PricingScreen";
 
 export const metadata: Metadata = {
-  title: "Pricing — bando",
+  title: "Pricing | bando",
   description:
     "Start free. Upgrade to Premium to see exactly which IELTS question types cost you points, with explanations and full mock tests.",
 };

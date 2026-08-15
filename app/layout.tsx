@@ -15,7 +15,7 @@ const jbMono = JetBrains_Mono({
 });
 
 const siteUrl = publicSiteUrl();
-const title = "bando — Get your band";
+const title = "bando: Get your band";
 const description = "Premium IELTS Reading & Listening prep: real exam mode, per-type analytics, and a clear path to your target band.";
 
 export const metadata: Metadata = {
