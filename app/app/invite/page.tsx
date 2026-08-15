@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { publicSiteUrl } from "@/env";
 import { getProfile, requireUser } from "@/lib/auth";
@@ -9,6 +10,7 @@ import { Icon } from "@/components/core/icons";
 import InviteLink from "./InviteLink";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Invite friends | bando" };
 
 interface ReferralRow {
   status: "sent" | "registered" | "rewarded";

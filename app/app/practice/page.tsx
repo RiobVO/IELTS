@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { getProfile, requireUser } from "@/lib/auth";
@@ -17,6 +18,7 @@ import { AppShell } from "../_AppShell";
 import { PracticeCatalog, type HeroData, type PracticeTest, type FilterOption, type DrillWeakest, type InitialFilter } from "./_PracticeCatalog";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Practice | bando" };
 
 /**
  * Practice (`/app/practice`) — единый каталог практики (редизайн «bando»): шапка +

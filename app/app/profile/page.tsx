@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { and, eq } from "drizzle-orm";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -13,6 +14,7 @@ import { Badge } from "@/components/core/Badge";
 import { Icon, type IconName } from "@/components/core/icons";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Profile | bando" };
 
 type Breakdown = Record<string, { correct: number; total: number }> | null;
 

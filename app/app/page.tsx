@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { and, count, desc, eq, sql } from "drizzle-orm";
@@ -15,6 +16,7 @@ import { Badge } from "@/components/core/Badge";
 import { Icon, type IconName } from "@/components/core/icons";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Home | bando" };
 
 type Breakdown = Record<string, { correct: number; total: number }> | null;
 

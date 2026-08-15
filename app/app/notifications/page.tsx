@@ -9,7 +9,7 @@ import { NotificationsList } from "./NotificationsList";
 import { loadNotificationsPage } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Notifications" };
+export const metadata: Metadata = { title: "Notifications | bando" };
 
 /**
  * `/app/notifications` — полная история уведомлений (мост из dropdown колокольчика).
