@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import { extractData, extractFunctionTable, extractObjectLiteral, extractRangeBuilderTable } from "../extract-js";
 import {
   canonQuestionType,
+  isChooseManyLabel,
   unknownTypeWarning,
   blankTypeWarning,
   UNKNOWN_TYPE_FALLBACK,
@@ -144,6 +145,14 @@ function parseReadingRunner(html: string): RunnerParseResult {
       warnings.push(
         `Q${n}: correctAnswers is an array (possible choose-TWO/THREE) but has no mcqGroups ` +
           `entry — grading falls back to ${answer.mode}; add an mcqGroups range so it is graded as a letter-set`,
+      );
+    }
+    // Тот же multi-select guard по LABEL: ярлык «Multiple Choice (TWO/THREE answers)» без
+    // mcqGroups-записи. Выход (qtype/mode/accept) НЕ меняем — только review-сигнал.
+    if (isChooseManyLabel(rawType)) {
+      warnings.push(
+        `Q${n}: question type ${JSON.stringify(rawType)} looks like choose-TWO/THREE but has no ` +
+          `mcqGroups entry — the authoring spec requires an mcqGroups range for multi-select MCQ`,
       );
     }
     if (!answer.accept.some((a) => (a ?? "").trim() !== "")) {
