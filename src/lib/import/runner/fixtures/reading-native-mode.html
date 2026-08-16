@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IELTS Reading — native mode-card runner (test fixture)</title>
+<style>
+  .start-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  .mode-card{border:2px solid #e5e7eb;border-radius:14px;padding:1rem;cursor:pointer}
+  .mode-card-btn{width:100%;border:none;border-radius:10px;padding:.7rem 1rem;font-weight:800;cursor:pointer;color:#fff}
+  .mock-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center}
+  .mock-overlay.active{display:flex}
+  .mode-switcher{position:relative}
+  #loadingOverlay{position:absolute;inset:0;display:none}
+  #loadingOverlay.active{display:flex}
+</style>
+</head>
+<body>
+<div id="startScreen" class="start-screen" role="dialog" aria-labelledby="dashTitle" aria-modal="true">
+  <div class="start-content">
+    <h1 id="dashTitle">Cambridge — Reading (fixture)</h1>
+    <div class="mode-grid">
+      <div class="mode-card practice" data-mode="practice" role="button" tabindex="0">
+        <div class="mode-card-title">Practice</div>
+        <button type="button" class="mode-card-btn" data-mode="practice">Start Practice</button>
+      </div>
+      <div class="mode-card mock" data-mode="mock" role="button" tabindex="0">
+        <div class="mode-card-title">Mock</div>
+        <button type="button" class="mode-card-btn" data-mode="mock">Start Mock</button>
+      </div>
+    </div>
+  </div>
+  <div id="loadingOverlay"><p>Loading…</p></div>
+</div>
+
+<div id="mockTimeOverlay" class="mock-overlay" aria-hidden="true">
+  <div class="mock-panel">
+    <input type="range" id="mockTimeSlider" min="10" max="60" value="60">
+    <span id="mockTimeValue">60</span>
+    <button type="button" id="mockCancelBtn">Cancel</button>
+    <button type="button" id="mockStartBtn">Start Mock</button>
+  </div>
+</div>
+
+<header class="header">
+  <div class="mode-switcher">
+    <button type="button" id="modeSwitchBtn">Mode</button>
+  </div>
+</header>
+
+<main id="examRoot"><!-- questions render here --></main>
+
+<script>
+const TEST_NAME = 'Fixture Reading';
+let testMode = 'practice';
+let mockLimitSeconds = 0;
+let pendingMockLimit = 0;         // chosen in the time overlay before Mock begins
+let timerPaused = false;
+let totalSeconds = 0;
+const studentInfo = {};
+
+function applyModeUI(){ document.body.className = 'mode-' + testMode; }
+function startTimer(){ /* fixture: no-op */ }
+function saveState(){ /* fixture: no-op — no localStorage in the distillate */ }
+function announce(){ /* fixture: no-op */ }
+
+function beginTest(mode){
+  testMode = (mode === 'practice') ? 'practice' : 'mock';
+  mockLimitSeconds = (testMode === 'mock') ? (pendingMockLimit || 3600) : 0;
+  timerPaused = false;
+  applyModeUI();
+  saveState();
+  document.getElementById('loadingOverlay').classList.add('active');
+  setTimeout(() => {
+    document.getElementById('startScreen').style.display = 'none';
+    startTimer();
+  }, 500);
+}
+
+const mockOverlay = document.getElementById('mockTimeOverlay');
+const mockSlider = document.getElementById('mockTimeSlider');
+function openMockOverlay(){ mockOverlay.classList.add('active'); mockOverlay.setAttribute('aria-hidden','false'); }
+function closeMockOverlay(){ mockOverlay.classList.remove('active'); mockOverlay.setAttribute('aria-hidden','true'); }
+document.getElementById('mockCancelBtn').addEventListener('click', closeMockOverlay);
+document.getElementById('mockStartBtn').addEventListener('click', () => {
+  const mins = Number(mockSlider.value);
+  closeMockOverlay();
+  pendingMockLimit = mins * 60;
+  beginTest('mock');
+});
+
+function chooseMode(mode){ if(mode === 'practice') beginTest('practice'); else openMockOverlay(); }
+document.querySelectorAll('.mode-card-btn').forEach(btn => {
+  btn.addEventListener('click', e => { e.stopPropagation(); chooseMode(btn.dataset.mode); });
+});
+document.querySelectorAll('.mode-card').forEach(card => {
+  card.addEventListener('click', () => chooseMode(card.dataset.mode));
+});
+
+document.addEventListener('keydown', e => {
+  const startVisible = document.getElementById('startScreen').style.display !== 'none';
+  if(startVisible){
+    if(e.key === '1'){ e.preventDefault(); chooseMode('practice'); }
+    else if(e.key === '2'){ e.preventDefault(); chooseMode('mock'); }
+  }
+});
+
+function loadState(){ /* fixture: nothing persisted — the resume branch is dead here */ }
+loadState();
+applyModeUI();
+</script>
+</body>
+</html>
