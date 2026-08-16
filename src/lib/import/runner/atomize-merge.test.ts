@@ -121,6 +121,30 @@ describe("mergeAtomization", () => {
     expect(res.parsed).toBe(runner);
   });
 
+  it("passageOrder вопроса без соответствующего пассажа в atom → atomized=false", () => {
+    const runner = base({ questions: [q(1), q(2)] });
+    const atom = base({
+      passages: [passage(1, { bodyHtml: "<p>only p1</p>" })], // нет пассажа order=2
+      questions: [q(1, { passageOrder: 1, promptHtml: "a" }), q(2, { passageOrder: 2, promptHtml: "b" })],
+    });
+
+    const res = mergeAtomization(runner, atom);
+
+    expect(res.atomized).toBe(false);
+    expect(res.parsed).toBe(runner);
+    expect(res.reason).toMatch(/passage/i);
+  });
+
+  it("atom без пассажей (пустой массив) → atomized=false (иначе persist уронит NOT NULL)", () => {
+    const runner = base({ questions: [q(1)] });
+    const atom = base({ passages: [], questions: [q(1, { promptHtml: "a" })] });
+
+    const res = mergeAtomization(runner, atom);
+
+    expect(res.atomized).toBe(false);
+    expect(res.parsed).toBe(runner);
+  });
+
   it("audioPath пассажа сохраняется из runner (не затирается null из atom)", () => {
     const runner = base({
       section: "listening",
