@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseRunner } from "./parse-runner";
+import { parseRunner, diagnoseEmptyRunnerParse } from "./parse-runner";
 import { isUnknownTypeWarning } from "../question-types";
 
 const FIX = join(__dirname, "fixtures");
@@ -211,5 +211,25 @@ describe("parseRunner — пустой qtype → informational, не блок (P
     const mixed = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"1":"TRUE"};var questionTypes = {"1":"Frobnicate"};</script></body></html>`;
     expect(parseRunner(mixed).parsed.warnings.some(isUnknownTypeWarning)).toBe(true);
+  });
+});
+
+// P4 (2026-07-09): при 0 распознанных вопросов различаем два отказа — контейнер ключа
+// вообще не найден (bespoke-генератор под чужим именем) vs. контейнер есть, но номера
+// вопросов не распознаны. Разное сообщение помогает админу понять причину отказа.
+describe("diagnoseEmptyRunnerParse (P4)", () => {
+  it("контейнер ключа не найден (чужое имя) → сообщение про ненайденный контейнер", () => {
+    const msg = diagnoseEmptyRunnerParse(`<script>const answers = {"1":"A","2":"B"};</script>`);
+    expect(msg).toMatch(/container not found/i);
+  });
+
+  it("нет inline-скрипта → контейнер не найден", () => {
+    expect(diagnoseEmptyRunnerParse(`<div>no script here</div>`)).toMatch(/container not found/i);
+  });
+
+  it("контейнер найден, но номера не распознаны → другое сообщение с именем контейнера", () => {
+    const msg = diagnoseEmptyRunnerParse(`<script>const correctAnswers = {"q1":"A","q2":"B"};</script>`);
+    expect(msg).toMatch(/answer key found/i);
+    expect(msg).toMatch(/correctAnswers/);
   });
 });

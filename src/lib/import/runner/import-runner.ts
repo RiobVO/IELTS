@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { uploadAudio } from "@/lib/telegram/storage";
-import { parseRunner } from "./parse-runner";
+import { parseRunner, diagnoseEmptyRunnerParse } from "./parse-runner";
 import { fetchExternalAudio } from "./safe-audio-fetch";
 import { sanitizeRunner, assertNoKeyLeak } from "./sanitize-runner";
 import { runnerBrandResidue } from "./skin-runner";
@@ -24,10 +24,11 @@ export async function importRunner(
   opts: { sourceFilePath?: string; createdBy?: string },
 ): Promise<ImportRunnerResult> {
   const { parsed, externalAudioSrc } = parseRunner(html);
-  // Пустой парс = ключ-контейнеры этого источника не распознаны. Отказ честнее
-  // молчаливого 0-вопросного драфта (бот покажет причину админу).
+  // Пустой парс = источник не распознан. Отказ честнее молчаливого 0-вопросного драфта.
+  // P4: сообщение различает «контейнер ключа не найден» от «найден, но номера не распознаны»
+  // — бот/админ видит, это неподдерживаемый генератор или сломанная разметка ключа.
   if (parsed.questions.length === 0) {
-    throw new Error("no questions parsed — unrecognized key container(s) in this source; extend the parser");
+    throw new Error(diagnoseEmptyRunnerParse(html));
   }
 
   // Дубль-гвард по содержимому (QA 2026-07-02): тот же тест под другим именем файла

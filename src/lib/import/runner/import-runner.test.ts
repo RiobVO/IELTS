@@ -3,8 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // #12: importRunner must be atomic — a failure in the fallible pre-work (audio fetch,
 // anti-leak) must leave NO half-draft. We mock every dependency so the test asserts
 // only the control flow: persistTest is reached only after all validation passes.
-const { parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind, uploadSourceHtml } = vi.hoisted(() => ({
+const { parseRunner, diagnoseEmpty, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind, uploadSourceHtml } = vi.hoisted(() => ({
   parseRunner: vi.fn(),
+  diagnoseEmpty: vi.fn(),
   fetchAudio: vi.fn(),
   uploadAudio: vi.fn(),
   sanitize: vi.fn(),
@@ -15,7 +16,7 @@ const { parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResid
   uploadSourceHtml: vi.fn(),
 }));
 
-vi.mock("./parse-runner", () => ({ parseRunner }));
+vi.mock("./parse-runner", () => ({ parseRunner, diagnoseEmptyRunnerParse: diagnoseEmpty }));
 vi.mock("./safe-audio-fetch", () => ({ fetchExternalAudio: fetchAudio }));
 vi.mock("@/lib/telegram/storage", () => ({ uploadAudio }));
 vi.mock("./sanitize-runner", () => ({ sanitizeRunner: sanitize, assertNoKeyLeak: assertNoLeak }));
@@ -43,7 +44,8 @@ const listeningParsed = () => ({
 });
 
 beforeEach(() => {
-  [parseRunner, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind, uploadSourceHtml].forEach((m) => m.mockReset());
+  [parseRunner, diagnoseEmpty, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind, uploadSourceHtml].forEach((m) => m.mockReset());
+  diagnoseEmpty.mockReturnValue("no questions parsed — unsupported source");
   sanitize.mockReturnValue("<runner/>");
   brandResidue.mockReturnValue([]);
   persist.mockResolvedValue("unused-return");
