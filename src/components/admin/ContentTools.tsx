@@ -11,6 +11,7 @@ import { SubmitButton, ConfirmButton } from "./AdminSubmit";
  * построчным кликом с ре-скроллом после каждого действия.
  */
 const CSS = `
+.adm-search:focus-visible{outline:none;box-shadow:var(--ring);border-color:var(--focus-ring)}
 @media (prefers-reduced-motion:reduce){.adm-bulk{transition:none}}
 `;
 
@@ -105,6 +106,7 @@ export function ContentTools({
       <div style={S.bar}>
         <input
           ref={searchRef}
+          className="adm-search"
           type="search"
           value={q}
           onChange={(e) => {
@@ -142,17 +144,29 @@ export function ContentTools({
       </div>
       {empty && <p style={S.none}>No content matches this filter.</p>}
 
+      {/* visibility:hidden (не только transform) убирает кнопки из tab-order и AT,
+          когда ничего не выбрано — иначе фокус проваливался бы в off-screen форму
+          (WCAG 4.1.2 aria-hidden-focus). */}
       <form
         id="admin-bulk"
         action={bulkAction}
         className="adm-bulk"
-        aria-hidden={selected === 0}
-        style={{ ...S.bulk, transform: selected ? "translate(-50%,0)" : "translate(-50%,180%)" }}
+        style={{
+          ...S.bulk,
+          transform: selected ? "translate(-50%,0)" : "translate(-50%,180%)",
+          visibility: selected ? "visible" : "hidden",
+        }}
       >
         <span style={S.bulkCount}>{selected} selected</span>
-        <SubmitButton name="intent" value="approve" size="sm" variant="secondary">
+        <ConfirmButton
+          name="intent"
+          value="approve"
+          size="sm"
+          variant="secondary"
+          message={`Approve ${selected} test(s) without opening each key? Do this only after eyeballing their summaries.`}
+        >
           Approve
-        </SubmitButton>
+        </ConfirmButton>
         <ConfirmButton
           name="intent"
           value="publish"
