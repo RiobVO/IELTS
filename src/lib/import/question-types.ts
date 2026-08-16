@@ -45,6 +45,9 @@ const EXACT: Record<string, QuestionType> = {
   notecompletion: "note_completion",
   notescompletion: "note_completion",
   classification: "matching_features",
+  // «Match each statement with the correct researcher, A-E» — сопоставление людей
+  // с утверждениями = features; generic CONTAINS "matching" уводил бы в matching_info.
+  matchingresearcher: "matching_features",
   flowchartcompletion: "flowchart_completion",
   flowchartcompletion2: "flowchart_completion",
   tablecompletion: "table_completion",

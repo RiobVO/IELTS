@@ -25,6 +25,7 @@ describe("canonQuestionType", () => {
     ["Note Completion", "note_completion"],
     ["Notes Completion", "note_completion"],
     ["Classification", "matching_features"], // спец-ремап классификации
+    ["Matching Researcher", "matching_features"], // сопоставление людей с утверждениями — features, не info
     ["Flowchart Completion", "flowchart_completion"],
     ["Table Completion", "table_completion"],
     ["Diagram Label Completion", "diagram_label"],
