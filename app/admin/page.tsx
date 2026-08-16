@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { contentItem } from "@/db/schema";
+import { answerKey, contentItem, question } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { categoryLabel } from "@/lib/labels";
+import { summarizeReview, type ReviewRow, type ReviewSummary } from "@/lib/content/review-summary";
 import { Button } from "@/components/core/Button";
 import { Badge } from "@/components/core/Badge";
 import { markReviewed, setStatus, uploadTest } from "./actions";
@@ -36,6 +37,36 @@ export default async function AdminPage({
     })
     .from(contentItem)
     .orderBy(desc(contentItem.createdAt));
+
+  // Сводка ключа для драфтов (P3): админ подтверждает ключ, видя разбивку, а не вслепую.
+  // Читаем owner-путём; СЫРОЙ accept остаётся на сервере — в JSX уходят только агрегаты
+  // (summarizeReview), поэтому ответы не утекают ни в клиент, ни в бота.
+  const draftIds = items.filter((it) => it.status !== "published").map((it) => it.id);
+  const summaries = new Map<string, ReviewSummary>();
+  if (draftIds.length > 0) {
+    const rows = await db
+      .select({
+        contentItemId: question.contentItemId,
+        number: question.number,
+        qtype: question.qtype,
+        mode: answerKey.mode,
+        accept: answerKey.accept,
+      })
+      .from(question)
+      .leftJoin(answerKey, eq(answerKey.questionId, question.id))
+      .where(inArray(question.contentItemId, draftIds));
+
+    const byItem = new Map<string, ReviewRow[]>();
+    for (const r of rows) {
+      const acc = (r.accept as string[] | null) ?? [];
+      const emptyAccept = r.mode === null || !acc.some((a) => (a ?? "").trim() !== "");
+      const list = byItem.get(r.contentItemId) ?? [];
+      // accept сюда НЕ кладём — только производный флаг emptyAccept.
+      list.push({ number: r.number, qtype: r.qtype, mode: r.mode, emptyAccept });
+      byItem.set(r.contentItemId, list);
+    }
+    for (const [id, rs] of byItem) summaries.set(id, summarizeReview(rs));
+  }
 
   return (
     <main style={S.page}>
@@ -80,6 +111,7 @@ export default async function AdminPage({
               const warnings = (it.importWarnings as string[] | null) ?? [];
               const reviewed = it.reviewedAt != null;
               const isDraft = it.status !== "published";
+              const summary = isDraft ? summaries.get(it.id) : undefined;
               return (
                 // id-якорь: телеграм-бот шлёт ссылку /admin#<uuid> на review конкретного теста
                 <li key={it.id} id={it.id} style={S.row}>
@@ -97,6 +129,47 @@ export default async function AdminPage({
                       )}
                       {warnings.length > 0 && <span>· {warnings.length} warning(s)</span>}
                     </div>
+                    {summary && (
+                      <div style={S.summary}>
+                        <div style={S.sumRow}>
+                          <span style={S.sumLabel}>Key · {summary.total} q.</span>
+                          <span style={S.sumChips}>
+                            {Object.entries(summary.byMode).map(([m, n]) => (
+                              <span key={m} style={S.chip}>
+                                {m} · {n}
+                              </span>
+                            ))}
+                          </span>
+                        </div>
+                        <div style={S.sumRow}>
+                          <span style={S.sumLabel}>Types</span>
+                          <span style={S.sumChips}>
+                            {Object.entries(summary.byType).map(([t, n]) => (
+                              <span key={t} style={S.chipMuted}>
+                                {t} · {n}
+                              </span>
+                            ))}
+                          </span>
+                        </div>
+                        {(summary.emptyKeys > 0 ||
+                          summary.duplicateNumbers.length > 0 ||
+                          summary.numberGap) && (
+                          <div style={S.sumFlags}>
+                            {summary.emptyKeys > 0 && (
+                              <span style={S.flag}>⚠ {summary.emptyKeys} empty key(s)</span>
+                            )}
+                            {summary.duplicateNumbers.length > 0 && (
+                              <span style={S.flag}>
+                                ⚠ duplicate #: {summary.duplicateNumbers.join(", ")}
+                              </span>
+                            )}
+                            {summary.numberGap && summary.duplicateNumbers.length === 0 && (
+                              <span style={S.flag}>⚠ number gap</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {isDraft && warnings.length > 0 && (
                       <details style={S.warnBox}>
                         <summary style={S.warnSummary}>
@@ -158,6 +231,14 @@ const S: Record<string, React.CSSProperties> = {
   rowTitle: { fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   meta: { display: "flex", gap: 8, alignItems: "center", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", marginTop: 6, flexWrap: "wrap" },
   actions: { flexShrink: 0 },
+  summary: { marginTop: 10, background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 },
+  sumRow: { display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" },
+  sumLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 800, color: "var(--text-secondary)", minWidth: 72 },
+  sumChips: { display: "flex", gap: 6, flexWrap: "wrap" },
+  chip: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-primary)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "1px 6px" },
+  chipMuted: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "1px 6px" },
+  sumFlags: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 2 },
+  flag: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--error-text)" },
   warnBox: { marginTop: 10, background: "var(--warn-subtle, var(--bg-base))", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "8px 10px" },
   warnSummary: { cursor: "pointer", fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--warn-text, var(--text-secondary))" },
   warnList: { margin: "8px 0 0", padding: "0 0 0 18px", display: "flex", flexDirection: "column", gap: 4 },
