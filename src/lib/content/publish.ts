@@ -94,7 +94,8 @@ export async function publishReviewedContentItem(id: string): Promise<PublishRes
   // (#17) Machine hard-gate: no answer key is empty. An empty accept grades as always-wrong
   // (grade.ts never matches), silently deflating every student's score.
   const hasEmptyKey = rows.some((r) => {
-    const acc = (r.accept as string[] | null) ?? []; // jsonb column; parser writes string[]
+    // jsonb column; parser writes string[] — но не-массив (напр. {}) уронил бы .some.
+    const acc = Array.isArray(r.accept) ? (r.accept as string[]) : [];
     return !acc.some((a) => (a ?? "").trim() !== "");
   });
   if (hasEmptyKey) return { ok: false, reason: "empty_answer_key" };

@@ -58,7 +58,8 @@ export default async function AdminPage({
 
     const byItem = new Map<string, ReviewRow[]>();
     for (const r of rows) {
-      const acc = (r.accept as string[] | null) ?? [];
+      // accept — jsonb; парсер пишет string[], но не-массив (напр. {}) уронил бы .some.
+      const acc = Array.isArray(r.accept) ? (r.accept as string[]) : [];
       const emptyAccept = r.mode === null || !acc.some((a) => (a ?? "").trim() !== "");
       const list = byItem.get(r.contentItemId) ?? [];
       // accept сюда НЕ кладём — только производный флаг emptyAccept.
