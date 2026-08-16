@@ -92,7 +92,18 @@ describe("blankTypeWarning / isUnknownTypeWarning (P1 softening)", () => {
     );
   });
 
-  it("малформленный маркер без label трактуется как блокирующий (fail-closed)", () => {
-    expect(isUnknownTypeWarning("Q9: unknown type → fell back to short_answer")).toBe(true);
+  // Codex-ревью (2026-07-09): маркер, лежащий ВНУТРИ JSON-label чужого low-confidence
+  // warning, не должен давать ложный блок (bare includes(marker) его ловил).
+  it("маркер внутри label чужого low-confidence warning не блокирует", () => {
+    expect(isUnknownTypeWarning('Q3: low-confidence type "Matching → fell back to" → matching_info')).toBe(false);
+  });
+
+  it("envelope с непарсибельным JSON-label — fail-closed (блок)", () => {
+    expect(isUnknownTypeWarning('Q9: unknown type "\\p" → fell back to short_answer')).toBe(true);
+  });
+
+  it("строка не в форме сгенерированного envelope не блокирует", () => {
+    // генератор ВСЕГДА кавычит label (JSON.stringify) — строка без кавычек не наш warning
+    expect(isUnknownTypeWarning("Q9: unknown type → fell back to short_answer")).toBe(false);
   });
 });

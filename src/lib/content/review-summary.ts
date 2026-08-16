@@ -44,10 +44,11 @@ export function summarizeReview(rows: ReviewRow[]): ReviewSummary {
   }
 
   const nums = rows.map((r) => r.number);
-  // Offset-agnostic (зеркалит publish-гейт): смежный уникальный набор ⟺ нет дублей И
-  // (max-min+1) == размеру. Пустой набор — тоже дефект.
+  // Offset-agnostic (зеркалит publish-гейт questionNumbersOk): положительные целые, смежный
+  // уникальный набор ⟺ нет дублей И (max-min+1) == размеру. Пустой/неположительный — дефект.
   const numberGap =
     nums.length === 0 ||
+    !nums.every((n) => Number.isInteger(n) && n > 0) ||
     seen.size !== nums.length ||
     Math.max(...nums) - Math.min(...nums) + 1 !== seen.size;
 

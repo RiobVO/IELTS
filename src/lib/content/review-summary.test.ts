@@ -46,4 +46,13 @@ describe("summarizeReview", () => {
     expect(s.total).toBe(0);
     expect(s.numberGap).toBe(true);
   });
+
+  it("неположительные номера флагуются как numberGap (Codex 2026-07-09)", () => {
+    const s = summarizeReview([
+      row(-1, "tfng", "exact"),
+      row(0, "tfng", "exact"),
+      row(1, "tfng", "exact"),
+    ]);
+    expect(s.numberGap).toBe(true);
+  });
 });
