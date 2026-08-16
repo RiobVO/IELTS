@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseRunner } from "./parse-runner";
+import { isUnknownTypeWarning } from "../question-types";
 
 const FIX = join(__dirname, "fixtures");
 const reading = readFileSync(join(FIX, "reading.html"), "utf8");
@@ -187,5 +188,28 @@ describe("parseRunner — warnings (review gate)", () => {
   it("чистый файл: нет unknown-type / empty-key warnings", () => {
     const clean = parseRunner(reading).parsed.warnings;
     expect(clean.some((x) => /unknown type|empty answer key/i.test(x))).toBe(false);
+  });
+});
+
+// P1 (2026-07-09): пустой qtype (источник не заполнил тип) не должен блокировать publish —
+// грейдинг маршрутизируется по answer-mode. Парсер эмитит informational blankTypeWarning
+// вместо блокирующего unknownTypeWarning. Непустой мусорный label остаётся блокирующим.
+describe("parseRunner — пустой qtype → informational, не блок (P1)", () => {
+  const blankHtml = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"1":"TRUE","2":"FALSE"};var questionTypes = {};</script></body></html>`;
+  const w = parseRunner(blankHtml).parsed.warnings;
+
+  it("ни один warning о пустом типе не считается блокирующим", () => {
+    expect(w.some(isUnknownTypeWarning)).toBe(false);
+  });
+
+  it("но информационный warning про тип присутствует (виден админу)", () => {
+    expect(w.some((x) => /Q1/.test(x) && /type/i.test(x))).toBe(true);
+  });
+
+  it("непустой нераспознанный тип в том же файле остаётся блокирующим", () => {
+    const mixed = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"1":"TRUE"};var questionTypes = {"1":"Frobnicate"};</script></body></html>`;
+    expect(parseRunner(mixed).parsed.warnings.some(isUnknownTypeWarning)).toBe(true);
   });
 });
