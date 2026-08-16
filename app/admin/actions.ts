@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -117,8 +117,42 @@ export async function setStatus(formData: FormData) {
     revalidateTag(contentTag(id));
   }
   revalidatePath("/admin");
-  // #id — якорь на затронутую строку, чтобы редирект не сбрасывал скролл наверх.
-  redirect(`/admin#${id}`);
+  // done/did — тост «Undo» на затронутой строке; #id — якорь, чтобы не прыгать наверх.
+  redirect(`/admin?done=${status}&did=${id}#${id}`);
+}
+
+/**
+ * Bulk-approve или bulk-publish выбранных драфтов (power-user: разгребать пачку
+ * импортов из Telegram без построчного клика). Approve — один update reviewed_at по
+ * inArray. Publish гоним КАЖДЫЙ через тот же guarded chokepoint (publishReviewedContentItem),
+ * поэтому review-gate держится: непроверенные/невалидные молча пропускаются, а не уходят
+ * студентам. Owner-only.
+ */
+export async function bulkSetStatus(formData: FormData) {
+  await requireAdmin();
+  const intent = String(formData.get("intent") ?? "");
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  if (ids.length === 0 || (intent !== "approve" && intent !== "publish")) redirect("/admin");
+
+  if (intent === "approve") {
+    await db.update(contentItem).set({ reviewedAt: sql`now()` }).where(inArray(contentItem.id, ids));
+    revalidatePath("/admin");
+    redirect(`/admin?bulk=${encodeURIComponent(`Approved ${ids.length} test(s).`)}`);
+  }
+
+  let ok = 0;
+  const skipped: string[] = [];
+  for (const id of ids) {
+    const res = await publishReviewedContentItem(id);
+    if (res.ok) ok++;
+    else skipped.push(id);
+  }
+  revalidateTag("content_item");
+  revalidatePath("/admin");
+  const msg = skipped.length
+    ? `Published ${ok} test(s); skipped ${skipped.length} (not approved or invalid).`
+    : `Published ${ok} test(s).`;
+  redirect(`/admin?bulk=${encodeURIComponent(msg)}`);
 }
 
 /**

@@ -7,8 +7,9 @@ import { categoryLabel } from "@/lib/labels";
 import { summarizeReview, type ReviewRow, type ReviewSummary } from "@/lib/content/review-summary";
 import { Badge } from "@/components/core/Badge";
 import { SubmitButton, ConfirmButton } from "@/components/admin/AdminSubmit";
-import { ContentFilter } from "@/components/admin/ContentFilter";
-import { markReviewed, setStatus, uploadTest } from "./actions";
+import { ContentTools } from "@/components/admin/ContentTools";
+import { UndoToast } from "@/components/admin/UndoToast";
+import { bulkSetStatus, markReviewed, setStatus, uploadTest } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Admin | bando" };
@@ -16,7 +17,16 @@ export const metadata: Metadata = { title: "Admin | bando" };
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ uploaded?: string; q?: string; w?: string; brand?: string; error?: string }>;
+  searchParams: Promise<{
+    uploaded?: string;
+    q?: string;
+    w?: string;
+    brand?: string;
+    error?: string;
+    bulk?: string;
+    done?: string;
+    did?: string;
+  }>;
 }) {
   const profile = await requireAdmin();
   const sp = await searchParams;
@@ -70,6 +80,9 @@ export default async function AdminPage({
     for (const [id, rs] of byItem) summaries.set(id, summarizeReview(rs));
   }
 
+  // Тост Undo после publish/unpublish: находим затронутый тест по ?did.
+  const undoItem = sp.done && sp.did ? items.find((i) => i.id === sp.did) : undefined;
+
   return (
     <main style={S.page}>
       <div style={S.wrap}>
@@ -79,6 +92,7 @@ export default async function AdminPage({
         </p>
 
         {sp.error && <p style={S.err}>{sp.error}</p>}
+        {sp.bulk && <p style={S.ok}>{sp.bulk}</p>}
         {sp.uploaded && (
           <p style={S.ok}>
             Uploaded “{sp.uploaded}” — {sp.q} question(s)
@@ -111,11 +125,31 @@ export default async function AdminPage({
           </form>
         </section>
 
+        <details style={S.help}>
+          <summary style={S.helpSummary}>How this works · shortcuts</summary>
+          <div style={S.helpBody}>
+            <p style={S.helpP}>
+              Upload parses the test and saves a <b>draft</b>. Review the key summary and any parser
+              warnings, <b>Approve</b> to unlock publishing, then <b>Publish</b> — a published test is
+              live to real students.
+            </p>
+            <ul style={S.helpList}>
+              <li>
+                <kbd style={S.kbd}>/</kbd> — focus the filter
+              </li>
+              <li>
+                <b>Select all</b> → <b>Approve</b> / <b>Publish</b> — act on many drafts at once
+              </li>
+              <li>Undo appears briefly after publish / unpublish</li>
+            </ul>
+          </div>
+        </details>
+
         <div style={S.listHead}>Content</div>
         {items.length === 0 ? (
           <p style={S.hint}>Nothing uploaded yet.</p>
         ) : (
-          <ContentFilter statuses={Array.from(new Set(items.map((i) => i.status))).sort()}>
+          <ContentTools statuses={Array.from(new Set(items.map((i) => i.status))).sort()} bulkAction={bulkSetStatus}>
           <ul style={S.list}>
             {items.map((it) => {
               const warnings = (it.importWarnings as string[] | null) ?? [];
@@ -124,7 +158,7 @@ export default async function AdminPage({
               const summary = isDraft ? summaries.get(it.id) : undefined;
               return (
                 // id-якорь: телеграм-бот шлёт ссылку /admin#<uuid> на review конкретного теста;
-                // data-* — для клиентского ContentFilter (title/status).
+                // data-* + чекбокс — для клиентского ContentTools (фильтр + bulk-выбор).
                 <li
                   key={it.id}
                   id={it.id}
@@ -133,6 +167,17 @@ export default async function AdminPage({
                   data-status={it.status}
                   style={S.row}
                 >
+                  {isDraft && (
+                    <input
+                      type="checkbox"
+                      name="ids"
+                      value={it.id}
+                      form="admin-bulk"
+                      data-admin-check
+                      aria-label={`Select ${it.title}`}
+                      style={S.check}
+                    />
+                  )}
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={S.rowTitle}>{it.title}</div>
                     <div style={S.meta}>
@@ -206,13 +251,8 @@ export default async function AdminPage({
                       <form action={setStatus}>
                         <input type="hidden" name="id" value={it.id} />
                         <input type="hidden" name="status" value="draft" />
-                        <ConfirmButton
-                          variant="secondary"
-                          size="sm"
-                          message={`Unpublish “${it.title}”? Students will no longer see it in the catalog.`}
-                        >
-                          Unpublish
-                        </ConfirmButton>
+                        {/* reversible → Undo-тост, не confirm (снимаем лишнее трение). */}
+                        <SubmitButton variant="secondary" size="sm">Unpublish</SubmitButton>
                       </form>
                     ) : reviewed ? (
                       <form action={setStatus}>
@@ -238,7 +278,20 @@ export default async function AdminPage({
               );
             })}
           </ul>
-          </ContentFilter>
+          </ContentTools>
+        )}
+
+        {undoItem && (
+          <UndoToast
+            message={
+              sp.done === "published"
+                ? `Published “${undoItem.title}” — live to students.`
+                : `Unpublished “${undoItem.title}”.`
+            }
+            reverseAction={setStatus}
+            id={undoItem.id}
+            reverseStatus={sp.done === "published" ? "draft" : "published"}
+          />
         )}
       </div>
     </main>
@@ -255,6 +308,13 @@ const S: Record<string, React.CSSProperties> = {
   card: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: "20px", marginTop: 20 },
   cardTitle: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-base)", color: "var(--text-primary)" },
   hint: { fontFamily: "var(--font-ui)", color: "var(--text-muted)", fontSize: "var(--text-sm)", margin: "6px 0 0", lineHeight: 1.5 },
+  check: { marginTop: 3, width: 16, height: 16, accentColor: "var(--brand)", cursor: "pointer", flexShrink: 0 },
+  help: { marginTop: 20, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 14px" },
+  helpSummary: { cursor: "pointer", fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--text-secondary)" },
+  helpBody: { marginTop: 10 },
+  helpP: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 },
+  helpList: { margin: "10px 0 0", padding: "0 0 0 18px", display: "flex", flexDirection: "column", gap: 4, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: 1.5 },
+  kbd: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", background: "var(--surface-inset)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "1px 6px", color: "var(--text-primary)" },
   uploadForm: { display: "flex", gap: 12, alignItems: "center", marginTop: 16, flexWrap: "wrap" },
   file: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", flex: 1, minWidth: 0, color: "var(--text-secondary)" },
   listHead: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-base)", color: "var(--text-primary)", margin: "28px 0 12px" },
