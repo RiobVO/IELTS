@@ -42,7 +42,7 @@ export default async function ExamPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ mode?: string; focus?: string }>;
+  searchParams: Promise<{ mode?: string; min?: string; focus?: string }>;
 }) {
   const user = await requireUser();
   const { id } = await params;
@@ -131,5 +131,18 @@ export default async function ExamPage({
   // trial-старт: H3-атомарный claim в startAttempt.
   const isTrial = !meetsTier(userTier, test.tierRequired);
   const { attemptId } = await startAttempt(user.id, id, mode, isTrial);
-  return <ExamFrame attemptId={attemptId} contentItemId={id} />;
+  // Лимит mock из URL (?min=) — от пресетов ModeStart; clamp против ручных значений
+  // (та же валидация, что в /app/reading). В iframe уходит только для mock: раннер
+  // синхронизирует внутренний mock-таймер с этим значением (forceRunnerMode).
+  const minRaw = Math.round(Number(sp.min));
+  const mockMinutes = Number.isFinite(minRaw)
+    ? Math.min(180, Math.max(5, minRaw))
+    : null;
+  return (
+    <ExamFrame
+      attemptId={attemptId}
+      contentItemId={id}
+      mockMinutes={mode === "mock" ? mockMinutes : null}
+    />
+  );
 }
