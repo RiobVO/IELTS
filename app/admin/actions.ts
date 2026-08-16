@@ -97,6 +97,15 @@ export async function setStatus(formData: FormData) {
       if (res.reason === "unresolved_question_type") {
         fail("Can't publish: a question type didn't resolve (see the parser warnings) — fix the import first.");
       }
+      if (res.reason === "question_number_gap") {
+        fail("Can't publish: question numbers have a gap or duplicate — fix the import first.");
+      }
+      if (res.reason === "answer_key_count_mismatch") {
+        fail("Can't publish: a question is missing its answer key — fix the import first.");
+      }
+      if (res.reason === "missing_listening_audio") {
+        fail("Can't publish: this listening test has no audio yet — attach the mp3 first.");
+      }
       redirect("/admin"); // not_found
     }
   } else {
