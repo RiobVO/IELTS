@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getProfile, getUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { writingFeatureEnabled } from "@/env";
 import { isUuid } from "@/lib/uuid";
 import { readFeedbackResult } from "@/lib/writing/read";
@@ -22,6 +23,8 @@ export default async function WritingResultPage({ params }: { params: Promise<{ 
   const user = await getUser();
   if (!user) redirect("/auth");
   if (!writingFeatureEnabled()) redirect("/app/practice");
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
 
   const { id } = await params;
   if (!isUuid(id)) notFound();

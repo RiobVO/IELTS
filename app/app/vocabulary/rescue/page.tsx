@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { getRescueQueue } from "@/lib/vocab/queries";
 import { AppShell } from "../../_AppShell";
 import { ReviewSession } from "../[deckId]/ReviewSession";
@@ -11,6 +12,8 @@ export const metadata: Metadata = { title: "Rescue review | bando" };
 /** Rescue-сессия трудных слов: только уже начатые карты, без добора новых. */
 export default async function VocabRescuePage() {
   const user = await requireUser();
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
   const cards = await getRescueQueue(user.id);
   if (cards.length === 0) redirect("/app/vocabulary");
 

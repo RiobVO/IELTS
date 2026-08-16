@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { getOpenMistakes, type OpenMistake } from "@/lib/practice/mistakes";
 import { qtypeLabel } from "@/lib/labels";
 import { Icon } from "@/components/core/icons";
@@ -26,6 +27,8 @@ export default async function MistakesPage({
   searchParams: Promise<{ qtype?: string }>;
 }) {
   const user = await requireUser();
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
   const sp = await searchParams;
   const mistakes = await getOpenMistakes(user.id, { limit: 50 });
 

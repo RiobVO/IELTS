@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
+import { getHeaderData } from "@/lib/notifications/header-data";
 import { db } from "@/db";
 import { vocabDeck } from "@/db/schema";
 import { getDeckBrowse, getVocabCatalog } from "@/lib/vocab/queries";
@@ -53,6 +54,8 @@ export default async function VocabDeckBrowsePage({
   params: Promise<{ deckId: string }>;
 }) {
   const user = await requireUser();
+  // Пре-варм данных шапки конкурентно (cache()'d; AppShell reuses).
+  void getHeaderData();
   const { deckId } = await params;
   if (!isUuid(deckId)) notFound();
 
