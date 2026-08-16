@@ -131,6 +131,18 @@ describe("forceRunnerMode — native mode-card runners (family B)", () => {
     expect(out).not.toContain('id="bando-start-hide"');
   });
 
+  it("семейство A: 3-й аргумент (mock minutes) не влияет на вывод", () => {
+    // mockMinutes — только для семейства B. Пиним, что на A вывод идентичен
+    // 2-аргументному вызову: регрессия, меняющая A от третьего аргумента (без
+    // добавления B-маркеров), иначе прошла бы незамеченной.
+    expect(forceRunnerMode(FIXTURE, "mock", 60)).toBe(
+      forceRunnerMode(FIXTURE, "mock"),
+    );
+    expect(forceRunnerMode(FIXTURE, "practice", 60)).toBe(
+      forceRunnerMode(FIXTURE, "practice"),
+    );
+  });
+
   it("незнакомый шаблон: байт-в-байт no-op (даже с 3-м аргументом)", () => {
     const html = '<html><head></head><body><div id="other"></div></body></html>';
     expect(forceRunnerMode(html, "mock", 60)).toBe(html);
