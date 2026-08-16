@@ -79,12 +79,16 @@
   --text-link:      var(--violet-700);
 
   --success:        var(--green-500);
-  /* darkened from green-600 to hit WCAG AA (4.5:1) as small text on white/bg-base */
+  /* darkened from green-600 to hit WCAG AA (4.5:1) as small text on white/bg-base.
+     Also used on --success-subtle (green-200) — the admin "uploaded" banner: 4.52:1,
+     passing but on the margin. Darkening green-200 must re-check this pairing. */
   --success-text:   oklch(0.500 0.145 158);
   --success-subtle: var(--green-200);
   --success-edge:   var(--green-600);
   --warn:           var(--gold-500);
-  /* darkened from gold-600 → AA as small text (gold is the worst offender on white) */
+  /* darkened from gold-600 → AA as small text (gold is the worst offender on white).
+     Also used on --warn-subtle (gold-200) — the parser-warning disclosure: 4.75:1,
+     passing but on the margin. Darkening gold-200 must re-check this pairing. */
   --warn-text:      oklch(0.520 0.120 65);
   --warn-subtle:    var(--gold-200);
   --error:          var(--red-500);

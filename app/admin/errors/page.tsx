@@ -3,6 +3,7 @@ import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { errorLog } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
+import { Badge } from "@/components/core/Badge";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Admin errors | bando" };
@@ -42,7 +43,7 @@ export default async function AdminErrorsPage() {
             {rows.map((r) => (
               <li key={r.id} style={S.row}>
                 <div style={S.meta}>
-                  <span style={r.source === "client" ? S.tagClient : S.tagServer}>{r.source}</span>
+                  <Badge tone={r.source === "client" ? "error" : "neutral"}>{r.source}</Badge>
                   <span>{r.createdAt.toISOString()}</span>
                   {r.url && <span style={S.url}>{r.url}</span>}
                   {r.userId && <span>user {r.userId.slice(0, 8)}</span>}
@@ -64,7 +65,8 @@ export default async function AdminErrorsPage() {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", padding: "2.5rem 1.5rem 4rem", background: "var(--bg-base)" },
+  page: { padding: "2.5rem 1.5rem 4rem" },
+  // 900 (шире прочих админ-страниц с 760) — намеренно: широкие стек-трейсы читабельнее.
   wrap: { maxWidth: 900, margin: "0 auto" },
   h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
   sub: { fontFamily: "var(--font-ui)", color: "var(--text-muted)", marginTop: 6, fontSize: "var(--text-sm)" },
@@ -72,8 +74,6 @@ const S: Record<string, React.CSSProperties> = {
   list: { listStyle: "none", padding: 0, margin: "20px 0 0", display: "flex", flexDirection: "column", gap: 8 },
   row: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 16px" },
   meta: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" },
-  tagServer: { fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" },
-  tagClient: { fontWeight: 700, color: "var(--error-text)", textTransform: "uppercase" },
   url: { color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 360, whiteSpace: "nowrap" },
   msg: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-primary)", marginTop: 8, wordBreak: "break-word" },
   det: { marginTop: 8 },
