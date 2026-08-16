@@ -3,8 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // #12: importRunner must be atomic — a failure in the fallible pre-work (audio fetch,
 // anti-leak) must leave NO half-draft. We mock every dependency so the test asserts
 // only the control flow: persistTest is reached only after all validation passes.
-const { parseRunner, diagnoseEmpty, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind, uploadSourceHtml } = vi.hoisted(() => ({
+const { parseRunner, parseTest, diagnoseEmpty, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind, uploadSourceHtml } = vi.hoisted(() => ({
   parseRunner: vi.fn(),
+  parseTest: vi.fn(),
   diagnoseEmpty: vi.fn(),
   fetchAudio: vi.fn(),
   uploadAudio: vi.fn(),
@@ -17,6 +18,7 @@ const { parseRunner, diagnoseEmpty, fetchAudio, uploadAudio, sanitize, assertNoL
 }));
 
 vi.mock("./parse-runner", () => ({ parseRunner, diagnoseEmptyRunnerParse: diagnoseEmpty }));
+vi.mock("../parse-test", () => ({ parseTest }));
 vi.mock("./safe-audio-fetch", () => ({ fetchExternalAudio: fetchAudio }));
 vi.mock("@/lib/telegram/storage", () => ({ uploadAudio }));
 vi.mock("./sanitize-runner", () => ({ sanitizeRunner: sanitize, assertNoKeyLeak: assertNoLeak }));
@@ -44,7 +46,7 @@ const listeningParsed = () => ({
 });
 
 beforeEach(() => {
-  [parseRunner, diagnoseEmpty, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind, uploadSourceHtml].forEach((m) => m.mockReset());
+  [parseRunner, parseTest, diagnoseEmpty, fetchAudio, uploadAudio, sanitize, assertNoLeak, brandResidue, persist, dupFind, uploadSourceHtml].forEach((m) => m.mockReset());
   diagnoseEmpty.mockReturnValue("no questions parsed — unsupported source");
   sanitize.mockReturnValue("<runner/>");
   brandResidue.mockReturnValue([]);
@@ -119,5 +121,74 @@ describe("importRunner atomicity (#12)", () => {
     const [idArg, htmlArg] = uploadSourceHtml.mock.calls[0] as [string, string];
     expect(htmlArg).toBe("<html raw/>"); // необрезанный оригинал, не runnerHtml
     expect(idArg).toBe(res.id);
+  });
+});
+
+// Атомизация reading (стратегия A): importRunner прищепляет текст пассажей из
+// parseTest к runner-набору ДО persist, чтобы Practice стал богатым. Ключ/qtype/
+// категория — из runner (SoT); mock не меняется. Best-effort: сбой atom-парса или
+// несовпадение номеров → fallback на runner-набор, импорт успешен.
+const readingQ = (number: number, over: Record<string, unknown> = {}) => ({
+  number, passageOrder: 1, qtype: "tfng", promptHtml: "", options: null,
+  groupKey: null, evidenceRef: null,
+  answer: { mode: "exact", accept: ["TRUE"], explanation: null, evidence: null },
+  ...over,
+});
+const readingParsed = () => ({
+  section: "reading", title: "R", category: "passage_1", bandType: "reading_academic",
+  durationSeconds: 1200, questionTypes: ["tfng"], bandScale: null,
+  passages: [{ order: 1, title: null, bodyHtml: "", audioPath: null, questionsHtml: null }],
+  questions: [readingQ(1), readingQ(2)],
+  warnings: [],
+});
+const atomParsed = () => ({
+  ...readingParsed(),
+  title: "atom-ignored", category: "passage_3",
+  passages: [{ order: 1, title: "P1", bodyHtml: "<p>real text</p>", audioPath: null, questionsHtml: null }],
+  questions: [readingQ(1, { promptHtml: "Q1?" }), readingQ(2, { promptHtml: "Q2?" })],
+});
+
+describe("importRunner reading atomization", () => {
+  it("reading: мержит текст пассажа из parseTest в parsed до persist", async () => {
+    parseRunner.mockReturnValue({ parsed: readingParsed(), externalAudioSrc: null });
+    parseTest.mockReturnValue(atomParsed());
+    await importRunner("<html/>", {});
+    expect(parseTest).toHaveBeenCalledTimes(1);
+    const [parsedArg] = persist.mock.calls[0] as [{ passages: Array<{ bodyHtml: string }>; questions: Array<{ promptHtml: string; answer: unknown }>; category: string }];
+    // атомизировано: непустой текст + prompt
+    expect(parsedArg.passages[0]!.bodyHtml).toBe("<p>real text</p>");
+    expect(parsedArg.questions[0]!.promptHtml).toBe("Q1?");
+    // meta уровня content_item и ключ — из runner, не из atom
+    expect(parsedArg.category).toBe("passage_1");
+    expect(parsedArg.questions[0]!.answer).toEqual({ mode: "exact", accept: ["TRUE"], explanation: null, evidence: null });
+  });
+
+  it("reading: parseTest бросил → fallback на runner-набор + warning, импорт успешен", async () => {
+    parseRunner.mockReturnValue({ parsed: readingParsed(), externalAudioSrc: null });
+    parseTest.mockImplementation(() => { throw new Error("cheerio boom"); });
+    const res = await importRunner("<html/>", {});
+    expect(persist).toHaveBeenCalledTimes(1);
+    const [parsedArg] = persist.mock.calls[0] as [{ passages: Array<{ bodyHtml: string }>; warnings: string[] }];
+    expect(parsedArg.passages[0]!.bodyHtml).toBe(""); // не атомизировано
+    expect(parsedArg.warnings.some((w) => /atomi/i.test(w))).toBe(true);
+    expect(res.id).toBeTruthy();
+  });
+
+  it("reading: несовпадение номеров atom↔runner → fallback + warning", async () => {
+    parseRunner.mockReturnValue({ parsed: readingParsed(), externalAudioSrc: null });
+    const oneShort = atomParsed();
+    oneShort.questions = [readingQ(1, { promptHtml: "Q1?" })]; // нет Q2
+    parseTest.mockReturnValue(oneShort);
+    await importRunner("<html/>", {});
+    const [parsedArg] = persist.mock.calls[0] as [{ passages: Array<{ bodyHtml: string }>; warnings: string[] }];
+    expect(parsedArg.passages[0]!.bodyHtml).toBe("");
+    expect(parsedArg.warnings.some((w) => /atomi/i.test(w))).toBe(true);
+  });
+
+  it("listening: parseTest НЕ вызывается (вне scope этого фикса)", async () => {
+    parseRunner.mockReturnValue({ parsed: listeningParsed(), externalAudioSrc: null });
+    await importRunner("<html/>", {});
+    expect(parseTest).not.toHaveBeenCalled();
+    expect(persist).toHaveBeenCalledTimes(1);
   });
 });

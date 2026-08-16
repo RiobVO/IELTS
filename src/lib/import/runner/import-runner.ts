@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { uploadAudio } from "@/lib/telegram/storage";
 import { parseRunner, diagnoseEmptyRunnerParse } from "./parse-runner";
+import { parseTest } from "../parse-test";
+import { mergeAtomization } from "./atomize-merge";
 import { fetchExternalAudio } from "./safe-audio-fetch";
 import { sanitizeRunner, assertNoKeyLeak } from "./sanitize-runner";
 import { runnerBrandResidue } from "./skin-runner";
@@ -23,7 +25,8 @@ export async function importRunner(
   html: string,
   opts: { sourceFilePath?: string; createdBy?: string },
 ): Promise<ImportRunnerResult> {
-  const { parsed, externalAudioSrc } = parseRunner(html);
+  const { parsed: runnerParsed, externalAudioSrc } = parseRunner(html);
+  let parsed = runnerParsed;
   // Пустой парс = источник не распознан. Отказ честнее молчаливого 0-вопросного драфта.
   // P4: сообщение различает «контейнер ключа не найден» от «найден, но номера не распознаны»
   // — бот/админ видит, это неподдерживаемый генератор или сломанная разметка ключа.
@@ -35,6 +38,28 @@ export async function importRunner(
   // ложился второй строкой. Проверка ДО аудио-фетча — минуты скачивания не тратятся.
   const dup = await findDuplicateTest(parsed, opts.sourceFilePath);
   if (dup) throw new DuplicateTestError(dup);
+
+  // Атомизация reading (стратегия A, PRACTICE_PLAN): тот же HTML прогоняется вторым
+  // парсером (parseTest) ради текста пассажей + prompt/options, которые прищепляются
+  // к runner-набору по номеру вопроса. Runner остаётся SoT для answer_key/qtype/
+  // категории — mock (runner_html ниже) не меняется. Best-effort: сбой atom-парса
+  // или несовпадение номеров → warning + fallback на runner-набор (Practice
+  // остаётся practice-lite, импорт успешен). Listening — вне scope: у него нет
+  // текста пассажа и типизация расходится (отдельная задача).
+  if (parsed.section === "reading") {
+    try {
+      const merge = mergeAtomization(parsed, parseTest(html));
+      if (merge.atomized) {
+        parsed = merge.parsed;
+      } else if (merge.reason) {
+        parsed.warnings.push(merge.reason);
+      }
+    } catch (e) {
+      parsed.warnings.push(
+        `atomization skipped — parseTest failed (${String((e as Error)?.message ?? e).slice(0, 120)})`,
+      );
+    }
+  }
 
   // Mint the id up front so the fallible work (audio fetch/upload + sanitize + anti-leak)
   // runs BEFORE the DB write. persistTest is then a single all-or-nothing commit — a
