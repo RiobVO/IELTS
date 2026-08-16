@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { extractData, extractFunctionTable, extractRangeBuilderTable } from "../extract-js";
+import { extractData, extractFunctionTable, extractObjectLiteral, extractRangeBuilderTable } from "../extract-js";
 import {
   canonQuestionType,
   unknownTypeWarning,
@@ -45,13 +45,13 @@ const KEY_CONTAINERS = ["correctAnswers", "KEY", "acceptableAnswers", "acceptabl
  */
 export function diagnoseEmptyRunnerParse(html: string): string {
   const src = scriptText(html);
-  const declared = KEY_CONTAINERS.filter((name) =>
-    new RegExp(`(?:const|let|var)\\s+${name}\\s*=`).test(src),
-  );
+  // Детекция через extractObjectLiteral (comment-aware, P2): требует реальный `{...}`-литерал,
+  // а не имя как подстроку в строке/тексте — иначе ложное "found" (Codex 2026-07-09).
+  const declared = KEY_CONTAINERS.filter((name) => extractObjectLiteral(src, name) != null);
   if (declared.length === 0) {
     return (
-      "no questions parsed — answer-key container not found (expected one of " +
-      "correctAnswers / KEY / acceptableAnswers / mcqGroups). This source generator isn't supported."
+      `no questions parsed — answer-key container not found (expected one of ` +
+      `${KEY_CONTAINERS.join(" / ")}). This source generator isn't supported.`
     );
   }
   return (
@@ -102,9 +102,11 @@ function parseReadingRunner(html: string): RunnerParseResult {
   const bandScale = extractFunctionTable(src, "getBandFor40", 0, 40);
 
   // Union: an mcq-multi member may live only in mcqGroups, not in correctAnswers.
-  const numbers = [...new Set([...Object.keys(correct).map(Number), ...mcqByNum.keys()])].sort(
-    (a, b) => a - b,
-  );
+  // Фильтр положительных целых (P4): нечисловые ключи "q1" (bespoke-диалект) иначе дают
+  // number=NaN → падение на persist-integer вместо чистого 0-вопросного отказа.
+  const numbers = [...new Set([...Object.keys(correct).map(Number), ...mcqByNum.keys()])]
+    .filter((n) => Number.isInteger(n) && n > 0)
+    .sort((a, b) => a - b);
   const warnings: string[] = [];
   const questions = numbers.map((n) => {
     const k = String(n);
@@ -197,7 +199,11 @@ function parseListeningRunner(html: string): RunnerParseResult {
         ?? {};
   const bandScale = extractFunctionTable(src, "band", 0, 40);
 
-  const numbers = Object.keys(key).map(Number).sort((a, b) => a - b);
+  // Фильтр положительных целых (P4): нечисловые ключи "q1" не создают NaN-вопросов.
+  const numbers = Object.keys(key)
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0)
+    .sort((a, b) => a - b);
   const warnings: string[] = [];
   const questions = numbers.map((n) => {
     const variants = key[String(n)] ?? [];

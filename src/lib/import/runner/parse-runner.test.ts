@@ -232,4 +232,30 @@ describe("diagnoseEmptyRunnerParse (P4)", () => {
     expect(msg).toMatch(/answer key found/i);
     expect(msg).toMatch(/correctAnswers/);
   });
+
+  // Codex-ревью (2026-07-09): детекция должна требовать реальный `{...}`-литерал, а не имя
+  // как подстроку в строке/тексте (иначе ложное "found").
+  it("имя контейнера лишь как подстрока в строке → НЕ считается объявлением", () => {
+    const msg = diagnoseEmptyRunnerParse(`<script>const note = "const correctAnswers = here";</script>`);
+    expect(msg).toMatch(/container not found/i);
+  });
+});
+
+// Codex-ревью (2026-07-09): bespoke-ключи "q1".."q40" под распознанным именем давали
+// вопрос с number=NaN (падал на persist-integer) вместо чистого 0-вопросного отказа.
+describe("parseRunner — нечисловые/неположительные ключи не создают вопросов (P4)", () => {
+  it("q-префиксные ключи reading → 0 распознанных вопросов", () => {
+    const { parsed } = parseRunner(`<script>const correctAnswers = {"q1":"A","q2":"B","q40":"C"};</script>`);
+    expect(parsed.questions).toHaveLength(0);
+  });
+  it("q-префиксные ключи listening → 0 распознанных вопросов", () => {
+    const { parsed } = parseRunner(
+      `<script>const KEY = {"q1":["a"],"q2":["b"]};</script><audio></audio><div class="part" data-part="1"></div>`,
+    );
+    expect(parsed.questions).toHaveLength(0);
+  });
+  it("валидные числовые ключи по-прежнему дают вопросы", () => {
+    const { parsed } = parseRunner(`<script>const correctAnswers = {"1":"A","2":"B"};</script>`);
+    expect(parsed.questions.map((q) => q.number)).toEqual([1, 2]);
+  });
 });
