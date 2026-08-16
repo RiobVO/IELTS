@@ -160,10 +160,13 @@ if (invokedDirectly) {
     source_file_path: string | null;
   }
 
+  // Reading-only: атомизация listening сознательно вне scope (нет текста пассажа,
+  // расходящаяся типизация — см. import-runner reading-гейт). Держим backfill в тех
+  // же рамках, что и живой импорт, чтобы не оживить listening-practice случайно.
   const rows = (await db.execute(sql`
     SELECT id, title, source_file_path
     FROM content_item
-    WHERE status = 'published' AND runner_html IS NOT NULL
+    WHERE status = 'published' AND runner_html IS NOT NULL AND section = 'reading'
     ORDER BY title
   `)) as unknown as DbRow[];
 
