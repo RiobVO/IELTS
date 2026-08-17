@@ -481,7 +481,7 @@ const BDG_CSS = `
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 1080, margin: "0 auto" },
   head: { display: "flex", alignItems: "flex-end", gap: 16, marginBottom: 22 },
-  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 4px" },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 4px" },
   sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: 0 },
   ringCount: { position: "relative", width: 64, height: 64, flex: "none", display: "grid", placeItems: "center" },
   ringCountB: { position: "relative", fontFamily: "var(--font-mono)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--brand)", display: "flex", alignItems: "baseline", gap: 1 },

@@ -76,7 +76,7 @@ export default async function InvitePage() {
 
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 720, margin: "0 auto" },
-  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 4px" },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 4px" },
   lead: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "0 0 20px" },
   invite: { position: "relative", overflow: "hidden", background: "linear-gradient(160deg, var(--surface-premium), var(--surface-premium-deep))", borderRadius: "var(--radius-xl)", color: "var(--surface-premium-ink)" },
   glow: { position: "absolute", top: -90, right: -70, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--brand) 50%, transparent), transparent 64%)" },

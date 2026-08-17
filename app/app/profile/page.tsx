@@ -427,7 +427,7 @@ const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 840, margin: "0 auto" },
   idRow: { display: "flex", alignItems: "center", gap: 18, marginBottom: 18 },
   avatar: { width: 60, height: 60, flex: "none", borderRadius: "50%", display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", color: "var(--text-on-brand)", fontFamily: "var(--font-ui)", fontSize: 23, fontWeight: 700, boxShadow: "var(--shadow-md)" },
-  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: 0 },
   subLine: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", marginTop: 2 },
 
   hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "radial-gradient(520px 280px at 88% -40%, color-mix(in oklab, var(--violet-400) 55%, transparent), transparent 70%), linear-gradient(155deg, var(--brand), var(--brand-active) 70%, var(--violet-700))", color: "var(--text-on-brand)", marginBottom: 14 },

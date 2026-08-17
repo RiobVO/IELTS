@@ -71,12 +71,12 @@ export default function ResetPasswordPage() {
 
         {status === "sent" ? (
           <div role="status">
-            <h1 ref={sentHeadingRef} tabIndex={-1} style={{ outline: "none", fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 6px" }}>Check your email</h1>
+            <h1 ref={sentHeadingRef} tabIndex={-1} style={{ outline: "none", fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 6px" }}>Check your email</h1>
             <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.55, color: "var(--text-muted)", margin: "0 0 24px" }}>If an account exists for that address, a password reset link is on its way. The link opens a page to set a new password.</p>
           </div>
         ) : (
           <>
-            <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: "0 0 6px" }}>Reset your password</h1>
+            <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 6px" }}>Reset your password</h1>
             <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", lineHeight: 1.55, color: "var(--text-muted)", margin: "0 0 22px" }}>Enter the email you signed up with and we&apos;ll send a reset link.</p>
 
             {error && (

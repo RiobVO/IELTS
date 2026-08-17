@@ -68,7 +68,7 @@ const S: Record<string, React.CSSProperties> = {
   page: { padding: "2.5rem 1.5rem 4rem" },
   // 900 (шире прочих админ-страниц с 760) — намеренно: широкие стек-трейсы читабельнее.
   wrap: { maxWidth: 900, margin: "0 auto" },
-  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", color: "var(--text-primary)", margin: 0 },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: 0 },
   sub: { fontFamily: "var(--font-ui)", color: "var(--text-muted)", marginTop: 6, fontSize: "var(--text-sm)" },
   hint: { fontFamily: "var(--font-ui)", color: "var(--text-muted)", fontSize: "var(--text-sm)", marginTop: 20 },
   list: { listStyle: "none", padding: 0, margin: "20px 0 0", display: "flex", flexDirection: "column", gap: 8 },
