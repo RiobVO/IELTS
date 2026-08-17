@@ -5,7 +5,12 @@
 
 :root {
   --font-ui: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-reading: var(--font-literata), 'Literata', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  /* Фолбэк-стек БЕЗ var(--font-literata): var() внутри значения custom property
+     подставляется на элементе объявления (:root), а next/font-переменная Literata
+     живёт только на обёртке /app (app/app/layout.tsx) — ссылка отсюда была бы
+     invalid at computed-value time и убила бы токен целиком. Настоящий стек с
+     next/font задаёт .app-serif ниже, на той же обёртке. */
+  --font-reading: 'Literata', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
   --font-mono: var(--font-jbmono), 'JetBrains Mono', ui-monospace, 'SF Mono', 'Geist Mono', monospace;
 
   /* ---- Type scale (mobile-first; rem on a 16px root) ---- */
@@ -49,4 +54,12 @@
   --tracking-normal:  0;
   --tracking-wide:    0.02em;
   --tracking-caps:    0.09em;
+}
+
+/* Сегмент /app (обёртка в app/app/layout.tsx несёт этот класс вместе с
+   literata.variable): здесь --font-literata определена на ТОМ ЖЕ элементе,
+   поэтому подстановка валидна — все var(--font-reading) внутри /app получают
+   next/font Literata. Вне /app остаётся фолбэк из :root (serif там не рендерится). */
+.app-serif {
+  --font-reading: var(--font-literata), 'Literata', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
 }

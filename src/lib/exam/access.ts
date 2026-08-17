@@ -258,6 +258,11 @@ export async function startAttempt(
    * нему — единый снимок согласованнее, чем второе чтение); null → попытки нет,
    * идём сразу на вставку (гонку параллельных стартов разруливает
    * onConflictDoNothing в openNewAttempt); undefined → легаси-путь, ищем сами.
+   *
+   * Multi-tab TOCTOU: снимок может отстать от параллельной вкладки на ~1 RT — как
+   * и прежний повторный SELECT, живший на RT позже батча; окно свойственно
+   * полнообъектному автосейву на протяжении всей сессии, а целостность держат
+   * WHERE status='in_progress' в saveProgress и single-fire claim сабмита.
    */
   resume?: { id: string; mode: AttemptMode; answers: Record<string, string | string[]> } | null,
 ): Promise<StartResult> {
