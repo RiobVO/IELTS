@@ -113,6 +113,8 @@ export async function submitAttempt(
         // explanation/evidence нужны только для D3-snapshot (грейдинг их не
         // использует) — кладём их в snapshot на момент сдачи.
         explanation: answerKey.explanation,
+        // RU-объяснение (L1-слой, 0050) — тот же snapshot-путь, что explanation.
+        explanationRu: answerKey.explanationRu,
         evidence: answerKey.evidence,
       })
       .from(question)

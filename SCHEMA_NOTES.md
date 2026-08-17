@@ -850,6 +850,30 @@ TRUNCATE), `authenticated` — INSERT/DELETE/REFERENCES/TRIGGER/TRUNCATE. Бар
 up снимал только дрейф, контрактных грантов не менял. Проверено на проде скриптом-пробой
 (колоночный UPDATE = только `read_at` у `authenticated`).
 
+## 0050 — L1-слой: answer_key.explanation_ru + content_item.l1_status
+
+Колоночная additive-миграция (трек роста, этап L1; 2026-07-11). **Таблиц не прибавилось
+(count стоит на 34)**, новый enum `l1_gen_status` (`pending|generating|done|failed`).
+
+- **`answer_key.explanation_ru text NULL`** — русское объяснение рядом с EN. Пишется
+  ТОЛЬКО отдельным env-гейтед шагом генерации (`/api/content/generate-l1`, Gemini,
+  `L1_GEN_MODEL`) — детерминированный импорт-парсер остаётся LLM-free (BRIEF §4.2)
+  и всегда пишет NULL. Наследует hard-lock таблицы (RLS on + гранты отозваны в 0001;
+  ADD COLUMN грантов не создаёт — Supabase default-priv готча касается только новых
+  ТАБЛИЦ). Уходит клиенту строго теми же путями, что EN explanation: снапшот D3 на
+  submit + practice-reveal; в mock-result — только внутри `hasFullReview`-веток.
+- **`content_item.l1_status l1_gen_status NOT NULL DEFAULT 'pending'`** — стадия
+  генерации; `'generating'` — атомарный claim против конкурентных прогонов
+  (`UPDATE ... WHERE l1_status <> 'generating' RETURNING`). done = ПОЛНОЕ покрытие
+  вопросов с ключом; частичный/сбойный прогон → failed (админ дожимает Regenerate).
+  Колоночные SELECT-гранты content_item (0035) новую колонку клиентам НЕ выдают —
+  осознанно: читает только админ-ревью owner-path. Re-import каскадно стирает
+  explanation_ru и рождает свежий default 'pending' → триггер на импорте
+  перегенерирует сам (самолечение).
+
+**Verification.** `verify` green (34 tables; up→down→up clean + idempotent; anon-denial
+answer_key не изменился). Прод-проба после применения: anon SELECT `l1_status` — denied.
+
 ## 0048 — writing/speaking grant lockdown (снятие прод-дрейфа)
 
 Тот же класс, что 0047, на 7 таблицах Writing/Speaking (`writing_task`,

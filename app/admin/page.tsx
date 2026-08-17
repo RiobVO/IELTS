@@ -2,14 +2,23 @@ import type { Metadata } from "next";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { answerKey, contentItem, question } from "@/db/schema";
+import { l1FeatureEnabled } from "@/env";
 import { requireAdmin } from "@/lib/auth";
 import { categoryLabel } from "@/lib/labels";
 import { summarizeReview, type ReviewRow, type ReviewSummary } from "@/lib/content/review-summary";
-import { Badge } from "@/components/core/Badge";
+import { Badge, type BadgeTone } from "@/components/core/Badge";
 import { SubmitButton, ConfirmButton } from "@/components/admin/AdminSubmit";
 import { ContentTools } from "@/components/admin/ContentTools";
 import { UndoToast } from "@/components/admin/UndoToast";
-import { bulkSetStatus, markReviewed, setStatus, uploadTest } from "./actions";
+import { bulkSetStatus, markReviewed, regenerateL1, setStatus, uploadTest } from "./actions";
+
+/** l1_status → Badge tone. */
+function l1Tone(status: string): BadgeTone {
+  if (status === "done") return "success";
+  if (status === "generating") return "brand";
+  if (status === "failed") return "error";
+  return "neutral"; // pending
+}
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Admin | bando" };
@@ -30,6 +39,7 @@ export default async function AdminPage({
 }) {
   const profile = await requireAdmin();
   const sp = await searchParams;
+  const l1On = l1FeatureEnabled();
 
   // Owner db: admin sees ALL content (incl. draft), unlike the RLS anon path.
   const items = await db
@@ -41,6 +51,7 @@ export default async function AdminPage({
       status: contentItem.status,
       reviewedAt: contentItem.reviewedAt,
       importWarnings: contentItem.importWarnings,
+      l1Status: contentItem.l1Status,
       // Внешняя ссылка написана ТЕКСТОМ (content_item.id): drizzle рендерит
       // ${contentItem.id} в raw-sql как неквалифицированный "id", который внутри
       // подзапроса резолвится в question.id → самосравнение → всегда 0.
@@ -51,9 +62,11 @@ export default async function AdminPage({
 
   // Сводка ключа для драфтов (P3): админ подтверждает ключ, видя разбивку, а не вслепую.
   // Читаем owner-путём; СЫРОЙ accept остаётся на сервере — в JSX уходят только агрегаты
-  // (summarizeReview), поэтому ответы не утекают ни в клиент, ни в бота.
+  // (summarizeReview), поэтому ответы не утекают ни в клиент, ни в бота. Заодно считаем
+  // покрытие L1-объяснений (explanation_ru) для строки «L1 (RU)» ниже (0050).
   const draftIds = items.filter((it) => it.status !== "published").map((it) => it.id);
   const summaries = new Map<string, ReviewSummary>();
+  const l1Coverage = new Map<string, { done: number; total: number }>();
   if (draftIds.length > 0) {
     const rows = await db
       .select({
@@ -62,6 +75,7 @@ export default async function AdminPage({
         qtype: question.qtype,
         mode: answerKey.mode,
         accept: answerKey.accept,
+        explanationRu: answerKey.explanationRu,
       })
       .from(question)
       .leftJoin(answerKey, eq(answerKey.questionId, question.id))
@@ -76,6 +90,11 @@ export default async function AdminPage({
       // accept сюда НЕ кладём — только производный флаг emptyAccept.
       list.push({ number: r.number, qtype: r.qtype, mode: r.mode, emptyAccept });
       byItem.set(r.contentItemId, list);
+
+      const l1 = l1Coverage.get(r.contentItemId) ?? { done: 0, total: 0 };
+      l1.total += 1;
+      if ((r.explanationRu ?? "").trim() !== "") l1.done += 1;
+      l1Coverage.set(r.contentItemId, l1);
     }
     for (const [id, rs] of byItem) summaries.set(id, summarizeReview(rs));
   }
@@ -230,6 +249,26 @@ export default async function AdminPage({
                               <span style={S.flag}>⚠ number gap</span>
                             )}
                           </div>
+                        )}
+                      </div>
+                    )}
+                    {isDraft && (
+                      <div style={{ ...S.sumRow, marginTop: 10 }}>
+                        <span style={S.sumLabel}>L1 (RU)</span>
+                        {l1On ? (
+                          <>
+                            <Badge tone={l1Tone(it.l1Status)}>{it.l1Status}</Badge>
+                            <span style={S.chipMuted}>
+                              {(l1Coverage.get(it.id) ?? { done: 0, total: 0 }).done}/
+                              {(l1Coverage.get(it.id) ?? { done: 0, total: 0 }).total} explained
+                            </span>
+                            <form action={regenerateL1}>
+                              <input type="hidden" name="id" value={it.id} />
+                              <SubmitButton variant="secondary" size="sm">Regenerate</SubmitButton>
+                            </form>
+                          </>
+                        ) : (
+                          <span style={S.chipMuted}>L1 generation is off (no model configured)</span>
                         )}
                       </div>
                     )}

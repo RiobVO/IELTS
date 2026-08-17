@@ -82,6 +82,8 @@ type ReviewRow = {
   mode: GradeKey["mode"];
   accept: string[];
   explanation: string | null;
+  /** RU-объяснение (L1-слой, 0050) — тот же гейт/путь, что explanation. */
+  explanationRu: string | null;
   evidence: { para: string; snippet: string } | null;
 };
 
@@ -152,6 +154,7 @@ export default async function ResultPage({
         mode: answerKey.mode,
         accept: answerKey.accept,
         explanation: answerKey.explanation,
+        explanationRu: answerKey.explanationRu,
         evidence: answerKey.evidence,
       })
       .from(question)
@@ -273,6 +276,9 @@ export default async function ResultPage({
         mode: q.mode,
         accept: q.accept,
         explanation: q.explanation,
+        // Снапшоты, снятые до 0050, поля не имеют — нормализуем undefined → null,
+        // чтобы держать контракт ReviewRow (string | null).
+        explanationRu: q.explanationRu ?? null,
         evidence: q.evidence,
       }))
     : liveRows.map((r) => ({
@@ -281,6 +287,7 @@ export default async function ResultPage({
         mode: r.mode,
         accept: (r.accept as string[]) ?? [],
         explanation: r.explanation,
+        explanationRu: r.explanationRu,
         evidence: (r.evidence as { para: string; snippet: string } | null) ?? null,
       }));
 
@@ -400,6 +407,7 @@ export default async function ResultPage({
       ...base,
       answer: (m.accept as string[]).join(" / "),
       evidence: ev?.snippet ?? null,
+      explanationRu: m.explanationRu,
     };
   });
 
@@ -478,6 +486,7 @@ export default async function ResultPage({
             given: given && given !== "" ? given : "—",
             answer: m.accept.join(" / "),
             why: m.explanation,
+            whyRu: m.explanationRu,
             evidence: m.evidence?.snippet ?? null,
             strategy: qtypeDescription(q.qtype),
             tag: blindSpotTag({ qtype: q.qtype, accept: m.accept }, blindSpot),

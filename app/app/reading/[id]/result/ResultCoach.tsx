@@ -554,6 +554,7 @@ function ReviewRoom({
                 {item.tag && <span className="rc-rev-tag">{item.tag}</span>}
               </div>
             )}
+            {item.whyRu && <RuWhy text={item.whyRu} />}
             {item.evidence ? (
               <div className="rc-ev">📖 <span>{item.evidence}</span></div>
             ) : (
@@ -568,6 +569,24 @@ function ReviewRoom({
           </div>
         </FadeUp>
       )}
+    </div>
+  );
+}
+
+/**
+ * RuWhy (L1-слой, 0050) — свёрнутый по умолчанию RU-перевод `why`. Рендерится
+ * внутри <FadeUp key={gi}>, поэтому ремонтируется (и сворачивается заново) на
+ * каждом следующем промахе — тот же паттерн тумблера, что в InsightReport/ExamRunner.
+ */
+function RuWhy({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rc-rev-ru">
+      <button type="button" className="rc-rev-ru-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <span className="rc-rev-ru-badge">RU</span>
+        {open ? "Hide" : "Explain in Russian"}
+      </button>
+      {open && <p className="rc-rev-ru-text">{text}</p>}
     </div>
   );
 }
@@ -806,6 +825,13 @@ const COACH_CSS = `
 .rc-rev-why{display:flex;gap:10px;font-family:var(--font-ui);font-size:14px;color:var(--text-secondary);line-height:1.55;margin-bottom:14px}
 .rc-rev-why b{color:var(--text-primary)}
 .rc-rev-tag{font-family:var(--font-ui);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--warn-text);background:var(--warn-subtle);border-radius:6px;padding:3px 8px;margin-left:auto;flex:none}
+/* RU-объяснение (L1-слой, 0050) — свёрнутый по умолчанию тумблер под rc-rev-why. */
+.rc-rev-ru{margin-bottom:14px}
+.rc-rev-ru-toggle{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:2px 0;border:none;background:none;color:var(--text-muted);font-family:var(--font-ui);font-size:13px;font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.rc-rev-ru-toggle:hover{color:var(--text-secondary)}
+.rc-rev-ru-badge{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--brand-active);background:var(--brand-subtle);border-radius:5px;padding:2px 5px}
+.rc-rev-ru-text{margin:6px 0 0;font-family:var(--font-ui);font-size:14px;line-height:1.6;color:var(--text-secondary)}
+@media (pointer:coarse){.rc-rev-ru-toggle{min-height:44px}}
 .rc-ev{display:flex;gap:11px;font-family:var(--font-reading);font-size:14px;color:var(--reading-text);background:var(--reading-surface);border:1px solid var(--reading-rule);border-radius:12px;padding:14px 16px;line-height:1.6}
 /* .rc-ev mark сознательно не портирован из прототипа: evidence рендерится как
    плоский текст (React text child, не dangerouslySetInnerHTML) — <mark> в

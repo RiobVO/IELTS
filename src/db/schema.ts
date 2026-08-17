@@ -126,6 +126,14 @@ export const paymentStatus = pgEnum("payment_status", [
   "completed",
   "failed",
 ]);
+// Состояние шага генерации L1-объяснений (0050). 'generating' — атомарный claim
+// против конкурентных прогонов; см. content_item.l1Status.
+export const l1GenStatus = pgEnum("l1_gen_status", [
+  "pending",
+  "generating",
+  "done",
+  "failed",
+]);
 
 /* -------------------------------------------------------------------------- */
 /* region — hierarchical territory (country -> region/viloyat -> district)     */
@@ -233,6 +241,10 @@ export const contentItem = pgTable(
     // Updated server-side after each rated attempt; count tracks rated attempts.
     difficultyRating: integer("difficulty_rating").notNull().default(1000),
     difficultyCount: integer("difficulty_count").notNull().default(0),
+    // Пайплайн L1-объяснений (0050): pending → generating → done|failed. Claim
+    // 'generating' делает конкурентные прогоны безопасными. Колонка не выдана
+    // клиентским ролям (column-level grants 0035) — читает только админ owner-path.
+    l1Status: l1GenStatus("l1_status").notNull().default("pending"),
     createdBy: uuid("created_by").references(() => profile.id, {
       onDelete: "set null",
     }),
@@ -308,6 +320,10 @@ export const answerKey = pgTable("answer_key", {
   accept: jsonb("accept").notNull(),
   explanation: text("explanation"),
   evidence: jsonb("evidence"),
+  // RU-объяснение (L1-слой, 0050). Пишется ТОЛЬКО отдельным env-гейтед шагом
+  // генерации вне парсера (BRIEF §4.2 — парсер LLM-free, persist пишет NULL).
+  // Наследует hard-lock таблицы: клиентским ролям недоступно.
+  explanationRu: text("explanation_ru"),
 });
 
 /* -------------------------------------------------------------------------- */

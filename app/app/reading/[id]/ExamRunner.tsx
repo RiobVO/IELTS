@@ -1493,6 +1493,7 @@ const PracticeCheck = memo(function PracticeCheck({
           <div className="exam-reveal-label">Answer</div>
           <div className="exam-reveal-answer">{reveal.accept.join(" / ") || "—"}</div>
           {reveal.explanation && <p className="exam-reveal-why">{reveal.explanation}</p>}
+          {reveal.explanationRu && <RuExplanation text={reveal.explanationRu} />}
           {reveal.evidence?.snippet && (
             <div className="exam-reveal-ev">
               <span aria-hidden="true">📖</span>
@@ -1531,6 +1532,30 @@ const PracticeCheck = memo(function PracticeCheck({
     </div>
   );
 });
+
+/**
+ * RuExplanation (L1-слой, 0050) — свёрнутый по умолчанию RU-перевод английского
+ * explanation внутри reveal. Свёрнут намеренно: EN-объяснение остаётся основной
+ * методикой (IELTS сдаётся на английском), RU — страховочный слой для тех, кому
+ * не хватает языка. Тот же паттерн тумблера, что StrategyHint ниже.
+ */
+function RuExplanation({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="exam-reveal-ru">
+      <button
+        type="button"
+        className="exam-reveal-ru-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="exam-reveal-ru-badge">RU</span>
+        {open ? "Hide" : "Explain in Russian"}
+      </button>
+      {open && <p className="exam-reveal-ru-text">{text}</p>}
+    </div>
+  );
+}
 
 /**
  * StrategyHint (P2b) — сворачиваемая стратегия по типу вопроса. Zero-key: контент
@@ -1962,6 +1987,13 @@ const READING_CSS = `
 .exam-reveal-why{margin:9px 0 0;font-family:var(--font-ui);font-size:var(--text-sm);line-height:1.6;color:var(--text-secondary)}
 .exam-reveal-ev{display:flex;gap:7px;margin-top:9px;font-family:var(--font-ui);font-size:var(--text-sm);line-height:1.55;color:var(--text-secondary)}
 .exam-reveal-ev-para{margin-top:6px;font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;color:var(--text-muted)}
+/* RU-объяснение (L1-слой, 0050) — свёрнутый по умолчанию тумблер под EN-explanation. */
+.exam-reveal-ru{margin-top:9px}
+.exam-reveal-ru-toggle{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:2px 0;border:none;background:none;color:var(--text-muted);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
+.exam-reveal-ru-toggle:hover{color:var(--text-secondary)}
+.exam-reveal-ru-badge{font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;letter-spacing:.04em;color:var(--brand-active);background:var(--brand-subtle);border-radius:5px;padding:2px 5px}
+.exam-reveal-ru-text{margin:6px 0 0;font-family:var(--font-ui);font-size:var(--text-sm);line-height:1.6;color:var(--text-secondary)}
+@media (pointer:coarse){.exam-reveal-ru-toggle{min-height:44px}}
 @keyframes exam-reveal-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.exam-reveal{animation:none}}
 @media (pointer:coarse){.exam-check-btn{min-height:44px}.exam-reveal-link{min-height:44px}}

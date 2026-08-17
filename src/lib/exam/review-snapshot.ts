@@ -22,6 +22,8 @@ export interface SnapshotQuestion {
   /** правильные/принимаемые значения (как в answer_key.accept) */
   accept: string[];
   explanation: string | null;
+  /** RU-объяснение (L1-слой, 0050) — тот же гейт/путь, что explanation. */
+  explanationRu: string | null;
   evidence: SnapshotEvidence | null;
 }
 
@@ -36,6 +38,7 @@ export interface KeyRow {
   mode: AnswerMode;
   accept: unknown;
   explanation: string | null | undefined;
+  explanationRu: string | null | undefined;
   evidence: unknown;
 }
 
@@ -48,6 +51,7 @@ export function buildReviewSnapshot(rows: KeyRow[]): ReviewSnapshot {
       mode: r.mode,
       accept: Array.isArray(r.accept) ? (r.accept as string[]) : [],
       explanation: r.explanation ?? null,
+      explanationRu: r.explanationRu ?? null,
       evidence: (r.evidence as SnapshotEvidence | null) ?? null,
     })),
   };
