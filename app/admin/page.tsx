@@ -63,12 +63,18 @@ export default async function AdminPage({
 
   // Сводка ключа для драфтов (P3): админ подтверждает ключ, видя разбивку, а не вслепую.
   // Читаем owner-путём; СЫРОЙ accept остаётся на сервере — в JSX уходят только агрегаты
-  // (summarizeReview), поэтому ответы не утекают ни в клиент, ни в бота. Заодно считаем
-  // покрытие L1-объяснений (explanation_ru) для строки «L1 (RU)» ниже (0050).
+  // (summarizeReview), поэтому ответы не утекают ни в клиент, ни в бота.
+  //
+  // L1-покрытие (explanation_ru) считаем для ВСЕХ тестов, не только драфтов: publish не
+  // гейтится l1_status (см. regenerateL1), поэтому админ должен видеть статус/иметь
+  // Regenerate и ПОСЛЕ публикации — иначе после publish генерация становится невидимой
+  // и неуправляемой (был баг: строка «L1 (RU)» пропадала с экрана вместе с draft-скоупом).
   const draftIds = items.filter((it) => it.status !== "published").map((it) => it.id);
+  const allIds = items.map((it) => it.id);
   const summaries = new Map<string, ReviewSummary>();
   const l1Coverage = new Map<string, { done: number; total: number }>();
-  if (draftIds.length > 0) {
+  if (allIds.length > 0) {
+    const draftIdSet = new Set(draftIds);
     const rows = await db
       .select({
         contentItemId: question.contentItemId,
@@ -80,17 +86,19 @@ export default async function AdminPage({
       })
       .from(question)
       .leftJoin(answerKey, eq(answerKey.questionId, question.id))
-      .where(inArray(question.contentItemId, draftIds));
+      .where(inArray(question.contentItemId, allIds));
 
     const byItem = new Map<string, ReviewRow[]>();
     for (const r of rows) {
-      // accept — jsonb; парсер пишет string[], но не-массив (напр. {}) уронил бы .some.
-      const acc = Array.isArray(r.accept) ? (r.accept as string[]) : [];
-      const emptyAccept = r.mode === null || !acc.some((a) => (a ?? "").trim() !== "");
-      const list = byItem.get(r.contentItemId) ?? [];
-      // accept сюда НЕ кладём — только производный флаг emptyAccept.
-      list.push({ number: r.number, qtype: r.qtype, mode: r.mode, emptyAccept });
-      byItem.set(r.contentItemId, list);
+      if (draftIdSet.has(r.contentItemId)) {
+        // accept — jsonb; парсер пишет string[], но не-массив (напр. {}) уронил бы .some.
+        const acc = Array.isArray(r.accept) ? (r.accept as string[]) : [];
+        const emptyAccept = r.mode === null || !acc.some((a) => (a ?? "").trim() !== "");
+        const list = byItem.get(r.contentItemId) ?? [];
+        // accept сюда НЕ кладём — только производный флаг emptyAccept.
+        list.push({ number: r.number, qtype: r.qtype, mode: r.mode, emptyAccept });
+        byItem.set(r.contentItemId, list);
+      }
 
       const l1 = l1Coverage.get(r.contentItemId) ?? { done: 0, total: 0 };
       l1.total += 1;
@@ -260,26 +268,34 @@ export default async function AdminPage({
                         )}
                       </div>
                     )}
-                    {isDraft && (
-                      <div style={{ ...S.sumRow, marginTop: 10 }}>
-                        <span style={S.sumLabel}>L1 (RU)</span>
-                        {l1On ? (
-                          <>
-                            <Badge tone={l1Tone(it.l1Status)}>{it.l1Status}</Badge>
-                            <span style={S.chipMuted}>
-                              {(l1Coverage.get(it.id) ?? { done: 0, total: 0 }).done}/
-                              {(l1Coverage.get(it.id) ?? { done: 0, total: 0 }).total} explained
-                            </span>
+                    {/* Не гейтим isDraft: publish не блокирует L1-пайплайн, статус/Regenerate
+                        должны оставаться видимы и управляемы после публикации тоже. */}
+                    <div style={{ ...S.sumRow, marginTop: 10 }}>
+                      <span style={S.sumLabel}>L1 (RU)</span>
+                      {l1On ? (
+                        <>
+                          <Badge tone={l1Tone(it.l1Status)}>{it.l1Status}</Badge>
+                          <span style={S.chipMuted}>
+                            {(l1Coverage.get(it.id) ?? { done: 0, total: 0 }).done}/
+                            {(l1Coverage.get(it.id) ?? { done: 0, total: 0 }).total} explained
+                          </span>
+                          {it.l1Status === "generating" ? (
+                            // Кнопку прячем целиком, а не просто disabled: form-сабмит на
+                            // 'generating' у regenerateL1 форс-ресетит статус в 'failed' без
+                            // повторного запуска (защита от гонки, см. store.ts) — повторный
+                            // клик именно сейчас даёт худший UX, а не безвредный no-op.
+                            <span style={S.chipMuted}>Generating…</span>
+                          ) : (
                             <form action={regenerateL1}>
                               <input type="hidden" name="id" value={it.id} />
                               <SubmitButton variant="secondary" size="sm">Regenerate</SubmitButton>
                             </form>
-                          </>
-                        ) : (
-                          <span style={S.chipMuted}>L1 generation is off (no model configured)</span>
-                        )}
-                      </div>
-                    )}
+                          )}
+                        </>
+                      ) : (
+                        <span style={S.chipMuted}>L1 generation is off (no model configured)</span>
+                      )}
+                    </div>
                     {isDraft && warnings.length > 0 && (
                       <details style={S.warnBox}>
                         <summary style={S.warnSummary}>
