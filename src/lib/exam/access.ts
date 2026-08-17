@@ -171,14 +171,16 @@ export async function hasConsumedTrial(
  * Незакрытая попытка этого (user, test) — страницы решают по ней, показывать ли
  * экран выбора режима (нет попытки и нет ?mode= → выбор) или резюмить с режимом,
  * зафиксированным при создании. Отдельный лёгкий SELECT по partial-индексу 0007,
- * батчится страницей с остальными независимыми чтениями.
+ * батчится страницей с остальными независимыми чтениями. `answers` читаются
+ * сразу же: страница передаёт строку в startAttempt (параметр `resume`), и тот
+ * резюмит без повторного SELECT той же строки — минус серийный round-trip.
  */
 export async function findInProgressAttempt(
   userId: string,
   contentItemId: string,
-): Promise<{ id: string; mode: AttemptMode } | null> {
+): Promise<{ id: string; mode: AttemptMode; answers: Record<string, string | string[]> } | null> {
   const [row] = await db
-    .select({ id: attempt.id, mode: attempt.mode })
+    .select({ id: attempt.id, mode: attempt.mode, answers: attempt.answers })
     .from(attempt)
     .where(
       and(
@@ -189,7 +191,12 @@ export async function findInProgressAttempt(
     )
     .orderBy(desc(attempt.startedAt))
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+  return {
+    id: row.id,
+    mode: row.mode,
+    answers: (row.answers as Record<string, string | string[]>) ?? {},
+  };
 }
 
 /**
@@ -245,25 +252,38 @@ export async function startAttempt(
    * держит только (user,item)). Резюм существующей попытки — БЕЗ лока.
    */
   isTrial = false,
+  /**
+   * Результат страничного findInProgressAttempt из ТОГО ЖЕ запроса: объект →
+   * резюмим его без повторного SELECT той же строки (страница уже решила mode по
+   * нему — единый снимок согласованнее, чем второе чтение); null → попытки нет,
+   * идём сразу на вставку (гонку параллельных стартов разруливает
+   * onConflictDoNothing в openNewAttempt); undefined → легаси-путь, ищем сами.
+   */
+  resume?: { id: string; mode: AttemptMode; answers: Record<string, string | string[]> } | null,
 ): Promise<StartResult> {
-  const [existing] = await db
-    .select({ id: attempt.id, answers: attempt.answers, mode: attempt.mode })
-    .from(attempt)
-    .where(
-      and(
-        eq(attempt.userId, userId),
-        eq(attempt.contentItemId, contentItemId),
-        eq(attempt.status, "in_progress"),
-      ),
-    )
-    .orderBy(desc(attempt.startedAt))
-    .limit(1);
-  if (existing) {
-    return {
-      attemptId: existing.id,
-      answers: (existing.answers as Record<string, string | string[]>) ?? {},
-      mode: existing.mode,
-    };
+  if (resume) {
+    return { attemptId: resume.id, answers: resume.answers, mode: resume.mode };
+  }
+  if (resume === undefined) {
+    const [existing] = await db
+      .select({ id: attempt.id, answers: attempt.answers, mode: attempt.mode })
+      .from(attempt)
+      .where(
+        and(
+          eq(attempt.userId, userId),
+          eq(attempt.contentItemId, contentItemId),
+          eq(attempt.status, "in_progress"),
+        ),
+      )
+      .orderBy(desc(attempt.startedAt))
+      .limit(1);
+    if (existing) {
+      return {
+        attemptId: existing.id,
+        answers: (existing.answers as Record<string, string | string[]>) ?? {},
+        mode: existing.mode,
+      };
+    }
   }
 
   // Trial-старт: атомарный claim под advisory-xact-lock (снимается на commit/rollback

@@ -181,7 +181,8 @@ export default async function ReadingTestPage({
   // H3-атомарный claim в startAttempt.
   const isTrial = !meetsTier(userTier, test.tier_required as Tier);
   const [{ attemptId, answers: savedAnswers, mode: attemptMode }, annotations, locatableRows] = await Promise.all([
-    startAttempt(user.id, id, mode, isTrial),
+    // `existing` из батча выше — резюм без повторного SELECT той же строки.
+    startAttempt(user.id, id, mode, isTrial, existing),
     // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
     // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
     db
