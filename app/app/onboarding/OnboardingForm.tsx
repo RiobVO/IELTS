@@ -100,6 +100,14 @@ export default function OnboardingForm({
               </select>
             </label>
 
+            <label style={S.field}>
+              <span style={S.label}>
+                When is your exam? <span style={S.opt}>· optional</span>
+              </span>
+              <Input type="date" name="exam_date" />
+              <span style={S.hint}>You can add or change this later.</span>
+            </label>
+
             <div style={{ marginTop: 8 }}>
               <Button type="button" size="lg" fullWidth trailingIcon="arrow-right" onClick={goNext}>
                 Continue
@@ -200,6 +208,7 @@ const S: Record<string, React.CSSProperties> = {
   label: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-secondary)" },
   opt: { fontWeight: 500, color: "var(--text-muted)" },
   select: { height: 50, padding: "0 14px", background: "var(--surface-raised)", border: "2px solid var(--border)", borderRadius: "var(--radius-md)", fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", color: "var(--text-primary)", cursor: "pointer", appearance: "none" },
+  hint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
 
   passage: { fontFamily: "var(--font-reading)", fontSize: "var(--text-base)", lineHeight: "var(--leading-relaxed)", color: "var(--reading-text)", background: "var(--reading-surface)", border: "1px solid var(--reading-rule)", borderRadius: "var(--radius-lg)", padding: "18px 20px", marginBottom: 22, maxHeight: 220, overflowY: "auto" },
   q: { display: "flex", flexDirection: "column", gap: 10 },
