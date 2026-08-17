@@ -2,6 +2,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { answerKey, contentItem, passage, question } from "@/db/schema";
 import { cronSecret, l1FeatureEnabled, publicSiteUrl } from "@/env";
+import { normalizeEvidence } from "@/lib/exam/review-snapshot";
 
 /** Персист режет каждое объяснение до этой длины — страховка от аномального ответа. */
 const MAX_EXPLANATION_CHARS = 600;
@@ -51,9 +52,11 @@ function normalizeAccept(accept: unknown): string[] {
   return Array.isArray(accept) ? (accept as string[]) : [];
 }
 
+// Тот же alias-нормализатор, что review-snapshot.ts: часть импортов кладёт
+// evidence как {part, text}, не {para, snippet} — без него промт лишался бы
+// якоря-цитаты у части тестов, хотя evidence реально был в БД.
 function extractEvidenceSnippet(evidence: unknown): string | null {
-  const snippet = (evidence as { snippet?: unknown } | null)?.snippet;
-  return typeof snippet === "string" && snippet.trim() !== "" ? snippet : null;
+  return normalizeEvidence(evidence)?.snippet ?? null;
 }
 
 // Загружает пассажи + вопросы + ключ (owner-путём — answer_key залочена RLS-ом) для
