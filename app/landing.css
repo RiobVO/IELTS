@@ -104,7 +104,7 @@ h1{font-size:clamp(2.5rem,6vw,4.6rem);margin:24px 0 0}
 .fill{height:100%;border-radius:99px;width:100%;transform:scaleX(0);transform-origin:left;transition:transform 1.1s var(--ease)}
 a.bar{display:block;border-radius:10px;transition:background .18s}
 a.bar:hover{background:var(--vtint)}
-.weakt{font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;background:rgba(240,80,106,.13);color:var(--red-d);padding:3px 8px;border-radius:6px}
+.weakt{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;background:rgba(240,80,106,.13);color:var(--red-d);padding:3px 8px;border-radius:6px}
 .card-foot{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:15px;border-top:1px solid var(--rule);font-size:13.5px;color:var(--ink-2);font-weight:500}
 .card-foot .go{color:var(--v2);font-weight:700;display:inline-flex;align-items:center;gap:6px}.card-foot .go .ico{width:14px;height:14px}
 
@@ -120,17 +120,17 @@ a.bar:hover{background:var(--vtint)}
 .fcard:hover{transform:translateY(-4px);box-shadow:var(--sh);border-color:var(--vb)}
 /* мини-скриншоты продукта — тем же CSS-языком, что hero-карточка; без внешних ассетов */
 .minishot{flex:none;width:104px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:var(--sh-sm)}
-.minishot .mk{display:block;font-size:8.5px;font-weight:800;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.minishot .mv{display:block;font-size:19px;font-weight:800;color:var(--v2);line-height:1.15;margin:3px 0 8px}
+.minishot .mk{display:block;font-size:8.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.minishot .mv{display:block;font-size:19px;font-weight:700;color:var(--v2);line-height:1.15;margin:3px 0 8px}
 .minishot .mv.sm{font-size:12px;color:var(--red-d)}
-.minishot .mv.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.minishot .mv.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:800}
 .minishot .mb{display:block;height:4px;border-radius:3px;background:#EFEDF7;margin-top:5px;overflow:hidden}
 .minishot .mb i{display:block;height:100%;border-radius:3px}
 .minishot .mdots{display:flex;gap:3px;margin-top:2px}
 .minishot .mdots i{width:8px;height:8px;border-radius:3px;background:#E3E1EE}
 .minishot .mdots i.on{background:var(--v)}
 .minishot .mdots i.fl{background:var(--amber)}
-.fcard h3{font-size:18px;margin:0 0 8px;color:var(--ink)}
+.fcard h3{font-size:18px;font-weight:700;margin:0 0 8px;color:var(--ink)}
 .fcard p{font-size:14px;color:var(--ink-2);line-height:1.55;margin:0}
 .fcard .farr{display:flex;justify-content:flex-end;margin-top:16px;color:var(--ink-3);transition:transform .28s var(--ease),color .2s}
 .fcard .farr svg{width:20px;height:20px}
@@ -138,7 +138,7 @@ a.bar:hover{background:var(--vtint)}
 .fcard.lead{grid-column:span 6;flex-direction:row;align-items:center;gap:28px;padding:30px 34px}
 .fcard.lead .minishot{width:120px}
 .fcard.lead>div{flex:1}
-.fcard.lead h3{font-size:22px}
+.fcard.lead h3{font-size:22px;font-weight:700}
 .fcard.lead p{font-size:15px;max-width:54ch;line-height:1.6}
 @media(max-width:920px){.fgrid{grid-template-columns:1fr}.fcard,.fcard.lead{grid-column:auto;flex-direction:row;align-items:flex-start;gap:18px}.fcard.lead .minishot{width:104px}}
 .tmarq{position:relative;overflow:hidden;margin:0 0 46px;-webkit-mask:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);mask:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent)}
@@ -164,7 +164,7 @@ a.bar:hover{background:var(--vtint)}
 .vc{border-radius:24px;padding:32px 30px}
 .vc.them{background:var(--bg-2);border:1px solid var(--line)}
 .vc.us{background:#fff;box-shadow:var(--sh);border:1px solid rgba(129,112,234,.25)}
-.vc .vh{font-weight:800;font-size:18px;margin-bottom:22px;display:flex;align-items:center;gap:10px}
+.vc .vh{font-weight:700;font-size:18px;margin-bottom:22px;display:flex;align-items:center;gap:10px}
 .vc.them .vh{color:var(--ink-3)}
 .vc.us .vh .bd{background:var(--v2);color:#fff;font-size:13px;font-weight:700;padding:3px 11px;border-radius:8px}
 .vr{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--rule);font-size:15.5px}.vr:last-child{border:0}
@@ -175,7 +175,7 @@ a.bar:hover{background:var(--vtint)}
 /* exam-sheet stats: лист Q1–40, волна цветов типов, штамп FREE; каждая ячейка — ссылка в дрилл */
 .sheet{position:relative;background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:var(--sh);max-width:760px;margin:0 auto;padding:28px 32px}
 .sheet-top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
-.sheet-title{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.sheet-title{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
 .sheet-timer{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--v2);background:var(--vsoft);border-radius:8px;padding:4px 10px;font-variant-numeric:tabular-nums}
 .qgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:8px}
 .q{aspect-ratio:1;border-radius:7px;display:grid;place-content:center;transition:transform .4s var(--ease),opacity .35s,background .3s}
@@ -193,7 +193,7 @@ a.bar:hover{background:var(--vtint)}
 .lg{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--ink-2);transition:color .2s}
 .lg:hover{color:var(--v2)}
 .lg i{width:9px;height:9px;border-radius:3px;flex:none}
-.stamp{position:absolute;right:-12px;bottom:-14px;transform:rotate(-9deg);font-weight:800;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-d);border:3px solid var(--green-d);border-radius:10px;padding:7px 14px;background:rgba(255,255,255,.88);box-shadow:var(--sh-sm);transition:transform .35s cubic-bezier(.34,1.3,.5,1),opacity .25s}
+.stamp{position:absolute;right:-12px;bottom:-14px;transform:rotate(-9deg);font-weight:700;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--green-d);border:3px solid var(--green-d);border-radius:10px;padding:7px 14px;background:rgba(255,255,255,.88);box-shadow:var(--sh-sm);transition:transform .35s cubic-bezier(.34,1.3,.5,1),opacity .25s}
 .stamp small{display:block;font-size:8.5px;letter-spacing:.08em;font-weight:700}
 .sheet-stats{display:flex;gap:14px 44px;flex-wrap:wrap;justify-content:center;margin-top:28px}
 .sst{text-align:center}

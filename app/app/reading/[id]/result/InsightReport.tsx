@@ -243,7 +243,7 @@ const AK_CSS = `
 .chip.on .c{color:color-mix(in oklab, #fff 75%, transparent)}
 
 .ak-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-sm)}
-.ak-group{display:flex;align-items:center;gap:10px;padding:11px 18px;font-family:var(--font-ui);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);background:var(--surface-inset);border-top:1px solid var(--border-subtle)}
+.ak-group{display:flex;align-items:center;gap:10px;padding:11px 18px;font-family:var(--font-ui);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);background:var(--surface-inset);border-top:1px solid var(--border-subtle)}
 div[data-n]:first-child .ak-group{border-top:0}
 .ak-group .gc{margin-left:auto;font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:0;text-transform:none}
 
@@ -252,7 +252,7 @@ div[data-n]:first-child > .ak-row{border-top:0}
 .ak-row:hover{background:var(--surface-hover)}
 .ak-row.wrong{background:linear-gradient(90deg,var(--error-subtle),transparent 42%)}
 .ak-row.wrong:hover{background:linear-gradient(90deg,color-mix(in oklab, var(--error-subtle) 80%, var(--error)),transparent 46%)}
-.ak-mark{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:14px;font-weight:800;flex:none}
+.ak-mark{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:14px;font-weight:700;flex:none}
 .ak-mark.ok{background:var(--success-subtle);color:var(--success-text)}
 .ak-mark.no{background:var(--error-subtle);color:var(--error-text)}
 .ak-mid{min-width:0;display:flex;flex-direction:column;gap:5px}

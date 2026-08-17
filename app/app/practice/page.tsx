@@ -462,7 +462,7 @@ const WS: Record<string, React.CSSProperties> = {
   title: {
     fontFamily: "var(--font-ui)",
     fontSize: "var(--text-sm)",
-    fontWeight: 800,
+    fontWeight: 700,
     color: "var(--text-primary)",
   },
   chips: { display: "flex", flexWrap: "wrap", gap: 10 },

@@ -134,12 +134,12 @@ const CSS = `
 const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 900, margin: "0 auto", padding: "24px 16px 56px", display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   head: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  title: { margin: 0, fontSize: 20, fontWeight: 800, color: "var(--text-primary)" },
+  title: { margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-primary)" },
   sub: { margin: "4px 0 0", fontSize: 12.5, color: "var(--text-muted)" },
 
   table: { width: "100%", minWidth: 520, borderCollapse: "collapse" },
   th: { textAlign: "left", padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", borderBottom: "1px solid var(--border-subtle)" },
-  wordCell: { padding: "12px 16px", borderBottom: "1px solid var(--border-subtle)", fontWeight: 800, color: "var(--text-primary)", whiteSpace: "nowrap" },
+  wordCell: { padding: "12px 16px", borderBottom: "1px solid var(--border-subtle)", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap" },
   word: { marginRight: 6 },
   pos: { fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, color: "var(--text-disabled)" },
   defCell: { padding: "12px 16px", borderBottom: "1px solid var(--border-subtle)", fontSize: 13.5, color: "var(--text-secondary)" },

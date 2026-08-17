@@ -798,10 +798,10 @@ const CSS = `
 const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 640, margin: "0 auto", padding: "24px 16px 64px", display: "flex", flexDirection: "column", gap: 18, fontFamily: "var(--font-ui)" },
   back: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "var(--text-muted)", textDecoration: "none" },
-  title: { margin: "10px 0 0", fontSize: 24, fontWeight: 800, color: "var(--text-primary)" },
+  title: { margin: "10px 0 0", fontSize: 24, fontWeight: 700, color: "var(--text-primary)" },
   headStats: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 },
   stat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--surface-inset)", color: "var(--text-secondary)", fontSize: 12.5, fontWeight: 700 },
-  rescueStat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 12.5, fontWeight: 800 },
+  rescueStat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.01em" },
 
   // Mode toggle (Flashcards | Type the answer | Paraphrase | Completion). flexWrap —
   // статичная страховка от переполнения на узких экранах при доп. сегментах (не брейкпоинт).
@@ -819,7 +819,7 @@ const S: Record<string, CSSProperties> = {
 
   capNotice: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 14, padding: "15px 18px", background: "color-mix(in oklab, var(--warn) 7%, var(--surface))", border: "2px solid color-mix(in oklab, var(--warn) 38%, var(--border))", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)" },
   capIcon: { width: 42, height: 42, flex: "none", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", background: "var(--warn-subtle)", color: "var(--warn-text)" },
-  capTitle: { fontSize: 15, fontWeight: 800, color: "var(--text-primary)" },
+  capTitle: { fontSize: 15, fontWeight: 700, color: "var(--text-primary)" },
   capBody: { fontSize: 13, color: "var(--text-muted)", marginTop: 3, lineHeight: 1.5 },
 
   wordRow: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap" },
@@ -827,7 +827,7 @@ const S: Record<string, CSSProperties> = {
   ttsBtn: { width: 44, height: 44, borderRadius: "var(--radius-full)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", display: "grid", placeItems: "center", padding: 0, cursor: "pointer", transition: "var(--transition-colors)" },
   ipa: { fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--text-muted)" },
   pos: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-link)", background: "var(--brand-subtle)", padding: "3px 10px", borderRadius: "var(--radius-full)" },
-  flipBtn: { marginTop: 14, minHeight: 44, appearance: "none", cursor: "pointer", padding: "10px 20px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 800 },
+  flipBtn: { marginTop: 14, minHeight: 44, appearance: "none", cursor: "pointer", padding: "10px 20px", borderRadius: "var(--radius-md)", border: "2px solid var(--brand-border)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, letterSpacing: "0.01em" },
   definition: { fontSize: 17, lineHeight: 1.5, color: "var(--text-primary)", fontWeight: 600 },
   example: { margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--text-muted)" },
   translation: { fontSize: 15, fontWeight: 700, color: "var(--text-link)" },
@@ -865,23 +865,23 @@ const S: Record<string, CSSProperties> = {
   paraFace: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "safe center", textAlign: "center", gap: 14, padding: "26px 22px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)", overflowY: "auto" },
   paraOverline: { fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-link)" },
   paraPrompt: { fontSize: 17, lineHeight: 1.5, fontWeight: 600, color: "var(--text-primary)", maxWidth: "40ch" },
-  paraSyn: { fontStyle: "normal", fontWeight: 800, color: "var(--text-link)" },
+  paraSyn: { fontStyle: "normal", fontWeight: 700, color: "var(--text-link)" },
   optGroup: { display: "flex", flexDirection: "column", gap: 9, width: "100%", maxWidth: 400 },
-  optBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "12px 16px", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", fontFamily: "var(--font-ui)", fontSize: 14.5, fontWeight: 700, color: "var(--text-primary)", cursor: "pointer", boxShadow: "var(--shadow-solid)", transition: "var(--transition-colors)" },
+  optBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "12px 16px", borderRadius: "var(--radius-md)", border: "2px solid var(--border)", background: "var(--surface)", fontFamily: "var(--font-ui)", fontSize: 14.5, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-primary)", cursor: "pointer", boxShadow: "var(--shadow-solid)", transition: "var(--transition-colors)" },
 
   correctBox: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: "var(--radius-xl)", border: "2px solid var(--success-subtle)", background: "var(--success-subtle)" },
-  correctWord: { fontSize: 24, fontWeight: 800, color: "var(--success-text)" },
+  correctWord: { fontSize: 24, fontWeight: 700, color: "var(--success-text)" },
 
   wrongBox: { display: "flex", flexDirection: "column", gap: 14, padding: "22px 20px", borderRadius: "var(--radius-xl)", border: "2px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
   wrongRow: { display: "flex", alignItems: "baseline", gap: 8, fontSize: 15 },
   wrongLabel: { flex: "none", minWidth: "5.5em", fontWeight: 700, color: "var(--text-muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" },
   wrongTyped: { textDecoration: "line-through", color: "var(--text-disabled)" },
-  wrongCorrect: { fontWeight: 800, color: "var(--success-text)" },
+  wrongCorrect: { fontWeight: 700, color: "var(--success-text)" },
   wrongFull: { display: "flex", flexDirection: "column", gap: 8, alignItems: "center", textAlign: "center", paddingTop: 14, borderTop: "1px solid var(--border-subtle)" },
 
   summary: { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10, padding: "40px 24px", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-solid)" },
   summaryIcon: { display: "grid", placeItems: "center", width: 56, height: 56, borderRadius: "50%", background: "var(--success-subtle)", color: "var(--success-text)", marginBottom: 4 },
-  summaryTitle: { margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-primary)" },
+  summaryTitle: { margin: 0, fontSize: 22, fontWeight: 700, color: "var(--text-primary)" },
   summaryBody: { margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--text-muted)", maxWidth: "42ch" },
   summaryStats: { display: "flex", gap: 28, marginTop: 6 },
   summaryStat: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2 },

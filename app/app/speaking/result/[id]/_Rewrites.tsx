@@ -72,7 +72,7 @@ const CSS = `
 
 const S: Record<string, CSSProperties> = {
   head: { display: "flex", alignItems: "center", gap: 10, marginBottom: 4 },
-  h2: { margin: 0, fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
+  h2: { margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
   pill: { fontSize: 11, fontWeight: 700, color: "var(--success-text)", background: "var(--success-subtle)", padding: "2px 9px", borderRadius: "var(--radius-full)" },
   help: { margin: "0 0 14px", fontSize: 13.5, color: "var(--text-muted)" },
 

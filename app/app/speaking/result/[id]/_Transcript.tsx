@@ -403,7 +403,7 @@ const CSS = `
 
 const S: Record<string, CSSProperties> = {
   head: { display: "flex", alignItems: "center", gap: 10, marginBottom: 4 },
-  h2: { margin: 0, fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
+  h2: { margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
   annotatedPill: { fontSize: 11, fontWeight: 700, color: "var(--text-link)", background: "var(--brand-subtle)", padding: "2px 9px", borderRadius: "var(--radius-full)" },
   wordCount: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" },
   help: { margin: "0 0 14px", fontSize: 13.5, color: "var(--text-muted)" },
@@ -428,7 +428,7 @@ const S: Record<string, CSSProperties> = {
   noteCard: { display: "flex", flexDirection: "column", gap: 5, textAlign: "left", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "12px 14px", cursor: "pointer", fontFamily: "var(--font-ui)", transition: "background-color .15s ease" },
   noteTop: { display: "flex", alignItems: "center", gap: 8 },
   noteNum: { flex: "none", minWidth: 18, height: 18, padding: "0 4px", borderRadius: 6, display: "grid", placeItems: "center", color: "white", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700 },
-  noteType: { fontSize: 10, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase" },
+  noteType: { fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" },
   // Ellipsis the quote so a long line can't distend the card column (Writing's cardQuote).
   noteQuote: { fontFamily: "var(--font-reading)", fontStyle: "italic", fontSize: 13.5, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   noteComment: { fontSize: 13.5, lineHeight: 1.5, color: "var(--text-primary)" },
@@ -451,6 +451,6 @@ const S: Record<string, CSSProperties> = {
 
   removedCard: { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 28 },
   removedCircle: { display: "grid", placeItems: "center", width: 56, height: 56, borderRadius: "var(--radius-full)", background: "var(--error-subtle)" },
-  removedTitle: { margin: 0, fontSize: 18, fontWeight: 800, color: "var(--text-primary)" },
+  removedTitle: { margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" },
   removedBody: { margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--text-secondary)", maxWidth: "42ch" },
 };

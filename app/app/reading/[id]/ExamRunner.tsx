@@ -1157,7 +1157,7 @@ const badge = (mock: boolean): React.CSSProperties => ({
   color: mock ? "var(--brand)" : "var(--text-secondary)",
   fontFamily: "var(--font-ui)",
   fontSize: "var(--text-2xs)",
-  fontWeight: 800,
+  fontWeight: 700,
   letterSpacing: "0.06em",
   textTransform: "uppercase",
 });
@@ -1950,15 +1950,15 @@ const READING_CSS = `
 .exam-check-btn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
 .exam-check-btn:hover:not(:disabled){background:var(--surface-hover);color:var(--text-primary)}
 .exam-check-btn:disabled{opacity:.55;cursor:default}
-.exam-verdict{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:var(--text-sm);font-weight:800}
+.exam-verdict{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700}
 .exam-verdict.ok{color:var(--success-text)}
 .exam-verdict.no{color:var(--error-text)}
 .exam-reveal-link{display:inline-flex;align-items:center;background:none;border:none;padding:0;color:var(--brand);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .exam-reveal-link:hover:not(:disabled){color:var(--brand-hover)}
 .exam-reveal-link:disabled{opacity:.55;cursor:default}
 .exam-reveal{flex-basis:100%;margin-top:2px;padding:12px 14px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-hover);animation:exam-reveal-in .28s cubic-bezier(.16,1,.3,1) both}
-.exam-reveal-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
-.exam-reveal-answer{margin-top:3px;font-family:var(--font-ui);font-size:var(--text-base);font-weight:800;color:var(--text-primary)}
+.exam-reveal-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.exam-reveal-answer{margin-top:3px;font-family:var(--font-ui);font-size:var(--text-base);font-weight:700;color:var(--text-primary)}
 .exam-reveal-why{margin:9px 0 0;font-family:var(--font-ui);font-size:var(--text-sm);line-height:1.6;color:var(--text-secondary)}
 .exam-reveal-ev{display:flex;gap:7px;margin-top:9px;font-family:var(--font-ui);font-size:var(--text-sm);line-height:1.55;color:var(--text-secondary)}
 .exam-reveal-ev-para{margin-top:6px;font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;color:var(--text-muted)}
@@ -1994,7 +1994,7 @@ const READING_CSS = `
 /* P10 confidence — метка уверенности (practice-only), своя строка под check
    (flex-basis:100% внутри .exam-check). Токены; тап-таргеты в @media coarse. */
 .exam-conf{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:2px}
-.exam-conf-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.exam-conf-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
 .exam-conf-opt{display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);font-family:var(--font-ui);font-size:var(--text-xs);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
 .exam-conf-opt:hover{background:var(--surface-hover);color:var(--text-primary)}
 .exam-conf-opt[data-active][data-level="low"]{background:var(--warn-subtle);border-color:var(--warn);color:var(--warn-text)}
@@ -2021,7 +2021,7 @@ const READING_CSS = `
 .lab-btn{display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
 .lab-btn:hover{background:var(--surface-hover);color:var(--text-primary)}
 .lab-sep{width:1px;height:20px;background:var(--border);margin:0 3px}
-.lab-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.lab-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
 .lab-rate{display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;padding:0 10px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);font-family:var(--font-mono);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
 .lab-rate:hover{background:var(--surface-hover);color:var(--text-primary)}
 .lab-rate[data-active]{background:var(--brand);border-color:var(--brand);color:var(--text-on-brand)}
@@ -2031,7 +2031,7 @@ const READING_CSS = `
 .exam-reader-backdrop{position:fixed;inset:0;z-index:39;border:none;background:transparent;cursor:default;padding:0}
 .exam-reader-panel{position:fixed;top:60px;right:12px;z-index:40;width:min(280px,calc(100vw - 24px));display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-lg);animation:exam-reveal-in .2s cubic-bezier(.16,1,.3,1) both}
 .exam-reader-row{display:flex;flex-direction:column;gap:7px}
-.exam-reader-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.exam-reader-label{font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
 .exam-reader-seg{display:flex;gap:6px}
 .exam-reader-opt{flex:1;min-height:38px;padding:0 10px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface-raised);color:var(--text-secondary);font-family:var(--font-ui);font-size:var(--text-sm);font-weight:700;cursor:pointer;transition:var(--transition-colors)}
 .exam-reader-opt:hover{background:var(--surface-hover);color:var(--text-primary)}
@@ -2176,7 +2176,7 @@ const S: Record<string, React.CSSProperties> = {
   top: { display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)", background: "var(--bg-raised)", flex: "none" },
   tabs: { flex: "none", gap: 6, padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--bg-raised)" },
   exit: { flex: "none", width: 38, height: 38, borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", color: "var(--text-secondary)", textDecoration: "none" },
-  topTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 800, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  topTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   topMeta: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)" },
 
   audioBar: { padding: "16px 24px", background: "var(--bg-raised)", borderBottom: "1px solid var(--border)", flex: "none" },

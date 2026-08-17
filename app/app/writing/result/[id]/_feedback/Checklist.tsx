@@ -37,7 +37,7 @@ export function Checklist({ items }: { items: string[] }) {
 }
 
 const S: Record<string, CSSProperties> = {
-  h2: { margin: "0 0 12px", fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
+  h2: { margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: "var(--text-primary)" },
   card: { display: "flex", flexDirection: "column", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 8 },
   item: { display: "flex", alignItems: "center", gap: 12, padding: "12px 12px", border: "none", background: "transparent", textAlign: "left", cursor: "pointer", borderRadius: "var(--radius-md)", fontFamily: "var(--font-ui)" },
   box: { flex: "none", width: 24, height: 24, borderRadius: 7, border: "2px solid var(--border-strong)", display: "grid", placeItems: "center", transition: "var(--transition-colors)" },

@@ -81,7 +81,7 @@ const S: Record<string, React.CSSProperties> = {
   invite: { position: "relative", overflow: "hidden", background: "linear-gradient(160deg, var(--surface-premium), var(--surface-premium-deep))", borderRadius: "var(--radius-xl)", color: "var(--surface-premium-ink)" },
   glow: { position: "absolute", top: -90, right: -70, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle, color-mix(in oklab, var(--brand) 50%, transparent), transparent 64%)" },
   titleRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8 },
-  title: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-lg)" },
+  title: { fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-lg)" },
   text: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.68)", margin: "0 0 4px", maxWidth: 460 },
   stats: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "rgba(255,255,255,0.8)" },
 };

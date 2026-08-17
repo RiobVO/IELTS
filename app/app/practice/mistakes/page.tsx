@@ -212,7 +212,7 @@ const S: Record<string, React.CSSProperties> = {
   sectionH: {
     fontFamily: "var(--font-ui)",
     fontSize: "var(--text-sm)",
-    fontWeight: 800,
+    fontWeight: 700,
     color: "var(--text-secondary)",
     letterSpacing: "0.04em",
     textTransform: "uppercase",
@@ -251,7 +251,7 @@ const S: Record<string, React.CSSProperties> = {
     color: "var(--brand)",
     fontFamily: "var(--font-ui)",
     fontSize: "var(--text-2xs)",
-    fontWeight: 800,
+    fontWeight: 700,
     letterSpacing: "0.06em",
     textTransform: "uppercase",
   },
@@ -287,6 +287,6 @@ const S: Record<string, React.CSSProperties> = {
     borderRadius: "var(--radius-lg)",
     background: "var(--surface-inset, transparent)",
   },
-  emptyTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-md)", fontWeight: 800, color: "var(--text-primary)" },
+  emptyTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-md)", fontWeight: 700, color: "var(--text-primary)" },
   emptyText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", maxWidth: 420, lineHeight: 1.55 },
 };

@@ -490,14 +490,14 @@ const S: Record<string, React.CSSProperties> = {
   heroRing: { position: "relative", width: 96, height: 96, flex: "none", zIndex: 1 },
   heroMedal: { position: "absolute", inset: 11, borderRadius: "50%", display: "grid", placeItems: "center", background: "rgba(255,255,255,0.08)", color: "var(--surface-inverse-ink)" },
   heroEyebrow: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", color: "var(--violet-300)", fontWeight: 600 },
-  heroTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, margin: "7px 0 4px" },
+  heroTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 700, margin: "7px 0 4px" },
   heroDesc: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.8)", lineHeight: 1.5 },
   heroB: { color: "var(--surface-inverse-ink)", fontFamily: "var(--font-mono)" },
 
   track: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "18px 22px", marginBottom: 14, boxShadow: "var(--shadow-sm)" },
   trackHead: { display: "flex", alignItems: "center", gap: 10, marginBottom: 20 },
   trackIc: { width: 30, height: 30, flex: "none", borderRadius: 9, display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)" },
-  trackName: { fontFamily: "var(--font-ui)", fontWeight: 800, fontSize: "var(--text-base)", color: "var(--text-primary)" },
+  trackName: { fontFamily: "var(--font-ui)", fontWeight: 700, fontSize: "var(--text-base)", color: "var(--text-primary)" },
   trackMeta: { marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-secondary)" },
 
   // Рельс соединяет ЦЕНТРЫ медалей: 3 ноды по 33.333% → центры на 1/6 и 5/6.
@@ -536,7 +536,7 @@ const S: Record<string, React.CSSProperties> = {
   streakHelpS: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "rgba(255,255,255,0.72)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "var(--tracking-caps)" },
   streakHelpP: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "rgba(255,255,255,0.82)", margin: "8px 0 0", lineHeight: 1.5 },
 
-  heatTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--text-primary)", margin: "0 0 3px" },
+  heatTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 3px" },
   heatSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-secondary)", margin: "0 0 14px" },
   heatGrid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 },
   heatLegend: { display: "flex", alignItems: "center", gap: 4, marginTop: 10, fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-secondary)" },
@@ -548,7 +548,7 @@ const S: Record<string, React.CSSProperties> = {
   goalPips: { display: "flex", gap: 6, marginBottom: 12 },
   goalPip: { flex: 1, height: 8, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", boxShadow: "inset 0 0 0 1px var(--border)" },
   goalPipDone: { background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", boxShadow: "0 0 8px -2px color-mix(in oklab, var(--brand) 70%, transparent)" },
-  goalH: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 800, color: "var(--text-primary)", margin: 0 },
+  goalH: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-primary)", margin: 0 },
   goalP: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", margin: 0, lineHeight: 1.45 },
   goalDef: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "8px 0 0", lineHeight: 1.4 },
 

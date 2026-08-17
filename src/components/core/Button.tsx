@@ -70,7 +70,7 @@ export function Button({
     height: s.height, minWidth: s.height, padding: s.padding, width: fullWidth ? "100%" : undefined,
     marginBottom: edge && !pressed ? edge : 0,
     fontFamily: "var(--font-ui)", fontSize: s.font, fontWeight: "var(--weight-extrabold)",
-    letterSpacing: "var(--tracking-snug)", lineHeight: 1,
+    letterSpacing: "0.01em", lineHeight: 1,
     whiteSpace: "nowrap",
     color: cfg.fg, background: hover && !isOff ? cfg.hover : cfg.bg,
     border: "none", borderRadius: s.radius, cursor: isOff ? "not-allowed" : "pointer",
