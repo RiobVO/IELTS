@@ -297,6 +297,11 @@ export default async function PracticePage({
   // — not an official overall band (that needs all four skills). null = no tests yet.
   const bestOverall = Math.max(bestBand.reading, bestBand.listening);
 
+  // Empty-catalog funnel CTA (BRIEF §12.3 content-wipe) — server-only env, never
+  // NEXT_PUBLIC_*. Absent/blank => prop is null, PracticeCatalog skips the CTA.
+  const telegramChannelUrlRaw = process.env.TELEGRAM_CHANNEL_URL?.trim();
+  const telegramChannelUrl = telegramChannelUrlRaw ? telegramChannelUrlRaw : null;
+
   return (
     <AppShell active="practice">
       <PracticeCatalog
@@ -315,6 +320,7 @@ export default async function PracticePage({
         speakingEnabled={speakingFeatureEnabled()}
         initialFilter={initialFilter}
         notice={notice}
+        telegramChannelUrl={telegramChannelUrl}
       />
       {/* Weak spots (OwnC) — над ссылкой mistakes: чипы слабейших типов, тап ведёт
           в существующий фильтр каталога (?q_type=). Нет данных выше порога → секция
@@ -411,13 +417,27 @@ function buildHero({
 
   // 3) First — новичок без попыток: ведём в первый доступный Reading-тест.
   const first = readingTests.find((t) => meetsTier(userTier, t.tier_required)) ?? readingTests[0];
+  if (!first) {
+    // Каталог пуст (контент-вайп, §12.3) — раньше CTA слал на /app/reading, который
+    // сам редиректит обратно на /app/practice (петля). Ведём на живую фичу вместо тупика.
+    return {
+      kind: "first",
+      eyebrow: "Library refreshing",
+      title: "New tests are on the way",
+      sub: "The Reading and Listening library is being refreshed — meanwhile, keep building your vocabulary.",
+      cta: "Practice vocabulary",
+      href: "/app/vocabulary",
+      progress: null,
+      meta: null,
+    };
+  }
   return {
     kind: "first",
     eyebrow: "Start here",
     title: "Take your first test",
     sub: "Take a Reading test to surface your weakest question type — then we point your practice straight at it.",
     cta: "Browse Reading",
-    href: first ? (first.has_runner ? `/app/exam/${first.id}` : `/app/reading/${first.id}`) : "/app/reading",
+    href: first.has_runner ? `/app/exam/${first.id}` : `/app/reading/${first.id}`,
     progress: null,
     meta: null,
   };

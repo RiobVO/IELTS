@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { profile } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { captureServer } from "@/lib/analytics/server";
 
 /**
  * Inline re-target from the Practice hub (`profile.target_band`). SERVER-ONLY via
@@ -31,4 +32,15 @@ export async function setTargetBand(band: string): Promise<void> {
     .where(eq(profile.id, user.id));
 
   revalidatePath("/app/practice");
+}
+
+/**
+ * Waitlist для пустого каталога (контент-вайп, BRIEF §12.3): пока библиотека
+ * пополняется, собираем спрос вместо тупика. Никакой таблицы — только
+ * PostHog-телеметрия (как joinPaymentWaitlist в app/upgrade/actions.ts);
+ * best-effort — вызывающая сторона глушит ошибку, состояние кнопки не откатывает.
+ */
+export async function joinContentWaitlist(): Promise<void> {
+  const user = await requireUser();
+  await captureServer("content_waitlist", user.id, { source: "catalog" });
 }
