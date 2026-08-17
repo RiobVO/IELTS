@@ -466,6 +466,7 @@ Claude Design; (3) выдать готовый ПРОМТ со всеми реш
 | 4 | ✅ Лимиты Basic — механизм готов целиком: `BASIC_DAILY_LIMIT = 25` (`src/lib/tiers.ts`) + гейт по submitted-мокам за день (`src/lib/exam/access.ts` → redirect `?limit=1`). 25 выставлено осознанно свободным до монетизации; «затянуть» при запуске платных тиров = правка одной константы | §4.8 | done (ручка) | продуктовое решение о значении — вместе с мерч-ключами (п.1) |
 | 5 | i18n RU/UZ для UI-chrome | §11 | later | код (L, отдельная волна) |
 | 6 | A11y-прогон WCAG 2.1 AA в реальном браузере (клавиатура/скринридер/контраст) | §7–8 | later | код |
+| 7 | ✅ Кастомный домен — закрыт 2026-07-09: `bando.study` подключён (Porkbun DNS, Vercel apex+www с 308-редиректом), `NEXT_PUBLIC_SITE_URL` обновлён и redeploy сделан, Supabase Auth URL Configuration + Google OAuth Authorized origins на новый домен, Brevo sender/DKIM/DMARC и PostHog не требовали изменений. Старый `ielts-rho-seven.vercel.app` оставлен как fallback-алиас (307 → bando.study). Верифицировано: TLS/headers/robots/sitemap/health curl'ом + вручную signup/reset-письма и вход | — | done | нет |
 
 ### 12.2 Новые фичи (в брифе не было — добавлены в скоуп)
 
