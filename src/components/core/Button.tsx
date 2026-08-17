@@ -83,7 +83,7 @@ export function Button({
   const content = (
     <>
       {loading ? <Spinner size={s.icon} /> : (icon && <Icon name={icon} size={s.icon} strokeWidth={2.5} />)}
-      {children && <span style={{ overflowX: "hidden", overflowY: "visible", textOverflow: "ellipsis", minWidth: 0 }}>{children}</span>}
+      {children && <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, lineHeight: "normal" }}>{children}</span>}
       {!loading && trailingIcon && <Icon name={trailingIcon} size={s.icon} strokeWidth={2.5} />}
     </>
   );
