@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { daysUntilExam, examCountdownStatus, getExamCountdown, validExamDate } from "./exam-countdown";
+import {
+  daysUntilExam,
+  examCountdownStatus,
+  getExamCountdown,
+  isInCurrentTzWeek,
+  isSameTzDay,
+  validExamDate,
+} from "./exam-countdown";
 
 describe("daysUntilExam — базовые смещения (UTC)", () => {
   it("сегодня → 0", () => {
@@ -101,5 +108,62 @@ describe("getExamCountdown", () => {
 
   it("невалидный вход → null", () => {
     expect(getExamCountdown("garbage", new Date(), "UTC")).toBeNull();
+  });
+});
+
+describe("isSameTzDay", () => {
+  const now = new Date("2026-07-10T20:00:00.000Z"); // UTC: 10-е; Asia/Tashkent (+5): 11-е
+
+  it("тот же инстант, UTC → тот же день → true", () => {
+    expect(isSameTzDay(now, now, "UTC")).toBe(true);
+  });
+
+  it("UTC-полночь того же календарного дня → true", () => {
+    expect(isSameTzDay(new Date("2026-07-10T00:00:00.000Z"), now, "UTC")).toBe(true);
+  });
+
+  it("Asia/Tashkent уже встретил следующий день → в UTC это НЕ тот же день", () => {
+    expect(isSameTzDay(new Date("2026-07-10T00:00:00.000Z"), now, "Asia/Tashkent")).toBe(false);
+  });
+
+  it("сам с собой в Asia/Tashkent → true", () => {
+    expect(isSameTzDay(now, now, "Asia/Tashkent")).toBe(true);
+  });
+
+  it("неизвестная IANA-таймзона → false (консервативный дефолт)", () => {
+    expect(isSameTzDay(now, now, "Not/AZone")).toBe(false);
+  });
+});
+
+describe("isInCurrentTzWeek — граница недели (понедельник-старт)", () => {
+  // 2026-07-13 = понедельник (UTC). "Сейчас" — среда той же недели.
+  const wednesday = new Date("2026-07-15T12:00:00.000Z");
+
+  it("тот же понедельник (00:00 UTC) → true", () => {
+    expect(isInCurrentTzWeek(new Date("2026-07-13T00:00:00.000Z"), wednesday, "UTC")).toBe(true);
+  });
+
+  it("воскресенье ТОЙ ЖЕ недели (23:59 UTC 19-го) → true", () => {
+    expect(isInCurrentTzWeek(new Date("2026-07-19T23:59:00.000Z"), wednesday, "UTC")).toBe(true);
+  });
+
+  it("предыдущее воскресенье (до понедельника) → false", () => {
+    expect(isInCurrentTzWeek(new Date("2026-07-12T23:59:00.000Z"), wednesday, "UTC")).toBe(false);
+  });
+
+  it("следующий понедельник → false (уже другая неделя)", () => {
+    expect(isInCurrentTzWeek(new Date("2026-07-20T00:00:00.000Z"), wednesday, "UTC")).toBe(false);
+  });
+
+  it("Asia/Tashkent сдвигает границу: инстант, что в UTC ещё воскресенье, в +5 уже понедельник следующей недели", () => {
+    // 2026-07-19T20:00:00Z = UTC воскресенье 19-е (текущая неделя), но в
+    // Asia/Tashkent (+5) уже 2026-07-20 01:00 — понедельник СЛЕДУЮЩЕЙ недели.
+    const instant = new Date("2026-07-19T20:00:00.000Z");
+    expect(isInCurrentTzWeek(instant, wednesday, "UTC")).toBe(true);
+    expect(isInCurrentTzWeek(instant, wednesday, "Asia/Tashkent")).toBe(false);
+  });
+
+  it("неизвестная IANA-таймзона → false", () => {
+    expect(isInCurrentTzWeek(wednesday, wednesday, "Not/AZone")).toBe(false);
   });
 });

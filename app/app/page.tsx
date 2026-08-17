@@ -11,7 +11,8 @@ import { db } from "@/db";
 import { attempt, contentItem, leaderboardEntry } from "@/db/schema";
 import { categoryLabel, qtypeLabel, LISTENING_CATEGORIES } from "@/lib/labels";
 import { computeBandPlan, type BandPlan, type BandPlanWeakType } from "@/lib/progress/band-plan";
-import { getExamCountdown, type ExamCountdown } from "@/lib/progress/exam-countdown";
+import { getExamCountdown, isInCurrentTzWeek, isSameTzDay, type ExamCountdown } from "@/lib/progress/exam-countdown";
+import { computeDailyPlan, getCatalogAvailability, getMistakesDueSummary, type DailyPlan, type DailyPlanItem } from "@/lib/progress/daily-plan";
 import { AppShell } from "./_AppShell";
 import { ExamDateEditor } from "./ExamDateEditor";
 import { Button } from "@/components/core/Button";
@@ -99,7 +100,7 @@ export default async function Dashboard() {
 
   // Профиль / список попыток / глобальный ранг независимы → один Promise.all
   // (без водопада). Ранг читается owner-путём, но строго по своему user_id.
-  const [profile, attemptsRes, rankRows, leagueTotal, inProgressRows, vocabSummary] = await Promise.all([
+  const [profile, attemptsRes, rankRows, leagueTotal, inProgressRows, vocabSummary, mistakesSummary, catalogAvailability] = await Promise.all([
     getProfile(),
     supabase
       .from("attempt")
@@ -141,6 +142,10 @@ export default async function Dashboard() {
     // Слим-сводка Vocabulary (due/streak/goal) для правого рейла — независима
     // от остальных данных дашборда, читается в той же волне.
     getVocabDueSummary(user.id),
+    // Today's plan (BRIEF §12): due-ошибки одним FILTER-агрегатом (не 300-скан
+    // getOpenMistakes) + доступность каталога (5-мин data-cache).
+    getMistakesDueSummary(user.id),
+    getCatalogAvailability(),
     // Пре-варм данных шапки конкурентно с телом дашборда (cache()'d; AppShell
     // переиспользует — убирает trailing notification-хоп).
     getHeaderData(),
@@ -166,7 +171,10 @@ export default async function Dashboard() {
   const examDate = (profile?.exam_date as string | null) ?? null;
   // profile.timezone defaults to "UTC" at the DB level (schema.ts) — the ?? here
   // is just a defensive fallback for a stale/null-select edge, not the real default.
-  const examCountdown = examDate ? getExamCountdown(examDate, new Date(), (profile?.timezone as string | null) ?? "UTC") : null;
+  // Reused below for Today's plan tz-helpers (isSameTzDay/isInCurrentTzWeek) — one
+  // "today" definition for the whole dashboard, not a per-card recompute.
+  const tz = (profile?.timezone as string | null) ?? "UTC";
+  const examCountdown = examDate ? getExamCountdown(examDate, new Date(), tz) : null;
   const globalRank = rankRows[0]?.rank ?? null;
   // Ранг читается свежим запросом, знаменатель — из 5-минутного data-cache: у
   // нового участника лиги кэш может отставать («#N+1 of N»). Кламп снизу по
@@ -224,6 +232,34 @@ export default async function Dashboard() {
   const weak = bandPlan.weakTypes;
   const weakest = weak[0] ?? null;
   const hasAttempts = attempts.length > 0;
+
+  // Today's plan (BRIEF §12) — чистое ядро computeDailyPlan; drillDoneToday/
+  // mockDoneThisWeek читаем из уже загруженных attempts (без нового запроса),
+  // «сегодня»/«эта неделя» — той же таймзоной юзера, что exam-countdown.
+  // Известное ограничение: окно = последние 20 попыток — недельный mock «забудется»,
+  // если после него сдано 20+ работ за ту же неделю. Осознанно: экстремальный кейс
+  // не стоит отдельного запроса на каждый рендер дашборда.
+  const isFullMockCategory = (cat: string) => cat === "full_reading" || cat === "full_listening";
+  const drillDoneToday = attempts.some(
+    (a) => a.submitted_at && isSameTzDay(new Date(a.submitted_at), now, tz),
+  );
+  const mockDoneThisWeek = attempts.some(
+    (a) =>
+      a.submitted_at &&
+      isFullMockCategory(a.content_item?.category ?? "") &&
+      isInCurrentTzWeek(new Date(a.submitted_at), now, tz),
+  );
+  const dailyPlan = computeDailyPlan({
+    daysUntilExam: examCountdown?.days ?? null,
+    drill: bandPlan.drill,
+    secondDrill: weak[1] ?? null,
+    mistakes: mistakesSummary,
+    vocab: { dueToday: vocabSummary.dueToday, reviewedToday: vocabSummary.reviewedToday, goal: vocabSummary.goal },
+    drillDoneToday,
+    mockDoneThisWeek,
+    hasAttempts,
+    catalog: catalogAvailability,
+  });
 
   // Доля верных по ВСЕМ типам (не только top-5 weak-список) — для тёплой строки
   // нормализации, когда юзер реально буксует. Бренд candid, но не карающий: не
@@ -297,6 +333,9 @@ export default async function Dashboard() {
         <FocusCard weakest={weakest} weakCount={weak.length} seenTests={seenTests} bandPill={bandPill} drillMin={drillMin} hasAttempts={attempts.length > 0} />
 
         <div className="dash-col-main">
+          {/* Today's plan — дневной чек-лист, первым в колонке (BRIEF §12) */}
+          <TodayPlanCard plan={dailyPlan} catalogEmpty={!catalogAvailability.hasPublishedTests} />
+
           {/* Next up — сразу под фокусом (ядро экрана) */}
           {weak.length > 1 && (
             <div className="dash-sect" style={S.card}>
@@ -759,6 +798,65 @@ function ExamCountdownCard({ examDate, countdown }: { examDate: string | null; c
   );
 }
 
+/* Today's plan (BRIEF §12) — дневной чек-лист, первая карточка main-колонки.
+   Список считает чистое ядро computeDailyPlan (src/lib/progress/daily-plan.ts);
+   здесь только рендер + мета-строка (дни до экзамена / позвать задать дату). */
+function TodayPlanCard({ plan, catalogEmpty }: { plan: DailyPlan; catalogEmpty: boolean }) {
+  const meta = !plan.examDateSet
+    ? "Set your exam date"
+    : plan.examPassed
+      ? "Update your exam date"
+      : plan.daysUntilExam === 0
+        ? "Exam today"
+        : `Exam in ${plan.daysUntilExam} day${plan.daysUntilExam === 1 ? "" : "s"}`;
+
+  return (
+    <div className="dash-sect" style={S.card}>
+      <div style={S.todayHead}>
+        <h2 style={S.sectionTitle}>Today&apos;s plan</h2>
+        <div style={S.todayHeadMeta}>
+          <span style={S.todayMeta}>{meta}</span>
+          <span style={S.todayCount}>{plan.doneCount}/{plan.totalCount}</span>
+        </div>
+      </div>
+      {plan.allDone && (
+        <div style={S.todayAllDone}>
+          <Icon name="circle-check" size={16} strokeWidth={2.4} /> All done for today — see you tomorrow
+        </div>
+      )}
+      {plan.items.map((item) => (
+        <TodayPlanRow key={item.id} item={item} />
+      ))}
+      {catalogEmpty && <div style={S.todayEmptyNote}>New practice tests coming soon</div>}
+    </div>
+  );
+}
+
+function TodayPlanRow({ item }: { item: DailyPlanItem }) {
+  // sublabel сейчас всегда null (ядро его не заполняет) — прогресс-пара
+  // (target/progress) несёт vocab; остальные пункты показывают только label.
+  const sub = item.target != null ? `${item.progress ?? 0}/${item.target}` : item.sublabel;
+  return (
+    <Link
+      className="dash-today-row"
+      href={item.href}
+      style={S.todayRow}
+      aria-label={item.done ? `${item.label}, done` : item.label}
+    >
+      {item.done ? (
+        <Icon name="circle-check" size={20} strokeWidth={2.2} style={{ color: "var(--success-text)", flex: "none" }} />
+      ) : (
+        <span aria-hidden="true" style={S.todayRowRing} />
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...S.todayRowLabel, ...(item.done ? S.todayRowLabelDone : null) }}>{item.label}</div>
+        {sub && <div style={S.todayRowSub}>{sub}</div>}
+      </div>
+      <Icon name="chevron-right" size={16} strokeWidth={2.2} style={{ color: "var(--text-disabled)", flex: "none" }} />
+    </Link>
+  );
+}
+
 /* Plan to target band (W2-5, BRIEF §12.3 шаг 2) — компакт-ридаут дистанции до
    target + рекомендованный drill недели по слабейшему типу. Общее ядро с weekly
    digest (computeBandPlan, src/lib/progress/band-plan.ts) — тот же дрилл юзер
@@ -881,15 +979,16 @@ const DASH_CSS = `
 .dash-sect-tight{padding:18px 16px 8px}
 .dash-band{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
 .dash-band-num{font-size:50px}
-/* Loss / recent — это ссылки: явный hover-фидбэк подтверждает кликабельность. */
-.dash-loss,.dash-trow{transition:background-color var(--duration-fast) var(--ease-standard)}
+/* Loss / recent / today's plan rows — это ссылки: явный hover-фидбэк подтверждает кликабельность. */
+.dash-loss,.dash-trow,.dash-today-row{transition:background-color var(--duration-fast) var(--ease-standard)}
 .dash-loss:hover{background:var(--surface-inset)}
 .dash-trow:hover{background:var(--surface-inset)}
+.dash-today-row:hover{background:var(--surface-inset)}
 .dash-more summary{list-style:none;cursor:pointer}
 .dash-more summary::-webkit-details-marker{display:none}
 .dash-more summary svg{transition:transform .2s ease}
 .dash-more[open] summary svg{transform:rotate(180deg)}
-@media (prefers-reduced-motion:reduce){.dash-more summary svg,.dash-loss,.dash-trow{transition:none}}
+@media (prefers-reduced-motion:reduce){.dash-more summary svg,.dash-loss,.dash-trow,.dash-today-row{transition:none}}
 /* This week — полоса momentum: телефон = сегменты стопкой, десктоп = в ряд. */
 .dash-week{padding:16px}
 .dash-week-row{display:flex;flex-direction:column;gap:16px;align-items:flex-start}
@@ -1041,6 +1140,19 @@ const S: Record<string, React.CSSProperties> = {
   examNum: { fontFamily: "var(--font-mono)", fontSize: 40, lineHeight: 1, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" },
   examSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)", marginTop: 4 },
   examDateLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)" },
+
+  /* Today's plan — main-column checklist card */
+  todayHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 4, flexWrap: "wrap" },
+  todayHeadMeta: { display: "flex", alignItems: "center", gap: 10 },
+  todayMeta: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
+  todayCount: { fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--text-secondary)", background: "var(--surface-inset)", borderRadius: "var(--radius-full)", padding: "3px 10px" },
+  todayAllDone: { display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--success-text)", background: "var(--success-subtle)", borderRadius: "var(--radius-md)", padding: "10px 14px", margin: "10px 0 4px" },
+  todayRow: { display: "flex", alignItems: "center", gap: 14, padding: "13px 0", borderTop: "1px solid var(--border-subtle)", textDecoration: "none", color: "inherit" },
+  todayRowRing: { width: 20, height: 20, flex: "none", borderRadius: "50%", border: "2px solid var(--border)" },
+  todayRowLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)" },
+  todayRowLabelDone: { textDecoration: "line-through", color: "var(--text-muted)" },
+  todayRowSub: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--text-muted)", marginTop: 2 },
+  todayEmptyNote: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", padding: "13px 0 2px", borderTop: "1px solid var(--border-subtle)" },
 
   /* Plan-to-target rail card */
   planCard: { padding: 18, display: "flex", flexDirection: "column", gap: 10 },

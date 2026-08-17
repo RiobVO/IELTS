@@ -87,3 +87,38 @@ export function getExamCountdown(examDate: string, now: Date, timezone: string):
   if (!Number.isFinite(days)) return null;
   return { days, status: examCountdownStatus(days) };
 }
+
+/**
+ * date и now — один и тот же календарный день в таймзоне юзера. Живёт здесь (не в
+ * отдельном файле), потому что переиспользует ту же проекцию timezoneDayUTC, что
+ * daysUntilExam — «сегодня» дашборда (Today's plan, BRIEF §12) обязано совпадать
+ * с «сегодня» countdown-карточки, иначе день практики и день до экзамена разъедутся.
+ */
+export function isSameTzDay(date: Date, now: Date, timezone: string): boolean {
+  try {
+    return timezoneDayUTC(date, timezone) === timezoneDayUTC(now, timezone);
+  } catch {
+    return false; // неизвестное имя IANA-таймзоны — консервативный дефолт
+  }
+}
+
+/**
+ * date попадает в текущую ISO-неделю (понедельник — старт) относительно now, в
+ * таймзоне юзера. Понедельник этой недели — якорь: getUTCDay() даёт 0=вс..6=сб на
+ * уже спроецированной «полночи UTC» дня, mondayOffset переводит его в 0=пн..6=вс.
+ */
+export function isInCurrentTzWeek(date: Date, now: Date, timezone: string): boolean {
+  let dateDay: number;
+  let nowDay: number;
+  try {
+    dateDay = timezoneDayUTC(date, timezone);
+    nowDay = timezoneDayUTC(now, timezone);
+  } catch {
+    return false;
+  }
+  const nowDow = new Date(nowDay).getUTCDay();
+  const mondayOffset = (nowDow + 6) % 7;
+  const weekStart = nowDay - mondayOffset * 86_400_000;
+  const weekEnd = weekStart + 7 * 86_400_000;
+  return dateDay >= weekStart && dateDay < weekEnd;
+}
