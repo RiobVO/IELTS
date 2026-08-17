@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
-import { payment } from "@/db/schema";
+import { payment, preorder } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { captureServer } from "@/lib/analytics/server";
 import { findPlan, PENDING_TTL_MS } from "@/lib/payments/plans";
@@ -92,20 +92,48 @@ export async function initiatePayment(formData: FormData): Promise<void> {
 }
 
 /**
- * Waitlist-лайт (§12): пока оплата не запущена, кнопка на pricing регистрирует
- * интерес к платному тарифу. Никакой новой таблицы и никакого owner-path — это
- * только продуктовая телеметрия (спрос до онбординга мерчанта). distinctId =
- * user.id (сервер-авторитетно). tier/months нормализуются через findPlan — сырой
- * client-input в телеметрию не уходит (кривые значения схлопываются в unknown).
+ * Pre-order early-bird плана (§12): пока оплата не запущена, кнопка на pricing
+ * фиксирует намерение купить со скидкой — owner-path INSERT в `preorder`, БЕЗ
+ * выдачи доступа. Отдельная таблица, а не запись в `payment`: payment завязан на
+ * provider/tx-идемпотентность и webhook-lifecycle («payment = реальный charge» —
+ * инвариант, см. applyCompletedPayment/validateEntitlement), а pre-order тира не
+ * даёт — только намерение. ON CONFLICT DO NOTHING — повторный клик на тот же
+ * (user, tier, months) идемпотентен (unique-constraint миграции 0052). Сумма —
+ * plan.earlyBirdAmount с сервера, клиент её не диктует. Невалидный (tier, months)
+ * — тихий no-op, как раньше у waitlist-заглушки.
  */
-export async function joinPaymentWaitlist(input: {
+export async function preorderPlan(input: {
   tier: string;
   months: number;
-}): Promise<void> {
+}): Promise<{ ok: boolean }> {
   const user = await requireUser();
+  // Серверный бизнес-инвариант, не только UI-ветка: после запуска платежей
+  // прямой вызов action не должен фиксировать early-bird задним числом.
+  if (paymentsLive()) return { ok: false };
   const plan = findPlan(String(input.tier), Number(input.months));
-  await captureServer("payment_waitlist", user.id, {
-    tier: plan?.tier ?? "unknown",
-    period_months: plan?.months ?? 0,
+  if (!plan) return { ok: false };
+
+  try {
+    await db
+      .insert(preorder)
+      .values({
+        userId: user.id,
+        tier: plan.tier,
+        periodMonths: plan.months,
+        amount: plan.earlyBirdAmount,
+        currency: plan.currency,
+      })
+      .onConflictDoNothing();
+  } catch (e) {
+    // Durable-обещание цены: о сбое честно сообщаем клиенту ({ok:false} → кнопка
+    // остаётся активной), событие воронки не шлём — строки нет, врать метрике незачем.
+    console.error("preorderPlan insert failed", e);
+    return { ok: false };
+  }
+
+  await captureServer("preorder", user.id, {
+    tier: plan.tier,
+    period_months: plan.months,
   });
+  return { ok: true };
 }

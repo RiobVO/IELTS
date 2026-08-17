@@ -17,8 +17,9 @@ export const AnalyticsEvent = {
   CheckoutStart: "checkout_start",
   CheckoutBlocked: "checkout_blocked",
   PaymentFailed: "payment_failed",
-  PaymentWaitlist: "payment_waitlist",
+  Preorder: "preorder",
   ContentWaitlist: "content_waitlist",
+  SprintSignup: "sprint_signup",
 } as const;
 
 /** Свойства каждого события (ключ объекта = имя события в PostHog). */
@@ -57,12 +58,17 @@ export type EventProperties = {
   /** Неуспешный исход применения платежа (webhook): невалидная сумма/пара,
    *  протухший pending или внутренняя ошибка. Слепая зона воронки до этого шага. */
   payment_failed: { provider: string; reason: "invalid" | "expired" | "error" };
-  /** Клик по «Notify me when paid plans launch» пока оплата не запущена —
-   *  измеряем спрос на платные тарифы до онбординга мерчанта. */
-  payment_waitlist: { tier: string; period_months: number };
+  /** Pre-order early-bird плана (§12) пока оплата не запущена — фиксация намерения
+   *  купить в таблице `preorder`, измеряем спрос на платные тарифы до онбординга
+   *  мерчанта. Не платёж: только запись намерения. */
+  preorder: { tier: string; period_months: number };
   /** Клик по «Notify me when new tests land» в пустом каталоге (контент-вайп,
    *  BRIEF §12.3) — измеряем спрос на свежий контент, пока библиотека пополняется. */
   content_waitlist: { source: "catalog" };
+  /** Запись в ручной пилот когорты «спринт к экзамену» (BRIEF §12.3) — связка
+   *  user_id ↔ участие для замера retention. Без свойств: коммуникация целиком
+   *  в Telegram вне продукта, личность уже несёт distinctId. */
+  sprint_signup: Record<string, never>;
 };
 
 /** Имена событий — производны от контракта свойств, чтобы не разъехались. */
