@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { EventProperties } from "@/lib/analytics/events";
 import { captureServer } from "@/lib/analytics/server";
+import { linkOAuthReferral } from "@/lib/progress/referral";
 import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,6 +28,10 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   // `next` из query — нормализуем до внутреннего пути (open-redirect guard).
   const next = safeNextPath(searchParams.get("next"));
+  // ref — только используется для линковки в profile/referral (owner-path
+  // Drizzle-запрос по referral_code внутри linkOAuthReferral), никуда не
+  // редиректит и не рендерится — open-redirect guard тут не при чём.
+  const ref = searchParams.get("ref");
 
   if (code) {
     const supabase = await createClient();
@@ -35,8 +40,7 @@ export async function GET(request: Request) {
       // OAuth-signup — авторитетное серверное событие воронки (§11). Тот же
       // callback обслуживает и signup, и login; нового пользователя детектим по
       // свежему created_at (returning имеет старый). best-effort — телеметрия не
-      // должна ломать вход. has_ref=false: OAuth-поток пока не переносит ref_code
-      // (referral через OAuth — отдельный, ещё не подключённый gap).
+      // должна ломать вход.
       const u = data.user;
       const provider = analyticsProvider(u?.app_metadata?.provider);
       const createdMs = u?.created_at ? new Date(u.created_at).getTime() : 0;
@@ -44,16 +48,22 @@ export async function GET(request: Request) {
       // signUp server action. Когда включён тумблер «Confirm email», ссылка
       // подтверждения приводит email-юзера в этот же callback — без guard'а быстро
       // (< окна) подтвердивший email считался бы дважды (signUp + callback).
-      if (
-        u &&
-        provider !== "email" &&
-        createdMs > 0 &&
-        Date.now() - createdMs < FRESH_SIGNUP_WINDOW_MS
-      ) {
+      const ageMs = Date.now() - createdMs;
+      // ageMs >= 0 — доверенное поле (created_at от Supabase), но защита от
+      // рассинхронизации часов дешева: значение из будущего не должно проходить
+      // окно независимо от того, насколько далеко оно в будущем (review finding).
+      const isFreshOAuthSignup =
+        !!u && provider !== "email" && createdMs > 0 && ageMs >= 0 && ageMs < FRESH_SIGNUP_WINDOW_MS;
+      if (isFreshOAuthSignup) {
         await captureServer("signup", u.id, {
           auth_provider: provider,
-          has_ref: false,
+          has_ref: !!ref,
         });
+        // Реферал через Google OAuth (ранее терялся — signUp-триггер получает от
+        // Google метадату без ref_code, только email-форма его туда клала).
+        // Тот же fresh-signup гейт: линковка нужна ровно один раз, на регистрации,
+        // не на каждом повторном OAuth-логине по случайно сохранённой ссылке.
+        if (ref) await linkOAuthReferral(u.id, ref);
       }
       return NextResponse.redirect(`${origin}${next}`);
     }

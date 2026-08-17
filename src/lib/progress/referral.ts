@@ -28,10 +28,79 @@
  * (applyPostSubmit) redirects immediately after, and a reward failure must not
  * break the submit, only skip the perk.
  */
-import { and, eq, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { notification, profile, referral } from "@/db/schema";
 import { logError } from "@/lib/monitoring/log-error";
+
+/**
+ * OAuth signup gap-fill (Google — Apple/Facebook not wired yet, BRIEF §12.1 п.3):
+ * the `handle_new_user` DB trigger (migration 0005) links a referral from
+ * `raw_user_meta_data ->> 'ref_code'`, which the email signup form supplies but
+ * Google's OAuth exchange never does (Google populates that metadata from the
+ * user's Google profile, not our app). AuthScreen's googleSignIn now carries
+ * `ref` through the OAuth `redirectTo` URL instead; the callback route calls
+ * this to perform the SAME linking the trigger would have done, for a fresh
+ * OAuth signup only.
+ *
+ * Mirrors migrations/0005_referral_linking/up.sql exactly: self-referral
+ * blocked, idempotent (the trigger's WHERE NOT EXISTS has no app-code
+ * equivalent, so migration 0053 adds a real UNIQUE(invitee_id) constraint —
+ * onConflictDoNothing below targets it), referral insert failure never
+ * propagates (non-essential perk). Does NOT reward — that stays
+ * maybeRewardReferral's job, fired later from applyPostSubmit.
+ *
+ * Claim + insert run in ONE transaction (review finding): two separate
+ * statements let referred_by and the referral row's inviter disagree — e.g.
+ * a losing concurrent call's UPDATE affects 0 rows (referred_by already set)
+ * but its INSERT would still fire with the WRONG inviter, or a mid-flight
+ * failure between the two leaves referred_by set with no referral row (dead
+ * invite, no reward ever possible). Gating the INSERT on the UPDATE's own
+ * `returning()` means only the call that actually won the referred_by claim
+ * ever inserts — same shape as maybeRewardReferral's atomic claim below.
+ */
+export async function linkOAuthReferral(
+  userId: string,
+  refCode: string,
+): Promise<void> {
+  const code = refCode.trim();
+  if (!code) return;
+  try {
+    const [inviter] = await db
+      .select({ id: profile.id })
+      .from(profile)
+      .where(eq(profile.referralCode, code))
+      .limit(1);
+    if (!inviter || inviter.id === userId) return; // не найден / self-referral
+
+    await db.transaction(async (tx) => {
+      const claimed = await tx
+        .update(profile)
+        .set({ referredBy: inviter.id })
+        .where(and(eq(profile.id, userId), isNull(profile.referredBy)))
+        .returning({ id: profile.id });
+      if (claimed.length === 0) return; // уже привязан (эта или другая гонка) — не трогаем referral
+
+      await tx
+        .insert(referral)
+        .values({
+          inviterId: inviter.id,
+          inviteeId: userId,
+          code: randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase(),
+          status: "registered",
+        })
+        .onConflictDoNothing({ target: referral.inviteeId });
+    });
+  } catch (e) {
+    await logError({
+      source: "server",
+      message: `linkOAuthReferral failed: ${e instanceof Error ? e.message : String(e)}`,
+      stack: e instanceof Error ? e.stack : null,
+      userId,
+    });
+  }
+}
 
 export async function maybeRewardReferral(
   userId: string,
