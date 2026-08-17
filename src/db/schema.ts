@@ -1108,3 +1108,58 @@ export const mistakeReview = pgTable(
     index("mistake_review_content_item_id_idx").on(t.contentItemId),
   ],
 );
+
+/* -------------------------------------------------------------------------- */
+/* sprint_signup — запись в ручную когорту «спринт к экзамену» (migration 0051) */
+/* Пилот без автоматизации: куратор — владелец, когорта живёт в Telegram.       */
+/* In-app запись нужна ради связки user_id ↔ участие (замер retention).          */
+/* Owner-стейт как saved_word: owner-read (RLS user_id = auth.uid()), запись      */
+/* ТОЛЬКО server-action owner-path — клиентских writes нет.                       */
+/* -------------------------------------------------------------------------- */
+export const sprintSignup = pgTable("sprint_signup", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  // UNIQUE: одна когорта пилота — одна запись на пользователя (идемпотентность
+  // ON CONFLICT DO NOTHING в экшене).
+  userId: uuid("user_id")
+    .notNull()
+    .unique()
+    .references(() => profile.id, { onDelete: "cascade" }),
+  // Telegram-хэндл для связи куратора с участником.
+  telegramHandle: text("telegram_handle").notNull(),
+  // Снапшоты профиля на момент записи (когорта собрана по этим значениям).
+  examDate: date("exam_date"),
+  targetBand: numeric("target_band", { precision: 2, scale: 1 }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/* -------------------------------------------------------------------------- */
+/* preorder — фиксация намерения купить тариф по early-bird цене (migration     */
+/* 0052). НАМЕРЕННО отдельная от payment (та завязана на provider/tx-             */
+/* идемпотентность и webhook-lifecycle; «payment = реальный charge» — инвариант). */
+/* Тира НЕ даёт. amount — early-bird цена в тийинах на момент записи (plans.ts,   */
+/* клиент сумму не диктует). Owner-стейт как sprint_signup: owner-read, запись    */
+/* ТОЛЬКО server-action owner-path.                                               */
+/* -------------------------------------------------------------------------- */
+export const preorder = pgTable(
+  "preorder",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profile.id, { onDelete: "cascade" }),
+    tier: userTier("tier").notNull(),
+    periodMonths: integer("period_months").notNull(),
+    amount: integer("amount").notNull(),
+    currency: text("currency").notNull().default("UZS"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Одна запись на (user, план): повторный клик идемпотентен. Leftmost user_id
+    // обслуживает owner-read + RLS-политику.
+    unique("preorder_user_plan_key").on(t.userId, t.tier, t.periodMonths),
+  ],
+);

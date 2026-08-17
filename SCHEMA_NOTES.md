@@ -850,6 +850,29 @@ TRUNCATE), `authenticated` — INSERT/DELETE/REFERENCES/TRIGGER/TRUNCATE. Бар
 up снимал только дрейф, контрактных грантов не менял. Проверено на проде скриптом-пробой
 (колоночный UPDATE = только `read_at` у `authenticated`).
 
+## 0051 — sprint_signup (пилот-когорта) · 0052 — preorder (early-bird)
+
+Две additive-таблицы одного трека (этапы 5–6; 2026-07-11), **35-я и 36-я**
+(`verify.ts` `APP_TABLE_COUNT` 34 → 36). Обе — owner-стейт постуры saved_word:
+RLS on, `REVOKE ALL` от клиентских ролей (default-priv готча), точечный
+`GRANT SELECT` + `select_own`-политика, запись ТОЛЬКО owner-path server action.
+Обе добавлены в verify: owner-read cohort (§4i) + INSERT-denied (clientWriteLockdown).
+
+- **`sprint_signup`** — запись в ручную когорту «спринт к экзамену» (пилот,
+  куратор — владелец, коммуникация в Telegram, никакой автоматизации). Смысл
+  in-app записи — связка `user_id` ↔ участие для замера retention. `user_id`
+  UNIQUE (одна когорта — одна запись, `ON CONFLICT DO NOTHING`);
+  `exam_date`/`target_band` — снапшоты профиля на момент записи. Админ-список —
+  `/admin/sprint` (requireAdmin, owner-path).
+- **`preorder`** — durable-фиксация намерения купить тариф по early-bird цене
+  (−30%, `Plan.earlyBirdAmount` в plans.ts — фиксированные значения каталога,
+  клиент сумму не диктует), пока merchant-ключей нет. НАМЕРЕННО отдельная от
+  `payment`: та завязана на provider/tx-идемпотентность и webhook-lifecycle,
+  стаб-tx размывал бы инвариант «payment = реальный charge». **Тира не даёт**;
+  webhook/`initiatePayment` не тронуты. `UNIQUE(user_id, tier, period_months)` —
+  идемпотентность повторного клика. При запуске биллинга (`paymentsLive=true`)
+  PreorderCta уступает место реальному чекауту без миграции данных.
+
 ## 0050 — L1-слой: answer_key.explanation_ru + content_item.l1_status
 
 Колоночная additive-миграция (трек роста, этап L1; 2026-07-11). **Таблиц не прибавилось

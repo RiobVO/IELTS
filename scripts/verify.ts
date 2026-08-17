@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 34; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040) + saved_word (P11 «Saved words», 0041) + mistake_review (SR, 0044)
+const APP_TABLE_COUNT = 36; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040) + saved_word (P11 «Saved words», 0041) + mistake_review (SR, 0044) + sprint_signup (пилот-когорта, 0051) + preorder (early-bird, 0052)
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);
@@ -214,6 +214,8 @@ async function clientWriteLockdown(): Promise<{
   mistakeResolutionInsertDenied: boolean;
   savedWordInsertDenied: boolean;
   mistakeReviewInsertDenied: boolean;
+  sprintSignupInsertDenied: boolean;
+  preorderInsertDenied: boolean;
   ownerWriteWorks: boolean;
 }> {
   const email = `verify-lock+${Date.now()}@example.com`;
@@ -289,12 +291,28 @@ async function clientWriteLockdown(): Promise<{
         VALUES (${id}, gen_random_uuid(), 1, 'tfng')`,
     );
 
+    // (b6) sprint-signup forgery: запись в пилот-когорту (0051) пишет только owner-path
+    // экшен — та же owner-стейт постура, denied на grant-слое.
+    const sprintSignupInsertDenied = await deniedAsAuthenticated(
+      (tx) => tx`
+        INSERT INTO sprint_signup (user_id, telegram_handle)
+        VALUES (${id}, '@x')`,
+    );
+
+    // (b7) preorder forgery: early-bird намерение (0052) с server-trusted ценой — клиент
+    // не должен уметь вписать себе произвольный amount, denied на grant-слое.
+    const preorderInsertDenied = await deniedAsAuthenticated(
+      (tx) => tx`
+        INSERT INTO preorder (user_id, tier, period_months, amount)
+        VALUES (${id}, 'premium', 1, 1)`,
+    );
+
     // (c) legit path: the server action writes via the Drizzle OWNER role (this
     // connection) — a safe-field update must still succeed.
     const owner = await sql`UPDATE profile SET display_name = 'verify' WHERE id = ${id}`;
     const ownerWriteWorks = owner.count === 1;
 
-    return { profileUpdateDenied, attemptInsertDenied, vocabProgressInsertDenied, mistakeResolutionInsertDenied, savedWordInsertDenied, mistakeReviewInsertDenied, ownerWriteWorks };
+    return { profileUpdateDenied, attemptInsertDenied, vocabProgressInsertDenied, mistakeResolutionInsertDenied, savedWordInsertDenied, mistakeReviewInsertDenied, sprintSignupInsertDenied, preorderInsertDenied, ownerWriteWorks };
   } finally {
     await sql`DELETE FROM auth.users WHERE id = ${id}`;
   }
@@ -740,7 +758,7 @@ async function main() {
   // ЕСТЬ по дизайну (select_own TO authenticated), поэтому ассертим только RLS-on +
   // anon-deny — против регресса «RLS выключили» или «anon снова granted» (0024/0028;
   // vocab_progress — 0037, запись только owner-path, INSERT-lock проверяется ниже).
-  for (const t of ["writing_submission", "writing_feedback", "speaking_submission", "speaking_feedback", "vocab_progress", "mistake_resolution", "saved_word", "mistake_review"] as const) {
+  for (const t of ["writing_submission", "writing_feedback", "speaking_submission", "speaking_feedback", "vocab_progress", "mistake_resolution", "saved_word", "mistake_review", "sprint_signup", "preorder"] as const) {
     const l = await tableLock(t);
     if (l.rlsEnabled && l.anonDenied)
       ok(`RLS — anon SELECT on ${t} denied (owner-read policy intact)`);
@@ -824,9 +842,11 @@ async function main() {
     lockdown.mistakeResolutionInsertDenied &&
     lockdown.savedWordInsertDenied &&
     lockdown.mistakeReviewInsertDenied &&
+    lockdown.sprintSignupInsertDenied &&
+    lockdown.preorderInsertDenied &&
     lockdown.ownerWriteWorks
   )
-    ok("RLS — authenticated denied profile.role patch + submitted-attempt forge + vocab_progress/mistake_resolution/saved_word/mistake_review insert; owner write works");
+    ok("RLS — authenticated denied profile.role patch + submitted-attempt forge + vocab_progress/mistake_resolution/saved_word/mistake_review/sprint_signup/preorder insert; owner write works");
   else
     fail(
       `RLS — write-lockdown incomplete (profileUpdateDenied=${lockdown.profileUpdateDenied}, ` +
@@ -834,7 +854,9 @@ async function main() {
         `vocabProgressInsertDenied=${lockdown.vocabProgressInsertDenied}, ` +
         `mistakeResolutionInsertDenied=${lockdown.mistakeResolutionInsertDenied}, ` +
         `savedWordInsertDenied=${lockdown.savedWordInsertDenied}, ` +
-        `mistakeReviewInsertDenied=${lockdown.mistakeReviewInsertDenied}, ownerWriteWorks=${lockdown.ownerWriteWorks})`,
+        `mistakeReviewInsertDenied=${lockdown.mistakeReviewInsertDenied}, ` +
+        `sprintSignupInsertDenied=${lockdown.sprintSignupInsertDenied}, ` +
+        `preorderInsertDenied=${lockdown.preorderInsertDenied}, ownerWriteWorks=${lockdown.ownerWriteWorks})`,
     );
 
   // 7. health endpoint
