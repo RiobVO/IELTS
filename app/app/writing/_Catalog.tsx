@@ -630,10 +630,10 @@ const S: Record<string, CSSProperties> = {
 
   metaRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 15 },
   // Topic label → font-ui, sentence-case, ≥12px (was mono-caps 11). Color stays.
-  chip: { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 8, padding: "5px 10px", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600, letterSpacing: "-0.005em" },
+  chip: { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 8, padding: "5px 10px", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600 },
 
 
-  question: { margin: "0 0 16px", fontSize: 17, fontWeight: 500, lineHeight: 1.42, letterSpacing: "-0.005em", color: "var(--text-primary)", flex: 1 },
+  question: { margin: "0 0 16px", fontSize: 17, fontWeight: 500, lineHeight: 1.42, color: "var(--text-primary)", flex: 1 },
 
   footer: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, borderTop: "1px solid var(--border-subtle)", paddingTop: 15 },
   footerLeft: { display: "flex", flexDirection: "column", gap: 5, minWidth: 0 },

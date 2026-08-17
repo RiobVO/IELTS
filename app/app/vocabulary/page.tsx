@@ -539,9 +539,9 @@ const S: Record<string, CSSProperties> = {
   planMain: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 18, padding: "18px 20px" },
   planStats: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 22px" },
   stat: { display: "flex", flexDirection: "column", gap: 2, minWidth: 80 },
-  statNum: { fontFamily: "var(--font-mono)", fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.1, color: "var(--text-primary)" },
+  statNum: { fontFamily: "var(--font-mono)", fontSize: 26, fontWeight: 800, lineHeight: 1.1, color: "var(--text-primary)" },
   // Word-value variant (e.g. "Unlimited") — smaller than the numeric stats so it fits the cell.
-  statText: { fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em", lineHeight: 1.35, color: "var(--text-primary)" },
+  statText: { fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 800, lineHeight: 1.35, color: "var(--text-primary)" },
   streakNum: { color: "var(--streak)", display: "inline-flex", alignItems: "center", gap: 6 },
   statSmall: { fontSize: 13, color: "var(--text-muted)", fontWeight: 700 },
   statLabel: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" },
@@ -570,7 +570,7 @@ const S: Record<string, CSSProperties> = {
   // My words (P11) — слим-карта-ссылка.
   myWords: { display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderRadius: "var(--radius-lg)", background: "var(--surface)", border: "2px solid var(--border)", boxShadow: "var(--shadow-solid)", textDecoration: "none", color: "inherit", transition: "transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)" },
   myWordsIcon: { width: 40, height: 40, flex: "none", borderRadius: "var(--radius-md)", background: "var(--brand-subtle)", color: "var(--text-link)", display: "grid", placeItems: "center" },
-  myWordsTitle: { fontFamily: "var(--font-ui)", fontSize: 15.5, fontWeight: 800, letterSpacing: "-0.01em", color: "var(--text-primary)" },
+  myWordsTitle: { fontFamily: "var(--font-ui)", fontSize: 15.5, fontWeight: 800, color: "var(--text-primary)" },
   myWordsSub: { fontSize: 13, color: "var(--text-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
 
   empty: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "40px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", maxWidth: "52ch", marginInline: "auto" },
@@ -583,13 +583,13 @@ const S: Record<string, CSSProperties> = {
   sections: { display: "flex", flexDirection: "column", gap: 30 },
   section: { display: "flex", flexDirection: "column", gap: 14 },
   sectionHead: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
-  sectionTitle: { margin: 0, fontFamily: "var(--font-ui)", fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em", color: "var(--text-primary)" },
+  sectionTitle: { margin: 0, fontFamily: "var(--font-ui)", fontSize: 16, fontWeight: 800, color: "var(--text-primary)" },
   recoChip: { display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", color: "var(--text-link)", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 800 },
 
   card: { display: "flex", flexDirection: "column", gap: 12, textAlign: "left", background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 20, color: "inherit", transition: "transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)" },
   cardTop: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
   lockBadge: { display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: "var(--radius-full)", border: "1px solid var(--border)", color: "var(--text-muted)", fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700 },
-  cardTitle: { fontSize: 18, fontWeight: 800, letterSpacing: "-0.015em", color: "var(--text-primary)" },
+  cardTitle: { fontSize: 18, fontWeight: 800, color: "var(--text-primary)" },
   cardDesc: { margin: 0, fontSize: 13.5, lineHeight: 1.5, color: "var(--text-muted)" },
 
   progressRow: { display: "flex", flexDirection: "column", gap: 6, marginTop: "auto" },

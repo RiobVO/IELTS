@@ -798,7 +798,7 @@ const CSS = `
 const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 640, margin: "0 auto", padding: "24px 16px 64px", display: "flex", flexDirection: "column", gap: 18, fontFamily: "var(--font-ui)" },
   back: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "var(--text-muted)", textDecoration: "none" },
-  title: { margin: "10px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
+  title: { margin: "10px 0 0", fontSize: 24, fontWeight: 800, color: "var(--text-primary)" },
   headStats: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 },
   stat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--surface-inset)", color: "var(--text-secondary)", fontSize: 12.5, fontWeight: 700 },
   rescueStat: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "var(--error-subtle)", color: "var(--error-text)", fontSize: 12.5, fontWeight: 800 },

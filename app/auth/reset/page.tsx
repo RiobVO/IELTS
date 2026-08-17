@@ -12,7 +12,6 @@ const labelStyle: CSSProperties = {
   fontFamily: "var(--font-ui)",
   fontSize: "var(--text-xs)",
   fontWeight: 700,
-  letterSpacing: "var(--tracking-tight)",
   color: "var(--text-secondary)",
   marginBottom: 6,
 };

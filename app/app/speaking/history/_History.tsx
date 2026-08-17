@@ -126,7 +126,7 @@ const CSS = `
 const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 880, margin: "0 auto", padding: "24px 18px 56px", display: "flex", flexDirection: "column", gap: 22, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
   header: { display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" },
-  h1: { margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)" },
+  h1: { margin: 0, fontSize: 26, fontWeight: 800, color: "var(--text-primary)" },
   sub: { margin: "8px 0 0", fontSize: 15, color: "var(--text-muted)", maxWidth: "54ch" },
 
   empty: { padding: "36px 20px", textAlign: "center", color: "var(--text-muted)", fontSize: 14, background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)" },

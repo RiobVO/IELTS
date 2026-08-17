@@ -489,8 +489,8 @@ const S: Record<string, React.CSSProperties> = {
   hero: { position: "relative", overflow: "hidden", borderRadius: "var(--radius-2xl)", background: "linear-gradient(150deg, var(--surface-inverse), var(--surface-inverse-deep))", color: "var(--surface-inverse-ink)", display: "flex", gap: 22, marginBottom: 26, boxShadow: "var(--shadow-lg)" },
   heroRing: { position: "relative", width: 96, height: 96, flex: "none", zIndex: 1 },
   heroMedal: { position: "absolute", inset: 11, borderRadius: "50%", display: "grid", placeItems: "center", background: "rgba(255,255,255,0.08)", color: "var(--surface-inverse-ink)" },
-  heroEyebrow: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", letterSpacing: "var(--tracking-snug)", color: "var(--violet-300)", fontWeight: 600 },
-  heroTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, letterSpacing: "var(--tracking-tight)", margin: "7px 0 4px" },
+  heroEyebrow: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", color: "var(--violet-300)", fontWeight: 600 },
+  heroTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xl)", fontWeight: 800, margin: "7px 0 4px" },
   heroDesc: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.8)", lineHeight: 1.5 },
   heroB: { color: "var(--surface-inverse-ink)", fontFamily: "var(--font-mono)" },
 

@@ -613,7 +613,7 @@ const S: Record<string, CSSProperties> = {
   // Centered flow / gating screens
   centerWrap: { maxWidth: 560, margin: "0 auto", padding: "48px 18px 64px", display: "flex", justifyContent: "center", fontFamily: "var(--font-ui)" },
   centerCard: { width: "100%", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" },
-  centerH1: { margin: "20px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--text-primary)", textWrap: "balance" },
+  centerH1: { margin: "20px 0 0", fontSize: 24, fontWeight: 800, color: "var(--text-primary)", textWrap: "balance" },
   centerMono: { fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-muted)", marginTop: 8 },
   centerBody: { fontSize: 15, lineHeight: 1.55, color: "var(--text-secondary)", margin: "12px 0 0", maxWidth: "44ch" },
   centerFoot: { fontSize: 13, lineHeight: 1.5, color: "var(--text-muted)", margin: "20px 0 0", maxWidth: "42ch" },

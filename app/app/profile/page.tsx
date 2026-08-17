@@ -366,7 +366,7 @@ function StripStat({ icon, tone, value, label }: { icon: IconName; tone: string;
         <Icon name={icon} size={19} strokeWidth={2.3} />
       </span>
       <div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xl)", fontWeight: 600, lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xl)", fontWeight: 600, lineHeight: 1 }}>{value}</div>
         <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)", marginTop: 2, fontWeight: 600 }}>{label}</div>
       </div>
     </div>
@@ -436,7 +436,7 @@ const S: Record<string, React.CSSProperties> = {
   ringNum: { fontFamily: "var(--font-mono)", fontSize: 40, fontWeight: 600, lineHeight: 1, letterSpacing: "-0.02em" },
   ringCap: { fontSize: 10.5, color: "rgba(255,255,255,.8)", marginTop: 3 },
   heroEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,.82)", fontWeight: 700 },
-  heroTitle: { fontFamily: "var(--font-ui)", fontSize: 23, fontWeight: 800, letterSpacing: "-0.01em", margin: "8px 0 0", lineHeight: 1.2 },
+  heroTitle: { fontFamily: "var(--font-ui)", fontSize: 23, fontWeight: 800, margin: "8px 0 0", lineHeight: 1.2 },
   heroMono: { fontFamily: "var(--font-mono)", fontWeight: 600 },
   heroText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "rgba(255,255,255,.82)", margin: "8px 0 0", maxWidth: 380, lineHeight: 1.5 },
 
