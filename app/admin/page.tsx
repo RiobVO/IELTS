@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { answerKey, contentItem, question } from "@/db/schema";
@@ -108,6 +109,13 @@ export default async function AdminPage({
         <h1 style={S.h1}>Admin</h1>
         <p style={S.sub}>
           {profile.email} · {items.length} test(s)
+        </p>
+        {/* Sprint pilot cohort (BRIEF §12.3) isn't on the AdminNav tab-bar — a direct
+            link is the only path in besides typing the URL. */}
+        <p style={S.sub}>
+          <Link href="/admin/sprint" style={{ color: "var(--text-link)", fontWeight: 700 }}>
+            Exam sprint signups →
+          </Link>
         </p>
 
         {sp.error && <p style={S.err}>{sp.error}</p>}
