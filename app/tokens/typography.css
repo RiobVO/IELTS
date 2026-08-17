@@ -1,10 +1,10 @@
 /* bando — Typography
- *   --font-ui       Plus Jakarta Sans — all chrome, headings, labels, buttons, body
+ *   --font-ui       Manrope — all chrome, headings, labels, buttons, body
  *   --font-reading  Literata — exam passages ONLY (60–75ch measure, ≥1.6 lh)
  *   --font-mono     JetBrains Mono — numerals: timer, scores, band, ratings */
 
 :root {
-  --font-ui: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-ui: var(--font-manrope), 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
   /* Фолбэк-стек БЕЗ var(--font-literata): var() внутри значения custom property
      подставляется на элементе объявления (:root), а next/font-переменная Literata
      живёт только на обёртке /app (app/app/layout.tsx) — ссылка отсюда была бы

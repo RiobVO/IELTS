@@ -6,7 +6,7 @@
   --red:#F0506A;--amber:#F2A93B;--green:#1FBE86;
   /* тёмные пары: текст на светлом/тинтах ≥4.5:1, статус-заливки на треке ≥3:1 (пересчитано) */
   --red-d:#C0284A;--amber-d:#8A5A00;--green-d:#0F7A50;
-  --sans:var(--font-jakarta),"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --sans:var(--font-manrope),"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:var(--font-jbmono),"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
   --maxw:1140px;--ease:cubic-bezier(.22,.9,.27,1);
   --sh:0 24px 60px -28px rgba(45,32,110,.32),0 6px 16px -10px rgba(45,32,110,.16);
