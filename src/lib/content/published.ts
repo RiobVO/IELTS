@@ -32,6 +32,10 @@ export const getPublishedTests = unstable_cache(
           // Флаг наличия очищенного раннера (iframe-обёртка) — НЕ тащим сам text
           // (~200КБ/тест) в кэш каталога; каталог только маршрутизирует по нему.
           has_runner: sql<boolean>`${contentItem.runnerHtml} IS NOT NULL`,
+          // Для бейджа «New» (F15) — сам расчёт «свежести» относительно now() в кэш
+          // не кладём (unstable_cache переживёт TTL/revalidate), считает вызывающая
+          // страница вне кэша.
+          created_at: contentItem.createdAt,
         })
         .from(contentItem)
         .where(
@@ -46,7 +50,14 @@ export const getPublishedTests = unstable_cache(
     if (items.length === 0) return [];
 
     const byId = new Map(counts.map((c) => [c.cid, Number(c.n) || 0]));
-    return items.map((it) => ({ ...it, question_count: byId.get(it.id) ?? 0 }));
+    // created_at → ISO-строка ДО возврата: на cache HIT unstable_cache гоняет
+    // результат через JSON.stringify/parse, и Date всё равно пришёл бы строкой —
+    // Drizzle-тип Date маскировал бы это на MISS. Сериализуем сами, тип честный.
+    return items.map((it) => ({
+      ...it,
+      created_at: it.created_at.toISOString(),
+      question_count: byId.get(it.id) ?? 0,
+    }));
   },
   ["published-tests"],
   { tags: ["content_item"], revalidate: 300 },
