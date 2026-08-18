@@ -41,15 +41,18 @@ const lastSaveProgressLogAt = new Map<string, number>();
 /**
  * Persist in-progress answers (autosave, §4.3). Owner-checked, only while the
  * attempt is still in_progress. Best-effort — never throws to the client (a
- * failed autosave must not break the exam, the next tick retries).
+ * failed autosave must not break the exam, the next tick retries). Возвращает
+ * честный `{ok}` (волна E): раньше проглоченная ошибка резолвилась «успехом»,
+ * и клиентский индикатор «Progress not saved» гас при фактическом провале
+ * записи. Клиент трактует ok:false так же, как transport-reject.
  */
 export async function saveProgress(
   attemptId: string,
   answers: Record<string, string | string[]>,
-): Promise<void> {
+): Promise<{ ok: boolean }> {
   try {
     const user = await getUser();
-    if (!user) return;
+    if (!user) return { ok: false };
     await db
       .update(attempt)
       .set({ answers })
@@ -60,6 +63,7 @@ export async function saveProgress(
           eq(attempt.status, "in_progress"),
         ),
       );
+    return { ok: true };
   } catch (e) {
     const now = Date.now();
     const last = lastSaveProgressLogAt.get(attemptId) ?? 0;
@@ -75,6 +79,7 @@ export async function saveProgress(
         context: { op: "saveProgress", attemptId },
       });
     }
+    return { ok: false };
   }
 }
 
@@ -161,7 +166,9 @@ export async function submitAttempt(
   if (!accessData) redirect(`/app/reading/${contentItemId}`);
   // mode=null: на сабмите действует только tier-гейт (defense-in-depth). Дневной
   // кап гейтит СТАРТЫ mock, не завершения — редирект здесь терял бы доделанную
-  // попытку (iframe-раннер не автосейвит ответы).
+  // попытку (iframe-раннер теперь автосейвит ответы периодическим мостом
+  // ielts-progress, волна E F2, но редирект на середине сабмита всё равно терял
+  // бы уже введённый, ещё не подхваченный автосейвом прогресс).
   await enforceAccess(
     user.id,
     accessData.userTier,
