@@ -1,10 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   skinRunnerGate,
   skinRunnerBrand,
   skinRunnerTableScroll,
+  skinRunnerAudioDefer,
   runnerBrandResidue,
+  audioDeferredKickJs,
 } from "./skin-runner";
+
+const FIX = join(__dirname, "fixtures");
+const listeningFixture = readFileSync(join(FIX, "listening.html"), "utf8");
 
 describe("skinRunnerGate", () => {
   const gate =
@@ -216,5 +223,110 @@ describe("runnerBrandResidue (import-time guard)", () => {
 <span class="ielts-logo">IELTS</span>
 <a class="brand-telegram" href="https://t.me/CD_materialss">tg</a></div></body></html>`;
     expect(runnerBrandResidue(cdi)).toEqual([]);
+  });
+});
+
+describe("skinRunnerAudioDefer", () => {
+  const out = skinRunnerAudioDefer(listeningFixture);
+
+  it("preload='auto' на <audio> заменён на 'metadata' (реальная фикстура)", () => {
+    const audioTag = out.match(/<audio\b[^>]*>/i)?.[0] ?? "";
+    expect(audioTag).not.toMatch(/preload=(["'])auto\1/);
+    expect(audioTag).toMatch(/preload="metadata"/);
+  });
+
+  it("audio.load() больше не вызывается на верхнем уровне — только внутри deferred-обработчика", () => {
+    // ровно одно вхождение во всём файле, и оно внутри function bandoAudioKick(){...}
+    expect(out.match(/audio\.load\(\);/g)).toHaveLength(1);
+    const fn = out.match(/function bandoAudioKick\(\)\{([\s\S]*?)\}/);
+    expect(fn).toBeTruthy();
+    expect(fn![1]).toContain("audio.load();");
+    expect(fn![1]).toContain("audio.preload='auto';");
+  });
+
+  it("ставит маркеры pointerdown/keydown-обработчика (первый жест юзера)", () => {
+    expect(out).toContain("bando-audio-defer");
+    expect(out).toMatch(/addEventListener\('pointerdown',bandoAudioKick,true\)/);
+    expect(out).toMatch(/addEventListener\('keydown',bandoAudioKick,true\)/);
+  });
+
+  it("идемпотентно — повторный вызов на уже пропатченном html ничего не меняет", () => {
+    expect(skinRunnerAudioDefer(out)).toBe(out);
+  });
+
+  it("no-op на reading-html без #playOverlay (байт-в-байт)", () => {
+    expect(skinRunnerAudioDefer(READING_HEAD)).toBe(READING_HEAD);
+  });
+
+  it("no-op на listening-подобном html без якоря audio.load() (незнакомое семейство)", () => {
+    const noLoadAnchor =
+      '<html><head></head><body><div id="playOverlay">gate</div>' +
+      '<audio id="audio" src="a.mp3" preload="auto"></audio>' +
+      "<script>audio.preload='auto';</script></body></html>";
+    expect(skinRunnerAudioDefer(noLoadAnchor)).toBe(noLoadAnchor);
+  });
+
+  it("no-op на html без #playOverlay, даже если JS-якоря присутствуют", () => {
+    const noGate =
+      "<html><head></head><body>" +
+      '<audio id="audio" src="a.mp3" preload="auto"></audio>' +
+      "<script>audio.preload='auto';audio.load();</script></body></html>";
+    expect(skinRunnerAudioDefer(noGate)).toBe(noGate);
+  });
+
+  it("две <audio preload=\"auto\"> — обе заменены на metadata", () => {
+    const twoAudio =
+      '<html><head></head><body><div id="playOverlay">gate</div>' +
+      '<audio id="audio" src="a.mp3" preload="auto"></audio>' +
+      '<audio id="audio2" src="b.mp3" preload="auto"></audio>' +
+      "<script>audio.preload='auto';audio.load();</script></body></html>";
+    const patched = skinRunnerAudioDefer(twoAudio);
+    expect(patched.match(/preload="auto"/g)).toBeNull();
+    expect(patched.match(/preload="metadata"/g)).toHaveLength(2);
+  });
+});
+
+// Поведенческая проверка самого инжектируемого JS-снипета (не строки, а рантайм-
+// эффекта). Без jsdom (нет в инфре) — микро-харнесс через `new Function("audio",
+// "document", snippet)`: снипет — готовое ES5-IIFE, `audio` внутри него резолвится
+// по замыканию на параметр "audio" ЭТОЙ обёрточной функции (в реальном раннере —
+// на переменную `audio`, объявленную раньше в том же script-теге). Стабы —
+// vi.fn(), листенеры копятся в массиве.
+describe("audioDeferredKickJs — поведение снипета (без jsdom)", () => {
+  function makeHarness() {
+    const audio = { preload: "auto", load: vi.fn() };
+    const listeners: Array<{ type: string; handler: () => void; capture: boolean }> = [];
+    const addEventListener = vi.fn((type: string, handler: () => void, capture: boolean) => {
+      listeners.push({ type, handler, capture });
+    });
+    const removeEventListener = vi.fn();
+    const document = { addEventListener, removeEventListener };
+    const fn = new Function("audio", "document", audioDeferredKickJs());
+    fn(audio, document);
+    return { audio, document, listeners };
+  }
+
+  it("сразу preload='metadata', load() не вызван, зарегистрированы ровно 2 capture-листенера", () => {
+    const { audio, document, listeners } = makeHarness();
+    expect(audio.preload).toBe("metadata");
+    expect(audio.load).not.toHaveBeenCalled();
+    expect(document.addEventListener).toHaveBeenCalledTimes(2);
+    expect(listeners).toHaveLength(2);
+    expect(listeners.every((l) => l.capture === true)).toBe(true);
+    expect(listeners.map((l) => l.type).sort()).toEqual(["keydown", "pointerdown"]);
+  });
+
+  it("по первому жесту: preload flip на 'auto', load() ровно 1 раз, оба листенера сняты теми же ссылками", () => {
+    const { audio, document, listeners } = makeHarness();
+    const pointerHandler = listeners.find((l) => l.type === "pointerdown")!.handler;
+    const keydownHandler = listeners.find((l) => l.type === "keydown")!.handler;
+
+    pointerHandler();
+
+    expect(audio.preload).toBe("auto");
+    expect(audio.load).toHaveBeenCalledTimes(1);
+    expect(document.removeEventListener).toHaveBeenCalledTimes(2);
+    expect(document.removeEventListener).toHaveBeenCalledWith("pointerdown", pointerHandler, true);
+    expect(document.removeEventListener).toHaveBeenCalledWith("keydown", keydownHandler, true);
   });
 });

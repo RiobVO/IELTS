@@ -173,3 +173,83 @@ export function runnerBrandResidue(rawHtml: string): string[] {
   }
   return issues;
 }
+
+// RUNTIME (read-time) фикс жадной аудио-предзагрузки listening-раннера с download-
+// гейтом (#playOverlay). Распознанное семейство держит `<audio preload="auto">` и
+// дёргает `audio.load()` сразу на загрузке страницы — браузер тянет ВЕСЬ mp3 из
+// Storage, даже если юзер тест не открывал (лишний egress на Free-плане Supabase перед
+// стелс-волной ~600 юзеров, BACKLOG OPS-1). Голая замена preload auto→metadata сломала
+// бы сам гейт: Play разблокируется только через markAudioReady (canplaythrough /
+// buffered>=dur-0.4 / canplay+таймаут) — без явного audio.load() при 'auto' браузер
+// вообще не начнёт стриминг, буфер не наберётся, и Play не активируется НИКОГДА.
+// Поэтому вместо голой замены — отложенный запуск: preload остаётся 'metadata' до
+// первого пользовательского жеста (pointerdown/keydown на document, capture; листенеры
+// снимают друг друга после первого срабатывания — ручной once), а по жесту ставим
+// 'auto' + load() — то же самое, что раннер делал сразу, просто по требованию. Вся
+// остальная машинерия прогресс-бара/гейта не тронута и отработает штатно с момента
+// жеста.
+// Гейт применимости — распознанное семейство: #playOverlay + inline
+// `audio.preload='auto'` + `audio.load()` ВСЕ три сразу. Если якоря есть, но их JS-
+// последовательность не смежная (иной незнакомый вариант вёрстки) — патч не применяем
+// вовсе, чтобы не оставить html в промежуточном состоянии (атрибут metadata без
+// deferred-kick заблокировал бы стрим навсегда). Reading-раннеры и незнакомые
+// listening-семейства — no-op байт-в-байт.
+const AUDIO_DEFER_MARK = "bando-audio-defer";
+
+// Смежная пара из оригинального раннера: `audio.preload='auto';` сразу за которой
+// (после опциональных пробелов/комментариев) идёт `audio.load();`.
+const AUDIO_PRELOAD_JS_ANCHOR =
+  /audio\.preload\s*=\s*(['"])auto\1\s*;(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*audio\.load\s*\(\s*\)\s*;/;
+
+// ES5-совместимо (var/function) — исполняется в sandbox-iframe раннера без транспиляции.
+// Обёрнуто в IIFE, чтобы `bandoAudioKick` не утекал в общий scope чужого скрипта
+// раннера (страховка от коллизии имён / strict-mode нюансов чужого файла). `audio`
+// внутри IIFE НЕ передаётся параметром — резолвится по замыканию на внешний scope,
+// как и в оригинальном инжекте (`audio` уже объявлен раньше в том же script-теге).
+// Экспортирована для behavioral-теста (skin-runner.test.ts исполняет этот снипет
+// напрямую через `new Function`, без jsdom).
+export function audioDeferredKickJs(): string {
+  return (
+    `/* ${AUDIO_DEFER_MARK}: держим 'metadata' до первого жеста — не тянуть mp3 при открытии страницы */` +
+    "(function(){" +
+    "audio.preload='metadata';" +
+    "function bandoAudioKick(){" +
+    "document.removeEventListener('pointerdown',bandoAudioKick,true);" +
+    "document.removeEventListener('keydown',bandoAudioKick,true);" +
+    "audio.preload='auto';" +
+    "audio.load();" +
+    "}" +
+    "document.addEventListener('pointerdown',bandoAudioKick,true);" +
+    "document.addEventListener('keydown',bandoAudioKick,true);" +
+    "})();"
+  );
+}
+
+/**
+ * Откладывает старт аудио-стрима listening-раннера до первого пользовательского жеста
+ * вместо жадной загрузки на открытии страницы (анти-egress, BACKLOG OPS-1). No-op, если
+ * html не несёт распознанного download-гейта (#playOverlay + `audio.preload='auto'` +
+ * `audio.load()` все три сразу) или их JS-последовательность не смежная — в этом
+ * случае html не трогаем вовсе (частичный патч опаснее no-op: атрибут metadata без
+ * deferred-kick заблокировал бы стрим навсегда). Идемпотентно: маркер
+ * `bando-audio-defer` — на уже пропатченном html повторный вызов ничего не меняет
+ * (смежный якорь на верхнем уровне после первого патча уже не существует, заменён
+ * деферред-обработчиком).
+ */
+export function skinRunnerAudioDefer(html: string): string {
+  if (html.includes(AUDIO_DEFER_MARK)) return html; // уже пропатчено
+  if (!/id=["']playOverlay["']/.test(html)) return html; // не listening-gate
+  if (!/audio\.preload\s*=\s*['"]auto['"]/.test(html)) return html; // не распознанный якорь
+  if (!/audio\.load\s*\(\s*\)/.test(html)) return html; // не распознанный якорь
+
+  const patchedJs = html.replace(AUDIO_PRELOAD_JS_ANCHOR, audioDeferredKickJs());
+  if (patchedJs === html) return html; // якоря есть, но не смежные — не трогаем
+
+  // preload="auto" → preload="metadata" на ВСЕХ <audio>-тегах (не только #audio) —
+  // осознанно по ТЗ: незнакомая вариация может нести несколько <audio>, и все они
+  // должны получить metadata, а не только один распознанный id (ревью-предложение
+  // сузить до #audio отклонено). Регэксп внутри тега — не задевает другие атрибуты.
+  return patchedJs.replace(/<audio\b[^>]*>/gi, (tag) =>
+    tag.replace(/preload=(["'])auto\1/gi, 'preload="metadata"'),
+  );
+}
