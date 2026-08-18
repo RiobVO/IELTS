@@ -4,12 +4,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // remove. Раньше сбой remove логировался, но строка помечалась deleted → орфан-биометрия
 // past-retention навсегда (следующий проход пропускает audio_deleted_at IS NOT NULL).
 // Мокаем @/env (cronSecret), @/db (query-builder-цепочки), storage и store.
-const { dbUpdate, dbSelect, deleteAudioFn, markDeleted, markDeleteFailed } = vi.hoisted(() => ({
+const { dbUpdate, dbSelect, deleteAudioFn, markDeleted, markDeleteFailed, logErrorFn } = vi.hoisted(() => ({
   dbUpdate: vi.fn(),
   dbSelect: vi.fn(),
   deleteAudioFn: vi.fn(),
   markDeleted: vi.fn(),
   markDeleteFailed: vi.fn(),
+  logErrorFn: vi.fn(),
 }));
 
 vi.mock("@/env", () => ({ cronSecret: () => "s" }));
@@ -18,6 +19,8 @@ vi.mock("@/db", () => ({
 }));
 vi.mock("@/lib/speaking/storage", () => ({ deleteAudio: deleteAudioFn }));
 vi.mock("@/lib/speaking/store", () => ({ markAudioDeleted: markDeleted, markAudioDeleteFailed: markDeleteFailed }));
+// route теперь оборачивает GET в try/catch с logError (F10) — мокаем, как соседние route-тесты.
+vi.mock("@/lib/monitoring/log-error", () => ({ logError: logErrorFn }));
 
 import { GET } from "./route";
 
@@ -25,11 +28,12 @@ const authed = () => new Request("http://x/api/cron/speaking-reaper", { headers:
 const ROW = { id: "s1", audioPath: "u1/s1.webm", userId: "u1" };
 
 beforeEach(() => {
-  [dbUpdate, dbSelect, deleteAudioFn, markDeleted, markDeleteFailed].forEach((m) => m.mockReset());
+  [dbUpdate, dbSelect, deleteAudioFn, markDeleted, markDeleteFailed, logErrorFn].forEach((m) => m.mockReset());
   // (1) stuck update: .set().where().returning() → no stuck rows.
   dbUpdate.mockReturnValue({ set: () => ({ where: () => ({ returning: () => Promise.resolve([]) }) }) });
   // (2) toClean select: .from().where() → one retention-old row.
   dbSelect.mockReturnValue({ from: () => ({ where: () => Promise.resolve([ROW]) }) });
+  logErrorFn.mockResolvedValue(undefined);
 });
 
 describe("speaking-reaper GET (#6)", () => {
@@ -71,5 +75,14 @@ describe("speaking-reaper GET (#6)", () => {
     const body = await res.json();
     expect(markDeleted).toHaveBeenCalledWith("s1", "u1", "user");
     expect(body.cleaned).toBe(1);
+  });
+
+  it("500 + logError, когда роут падает вне per-target catch (F10)", async () => {
+    dbUpdate.mockImplementation(() => {
+      throw new Error("db down");
+    });
+    const res = await GET(authed());
+    expect(res.status).toBe(500);
+    expect(logErrorFn).toHaveBeenCalledOnce();
   });
 });

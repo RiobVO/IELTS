@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { cronSecret } from "@/env";
+import { logError } from "@/lib/monitoring/log-error";
 import { failStaleSubmissions } from "@/lib/writing/store";
 import { WRITING_STALE_MS } from "@/lib/writing/lifecycle";
 
@@ -18,6 +19,17 @@ export async function GET(request: Request) {
   if (!isCronAuthorized(request.headers.get("authorization"), cronSecret())) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
-  const failed = await failStaleSubmissions(new Date(Date.now() - WRITING_STALE_MS));
-  return NextResponse.json({ ok: true, failed }, { status: 200 });
+  try {
+    const failed = await failStaleSubmissions(new Date(Date.now() - WRITING_STALE_MS));
+    return NextResponse.json({ ok: true, failed }, { status: 200 });
+  } catch (e) {
+    await logError({
+      source: "server",
+      message: `writing-reaper cron failed: ${e instanceof Error ? e.message : String(e)}`,
+      stack: e instanceof Error ? e.stack : null,
+      url: request.url,
+      context: { route: "/api/cron/writing-reaper" },
+    });
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
 }
