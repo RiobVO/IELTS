@@ -1,5 +1,30 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  sanitizeSource,
+  SOURCE_COOKIE_MAX_AGE_SECONDS,
+  SOURCE_COOKIE_NAME,
+  SOURCE_QUERY_PARAM,
+} from "@/lib/analytics/source";
+
+/**
+ * Source-атрибуция (P5): если в query есть `?src=<slug>` и он валиден — кладём
+ * метку канала в first-party cookie `bando_src` (last-touch: перезаписываем
+ * существующую). httpOnly — читают только серверные потребители (оба signup-пути).
+ * Невалидный/отсутствующий src cookie не трогает, так что уже сохранённая метка
+ * доживает до TTL. Вызывается ПОСЛЕ auth-refresh (см. ниже) и добавляет лишь свой
+ * Set-Cookie к готовому response — supabase-cookies (другое имя) не задевает.
+ */
+function applySourceCookie(request: NextRequest, response: NextResponse): void {
+  const source = sanitizeSource(request.nextUrl.searchParams.get(SOURCE_QUERY_PARAM));
+  if (!source) return;
+  response.cookies.set(SOURCE_COOKIE_NAME, source, {
+    maxAge: SOURCE_COOKIE_MAX_AGE_SECONDS,
+    path: "/",
+    sameSite: "lax",
+    httpOnly: true,
+  });
+}
 
 /**
  * Refreshes the Supabase session on every request and guards the
@@ -48,8 +73,17 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth";
     url.searchParams.set("next", path);
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    // Канон Supabase SSR: новый response обязан унести Set-Cookie auth-рефреша
+    // (ротация/очистка session-cookie из setAll выше) — иначе они теряются на
+    // redirect-пути. Латентный дефект существовал тут и до P5 (Codex 2026-07-11).
+    response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+    // Метку канала сохраняем и на этом пути — иначе `?src=` на защищённом URL для
+    // разлогиненного гостя терялась бы при редиректе на /auth.
+    applySourceCookie(request, redirectResponse);
+    return redirectResponse;
   }
 
+  applySourceCookie(request, response);
   return response;
 }

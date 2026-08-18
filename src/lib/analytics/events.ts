@@ -27,6 +27,15 @@ export type EventProperties = {
   signup: {
     auth_provider: "email" | "apple" | "facebook" | "google";
     has_ref: boolean;
+    /** Канал привлечения (P5): санитизированный слаг из cookie `bando_src`, что
+     *  ставит middleware по `?src=<slug>`. Отсутствует, если пользователь пришёл
+     *  не по помеченной ссылке. НЕ реферал (`has_ref` — отдельный person-to-person
+     *  механизм): здесь метка канала. */
+    source?: string;
+    /** Дублируем `source` в person-properties: posthog-node разворачивает
+     *  `properties.$set` в $set персоны — чтобы когорты/retention фильтровались по
+     *  каналу, а не только отдельные события. */
+    $set?: { source: string };
   };
   test_start: {
     content_item_id: string;

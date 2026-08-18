@@ -3,12 +3,13 @@
 import { createHash } from "node:crypto";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { signupThrottle } from "@/db/schema";
 import { publicSiteUrl } from "@/env";
 import { captureServer } from "@/lib/analytics/server";
+import { sanitizeSource, SOURCE_COOKIE_NAME } from "@/lib/analytics/source";
 import {
   AUTH_THROTTLE_LIMITS,
   type AuthThrottleScope,
@@ -182,9 +183,14 @@ export async function signUp(formData: FormData) {
   // атрибуции; в метрику идёт только has_ref. best-effort.
   const isNewUser = (data.user?.identities?.length ?? 0) > 0;
   if (data.user && isNewUser) {
+    // Метка канала (P5): re-sanitize при чтении — cookie httpOnly, но
+    // пользователь-модифицируема (devtools/proxy), а значение уходит в PostHog.
+    const cookieStore = await cookies();
+    const source = sanitizeSource(cookieStore.get(SOURCE_COOKIE_NAME)?.value);
     await captureServer("signup", data.user.id, {
       auth_provider: "email",
       has_ref: ref !== "",
+      ...(source ? { source, $set: { source } } : {}),
     });
   }
 

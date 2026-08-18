@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { EventProperties } from "@/lib/analytics/events";
 import { captureServer } from "@/lib/analytics/server";
+import { sanitizeSource, SOURCE_COOKIE_NAME } from "@/lib/analytics/source";
 import { linkOAuthReferral } from "@/lib/progress/referral";
 import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
@@ -55,9 +57,14 @@ export async function GET(request: Request) {
       const isFreshOAuthSignup =
         !!u && provider !== "email" && createdMs > 0 && ageMs >= 0 && ageMs < FRESH_SIGNUP_WINDOW_MS;
       if (isFreshOAuthSignup) {
+        // Метка канала (P5): cookie `bando_src` ставит middleware на посадочной,
+        // до ухода в OAuth; re-sanitize при чтении (значение уходит в PostHog).
+        const cookieStore = await cookies();
+        const source = sanitizeSource(cookieStore.get(SOURCE_COOKIE_NAME)?.value);
         await captureServer("signup", u.id, {
           auth_provider: provider,
           has_ref: !!ref,
+          ...(source ? { source, $set: { source } } : {}),
         });
         // Реферал через Google OAuth (ранее терялся — signUp-триггер получает от
         // Google метадату без ref_code, только email-форма его туда клала).
