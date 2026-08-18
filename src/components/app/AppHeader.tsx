@@ -34,6 +34,9 @@ interface AppHeaderProps {
   markAllRead: () => Promise<void>;
   markOneRead: (id: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Student Telegram channel (TELEGRAM_CHANNEL_URL) — «Report a problem» CTA.
+   *  null when unset => the CTA is simply not rendered. */
+  telegramChannelUrl: string | null;
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
@@ -183,8 +186,9 @@ function StatPill({ icon, value, label, color }: { icon: Parameters<typeof Icon>
   );
 }
 
-export function AppHeader({ active, streak, xp, initials, unread, recent, markAllRead, markOneRead, signOut }: AppHeaderProps) {
+export function AppHeader({ active, streak, xp, initials, unread, recent, markAllRead, markOneRead, signOut, telegramChannelUrl }: AppHeaderProps) {
   const upgrade = useInteractive();
+  const report = useInteractive();
   const out = useInteractive();
   const burger = useInteractive();
   const [open, setOpen] = useState(false);
@@ -307,6 +311,25 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
             {initials}
           </Link>
 
+          {/* Report a problem — Telegram-канал вместо формы (пред-launch: без записи в
+              error_log). Fail-off: без TELEGRAM_CHANNEL_URL пункт не рендерится. На
+              мобильном живёт в drawer (.ah-signout скрыт классом, как у Sign out). */}
+          {telegramChannelUrl && (
+            <a
+              href={telegramChannelUrl}
+              target="_blank"
+              rel="noopener"
+              aria-label="Report a problem"
+              title="Report a problem"
+              className="ah-signout"
+              style={{ alignItems: "center", textDecoration: "none" }}
+            >
+              <IconAction hover={report.hover} handlers={report.handlers}>
+                <Icon name="flag" size={18} strokeWidth={2.2} />
+              </IconAction>
+            </a>
+          )}
+
           {/* Выход — дизайн-хедер его не содержит; сохранён, т.к. иначе из нового UI не выйти.
               На мобильном живёт в drawer (.ah-signout скрыт классом). */}
           <form action={signOut} className="ah-signout" style={{ alignItems: "center" }}>
@@ -415,6 +438,35 @@ export function AppHeader({ active, streak, xp, initials, unread, recent, markAl
             Sign out
           </Button>
         </form>
+
+        {/* Report a problem — тот же CTA, что и на десктопе (см. выше), только строкой
+            меню: Button не умеет target/rel, а внешняя ссылка должна открываться в
+            новой вкладке. */}
+        {telegramChannelUrl && (
+          <a
+            href={telegramChannelUrl}
+            target="_blank"
+            rel="noopener"
+            onClick={() => setOpen(false)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 13,
+              minHeight: 48,
+              padding: "0 14px",
+              marginTop: 6,
+              borderRadius: "var(--radius-md)",
+              textDecoration: "none",
+              color: "var(--text-secondary)",
+              fontFamily: "var(--font-ui)",
+              fontSize: "var(--text-md)",
+              fontWeight: 700,
+            }}
+          >
+            <Icon name="flag" size={19} strokeWidth={2.3} style={{ color: "var(--text-muted)" }} />
+            Report a problem
+          </a>
+        )}
           </nav>
         </>
       )}

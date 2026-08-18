@@ -34,7 +34,7 @@ export default function AboutPage() {
 
       <h2>Contact</h2>
       <p>
-        Questions or feedback? Reach us at <a href="mailto:hello@bando.app">hello@bando.app</a>.
+        Questions or feedback? Reach us at <a href="mailto:hello@bando.study">hello@bando.study</a>.
       </p>
     </InfoPage>
   );

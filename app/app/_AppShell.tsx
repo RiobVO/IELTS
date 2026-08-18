@@ -32,6 +32,12 @@ export async function AppShell({
     profile?.email,
   );
 
+  // Server-only env (не NEXT_PUBLIC_*) — читаем здесь и пробрасываем в клиентский
+  // AppHeader, как telegramChannelUrl в /app/practice. Пусто/не задано => пункт
+  // «Report a problem» просто не рендерится (fail-off).
+  const telegramChannelUrlRaw = process.env.TELEGRAM_CHANNEL_URL?.trim();
+  const telegramChannelUrl = telegramChannelUrlRaw ? telegramChannelUrlRaw : null;
+
   return (
     <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", background: "var(--bg-base)" }}>
       <a href="#content" className="skip-link">Skip to content</a>
@@ -45,6 +51,7 @@ export async function AppShell({
         markAllRead={markAllRead}
         markOneRead={markOneRead}
         signOut={signOut}
+        telegramChannelUrl={telegramChannelUrl}
       />
       {/* overflow-x:clip на контейнере контента — страховка мобильного бургер-drawer.
           Drawer шапки — position:fixed;right:0 (AppHeader). Любой горизонтальный
