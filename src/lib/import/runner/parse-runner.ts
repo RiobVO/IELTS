@@ -126,8 +126,10 @@ function parseReadingRunner(html: string): RunnerParseResult {
       ? { mode: "text_accept", accept: accept[k]!, explanation: expl[k] ?? null, evidence: evid[k] ?? null }
       : { mode: "exact", accept: [NORM(correct[k])], explanation: expl[k] ?? null, evidence: evid[k] ?? null };
     // Review-gate (BRIEF §4.2.1): не глотать неуверенный маппинг типа — поднять
-    // в warnings, чтобы админ увидел fallback перед публикацией. P1: пустой label
-    // (источник не указал тип) → informational (не блок); непустой мусор → блок.
+    // в warnings, чтобы админ увидел fallback перед публикацией. Пустой label
+    // (источник не указал тип) и непустой мусор дают РАЗНЫЙ текст warning'а
+    // (blankTypeWarning / unknownTypeWarning), но с QTYPE hard-block (2026-07-11)
+    // publish-гейт блокирует publish на обоих — см. question-types.ts.
     const rawType = types[k] ?? "";
     const canon = canonQuestionType(rawType);
     if (canon.type === null) {
@@ -234,8 +236,9 @@ function parseListeningRunner(html: string): RunnerParseResult {
       explanation: null,
       evidence: null,
     };
-    // Review-gate: поднять неуверенный маппинг типа и пустой ключ в warnings. P1:
-    // пустой label → informational (не блок), непустой нераспознанный → блок.
+    // Review-gate: поднять неуверенный маппинг типа и пустой ключ в warnings. Пустой
+    // label и непустой нераспознанный дают разный текст, но оба блокируют publish
+    // (QTYPE hard-block, 2026-07-11) — см. question-types.ts.
     const rawType = types[String(n)] ?? "";
     const canon = canonQuestionType(rawType);
     if (canon.type === null) {

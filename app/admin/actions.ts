@@ -102,7 +102,10 @@ export async function setStatus(formData: FormData) {
         fail("Can't publish: a question has an empty answer key — fix the import first.");
       }
       if (res.reason === "unresolved_question_type") {
-        fail("Can't publish: a question type didn't resolve (see the parser warnings) — fix the import first.");
+        fail(
+          "Can't publish: a question type is empty or unresolved — add QTYPE per the authoring spec " +
+            "and re-upload the file.",
+        );
       }
       if (res.reason === "question_number_gap") {
         fail("Can't publish: question numbers have a gap or duplicate — fix the import first.");

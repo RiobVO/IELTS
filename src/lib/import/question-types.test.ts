@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   canonQuestionType,
   blankTypeWarning,
-  isUnknownTypeWarning,
+  isUnresolvedQuestionTypeWarning,
   isChooseManyLabel,
 } from "./question-types";
 
@@ -80,37 +80,74 @@ describe("canonQuestionType", () => {
   });
 });
 
-// P1 (2026-07-09): пустой qtype (источник не указал тип) — informational, публикация
-// разрешена (грейдинг по answer-mode, не по qtype). Непустой нераспознанный — блок.
-// isUnknownTypeWarning стал blank-aware, чтобы разблокировать и УЖЕ сохранённые драфты.
-describe("blankTypeWarning / isUnknownTypeWarning (P1 softening)", () => {
-  it("blankTypeWarning не считается блокирующим unknown-type", () => {
-    expect(isUnknownTypeWarning(blankTypeWarning(3))).toBe(false);
+// QTYPE hard-block (2026-07-11, BACKLOG W2-3b): и пустой, и непустой нераспознанный qtype
+// блокируют publish — authoring-спека (docs/authoring-spec.md) требует QTYPE на каждый
+// вопрос. Раньше (P1, 2026-07-09) пустой label был смягчён до informational, пока спеки
+// не было; isUnresolvedQuestionTypeWarning реверсирует это смягчение и остаётся
+// blank-aware в другую сторону — ловит и УЖЕ сохранённые старым форматом драфты.
+describe("blankTypeWarning / isUnresolvedQuestionTypeWarning (QTYPE hard-block)", () => {
+  it("blankTypeWarning считается блокирующим unresolved-type", () => {
+    expect(isUnresolvedQuestionTypeWarning(blankTypeWarning(3))).toBe(true);
   });
 
-  it("persisted пустой-label warning (старый маркер) больше НЕ блокирует", () => {
-    expect(isUnknownTypeWarning('Q1: unknown type "" → fell back to short_answer')).toBe(false);
+  it("persisted пустой-label warning (старый маркер unknownTypeWarning) тоже блокирует", () => {
+    expect(isUnresolvedQuestionTypeWarning('Q1: unknown type "" → fell back to short_answer')).toBe(
+      true,
+    );
+  });
+
+  // Дословный формат blankTypeWarning ДО hard-block (P1-смягчение): такие строки остались
+  // в import_warnings старых драфтов — гейт обязан ловить их literal-форму (Codex 2026-07-11).
+  it("historical persisted blank-format (informational-текст P1) блокирует", () => {
+    expect(
+      isUnresolvedQuestionTypeWarning(
+        "Q3: no question type provided in source — informational, grading unaffected",
+      ),
+    ).toBe(true);
+  });
+
+  // JSON.stringify НЕ экранирует U+2028/U+2029; без dotAll `.` их не матчит — дыра в гейте.
+  it("label с U+2028 line separator не проскакивает мимо гейта", () => {
+    expect(
+      isUnresolvedQuestionTypeWarning(
+        `Q4: unknown type "line sep" → fell back to short_answer`,
+      ),
+    ).toBe(true);
   });
 
   it("непустой нераспознанный тип остаётся блокирующим", () => {
-    expect(isUnknownTypeWarning('Q2: unknown type "Frobnicate" → fell back to short_answer')).toBe(
-      true,
-    );
+    expect(
+      isUnresolvedQuestionTypeWarning('Q2: unknown type "Frobnicate" → fell back to short_answer'),
+    ).toBe(true);
   });
 
   // Codex-ревью (2026-07-09): маркер, лежащий ВНУТРИ JSON-label чужого low-confidence
   // warning, не должен давать ложный блок (bare includes(marker) его ловил).
   it("маркер внутри label чужого low-confidence warning не блокирует", () => {
-    expect(isUnknownTypeWarning('Q3: low-confidence type "Matching → fell back to" → matching_info')).toBe(false);
+    expect(
+      isUnresolvedQuestionTypeWarning(
+        'Q3: low-confidence type "Matching → fell back to" → matching_info',
+      ),
+    ).toBe(false);
   });
 
   it("envelope с непарсибельным JSON-label — fail-closed (блок)", () => {
-    expect(isUnknownTypeWarning('Q9: unknown type "\\p" → fell back to short_answer')).toBe(true);
+    expect(isUnresolvedQuestionTypeWarning('Q9: unknown type "\\p" → fell back to short_answer')).toBe(
+      true,
+    );
   });
 
   it("строка не в форме сгенерированного envelope не блокирует", () => {
     // генератор ВСЕГДА кавычит label (JSON.stringify) — строка без кавычек не наш warning
-    expect(isUnknownTypeWarning("Q9: unknown type → fell back to short_answer")).toBe(false);
+    expect(isUnresolvedQuestionTypeWarning("Q9: unknown type → fell back to short_answer")).toBe(
+      false,
+    );
+  });
+
+  it("посторонний текст не матчится по BLANK_ENVELOPE префиксу", () => {
+    expect(isUnresolvedQuestionTypeWarning("Q1: no question type here, false positive check")).toBe(
+      false,
+    );
   });
 });
 
