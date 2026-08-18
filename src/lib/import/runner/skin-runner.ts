@@ -253,3 +253,76 @@ export function skinRunnerAudioDefer(html: string): string {
     tag.replace(/preload=(["'])auto\1/gi, 'preload="metadata"'),
   );
 }
+
+// RUNTIME (read-time) периодический автосейв-мост iframe → parent (волна E, F2-минимал).
+// Раннер живёт в opaque-origin sandbox без allow-same-origin — единственный канал
+// наружу уже есть: `parent.postMessage({type:'ielts-submit',...})` из bridge.ts,
+// собранный там же `__collect()`. Вместо дублирования селекторов сбора ответов
+// (два параллельных набора — reading choose-TWO/drag-token/text и listening
+// gap/multi/dropzone, оба хрупкие к правкам bridge.ts) СПЛАЙСИМ новый код ВНУТРЬ
+// ТОЙ ЖЕ анонимной IIFE bridge-скрипта, текстовой вставкой прямо перед её
+// закрытием — `__collect` там уже объявлен function-scoped и виден по замыканию.
+// Отдельный <script>-тег снаружи так не смог бы: IIFE ничего не оставляет в
+// window (opaque origin, нет утечки в глобальный scope).
+//
+// Якорь — точный хвост bridge.ts (READING_BRIDGE/LISTENING_BRIDGE, эти константы
+// мы же и генерируем при импорте через sanitizeRunner) литеральной строкой, а не
+// позиционно/через </body>: он инвариантен относительно ЛЮБЫХ прочих read-time
+// патчей (skinRunner*, forceRunnerMode дописывают СВОИ скрипты в другие места —
+// хвост bridge-скрипта не трогают) и относительно 5 семейств исходного runner_html
+// (bridge — НАШ код, не контент источника, поэтому его текст идентичен во всех
+// рядах, импортированных текущим bridge.ts). Применяется РАНЬШЕ прочих skin*/
+// forceRunnerMode в route.ts — до того, как что-то ещё могло дописаться рядом.
+// Гейт применимости: наличие СВОЕГО SEND (`type: 'ielts-submit'`) — иначе
+// неопознанный/чужой bridge, не трогаем вовсе (defensive, no-op).
+const PROGRESS_MARK = "bando-progress-bridge";
+const READING_TAIL = "window.showResults = function(){ __send(); };\n})();</script>";
+const LISTENING_TAIL = "__hook();\n})();</script>";
+
+// ES5, splice-совместимо со scope bridge.ts (var/function, никаких let/const-коллизий
+// с __collect/__send/__hook/__readingMultiFor/__multiFor, объявленными рядом).
+// Двойной гейт «не спамить»: (1) __hasAnswers — полностью пустой снапшот не шлём
+// вовсе (свежий тест без единого ответа); (2) __lastProgress — не шлём повторно
+// тот же снапшот. setInterval(~12с) — сеть/подтверждение независимо от событий;
+// debounce(~2с) на change/input — быстрый отклик без спама на каждый keystroke.
+const PROGRESS_JS = `
+  var __lastProgress = null;
+  function __hasAnswers(a){ for (var k in a){ if (a[k] !== '' && a[k] != null) return true; } return false; }
+  function __sendProgress(){
+    try{
+      var ans = __collect();
+      if (!__hasAnswers(ans)) return;
+      var snap = JSON.stringify(ans);
+      if (snap === __lastProgress) return;
+      __lastProgress = snap;
+      parent.postMessage({ type: 'ielts-progress', answers: ans }, '*');
+    }catch(e){}
+  }
+  var __progressDebounce = null;
+  function __scheduleProgress(){
+    clearTimeout(__progressDebounce);
+    __progressDebounce = setTimeout(__sendProgress, 2000);
+  }
+  document.addEventListener('change', __scheduleProgress, true);
+  document.addEventListener('input', __scheduleProgress, true);
+  setInterval(__sendProgress, 12000);
+`;
+
+/**
+ * Инжектит периодический прогресс-мост (`ielts-progress`) внутрь bridge-IIFE.
+ * Идемпотентно (маркер `bando-progress-bridge`). No-op, если нет распознанного
+ * SEND (`type: 'ielts-submit'`) или хвост bridge не совпал ни с одним известным
+ * вариантом (reading/listening) — незнакомый/уже изменённый bridge не трогаем.
+ */
+export function injectProgressBridge(html: string): string {
+  if (html.includes(PROGRESS_MARK)) return html; // уже пропатчено
+  if (!html.includes("type: 'ielts-submit'")) return html; // не распознанный bridge
+  const marker = `/* ${PROGRESS_MARK} */`;
+  if (html.includes(READING_TAIL)) {
+    return html.replace(READING_TAIL, `${marker}${PROGRESS_JS}\n${READING_TAIL}`);
+  }
+  if (html.includes(LISTENING_TAIL)) {
+    return html.replace(LISTENING_TAIL, `${marker}${PROGRESS_JS}\n${LISTENING_TAIL}`);
+  }
+  return html; // SEND есть, но хвост не распознан — не трогаем (частичный патч опаснее no-op)
+}

@@ -8,7 +8,9 @@ import {
   skinRunnerAudioDefer,
   runnerBrandResidue,
   audioDeferredKickJs,
+  injectProgressBridge,
 } from "./skin-runner";
+import { READING_BRIDGE, LISTENING_BRIDGE } from "./bridge";
 
 const FIX = join(__dirname, "fixtures");
 const listeningFixture = readFileSync(join(FIX, "listening.html"), "utf8");
@@ -330,3 +332,61 @@ describe("audioDeferredKickJs — поведение снипета (без jsdo
     expect(document.removeEventListener).toHaveBeenCalledWith("keydown", keydownHandler, true);
   });
 });
+
+// F2-минимал (волна E): периодический автосейв-мост iframe → parent. Фикстуры зеркалят
+// РЕАЛЬНУЮ форму runner_html, которую производит sanitizeRunner (bridge прямо перед
+// </body>), чтобы якорь по хвосту bridge-скрипта проверялся на настоящем тексте.
+describe("injectProgressBridge", () => {
+  const readingHtml = `<html><head></head><body><div id="q1"></div>\n${READING_BRIDGE}\n</body></html>`;
+  const listeningHtml = `<html><head></head><body><div id="q1"></div>\n${LISTENING_BRIDGE}\n</body></html>`;
+
+  it("инжектит мост внутрь reading bridge-IIFE (ДО закрытия, не отдельным <script>)", () => {
+    const out = injectProgressBridge(readingHtml);
+    expect(out).toContain("bando-progress-bridge");
+    expect(out).toContain("ielts-progress");
+    // Переиспользует __collect() бриджа, не дублирует селекторный сбор ответов.
+    expect(out).toContain("__collect()");
+    expect(out.match(/function __readingMultiFor/g)?.length).toBe(1); // не задвоен
+    // Внутри ТОЙ ЖЕ IIFE: наш код стоит раньше закрывающего "})();</script>".
+    expect(out.indexOf("ielts-progress")).toBeLessThan(out.lastIndexOf("})();</script>"));
+    expect(out.indexOf("ielts-progress")).toBeGreaterThan(out.indexOf("function __collect"));
+  });
+
+  it("инжектит мост внутрь listening bridge-IIFE", () => {
+    const out = injectProgressBridge(listeningHtml);
+    expect(out).toContain("bando-progress-bridge");
+    expect(out).toContain("ielts-progress");
+    expect(out).toContain("__collect()");
+    expect(out.match(/function __multiFor/g)?.length).toBe(1); // не задвоен
+    expect(out.indexOf("ielts-progress")).toBeLessThan(out.lastIndexOf("})();</script>"));
+    expect(out.indexOf("ielts-progress")).toBeGreaterThan(out.indexOf("function __collect"));
+  });
+
+  it("шлёт только при непустых ответах и не спамит повтор — снапшот-гейт в самом снипете", () => {
+    const out = injectProgressBridge(readingHtml);
+    expect(out).toContain("__hasAnswers");
+    expect(out).toContain("__lastProgress");
+    expect(out).toMatch(/setInterval\(__sendProgress,\s*12000\)/);
+    expect(out).toMatch(/setTimeout\(__sendProgress,\s*2000\)/);
+  });
+
+  it("идемпотентен — повторный вызов не задваивает инжект", () => {
+    const once = injectProgressBridge(readingHtml);
+    expect(injectProgressBridge(once)).toBe(once);
+  });
+
+  it("no-op без распознанного SEND (не наш bridge / чужой контент)", () => {
+    const noBridge = "<html><head></head><body><div>plain</div></body></html>";
+    expect(injectProgressBridge(noBridge)).toBe(noBridge);
+  });
+
+  it("no-op когда SEND есть, но хвост bridge не распознан (частичный патч опаснее no-op)", () => {
+    const mutatedTail = `<html><head></head><body>${SEND_MARKER_ONLY}\n</body></html>`;
+    expect(injectProgressBridge(mutatedTail)).toBe(mutatedTail);
+  });
+});
+
+// Синтетический SEND-фрагмент без узнаваемого reading/listening хвоста — имитирует
+// гипотетический незнакомый bridge-вариант с тем же protocol-маркером ielts-submit.
+const SEND_MARKER_ONLY =
+  "<script>(function(){function __send(ans){ parent.postMessage({ type: 'ielts-submit', answers: ans }, '*'); } window.__unknownHook = __send; })();</script>";
