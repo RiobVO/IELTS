@@ -19,6 +19,7 @@ import { after } from "next/server";
 import { db } from "@/db";
 import { attempt, contentItem, profile, trialClaim } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
+import { isAdminProfile } from "@/lib/auth";
 import { BASIC_DAILY_LIMIT, effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { FULL_CATEGORIES, isFullCategory, trialAllows } from "./trial";
 
@@ -34,6 +35,12 @@ type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0
  * read here so submit needs a SINGLE content_item round-trip, not two). Returns
  * null if either row is missing. No redirects — separated from enforcement so the
  * reads can be batched with submit's other independent queries.
+ *
+ * F4 "Sit as student": the content_item query no longer filters status='published'
+ * in SQL — instead the published-gate is applied AFTER the read, so an admin can be
+ * exempted with zero extra round-trips (profile.role rides along the SAME profile
+ * select that already ran here). Non-admin behaviour is byte-identical to before
+ * (draft/unpublished id -> null, same as the old WHERE-clause gate).
  */
 export async function loadAccessData(
   userId: string,
@@ -43,10 +50,15 @@ export async function loadAccessData(
   tierRequired: Tier;
   category: string;
   bandScale: Record<string, number> | null;
+  /** true только когда юзер — admin И тест ещё не опубликован (F4). Сигнал для
+   *  enforceAccess: QA-прогон черновика вне монетизации (тир/дневной кап
+   *  неприменимы к тесту, который ещё не продаётся). Никогда true для студента
+   *  или опубликованного теста. */
+  adminDraftBypass: boolean;
 } | null> {
   const [[prof], [item]] = await Promise.all([
     db
-      .select({ tier: profile.tier, premiumUntil: profile.premiumUntil })
+      .select({ tier: profile.tier, premiumUntil: profile.premiumUntil, role: profile.role })
       .from(profile)
       .where(eq(profile.id, userId)),
     db
@@ -54,19 +66,23 @@ export async function loadAccessData(
         tierRequired: contentItem.tierRequired,
         category: contentItem.category,
         bandScale: contentItem.bandScale,
+        status: contentItem.status,
       })
       .from(contentItem)
-      // Owner-path bypasses RLS, so gate published HERE too: a draft/unpublished id
-      // never resolves -> caller redirects away. Keeps the start+submit gate from
-      // being weaker than the catalog's content_item_select_published policy.
-      .where(and(eq(contentItem.id, contentItemId), eq(contentItem.status, "published"))),
+      .where(eq(contentItem.id, contentItemId)),
   ]);
   if (!prof || !item) return null;
+  const admin = isAdminProfile(prof);
+  // Owner-path bypasses RLS, so gate published HERE too: a draft/unpublished id
+  // never resolves for a non-admin -> caller redirects away, byte-identical to the
+  // old WHERE-clause gate. Admin is exempted (F4) — the only behaviour change.
+  if (item.status !== "published" && !admin) return null;
   return {
     userTier: effectiveTier({ tier: prof.tier, premium_until: prof.premiumUntil }),
     tierRequired: item.tierRequired,
     category: item.category,
     bandScale: (item.bandScale as Record<string, number> | null) ?? null,
+    adminDraftBypass: admin && item.status !== "published",
   };
 }
 
@@ -94,7 +110,17 @@ export async function enforceAccess(
    * бы на редиректе, у iframe-раннера ответы не автосейвятся).
    */
   mode: AttemptMode | null,
+  /**
+   * F4 "Sit as student": true ТОЛЬКО когда caller уже подтвердил isAdmin И тест —
+   * черновик (см. loadAccessData.adminDraftBypass / инлайн-эквивалент в
+   * exam/reading page.tsx). Гейтить деньгами QA-прогон теста, которым ЕЩЁ не
+   * торгуют, бессмысленно — пропускаем тир И дневной кап целиком. Никогда true
+   * для студента или опубликованного теста, поэтому обычный путь не меняется.
+   */
+  adminDraftBypass = false,
 ): Promise<void> {
+  if (adminDraftBypass) return;
+
   // (a) Tier gate + trial-лейн (§4.8). Обычный tier-гейт закрыл бы полный тест для
   // Basic — trial-лейн пропускает ОДИН (лендинг «first full test is free»).
   // DB-запрос «израсходован ли trial» делаем ТОЛЬКО когда он реально может помочь

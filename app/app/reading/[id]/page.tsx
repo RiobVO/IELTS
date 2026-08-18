@@ -1,10 +1,11 @@
 import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getProfile, requireUser } from "@/lib/auth";
+import { getProfile, isAdminProfile, requireUser } from "@/lib/auth";
 import { db } from "@/db";
-import { annotation, answerKey, contentItem, question } from "@/db/schema";
-import { getExamContent } from "@/lib/content/exam-content";
+import { annotation, answerKey, attempt, contentItem, question } from "@/db/schema";
+import { getExamContent, getExamContentForAdminPreview } from "@/lib/content/exam-content";
+import { DraftPreviewBadge } from "@/components/exam/DraftPreviewBadge";
 import { ModeStart } from "@/components/exam/ModeStart";
 import {
   type AttemptMode,
@@ -56,7 +57,7 @@ export default async function ReadingTestPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ mode?: string; min?: string; focus?: string }>;
+  searchParams: Promise<{ mode?: string; min?: string; focus?: string; preview?: string }>;
 }) {
   const user = await requireUser();
   const { id } = await params;
@@ -73,15 +74,28 @@ export default async function ReadingTestPage({
   // (незакрытая попытка / была ли сдача) — per-user, считаются ВНЕ кэша, на каждый
   // запрос, параллельно с чтением контента. answer_key намеренно НЕ читается (в кэш
   // не попадает; не утекает до submit).
-  const [content, profile, existing, attempted] = await Promise.all([
+  const [cached, profile, existing, attempted] = await Promise.all([
     getExamContent(id),
     getProfile(),
     findInProgressAttempt(user.id, id),
     hasSubmittedAttempt(user.id, id),
   ]);
   // getExamContent гейтит status='published' (owner-путь обходит RLS) → draft/
-  // отсутствие = null = 404, тот же гейт, что раньше давал anon-клиент.
+  // отсутствие = null, тот же гейт, что раньше давал anon-клиент.
+  const isAdmin = isAdminProfile(profile);
+  // F4 "Sit as student": кэш вернул null → либо черновик, либо id не существует.
+  // ТОЛЬКО когда юзер admin, идём отдельным НЕкэшируемым чтением мимо
+  // unstable_cache (иначе черновик утёк бы в общий кэш-ключ ["exam-content", id] и
+  // стал бы виден студентам). Для не-админа/несуществующего id — content===null,
+  // как раньше.
+  const content = cached ?? (isAdmin ? await getExamContentForAdminPreview(id) : null);
   if (!content) notFound();
+  // true только когда явно прошли admin-веткой выше (кэш промахнулся — не-published).
+  const isDraftPreview = !cached;
+  // F4: admin-preview = черновик ЛИБО явный ?preview=1 на published (ссылка «Sit as
+  // student» из админки). Роль проверяется СЕРВЕРОМ — сам флаг не-админу ничего не
+  // даёт (для него preview просто игнорируется, поведение обычное).
+  const adminPreview = isAdmin && (isDraftPreview || sp.preview === "1");
   const { test } = content;
   // Нормализуем разметку абзацев каждого пассажа к единому контракту (.rp +
   // data-letter) на read-time — вся разнородность форматов в одной тестируемой
@@ -109,10 +123,44 @@ export default async function ReadingTestPage({
   const userTier = profile
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
     : "basic";
-  const mode = existing?.mode ?? modeParam;
+  // F4: admin-preview форсирует practice БЕЗУСЛОВНО — и для новой попытки, и для
+  // резюма. Резюмируемая mock-попытка конвертится в practice ПРЯМО В БД: submit
+  // читает attempt.mode из БД (shouldRateAttempt рейтингует mock), поэтому
+  // in-memory релейбл не защитил бы рейтинг. Update — owner-scoped, только
+  // in_progress; создать вторую practice-попытку рядом нельзя (partial-индекс 0007
+  // держит одну in_progress на (user, test)), значит конверсия — единственный
+  // способ резюмить без mock-хвоста.
+  let resume = existing;
+  if (adminPreview && existing && existing.mode === "mock") {
+    const converted = await db
+      .update(attempt)
+      .set({ mode: "practice" })
+      .where(
+        and(
+          eq(attempt.id, existing.id),
+          eq(attempt.userId, user.id),
+          eq(attempt.status, "in_progress"),
+        ),
+      )
+      .returning({ id: attempt.id });
+    // 0 строк — попытка уже не in_progress (конкурентный submit из другого таба):
+    // resume из устаревшего снапшота строить нельзя (in-memory разошёлся бы с
+    // БД-строкой) → идём путём «existing отсутствует»: startAttempt создаст свежую
+    // practice-попытку обычной механикой, остаток гонки разрулит ON CONFLICT (0007).
+    resume = converted.length > 0 ? { ...existing, mode: "practice" } : null;
+  }
+  const mode = adminPreview ? "practice" : (existing?.mode ?? modeParam);
   // Кап — только на создание НОВОГО mock; резюм существующей попытки не расходует
   // слот и не должен блокироваться (tier-гейт применяется всегда).
-  await enforceAccess(user.id, userTier, test.tier_required as Tier, test.category, id, existing ? null : modeParam);
+  await enforceAccess(
+    user.id,
+    userTier,
+    test.tier_required as Tier,
+    test.category,
+    id,
+    existing ? null : modeParam,
+    isDraftPreview, // adminDraftBypass — только когда isAdmin уже подтверждён выше
+  );
 
   // Listening: one audio file for the whole test. Local public/ path now;
   // a full Storage URL (signed, §11) once audio lives in the cloud.
@@ -178,11 +226,14 @@ export default async function ReadingTestPage({
   const locatorEligible = mode === "practice" && !audioSrc;
 
   // Пройти enforceAccess с !meetsTier можно только по trial-лейну (§4.8) → trial-старт:
-  // H3-атомарный claim в startAttempt.
-  const isTrial = !meetsTier(userTier, test.tier_required as Tier);
+  // H3-атомарный claim в startAttempt. Admin-draft-preview — НЕ trial (доступ дан
+  // bypass'ом, не расходом слота): forced false, иначе admin съел бы свой trial-
+  // слот QA-прогоном черновика.
+  const isTrial = !isDraftPreview && !meetsTier(userTier, test.tier_required as Tier);
   const [{ attemptId, answers: savedAnswers, mode: attemptMode }, annotations, locatableRows] = await Promise.all([
-    // `existing` из батча выше — резюм без повторного SELECT той же строки.
-    startAttempt(user.id, id, mode, isTrial, existing),
+    // `resume` из батча выше (с mock→practice конверсией admin-preview) — резюм без
+    // повторного SELECT той же строки.
+    startAttempt(user.id, id, mode, isTrial, resume),
     // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
     // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
     db
@@ -216,31 +267,34 @@ export default async function ReadingTestPage({
   ]);
 
   return (
-    <ExamRunner
-      // Смена попытки = свежий инстанс: refs single-pass/таймера не переживают attempt.
-      key={attemptId}
-      attemptId={attemptId}
-      contentItemId={id}
-      mode={attemptMode}
-      mockMinutes={mockMinutes}
-      initialAnswers={savedAnswers}
-      passages={(passages ?? []) as never}
-      questions={(questionsData ?? []) as Question[]}
-      durationSeconds={test.duration_seconds}
-      audioSrc={audioSrc}
-      title={test.title}
-      category={test.category}
-      initialAnnotations={annotations as never}
-      // Practice — учебная поверхность: всегда атомизированный рендер, иначе verbatim
-      // questions_html спрятал бы P6/P7 (check/reveal) и P1-подсказки, которые живут
-      // в QuestionBlock. Fidelity-verbatim остаётся mock/легаси-пути.
-      questionsHtml={attemptMode === "practice" ? null : questionsHtml}
-      // P15 — deep-link авто-скролл к вопросу, только practice (в mock проп не
-      // передаём: mock ходит iframe-раннером, атомизации тут нет).
-      focus={attemptMode === "practice" ? focusNumber : undefined}
-      // P2b-2 — номера вопросов с локатором ДО reveal. Практис-reading; для mock/
-      // listening проп undefined → кнопка «Where to look?» не рендерится.
-      locatable={attemptMode === "practice" && !audioSrc ? locatableRows.map((r) => r.number) : undefined}
-    />
+    <>
+      {isDraftPreview && <DraftPreviewBadge />}
+      <ExamRunner
+        // Смена попытки = свежий инстанс: refs single-pass/таймера не переживают attempt.
+        key={attemptId}
+        attemptId={attemptId}
+        contentItemId={id}
+        mode={attemptMode}
+        mockMinutes={mockMinutes}
+        initialAnswers={savedAnswers}
+        passages={(passages ?? []) as never}
+        questions={(questionsData ?? []) as Question[]}
+        durationSeconds={test.duration_seconds}
+        audioSrc={audioSrc}
+        title={test.title}
+        category={test.category}
+        initialAnnotations={annotations as never}
+        // Practice — учебная поверхность: всегда атомизированный рендер, иначе verbatim
+        // questions_html спрятал бы P6/P7 (check/reveal) и P1-подсказки, которые живут
+        // в QuestionBlock. Fidelity-verbatim остаётся mock/легаси-пути.
+        questionsHtml={attemptMode === "practice" ? null : questionsHtml}
+        // P15 — deep-link авто-скролл к вопросу, только practice (в mock проп не
+        // передаём: mock ходит iframe-раннером, атомизации тут нет).
+        focus={attemptMode === "practice" ? focusNumber : undefined}
+        // P2b-2 — номера вопросов с локатором ДО reveal. Практис-reading; для mock/
+        // listening проп undefined → кнопка «Where to look?» не рендерится.
+        locatable={attemptMode === "practice" && !audioSrc ? locatableRows.map((r) => r.number) : undefined}
+      />
+    </>
   );
 }

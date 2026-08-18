@@ -61,3 +61,14 @@ export async function requireAdmin() {
   if (profile.role !== "admin") redirect("/app");
   return profile;
 }
+
+/**
+ * Не-редиректящий предикат роли admin (F4 "Sit as student"). requireAdmin остаётся
+ * источником правды для admin-ONLY страниц (редиректит не-админа); этот предикат —
+ * для read-only байпас-веток внутри УЖЕ доступных студенту маршрутов (RSC-условие
+ * в /app/exam, /app/reading; route-handler в /app/exam/[id]/runner, где redirect()
+ * недоступен) — там нужен просто bool, не побочный эффект.
+ */
+export function isAdminProfile(profile: { role: string } | null | undefined): boolean {
+  return profile?.role === "admin";
+}
