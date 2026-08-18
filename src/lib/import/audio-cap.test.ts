@@ -13,23 +13,25 @@ describe("withinAudioCap", () => {
     expect(withinAudioCap(5 * 1024 * 1024)).toBe(true);
   });
 
-  it("пропускает файл ровно на границе (лимит включителен)", () => {
+  it("пропускает файл ровно на границе (лимит включителен, 12 MB)", () => {
     expect(withinAudioCap(MAX_IMPORT_AUDIO_BYTES)).toBe(true);
+    expect(withinAudioCap(12 * 1024 * 1024)).toBe(true);
   });
 
-  it("отсекает файл строго больше лимита", () => {
+  it("отсекает файл строго больше лимита (12 MB + 1 байт)", () => {
     expect(withinAudioCap(MAX_IMPORT_AUDIO_BYTES + 1)).toBe(false);
+    expect(withinAudioCap(12 * 1024 * 1024 + 1)).toBe(false);
     expect(withinAudioCap(40 * 1024 * 1024)).toBe(false);
   });
 });
 
 describe("audioTooLargeMessage", () => {
   it("несёт вес файла, лимит и actionable-инструкцию", () => {
-    const msg = audioTooLargeMessage(15 * 1024 * 1024);
-    expect(msg).toContain("15.0 MB");
+    const msg = audioTooLargeMessage(12 * 1024 * 1024);
+    expect(msg).toContain("12.0 MB");
     expect(msg).toContain(`${MAX_IMPORT_AUDIO_MB} MB`);
     expect(msg).toMatch(/пережми mp3/);
-    expect(msg).toMatch(/64–96 kbps mono/);
+    expect(msg).toMatch(/mono, 48 kbps, 32 kHz/);
     expect(msg).toMatch(/пришли снова/);
   });
 
