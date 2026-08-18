@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { uploadAudio } from "@/lib/telegram/storage";
 import { withinAudioCap, MAX_IMPORT_AUDIO_MB } from "../audio-cap";
+import { audioObjectKey } from "../audio-key";
 import { parseRunner, diagnoseEmptyRunnerParse } from "./parse-runner";
 import { parseTest } from "../parse-test";
 import { mergeAtomization } from "./atomize-merge";
@@ -24,7 +25,7 @@ export interface ImportRunnerResult {
   /** Аудио (listening) перезалито из HTML в наш Storage. false → нужен отдельный mp3. */
   hasAudio: boolean;
   /**
-   * Аудио в HTML нашлось, но НЕ прикреплено — превысило лимит Storage (>10 MB).
+   * Аудио в HTML нашлось, но НЕ прикреплено — превысило кап импорта (MAX_IMPORT_AUDIO_MB, см. audio-cap.ts).
    * Отличается от «аудио не было»: бот громко просит пережать mp3, а не молчит.
    */
   audioTooLarge: boolean;
@@ -96,10 +97,10 @@ export async function importRunner(
         const mb = (bytes.byteLength / (1024 * 1024)).toFixed(1);
         parsed.warnings.push(
           `embedded audio ${mb} MB exceeds ${MAX_IMPORT_AUDIO_MB} MB cap — not attached; ` +
-            `send a compressed mp3 (≤64–96 kbps mono) as a separate file`,
+            `send a compressed mp3 (mono, 48 kbps, 32 kHz) as a separate file`,
         );
       } else {
-        audioUrl = await uploadAudio(`${contentItemId}.mp3`, bytes, "audio/mpeg");
+        audioUrl = await uploadAudio(audioObjectKey(contentItemId, bytes), bytes, "audio/mpeg");
         const p1 = parsed.passages.find((p) => p.order === 1) ?? parsed.passages[0];
         if (p1) p1.audioPath = audioUrl; // persisted below, not in a separate post-write
       }

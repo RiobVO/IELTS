@@ -39,19 +39,28 @@ interface StorageObject {
 }
 
 /**
- * Объект ЖИВ, если его имя = `${liveId}${ext}` для существующего content_item.id
- * ИЛИ входит подстрокой в какой-либо passage.audio_path (страховка: audio_path
- * хранит публичный URL с ключом). Иначе — сирота.
+ * Объект ЖИВ:
+ *  - `audio` — ТОЛЬКО если его имя входит подстрокой в какой-либо
+ *    passage.audio_path. Имена в этом бакете версионные
+ *    (`<contentItemId>-<hash>.mp3`, см. audio-key.ts) — устаревший объект
+ *    прежней заливки того же теста (старый хэш) или легаси `<id>.mp3` совпадает
+ *    по `liveIds`, хотя актуальная ссылка теста уже указывает на другой файл.
+ *    Живым его делает только реальная ссылка в audio_path, не факт существования
+ *    content_item.
+ *  - `source-html` — по-прежнему `${liveId}${ext}` (имя = id, без версии) ИЛИ
+ *    подстрокой в audio_path (страховка на случай общего формата пути).
+ * Иначе — сирота.
  */
 export function isOrphan(
   o: StorageObject,
   liveIds: Set<string>,
   audioPaths: string[],
 ): boolean {
+  if (audioPaths.some((p) => p.includes(o.name))) return false;
+  if (o.bucket === "audio") return true;
   const ext = EXT[o.bucket];
   const idPart = o.name.endsWith(ext) ? o.name.slice(0, -ext.length) : o.name;
   if (liveIds.has(idPart)) return false;
-  if (audioPaths.some((p) => p.includes(o.name))) return false;
   return true;
 }
 
