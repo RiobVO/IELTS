@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { profile } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { captureServer } from "@/lib/analytics/server";
+import { logError } from "@/lib/monitoring/log-error";
 import { validExamDate } from "@/lib/progress/exam-countdown";
 
 function fail(message: string): never {
@@ -56,7 +57,12 @@ export async function completeOnboarding(formData: FormData) {
   } catch (e) {
     // A bad region_id (not in the region table) trips the FK; surface it instead
     // of a 500. Everything else is logged and reported generically.
-    console.error("completeOnboarding failed", e);
+    await logError({
+      source: "server",
+      message: "completeOnboarding failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "completeOnboarding", userId: user.id },
+    });
     fail("Could not save your profile. Try again.");
   }
 

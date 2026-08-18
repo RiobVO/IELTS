@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { contentItem, savedWord } from "@/db/schema";
 import { getUser } from "@/lib/auth";
+import { logError } from "@/lib/monitoring/log-error";
 import { isUuid } from "@/lib/uuid";
 import { MAX_CONTEXT_LEN, normalizeWord } from "@/lib/vocab/saved-words";
 import { reviewCard, type Grade } from "@/lib/vocab/srs";
@@ -13,7 +14,7 @@ import { reviewCard, type Grade } from "@/lib/vocab/srs";
  * из сессии, WHERE user_id ∧ id): grant на INSERT/UPDATE/DELETE у клиентских ролей
  * отозван (миграция 0041), поэтому это единственный путь записи. Best-effort: на
  * невалидном входе — мягкий no-op-результат (без redirect, чтобы не рвать экзамен),
- * реальный сбой БД — console.error в catch. Vocab ВНЕ rating/leaderboard-контура:
+ * реальный сбой БД — logError в catch. Vocab ВНЕ rating/leaderboard-контура:
  * рейтинг/бейджи/стрик экзаменов не трогаются.
  */
 
@@ -67,7 +68,12 @@ export async function saveWord(
       .returning({ id: savedWord.id });
     return { ok: true, created: inserted.length > 0 };
   } catch (e) {
-    console.error("saveWord failed", e);
+    await logError({
+      source: "server",
+      message: "saveWord failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "saveWord", userId: user.id },
+    });
     return { ok: false, reason: "error" };
   }
 }
@@ -136,7 +142,12 @@ export async function reviewSavedWord(
 
     return { ok: true, dueAt: dueAt.toISOString(), intervalDays: state.intervalDays };
   } catch (e) {
-    console.error("reviewSavedWord failed", e);
+    await logError({
+      source: "server",
+      message: "reviewSavedWord failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "reviewSavedWord", userId: user.id, savedWordId: id },
+    });
     return { ok: false, reason: "error" };
   }
 }
@@ -153,7 +164,12 @@ export async function deleteSavedWord(id: string): Promise<{ ok: boolean }> {
       .returning({ id: savedWord.id });
     return { ok: deleted.length > 0 };
   } catch (e) {
-    console.error("deleteSavedWord failed", e);
+    await logError({
+      source: "server",
+      message: "deleteSavedWord failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "deleteSavedWord", userId: user.id, savedWordId: id },
+    });
     return { ok: false };
   }
 }

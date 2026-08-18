@@ -19,6 +19,7 @@ import { and, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { attempt, contentItem, profile } from "@/db/schema";
 import { shouldRateAttempt } from "@/lib/anti-cheat";
+import { logError } from "@/lib/monitoring/log-error";
 import { createNotifications } from "@/lib/notifications/create";
 import { ELO_FLOOR, ratingDeltas } from "@/lib/rating/elo";
 import { type AwardedBadge, evaluateBadges } from "./badges";
@@ -190,7 +191,11 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
     });
 
     if (!progression) {
-      console.error("applyPostSubmit: profile not found", input.userId);
+      await logError({
+        source: "server",
+        message: "applyPostSubmit: profile not found",
+        context: { op: "applyPostSubmit", userId: input.userId, contentItemId: input.contentItemId },
+      });
       return {
         rated: false,
         ratingDelta: 0,
@@ -234,7 +239,12 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
         }
         await maybeRewardReferral(input.userId, rated);
       } catch (e) {
-        console.error("applyPostSubmit: deferred badge/referral work failed", e);
+        await logError({
+          source: "server",
+          message: "applyPostSubmit: deferred badge/referral work failed",
+          stack: e instanceof Error ? e.stack : null,
+          context: { op: "deferredBadgeReferral", userId: input.userId },
+        });
       }
     });
 
@@ -245,7 +255,12 @@ export async function applyPostSubmit(input: PostSubmitInput): Promise<{
       awardedBadges,
     };
   } catch (e) {
-    console.error("applyPostSubmit failed", e);
+    await logError({
+      source: "server",
+      message: "applyPostSubmit failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "applyPostSubmit", userId: input.userId, contentItemId: input.contentItemId },
+    });
     return {
       rated: false,
       ratingDelta: 0,

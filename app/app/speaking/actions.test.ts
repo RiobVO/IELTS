@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // create→evaluate desync is closed (no upload/insert when the trigger can't fire).
 const {
   getUser, getProfile, counts, recentCount, insertUploading, trigger, signedUpload, logEvent, dbSelect, dbUpdate, loadTask,
-  readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk,
+  readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk, logErrorFn,
 } = vi.hoisted(() => ({
     getUser: vi.fn(),
     getProfile: vi.fn(),
@@ -24,6 +24,7 @@ const {
     markDeleteFailed: vi.fn(),
     deleteAudioFn: vi.fn(),
     failStaleSpk: vi.fn(),
+    logErrorFn: vi.fn(),
   }));
 const featureEnabled = vi.hoisted(() => vi.fn());
 
@@ -55,6 +56,8 @@ vi.mock("@/db", () => ({
   },
 }));
 vi.mock("@/env", () => ({ speakingFeatureEnabled: featureEnabled }));
+// actions.ts теперь логирует через logError (F5) — мокаем, как соседние route-тесты.
+vi.mock("@/lib/monitoring/log-error", () => ({ logError: logErrorFn }));
 
 import { createSpeakingSubmission, deleteSpeakingRecording } from "./actions";
 import { SPEAKING_RATE_MAX } from "@/lib/speaking/lifecycle";
@@ -65,13 +68,14 @@ const TASK = "11111111-1111-1111-1111-111111111111"; // a well-formed task id
 
 beforeEach(() => {
   [getUser, getProfile, counts, recentCount, insertUploading, trigger, signedUpload, logEvent, dbSelect, dbUpdate, featureEnabled, loadTask,
-    readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk].forEach(
+    readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk, logErrorFn].forEach(
     (m) => m.mockReset(),
   );
   featureEnabled.mockReturnValue(true); // default fully configured; #5 case overrides
   failStaleSpk.mockResolvedValue(0); // default: nothing stale to reap
   recentCount.mockResolvedValue(0); // default: under the rate cap; N3 case overrides
   loadTask.mockResolvedValue({ status: "published", tierRequired: "basic" }); // default: open task; #3 cases override
+  logErrorFn.mockResolvedValue(undefined);
 });
 
 describe("createSpeakingSubmission", () => {

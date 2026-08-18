@@ -26,6 +26,7 @@
 import { and, eq, gt, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { attempt, badge, mistakeResolution, profile, userBadge } from "@/db/schema";
+import { logError } from "@/lib/monitoring/log-error";
 
 export interface AwardedBadge {
   id: string;
@@ -233,7 +234,12 @@ export async function evaluateBadges(userId: string): Promise<AwardedBadge[]> {
 
     return awarded;
   } catch (e) {
-    console.error("evaluateBadges failed", e);
+    await logError({
+      source: "server",
+      message: "evaluateBadges failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "evaluateBadges", userId },
+    });
     return [];
   }
 }

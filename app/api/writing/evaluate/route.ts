@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { writingInternalSecret } from "@/env";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { logError } from "@/lib/monitoring/log-error";
 import { getEvaluator } from "@/lib/writing/evaluator";
 import { minWordsFor } from "@/lib/writing/lifecycle";
 import { downloadTask1Image } from "@/lib/writing/storage";
@@ -52,7 +53,12 @@ export async function POST(request: Request) {
     await persistFeedback(submissionId, { ...result, feedback });
     return NextResponse.json({ ok: true, claimed: true }, { status: 200 });
   } catch (e) {
-    console.error("writing evaluate failed", submissionId, e);
+    await logError({
+      source: "server",
+      message: "writing evaluate failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "writingEvaluate", submissionId },
+    });
     await markFailed(submissionId); // preview/cap NOT consumed — only 'completed' counts
     return NextResponse.json({ ok: false, error: "eval_failed" }, { status: 200 });
   }

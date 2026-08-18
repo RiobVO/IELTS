@@ -48,7 +48,7 @@ export async function POST(
   // ре-сериализованного JSON (он мог бы отличаться порядком ключей/пробелами).
   const rawBody = await request.text();
 
-  if (!verifyWebhook(provider, request, rawBody)) {
+  if (!(await verifyWebhook(provider, request, rawBody))) {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 

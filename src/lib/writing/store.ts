@@ -8,6 +8,7 @@ import {
   writingTask,
 } from "@/db/schema";
 import { writingInternalSecret, publicSiteUrl } from "@/env";
+import { logError } from "@/lib/monitoring/log-error";
 import type { EvaluateResult } from "@/lib/writing/evaluator";
 
 // Insert pending, guarded by the 0024 one-active index. On conflict (user already
@@ -210,7 +211,13 @@ export function triggerEvaluate(submissionId: string): void {
         body: JSON.stringify({ submissionId }),
       });
     } catch (e) {
-      console.error("triggerEvaluate fetch failed", submissionId, e);
+      // Submission виснет в pending, если этот fetch не долетел — важный сигнал.
+      await logError({
+        source: "server",
+        message: "triggerEvaluate fetch failed",
+        stack: e instanceof Error ? e.stack : null,
+        context: { op: "writingTriggerEvaluate", submissionId },
+      });
     }
   });
 }

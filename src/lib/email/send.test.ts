@@ -1,4 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+
+// sendEmail теперь логирует через logError, который импортирует @/db (env-validating
+// на импорте) — мокаем, как в log-error.test.ts, иначе модуль падает на загрузке.
+vi.mock("@/db", () => ({ db: { insert: () => ({ values: vi.fn().mockResolvedValue(undefined) }) } }));
 import { sendEmail } from "./send";
 
 const cfg = { apiKey: "test-key", from: "noreply@example.com", fromName: "IELTS Prep" };

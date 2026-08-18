@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { speakingInternalSecret } from "@/env";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { logError } from "@/lib/monitoring/log-error";
 import { getEvaluator } from "@/lib/speaking/evaluator";
 import { isUnderlength } from "@/lib/speaking/lifecycle";
 import { downloadAudio } from "@/lib/speaking/storage";
@@ -55,7 +56,12 @@ export async function POST(request: Request) {
       const stt = await transcribeTimings(Buffer.from(audio.data, "base64"), audio.mimeType);
       if (stt) timings = alignTranscriptTimings(result.feedback.transcript, stt.words, stt.duration);
     } catch (e) {
-      console.error("speaking timings failed (non-fatal)", submissionId, e);
+      await logError({
+        source: "server",
+        message: "speaking timings failed (non-fatal)",
+        stack: e instanceof Error ? e.stack : null,
+        context: { op: "speakingTimings", submissionId },
+      });
     }
     await persistFeedback(submissionId, result, timings); // guarded: throws if reaped/delete-requested
     // Audio is KEPT after a successful eval so the user can replay their take and work
@@ -63,7 +69,12 @@ export async function POST(request: Request) {
     // not an immediate drop here. Privacy: still a private bucket + consent + auto-expiry.
     return NextResponse.json({ ok: true, claimed: true }, { status: 200 });
   } catch (e) {
-    console.error("speaking evaluate failed", submissionId, e);
+    await logError({
+      source: "server",
+      message: "speaking evaluate failed",
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "speakingEvaluate", submissionId },
+    });
     await markFailed(submissionId); // preview/cap NOT consumed — only 'completed' counts
     return NextResponse.json({ ok: false, error: "eval_failed" }, { status: 200 });
   }
