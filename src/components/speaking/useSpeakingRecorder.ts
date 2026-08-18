@@ -65,7 +65,12 @@ export function useSpeakingRecorder(maxSeconds: number) {
     analyserRef.current = an;
     const buf = new Uint8Array(an.fftSize);
 
-    const rec = new MediaRecorder(stream, { mimeType: pick.mime });
+    // Storage 1 GB на Free-плане Supabase + грядущая волна preview-записей —
+    // капаем битрейт записи. 48 kbps mono opus держит разборчивость и просодию
+    // для оценки речи (Gemini audio-native), ниже не опускаемся. Это hint для
+    // браузера: Safari/AAC-ветка может проигнорировать или клампить значение —
+    // это ок, приватность и остальная механика не задеты.
+    const rec = new MediaRecorder(stream, { mimeType: pick.mime, audioBitsPerSecond: 48_000 });
     recRef.current = rec;
     rec.ondataavailable = (ev) => { if (ev.data.size) chunksRef.current.push(ev.data); };
     rec.onstop = () => {
