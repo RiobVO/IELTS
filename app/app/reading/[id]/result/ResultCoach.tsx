@@ -933,8 +933,9 @@ const COACH_CSS = `
   /* Три rc-tab (Review misses/By type/Answer key) не помещались в rc-seg на узких
      телефонах — третий ("Answer key") обрубался у края без намёка на скролл
      (overflow-x:auto + скрытый scrollbar). Паддинги/шрифт уже, вертикальный
-     размер (min-height) не трогаем — тап-таргет не деградирует. */
-  .rc-seg{padding:4px;gap:2px}
+     размер (min-height) не трогаем — тап-таргет не деградирует. Fade на правом
+     крае — дешёвый намёк «есть ещё контент», без JS и без гонки с scroll-концом. */
+  .rc-seg{padding:4px;gap:2px;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent)}
   .rc-tab{padding:9px 8px;gap:4px;font-size:12px}
   .rc-tab .rc-b{font-size:10px;padding:1px 5px}
 }

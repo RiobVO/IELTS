@@ -65,7 +65,7 @@ export function ModeStart({
             <p style={MS.cardDesc}>
               {listening
                 ? "Real exam conditions — the recording plays once, no pause or replay."
-                : "Timed countdown that auto-submits at zero — just like the real test."}
+                : "Timed — auto-submits once your time is up, just like the real test."}
             </p>
             {!listening && (
               <p className="mode-mock-hint">

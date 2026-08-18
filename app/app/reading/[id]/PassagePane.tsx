@@ -474,26 +474,30 @@ export const PassagePane = memo(function PassagePane({
         </article>
       </div>
 
-      {/* tool capsule. highlight/note — только тонкий указатель (десктоп): на тач
-          инструмент прячем (см. isTouch). Если на тач и без reader-кнопок капсуле
-          нечего показать — не рендерим её вовсе. */}
-      {(!isTouch || !reader) && (
-      <div style={S.capsule}>
-        {!isTouch && (
-          <>
-            <button className="cap-btn" onClick={() => setMode("highlight")} aria-pressed={mode === "highlight"} title="Highlight" style={S.capBtn(mode === "highlight")}>
-              <Icon name="highlighter" size={18} strokeWidth={2.1} />
-            </button>
-            <button className="cap-btn" onClick={() => setMode("note")} aria-pressed={mode === "note"} title="Note" style={S.capBtn(mode === "note")}>
-              <Icon name="pen-line" size={18} strokeWidth={2.1} />
-            </button>
-          </>
-        )}
+      {/* tool capsule — desktop-only floating toolbar (highlight/note create-tool +
+          Aa/theme fallback для mock, у которого нет аналога в шапке). На тач
+          (coarse pointer) капсула не рендерится ВООБЩЕ: будучи position:absolute
+          внутри полноразмерного pane, она висела на месте, пока пассаж скроллился
+          под ней, и наезжала на строки текста — тот же гейт, что уже применён к
+          note-tool (mobile redesign, cb3dc4a), теперь на весь тулбар целиком, а не
+          только на пару highlight/note. Существующие <mark> остаются read-only
+          видимыми независимо от isTouch (см. useLayoutEffect выше).
+          isTouch выставляется в useEffect → первый SSR/гидрационный кадр рендерит
+          капсулу и на таче; CSS-гейт .pp-capsule (pointer:coarse) прячет её с
+          ПЕРВОГО кадра, JS-гейт затем убирает из DOM (Codex 2026-07-11). */}
+      {!isTouch && (
+      <div className="pp-capsule" style={S.capsule}>
+        <button className="cap-btn" onClick={() => setMode("highlight")} aria-pressed={mode === "highlight"} title="Highlight" style={S.capBtn(mode === "highlight")}>
+          <Icon name="highlighter" size={18} strokeWidth={2.1} />
+        </button>
+        <button className="cap-btn" onClick={() => setMode("note")} aria-pressed={mode === "note"} title="Note" style={S.capBtn(mode === "note")}>
+          <Icon name="pen-line" size={18} strokeWidth={2.1} />
+        </button>
         {/* P4: типографские кнопки (размер/тема) капсулы прячем в practice — управление
             ушло в панель шапки. Без reader (mock/listening) капсула прежняя. */}
         {!reader && (
           <>
-            {!isTouch && <span style={S.sep} />}
+            <span style={S.sep} />
             <button className="cap-btn" onClick={() => setFontPx((f) => Math.max(FONT_MIN, f - 1))} title="Smaller text" style={{ ...S.capBtn(false), fontSize: 13 }}>
               A−
             </button>
@@ -594,6 +598,7 @@ const PASSAGE_CSS = `
 /* Touch target: кнопки капсулы 38px → ≥44px на грубом указателе (десктоп без изменений). */
 .cap-btn{width:38px;height:38px}
 @media (pointer:coarse){.cap-btn{width:44px;height:44px}}
+@media (pointer:coarse){.pp-capsule{display:none}}
 /* P11 — капсула «Save word»: лёгкий вход; тач ≥44px; reduced-motion гасит анимацию. */
 .pp-saveword{animation:pp-saveword-in 140ms var(--ease-standard) 1}
 @keyframes pp-saveword-in{from{opacity:0;transform:translateX(-50%) translateY(5px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
