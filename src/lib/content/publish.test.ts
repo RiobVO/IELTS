@@ -259,4 +259,119 @@ describe("publishReviewedContentItem", () => {
     expect(res).toEqual({ ok: true, title: "L" });
     expect(update).toHaveBeenCalledOnce();
   });
+
+  // F3-min (2026-07-12): full-тест (category full_reading/full_listening) без band-шкалы
+  // публиковался с bandScale=null — студент видел percent вместо band (прод подтвердил).
+  it("refuses to publish a full_reading test with 40Q but no band scale (F3-min)", async () => {
+    const rows = Array.from({ length: 40 }, (_, i) => q(1 + i, ["A"]));
+    select
+      .mockReturnValueOnce(
+        contentChain([
+          { reviewedAt: new Date(), title: "Full R", section: "reading", category: "full_reading", bandScale: null },
+        ]),
+      )
+      .mockReturnValueOnce(integrityChain(rows));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "full_missing_band_scale" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // Пустой объект — вырожденное персистентное значение шкалы: гейт трактует {} как
+  // отсутствующую шкалу наравне с null (Object.keys(...).length === 0).
+  it("refuses to publish a full_reading test with 40Q and an EMPTY band scale object (F3-min)", async () => {
+    const rows = Array.from({ length: 40 }, (_, i) => q(1 + i, ["A"]));
+    select
+      .mockReturnValueOnce(
+        contentChain([
+          { reviewedAt: new Date(), title: "Full R", section: "reading", category: "full_reading", bandScale: {} },
+        ]),
+      )
+      .mockReturnValueOnce(integrityChain(rows));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "full_missing_band_scale" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // Пропущенный крайний вопрос (1..39) остаётся смежным диапазоном для offset-agnostic (a),
+  // но для full-теста действует IELTS-инвариант «ровно 40 вопросов».
+  it("refuses to publish a full_reading test with 39Q even with a valid band scale (F3-min)", async () => {
+    const rows = Array.from({ length: 39 }, (_, i) => q(1 + i, ["A"]));
+    select
+      .mockReturnValueOnce(
+        contentChain([
+          {
+            reviewedAt: new Date(),
+            title: "Full R",
+            section: "reading",
+            category: "full_reading",
+            bandScale: { "39": 9 },
+          },
+        ]),
+      )
+      .mockReturnValueOnce(integrityChain(rows));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "full_wrong_question_count" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // Верхняя граница: 41 смежный вопрос тоже проходит offset-agnostic (а), но нарушает
+  // инвариант «ровно 40» — блок тем же reason'ом.
+  it("refuses to publish a full_reading test with 41Q even with a valid band scale (F3-min)", async () => {
+    const rows = Array.from({ length: 41 }, (_, i) => q(1 + i, ["A"]));
+    select
+      .mockReturnValueOnce(
+        contentChain([
+          {
+            reviewedAt: new Date(),
+            title: "Full R",
+            section: "reading",
+            category: "full_reading",
+            bandScale: { "40": 9 },
+          },
+        ]),
+      )
+      .mockReturnValueOnce(integrityChain(rows));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: false, reason: "full_wrong_question_count" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("publishes a full_listening test with 40Q, a band scale, and audio (F3-min)", async () => {
+    const rows = Array.from({ length: 40 }, (_, i) => q(1 + i, ["A"]));
+    select
+      .mockReturnValueOnce(
+        contentChain([
+          {
+            reviewedAt: new Date(),
+            title: "Full L",
+            section: "listening",
+            category: "full_listening",
+            bandScale: { "40": 9 },
+          },
+        ]),
+      )
+      .mockReturnValueOnce(integrityChain(rows))
+      .mockReturnValueOnce(passagesChain([{ audioPath: "audio/l.mp3" }]));
+    update.mockReturnValue(updateChain());
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: true, title: "Full L" });
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  // Регресс-защита: single passage (offset-agnostic, category !== full_*) публикуется без
+  // band-шкалы как раньше — новый гейт не должен зацепить passage_2.
+  it("publishes an offset-numbered passage_2 without a band scale — no regression (F3-min)", async () => {
+    const rows = Array.from({ length: 13 }, (_, i) => q(14 + i, ["A"]));
+    select
+      .mockReturnValueOnce(
+        contentChain([
+          { reviewedAt: new Date(), title: "Passage 2", section: "reading", category: "passage_2", bandScale: null },
+        ]),
+      )
+      .mockReturnValueOnce(integrityChain(rows));
+    update.mockReturnValue(updateChain());
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: true, title: "Passage 2" });
+    expect(update).toHaveBeenCalledOnce();
+  });
 });

@@ -423,6 +423,8 @@ const PUBLISH_FAIL_MSG: Record<string, string> = {
   question_number_gap: "Нельзя опубликовать: дыра или дубль в номерах вопросов — почини импорт.",
   answer_key_count_mismatch: "Нельзя опубликовать: у вопроса нет ключа — почини импорт.",
   missing_listening_audio: "Нельзя опубликовать: у listening-теста ещё нет аудио — прикрепи mp3.",
+  full_missing_band_scale: "Нельзя опубликовать: у full-теста нет таблицы band-шкалы (getBandFor40) — почини импорт.",
+  full_wrong_question_count: "Нельзя опубликовать: у full-теста должно быть ровно 40 вопросов — почини импорт.",
 };
 
 /**

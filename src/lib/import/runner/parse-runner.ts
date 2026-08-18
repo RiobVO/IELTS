@@ -175,6 +175,12 @@ function parseReadingRunner(html: string): RunnerParseResult {
   // ронял 40-вопросный мок в passage_1 · 20m. Одиночный пассаж — это 13-14 вопросов,
   // полный тест — 40; порог 30 разделяет их с запасом.
   const isFull = bandScale != null || questions.length >= 30;
+  // F3-min (2026-07-12): full test (по числовой эвристике) без getBandFor40 — прод уже
+  // показал, что такой тест публикуется с bandScale=null и студент видит percent вместо
+  // band. Здесь только сигнал для review-экрана; фактический блокер — publish-гейт.
+  if (isFull && bandScale == null) {
+    warnings.push("full test without band scale (getBandFor40 not found)");
+  }
   const parsed: ParsedTest = {
     title: extractTitle(html, "Reading"),
     section: "reading",
@@ -258,6 +264,11 @@ function parseListeningRunner(html: string): RunnerParseResult {
   // Full Listening (40Q) несёт band() → bandScale; одиночная часть — нет.
   // Страховка счётом вопросов (Mock, QA 2026-07-02): часть 10-11 вопросов, полный — 40.
   const isFull = bandScale != null || questions.length >= 30;
+  // F3-min (2026-07-12): та же страховка, что и в reading-ветке — full test без band()
+  // молча публиковался с bandScale=null (percent вместо band на проде).
+  if (isFull && bandScale == null) {
+    warnings.push("full test without band scale (band() not found)");
+  }
   const parsed: ParsedTest = {
     title: extractTitle(html, "Listening"),
     section: "listening",
