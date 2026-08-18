@@ -824,21 +824,29 @@ export default function ExamRunner({
       );
       timerSecondary = (
         <>
+          {/* Essential-бейдж режима — ПРЯМОЙ ребёнок .etr-secondary (не внутри
+              .etr-scroll), чтобы флекс никогда не ужимал его контейнер уже своего
+              контента: раньше badge жил в общем overflow-x:auto ряду и на узких
+              телефонах обрезался серединой слова («PRACTIC|») без намёка на скролл. */}
           <span className="exam-mode-badge" style={badge(false)}>Practice</span>
-          {/* Own-A — pacing coach: только Reading practice, при заданной длительности и
-              включённом префе. Listening practice (свой transport P8) не трогаем. */}
-          {!isListening && durationSeconds != null && questions.length > 0 && readerPrefs.pace && (
-            <PacingChip targetSec={durationSeconds / questions.length} elapsedSec={practiceSeconds} answered={answered} />
-          )}
-          {/* P5 — микро-цель/брейки (practice-only). Общий и для reading, и для
-              listening practice (обе ветки сюда попадают); mock не рендерит. */}
-          <GoalControl answered={answered} total={questions.length} practiceSeconds={practiceSeconds} />
-          <button type="button" onClick={togglePause} aria-label={paused ? "Resume timer" : "Pause timer"} title={paused ? "Resume" : "Pause"} className="exam-ctrl" style={S.ctrlBtn}>
-            <Icon name={paused ? "play" : "pause"} size={16} />
-          </button>
-          <button type="button" onClick={restart} aria-label="Restart test" title="Restart test" className="exam-ctrl-text" style={S.ctrlBtnText}>
-            Restart
-          </button>
+          {/* Менее критичные practice-контролы — своя скроллящаяся полоса: при нехватке
+              ширины уезжают вбок, не утягивая за собой essential-бейдж режима. */}
+          <div className="etr-scroll">
+            {/* Own-A — pacing coach: только Reading practice, при заданной длительности и
+                включённом префе. Listening practice (свой transport P8) не трогаем. */}
+            {!isListening && durationSeconds != null && questions.length > 0 && readerPrefs.pace && (
+              <PacingChip targetSec={durationSeconds / questions.length} elapsedSec={practiceSeconds} answered={answered} />
+            )}
+            {/* P5 — микро-цель/брейки (practice-only). Общий и для reading, и для
+                listening practice (обе ветки сюда попадают); mock не рендерит. */}
+            <GoalControl answered={answered} total={questions.length} practiceSeconds={practiceSeconds} />
+            <button type="button" onClick={togglePause} aria-label={paused ? "Resume timer" : "Pause timer"} title={paused ? "Resume" : "Pause"} className="exam-ctrl" style={S.ctrlBtn}>
+              <Icon name={paused ? "play" : "pause"} size={16} />
+            </button>
+            <button type="button" onClick={restart} aria-label="Restart test" title="Restart test" className="exam-ctrl-text" style={S.ctrlBtnText}>
+              Restart
+            </button>
+          </div>
         </>
       );
     }
@@ -2115,8 +2123,13 @@ const READING_CSS = `
    иначе он рос бы до контента, wrap не срабатывал, а max-width:100% у secondary упирался
    в безразмерного родителя → Submit клиппился overflow:hidden shell на телефоне. */
 .exam-top-right{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:14px}
-.exam-top-right .etr-secondary{display:flex;flex-wrap:nowrap;align-items:center;gap:14px;min-width:0;max-width:100%;overflow-x:auto;padding-block:2px;scrollbar-width:none}
-.exam-top-right .etr-secondary::-webkit-scrollbar{display:none}
+.exam-top-right .etr-secondary{display:flex;flex-wrap:nowrap;align-items:center;gap:14px;min-width:0;max-width:100%}
+/* Только «лишние» practice-контролы (пейс/цель/pause/restart) скроллятся горизонтально —
+   Aa и бейдж режима остаются прямыми детьми .etr-secondary (см. JSX) и никогда не
+   попадают в overflow-клип: раньше вся секция была одним overflow-x:auto рядом со
+   скрытым скроллбаром, и бейдж мог оказаться обрезан серединой слова у края контейнера. */
+.exam-top-right .etr-scroll{display:flex;flex-wrap:nowrap;align-items:center;gap:14px;min-width:0;overflow-x:auto;padding-block:2px;scrollbar-width:none}
+.exam-top-right .etr-scroll::-webkit-scrollbar{display:none}
 .exam-top-right .etr-primary{display:flex;flex-wrap:nowrap;align-items:center;gap:14px;flex:none}
 /* Мобильная шапка (≤640px): правый кластер уходит ОТДЕЛЬНЫМ рядом во всю ширину ПОД
    заголовок (title получает ряд 1 целиком) — иначе тулбар (Aa/badge/pace/goal/таймер/
@@ -2134,6 +2147,7 @@ const READING_CSS = `
      контейнер-тулбар с фоном/рамкой — вместо разрозненных элементов, «плавающих»
      рядом с clock+Submit. Скроллится внутри себя, clock+Submit фиксированы справа. */
   .exam-top-right .etr-secondary{gap:10px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-inset)}
+  .exam-top-right .etr-scroll{gap:10px}
 }
 @media (min-width:1024px){
   .exam-top{padding:12px 20px;gap:14px}
@@ -2163,14 +2177,15 @@ const READING_CSS = `
    overflow:hidden shell), оверлеи прижаты к верху и скроллятся при высокой панели.
    Планшет/десктоп (>430px) не затрагиваются. */
 @media (max-width:430px){
-  .exam-top-right,.exam-top-right .etr-secondary,.exam-top-right .etr-primary{gap:8px!important}
+  .exam-top-right,.exam-top-right .etr-secondary,.exam-top-right .etr-scroll,.exam-top-right .etr-primary{gap:8px!important}
   .exam-qscroll{padding-left:14px;padding-right:14px}
   /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
   .exam-gap-input{min-width:80px!important;max-width:100%!important;font-size:16px!important}
   .exam-answer-input{font-size:16px!important}
   .exam-overlay{align-items:start!important}
-  /* Бейдж режима (Practice/Mock/Transfer) — смысловой лейбл, поднимаем до 12px. */
-  .exam-mode-badge{font-size:12px!important}
+  /* Бейдж режима (Practice/Mock/Transfer) — смысловой лейбл, поднимаем до 12px,
+     паддинги чуть уже (чип сжимается, а не обрезается). */
+  .exam-mode-badge{font-size:12px!important;padding:4px 8px!important}
 }
 
 /* === Cambridge skin (шаг 4): бело-сине-графитовый вид реального computer-IELTS.
