@@ -911,3 +911,60 @@ default privileges: у `authenticated` остались `REFERENCES`/`TRIGGER`/`
 `down` — no-op: снимаемое не выдавалось нашим контрактом (SELECT для authenticated не
 трогали, I/U/D уже сняты 0024/0028, REFERENCES/TRIGGER/TRUNCATE — чистый дрейф). Гейт
 (`verify.ts §4k`) ассертит: `authenticated` — ровно `SELECT`, `anon` — без грантов.
+
+## 0054 — trial_claim (атомарный guard trial-лейна, замена advisory-lock)
+
+Additive-таблица (P6; 2026-07-11), **37-я** (`verify.ts` `APP_TABLE_COUNT` 36 → 37).
+Номер 0054, не 0053: 0053 занят `0053_referral_invitee_unique` (закоммичен параллельно,
+UNIQUE на `referral.invitee_id`, таблицу не добавляет — count остался 36).
+Заменяет блокирующий `pg_advisory_xact_lock(hashtext('trial:'+userId))` в
+`startAttempt` (`src/lib/exam/access.ts`) на claim единственного trial-слота через
+`INSERT ... ON CONFLICT (user_id) DO NOTHING`. Мотив: advisory-xact-lock держал
+server-connection пула PgBouncer (transaction pooler, `prepare:false`) на всё время
+транзакции; PK-конфликт вместо него сериализует конкуренцию на row-lock ключа, без
+удержания отдельного лока (та же логика, что try-lock в `checkAuthThrottle`, но здесь
+блокирующая семантика нужна — проигравший должен дождаться и увидеть attempt
+победителя).
+
+- **Схема.** `user_id uuid PRIMARY KEY REFERENCES profile(id) ON DELETE CASCADE`
+  (PK = сам инвариант «один trial на юзера»), `content_item_id uuid NOT NULL
+  REFERENCES content_item(id) ON DELETE CASCADE`, `created_at timestamptz NOT NULL
+  DEFAULT now()`. FK-индекс `trial_claim_content_item_id_idx (content_item_id)` —
+  cascade-delete теста без seq-scan (`user_id` покрыт PK слева); паттерн
+  `mistake_resolution`/`saved_word`.
+- **Постура — SERVER-ONLY** (как `signup_throttle` 0022 / `error_log` 0034): RLS on,
+  `REVOKE ALL FROM anon, authenticated, PUBLIC` (снимает Supabase default-priv
+  гранты), `GRANT ALL TO service_role`, **ноль политик**. Клиент это состояние НЕ
+  читает — и гейт, и каталожный бейдж «Free trial» деривятся owner-path из `attempt`
+  (`hasConsumedTrial` / `trialConsumedBy`). Гейт (`verify.ts §4h`) ассертит full-lock
+  (RLS on + no client policy + anon denied) в когорте `signup_throttle`/
+  `leaderboard_snapshot`.
+- **Источник правды НЕ раздваивается.** `trial_claim` — чистый concurrency-guard, НЕ
+  второй источник решения. `startAttempt` (trial-ветка): победитель INSERT открывает
+  попытку сразу; проигравший (`ON CONFLICT` → пустой RETURNING) пересверяется со
+  СТАРЫМ `hasConsumedTrial(tx)` (READ COMMITTED видит закоммиченный attempt
+  победителя) — тот и решает `redirect|resume`. Значит claim физически не может дать
+  ложный deny (проигравший всегда сверяется с `hasConsumedTrial`), только отсечь
+  двойное открытие. `enforceAccess`/runner-route/каталог **не тронуты** — по-прежнему
+  на `hasConsumedTrial`.
+- **CASCADE (осознанно).** `content_item_id ON DELETE CASCADE` зеркалит
+  `attempt.content_item_id`: удаление теста (контент-вайп, как 2026-07-10) освобождает
+  trial. Иначе claim пережил бы удалённые attempts и разошёлся бы с
+  `hasConsumedTrial` (та «возвращает» trial, когда attempts на удалённом тесте
+  исчезли CASCADE). Abuse «дождаться удаления ради нового trial» не user-triggerable
+  (тесты удаляет только владелец). Альтернатива `ON DELETE SET NULL` + nullable
+  колонка сохранила бы claim после вайпа — но именно это создало бы рассинхрон
+  claim↔`hasConsumedTrial` без выгоды (гейт всё равно на `hasConsumedTrial`), поэтому
+  отвергнута.
+- **Backfill (up.sql).** По одной строке на юзера из существующих `attempt` по
+  семантике `hasConsumedTrial`: `DISTINCT ON (user_id)` самая ранняя (по `started_at`)
+  попытка на `full_reading`/`full_listening` с `tier_required <> 'basic'`, `ON CONFLICT
+  DO NOTHING` (идемпотентно). `created_at` = `started_at` (реальный момент расхода).
+  На проде после вайпа 2026-07-10, скорее всего, пусто. `down.sql` — `DROP TABLE`
+  (маркеры производные, восстановимы повторным backfill при re-up).
+
+**Verification.** `tsc` clean; `vitest` green; `npm run verify` green (37 tables;
+up→down→up clean + idempotent; `trial_claim` anon-denied в full-lock когорте);
+round-trip `db:up:local`→`db:down:local`→`db:up:local` clean; конкурентный throwaway-
+прогон (два `Promise.all`-старта trial на РАЗНЫХ item, 10×) — ровно один claim + один
+attempt, второй уходит в redirect.

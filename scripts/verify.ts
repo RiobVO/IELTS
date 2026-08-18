@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 36; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040) + saved_word (P11 «Saved words», 0041) + mistake_review (SR, 0044) + sprint_signup (пилот-когорта, 0051) + preorder (early-bird, 0052)
+const APP_TABLE_COUNT = 37; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040) + saved_word (P11 «Saved words», 0041) + mistake_review (SR, 0044) + sprint_signup (пилот-когорта, 0051) + preorder (early-bird, 0052) + trial_claim (P6 trial-lane guard, 0054)
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);
@@ -103,12 +103,15 @@ async function resetPublicSchema(): Promise<void> {
  * regression would still pass:
  *   - RLS is ENABLED on answer_key (pg_class.relrowsecurity),
  *   - there is NO policy granting anon/authenticated access, and
- *   - an actual anon SELECT is denied.
+ *   - an actual anon SELECT is denied,
+ *   - plus an actual authenticated SELECT is denied (Codex 2026-07-11: регресс,
+ *     вернувший гранты authenticated, иначе прошёл бы мимо anon-only пробы).
  */
 async function tableLock(table: string): Promise<{
   rlsEnabled: boolean;
   noClientPolicy: boolean;
   anonDenied: boolean;
+  authDenied: boolean;
 }> {
   const [{ rls }] = await sql<{ rls: boolean }[]>`
     SELECT relrowsecurity AS rls FROM pg_class
@@ -120,18 +123,25 @@ async function tableLock(table: string): Promise<{
       AND (roles::text[] && ARRAY['anon','authenticated']
            OR 'public' = ANY(roles::text[]))`;
 
-  let anonDenied = false;
-  try {
-    await sql.begin(async (tx) => {
-      await tx.unsafe("SET LOCAL ROLE anon");
-      await tx.unsafe(`SELECT * FROM ${table}`);
-    });
-  } catch (e: unknown) {
-    const err = e as { code?: string; message?: string };
-    anonDenied = err?.code === "42501" || /permission denied/i.test(String(err?.message ?? e));
-  }
+  const roleDenied = async (role: "anon" | "authenticated"): Promise<boolean> => {
+    try {
+      await sql.begin(async (tx) => {
+        await tx.unsafe(`SET LOCAL ROLE ${role}`);
+        await tx.unsafe(`SELECT * FROM ${table}`);
+      });
+      return false;
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      return err?.code === "42501" || /permission denied/i.test(String(err?.message ?? e));
+    }
+  };
 
-  return { rlsEnabled: rls === true, noClientPolicy: n === 0, anonDenied };
+  return {
+    rlsEnabled: rls === true,
+    noClientPolicy: n === 0,
+    anonDenied: await roleDenied("anon"),
+    authDenied: await roleDenied("authenticated"),
+  };
 }
 
 /**
@@ -646,24 +656,24 @@ async function main() {
 
   // 4. answer_key locked (BRIEF §6.1): RLS enabled + no anon/auth policy + anon denied
   const lock = await tableLock("answer_key");
-  if (lock.rlsEnabled && lock.noClientPolicy && lock.anonDenied)
-    ok("RLS — anon SELECT on answer_key denied");
+  if (lock.rlsEnabled && lock.noClientPolicy && lock.anonDenied && lock.authDenied)
+    ok("RLS — anon+authenticated SELECT on answer_key denied");
   else
     fail(
       `RLS — answer_key not fully locked (rlsEnabled=${lock.rlsEnabled}, ` +
-        `noClientPolicy=${lock.noClientPolicy}, anonDenied=${lock.anonDenied})`,
+        `noClientPolicy=${lock.noClientPolicy}, anonDenied=${lock.anonDenied}, authDenied=${lock.authDenied})`,
     );
 
   // 4b. attempt_review_snapshot locked the SAME way (D3): it holds correct
   // answers + evidence, so a client leak would bypass the answer_key lock and the
   // tier gate. Mirror of the answer_key assertion above.
   const snapLock = await tableLock("attempt_review_snapshot");
-  if (snapLock.rlsEnabled && snapLock.noClientPolicy && snapLock.anonDenied)
-    ok("RLS — anon SELECT on attempt_review_snapshot denied");
+  if (snapLock.rlsEnabled && snapLock.noClientPolicy && snapLock.anonDenied && snapLock.authDenied)
+    ok("RLS — anon+authenticated SELECT on attempt_review_snapshot denied");
   else
     fail(
       `RLS — attempt_review_snapshot not fully locked (rlsEnabled=${snapLock.rlsEnabled}, ` +
-        `noClientPolicy=${snapLock.noClientPolicy}, anonDenied=${snapLock.anonDenied})`,
+        `noClientPolicy=${snapLock.noClientPolicy}, anonDenied=${snapLock.anonDenied}, authDenied=${snapLock.authDenied})`,
     );
 
   // 4c. writing_feedback_debug + speaking_feedback_debug locked the SAME way: they hold
@@ -671,12 +681,12 @@ async function main() {
   // client read would leak it. Hard-locked like answer_key (migrations 0023 / 0027).
   for (const t of ["writing_feedback_debug", "speaking_feedback_debug"] as const) {
     const dbgLock = await tableLock(t);
-    if (dbgLock.rlsEnabled && dbgLock.noClientPolicy && dbgLock.anonDenied)
-      ok(`RLS — anon SELECT on ${t} denied`);
+    if (dbgLock.rlsEnabled && dbgLock.noClientPolicy && dbgLock.anonDenied && dbgLock.authDenied)
+      ok(`RLS — anon+authenticated SELECT on ${t} denied`);
     else
       fail(
         `RLS — ${t} not fully locked (rlsEnabled=${dbgLock.rlsEnabled}, ` +
-          `noClientPolicy=${dbgLock.noClientPolicy}, anonDenied=${dbgLock.anonDenied})`,
+          `noClientPolicy=${dbgLock.noClientPolicy}, anonDenied=${dbgLock.anonDenied}, authDenied=${dbgLock.authDenied})`,
       );
   }
 
@@ -698,12 +708,12 @@ async function main() {
   // self-hosted error sink holds stack traces + urls (internal detail), owner-read only via
   // /admin/errors. Full lock — RLS on + no client policy + anon denied.
   const elLock = await tableLock("error_log");
-  if (elLock.rlsEnabled && elLock.noClientPolicy && elLock.anonDenied)
-    ok("RLS — anon SELECT on error_log denied");
+  if (elLock.rlsEnabled && elLock.noClientPolicy && elLock.anonDenied && elLock.authDenied)
+    ok("RLS — anon+authenticated SELECT on error_log denied");
   else
     fail(
       `RLS — error_log not fully locked (rlsEnabled=${elLock.rlsEnabled}, ` +
-        `noClientPolicy=${elLock.noClientPolicy}, anonDenied=${elLock.anonDenied})`,
+        `noClientPolicy=${elLock.noClientPolicy}, anonDenied=${elLock.anonDenied}, authDenied=${elLock.authDenied})`,
     );
 
   // 4f. content_item column-lock (N1/N9, 0035): runner_html защищён от утечки ключей
@@ -742,15 +752,16 @@ async function main() {
   // 4h. Full-lock coverage gaps (N13, AUDIT_2026-07-02): signup_throttle (IP-хэши,
   // 0022) и leaderboard_snapshot (0014, только service_role) не ассертились — на
   // проде Supabase раздаёт широкие default-grants новым таблицам, и регресс RLS-off
-  // локальный гейт иначе не поймает.
-  for (const t of ["signup_throttle", "leaderboard_snapshot"] as const) {
+  // локальный гейт иначе не поймает. trial_claim (P6, 0054) — та же SERVER-ONLY
+  // постура (маркер расхода trial, клиенту не выдаётся): full-lock.
+  for (const t of ["signup_throttle", "leaderboard_snapshot", "trial_claim"] as const) {
     const l = await tableLock(t);
-    if (l.rlsEnabled && l.noClientPolicy && l.anonDenied)
-      ok(`RLS — anon SELECT on ${t} denied`);
+    if (l.rlsEnabled && l.noClientPolicy && l.anonDenied && l.authDenied)
+      ok(`RLS — anon+authenticated SELECT on ${t} denied`);
     else
       fail(
         `RLS — ${t} not fully locked (rlsEnabled=${l.rlsEnabled}, ` +
-          `noClientPolicy=${l.noClientPolicy}, anonDenied=${l.anonDenied})`,
+          `noClientPolicy=${l.noClientPolicy}, anonDenied=${l.anonDenied}, authDenied=${l.authDenied})`,
       );
   }
 
