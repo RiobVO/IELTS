@@ -60,8 +60,10 @@ export type EventProperties = {
   payment_failed: { provider: string; reason: "invalid" | "expired" | "error" };
   /** Pre-order early-bird плана (§12) пока оплата не запущена — фиксация намерения
    *  купить в таблице `preorder`, измеряем спрос на платные тарифы до онбординга
-   *  мерчанта. Не платёж: только запись намерения. */
-  preorder: { tier: string; period_months: number };
+   *  мерчанта. Не платёж: только запись намерения. `source_page` — с какой
+   *  страницы кликнули (whitelist на сервере — см. isSourcePage в
+   *  app/app/upgrade/actions.ts, сырую клиентскую строку в PostHog не пускаем). */
+  preorder: { tier: string; period_months: number; source_page: "pricing" | "upgrade" };
   /** Клик по «Notify me when new tests land» в пустом каталоге (контент-вайп,
    *  BRIEF §12.3) — измеряем спрос на свежий контент, пока библиотека пополняется. */
   content_waitlist: { source: "catalog" };

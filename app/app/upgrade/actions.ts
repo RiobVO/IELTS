@@ -17,6 +17,15 @@ function isProvider(v: string): v is PaymentProviderKey {
   return (VALID_PROVIDERS as readonly string[]).includes(v);
 }
 
+/** Откуда пришёл клик по pre-order (§11 source_page) — whitelist серверной
+ *  стороны: клиентская строка не должна долетать до PostHog как есть. */
+const VALID_SOURCE_PAGES = ["pricing", "upgrade"] as const;
+type SourcePage = (typeof VALID_SOURCE_PAGES)[number];
+
+function isSourcePage(v: string): v is SourcePage {
+  return (VALID_SOURCE_PAGES as readonly string[]).includes(v);
+}
+
 /**
  * Инициировать оплату (BRIEF §4.8 / §11). Создаёт ТОЛЬКО PENDING-строку платежа —
  * доступ НЕ выдаётся здесь: продлевает premium_until/tier исключительно
@@ -100,11 +109,14 @@ export async function initiatePayment(formData: FormData): Promise<void> {
  * даёт — только намерение. ON CONFLICT DO NOTHING — повторный клик на тот же
  * (user, tier, months) идемпотентен (unique-constraint миграции 0052). Сумма —
  * plan.earlyBirdAmount с сервера, клиент её не диктует. Невалидный (tier, months)
- * — тихий no-op, как раньше у waitlist-заглушки.
+ * — тихий no-op, как раньше у waitlist-заглушки. `sourcePage` — с какой
+ * страницы кликнули (§11 source_page на событии `preorder`), whitelist'ится
+ * isSourcePage: неизвестное значение не долетает до PostHog как сырая строка.
  */
 export async function preorderPlan(input: {
   tier: string;
   months: number;
+  sourcePage: string;
 }): Promise<{ ok: boolean }> {
   const user = await requireUser();
   // Серверный бизнес-инвариант, не только UI-ветка: после запуска платежей
@@ -112,6 +124,7 @@ export async function preorderPlan(input: {
   if (paymentsLive()) return { ok: false };
   const plan = findPlan(String(input.tier), Number(input.months));
   if (!plan) return { ok: false };
+  const sourcePage = isSourcePage(input.sourcePage) ? input.sourcePage : "upgrade";
 
   try {
     await db
@@ -134,6 +147,7 @@ export async function preorderPlan(input: {
   await captureServer("preorder", user.id, {
     tier: plan.tier,
     period_months: plan.months,
+    source_page: sourcePage,
   });
   return { ok: true };
 }

@@ -11,7 +11,7 @@ interface Price {
   monthly: number;
   annual: number;
   /** Early-bird pre-order цена (§12) — фиксированная скидка каталога, см. plans.ts.
-   *  Опционально: guest-режим (/pricing) early-bird не показывает и это поле не шлёт. */
+   *  Опционально: не задано — цена/бейдж early-bird не рендерятся (см. showEarlyBird). */
   earlyBirdMonthly?: number;
   earlyBirdAnnual?: number;
 }
@@ -111,6 +111,7 @@ export default function PricingScreen({
   speakingEnabled = false,
   paymentsLive = true,
   preordered = [],
+  sourcePage = "upgrade",
   error,
 }: {
   current: Tier;
@@ -128,6 +129,10 @@ export default function PricingScreen({
   /** Планы, уже зафиксированные юзером по early-bird цене (§12) — ключи
    *  `${tier}:${periodMonths}`. Guest-режим не передаёт (не залогинен). */
   preordered?: string[];
+  /** С какой страницы рендерится этот экран — событие `preorder` (§11) шлёт это
+   *  как source_page. Guest-режим (/pricing) не рендерит PreorderCta (кнопка
+   *  требует сессии), но проп пробрасывается на будущее без выдумывания значений. */
+  sourcePage?: "pricing" | "upgrade";
   /** ?error= из initiatePayment fail-closed → inline-алерт. */
   error?: string;
 }) {
@@ -174,7 +179,7 @@ export default function PricingScreen({
       {/* Plans */}
       <div style={S.plans}>
         {CARDS.map((card) => (
-          <PlanCard key={card.id} card={card} current={current} annual={annual} price={price} ctaHref={ctaHref} paymentsLive={paymentsLive} preordered={preordered} />
+          <PlanCard key={card.id} card={card} current={current} annual={annual} price={price} ctaHref={ctaHref} paymentsLive={paymentsLive} preordered={preordered} sourcePage={sourcePage} />
         ))}
       </div>
 
@@ -206,6 +211,7 @@ function PlanCard({
   ctaHref,
   paymentsLive,
   preordered,
+  sourcePage,
 }: {
   card: PlanCardMeta;
   current: Tier;
@@ -214,6 +220,7 @@ function PlanCard({
   ctaHref?: string;
   paymentsLive: boolean;
   preordered: string[];
+  sourcePage: "pricing" | "upgrade";
 }) {
   const pop = !!card.popular;
   const guest = !!ctaHref;
@@ -222,9 +229,10 @@ function PlanCard({
   const p = paid ? price[card.id as "premium" | "ultra"] : null;
   const perMonth = p ? (annual ? Math.round(p.annual / 12) : p.monthly) : 0;
   const earlyBirdPerMonth = p ? (annual ? Math.round((p.earlyBirdAnnual ?? 0) / 12) : (p.earlyBirdMonthly ?? 0)) : 0;
-  // Та же ветка, что решает CTA ниже (paid && !isCurrent && !paymentsLive):
-  // early-bird ценник показываем только там, где реально предлагаем pre-order.
-  const showEarlyBird = paid && !guest && !isCurrent && !paymentsLive;
+  // Early-bird ценник (зачёркнутая цена + бейдж) показываем и гостю на /pricing —
+  // pre-order сама кнопка (PreorderCta) гостю всё равно недоступна (см. `guest ?`
+  // ниже — её CTA всегда ведёт в /auth), но видеть скидку он должен уже здесь.
+  const showEarlyBird = paid && !isCurrent && !paymentsLive;
   const months = annual ? 12 : 1;
 
   return (
@@ -290,7 +298,7 @@ function PlanCard({
           </form>
         ) : (
           // Оплата ещё не запущена (§12): вместо тупика — pre-order по early-bird цене.
-          <PreorderCta tier={card.id} months={months} pop={pop} preordered={preordered.includes(`${card.id}:${months}`)} />
+          <PreorderCta tier={card.id} months={months} pop={pop} preordered={preordered.includes(`${card.id}:${months}`)} sourcePage={sourcePage} />
         )
       ) : (
         <Button size="lg" fullWidth variant="secondary" disabled>
@@ -321,7 +329,7 @@ function PlanCard({
  * кнопку в активное состояние с «Try again» — юзер не остаётся с ложным
  * «Price locked» без строки в БД.
  */
-function PreorderCta({ tier, months, pop, preordered }: { tier: CardId; months: number; pop: boolean; preordered: boolean }) {
+function PreorderCta({ tier, months, pop, preordered, sourcePage }: { tier: CardId; months: number; pop: boolean; preordered: boolean; sourcePage: "pricing" | "upgrade" }) {
   const [locked, setLocked] = useState(preordered);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -337,7 +345,7 @@ function PreorderCta({ tier, months, pop, preordered }: { tier: CardId; months: 
           if (locked || pending) return;
           setPending(true);
           setFailed(false);
-          preorderPlan({ tier, months })
+          preorderPlan({ tier, months, sourcePage })
             .then((r) => {
               setLocked(r.ok);
               if (!r.ok) setFailed(true);
