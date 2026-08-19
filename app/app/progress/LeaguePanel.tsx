@@ -416,7 +416,7 @@ const LB_CSS = `
 `;
 
 const S: Record<string, React.CSSProperties> = {
-  arena: { minHeight: "100%", overflowX: "hidden", background: "radial-gradient(120% 80% at 50% -8%, color-mix(in oklab, var(--brand) 14%, white) 0%, var(--bg-base) 52%)" },
+  arena: { minHeight: "100%", overflowX: "hidden", background: "radial-gradient(120% 80% at 50% -8%, color-mix(in oklab, var(--brand) 13%, white) 0%, var(--bg-base) 52%)" },
   wrap: { maxWidth: 960, margin: "0 auto", width: "100%" },
   head: { display: "flex", alignItems: "center", gap: 13, marginBottom: 16 },
   crown: { width: 44, height: 44, flex: "none", borderRadius: 13, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", boxShadow: "0 0 26px -4px color-mix(in oklab, var(--brand) 80%, transparent)" },
