@@ -392,7 +392,7 @@ function ForecastCard({ forecast }: { forecast: Forecast }) {
         // Объясняем, ЧТО такое диапазон и на чём он построен — не-native аудитории
         // «likely range» не самоочевиден; заодно закрывает methodology-пробел.
         <p style={S.forecastBasis}>
-          The band you&apos;re 80% likely to hit, from your last {forecast.pointCount} {forecast.pointCount === 1 ? "mock" : "mocks"} — it narrows as you sit more.
+          The range you&apos;re 80% likely to land in, from your last {forecast.pointCount} {forecast.pointCount === 1 ? "mock" : "mocks"} — it narrows as you sit more.
         </p>
       )}
       {forecast.slopePerWeek != null && forecast.slopePerWeek > 0 && (
@@ -567,12 +567,16 @@ const OV_CSS = `
 .ov-lbl-latest{font-family:var(--font-mono);font-weight:700;color:var(--text-primary);transform:translate(calc(-100% - 8px),-120%)}
 .ov-lbl-axis{color:var(--text-muted)}
 .ov-lbl-axis-r{transform:translate(-100%,0)}
-.ov-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px}
-.ov-leg-item{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:600;color:var(--text-secondary)}
-.ov-leg-btn{background:none;border:0;padding:2px 3px;margin:-2px -3px;border-radius:6px;cursor:pointer;transition:opacity .12s}
-.ov-leg-btn[aria-pressed="false"]{opacity:.4;text-decoration:line-through}
-.ov-leg-btn:hover{opacity:.75}
-.ov-leg-btn[aria-pressed="false"]:hover{opacity:.6}
+.ov-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.ov-leg-item{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:600}
+.ov-leg-static{color:var(--text-secondary);padding:3px 2px}
+/* R/L — bordered pill: явный контрол на тач, где нет hover. Off-состояние держит
+   ТЕКСТ на --text-muted (≈4.9:1, AA), а состояние несёт пунктирная рамка +
+   strikethrough + приглушённый свотч — без opacity на самом тексте (та давала ~1.5:1). */
+.ov-leg-btn{color:var(--text-secondary);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);padding:3px 10px;cursor:pointer;transition:background .12s,border-color .12s}
+.ov-leg-btn:hover{background:var(--surface-inset)}
+.ov-leg-btn[aria-pressed="false"]{color:var(--text-muted);border-style:dashed;text-decoration:line-through}
+.ov-leg-btn[aria-pressed="false"] .ov-leg-swatch{opacity:.4}
 .ov-leg-btn:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 40%,transparent)}
 .ov-leg-swatch{flex:none}
 .ov-leg-line{width:14px;height:3px;border-radius:var(--radius-full)}

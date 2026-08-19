@@ -133,6 +133,9 @@ export function TrajectoryChart({
   const tipBelow = pointYPct < 26;
   const tipTx = tipEdge === "left" ? "16px" : tipEdge === "right" ? "calc(-100% + 16px)" : "-50%";
   const tipTy = tipBelow ? "16px" : "calc(-100% - 14px)";
+  // Сплит-легенда/тогл имеют смысл только когда есть ОБЕ серии (иначе combined ==
+  // единственной сплит-линии — гасить нечего, а подпись не должна называть отсутствующую).
+  const hasSplit = !!reading && !!listening;
 
   return (
     <>
@@ -294,26 +297,28 @@ export function TrajectoryChart({
       )}
     </div>
 
-      {/* Кликабельная легенда: Combined всегда, R/L можно погасить тапом (декластер
-          на 230px-боксе). Легенда — сиблинг .ov-chart, не внутри, иначе % оверлея
-          подписей считались бы от более высокого контейнера. */}
+      {/* Легенда — сиблинг .ov-chart, не внутри, иначе % оверлея подписей считались
+          бы от более высокого контейнера. Тогл R/L показываем ТОЛЬКО когда есть обе
+          секции: при single-section combined совпадает со сплит-линией, гасить нечего,
+          а note не должна называть несуществующую серию. Combined-чип статичен;
+          R/L — bordered pill-кнопки, чтобы на тач было видно, что это контролы. */}
       <div className="ov-legend">
         <span className="ov-leg-item ov-leg-static">
           <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--brand)" }} /> Combined
         </span>
-        {reading && (
-          <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("reading")} onClick={() => toggle("reading")}>
-            <span className="ov-leg-swatch ov-leg-circle" style={{ background: SECTION_COLOR.reading }} /> Reading
-          </button>
-        )}
-        {listening && (
-          <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("listening")} onClick={() => toggle("listening")}>
-            <span className="ov-leg-swatch ov-leg-diamond" style={{ background: SECTION_COLOR.listening }} /> Listening
-          </button>
+        {hasSplit && (
+          <>
+            <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("reading")} aria-label={hidden.has("reading") ? "Show Reading line" : "Hide Reading line"} onClick={() => toggle("reading")}>
+              <span className="ov-leg-swatch ov-leg-circle" style={{ background: SECTION_COLOR.reading }} /> Reading
+            </button>
+            <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("listening")} aria-label={hidden.has("listening") ? "Show Listening line" : "Hide Listening line"} onClick={() => toggle("listening")}>
+              <span className="ov-leg-swatch ov-leg-diamond" style={{ background: SECTION_COLOR.listening }} /> Listening
+            </button>
+          </>
         )}
       </div>
-      {(reading || listening) && (
-        <p className="ov-legend-note">Combined is your band across every mock; Reading and Listening split it by section. Tap a label to hide it.</p>
+      {hasSplit && (
+        <p className="ov-legend-note">Combined is your band across every mock; Reading and Listening split it by section. Tap or click a section to hide its line.</p>
       )}
     </>
   );
