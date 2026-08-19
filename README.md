@@ -16,11 +16,19 @@ Supabase Auth/Storage · deploy Vercel + CDN. (§6)
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in the four required vars (see below)
+cp .env.example .env.local   # fill in the required vars (see below)
 ```
 
-Required env (`npm run verify` and the DB client fail fast if any is missing):
-`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`.
+Required env (`src/env.ts` fail-fasts at module load if any is missing):
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`,
+plus `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` for the browser
+auth clients.
+
+Two connection strings on Supabase: `DATABASE_URL` is the transaction pooler
+(`:6543`, app runtime), `DIRECT_URL` the session pooler (`:5432`, preferred by
+migrations). Passwords containing `?` or `#` must be percent-encoded. Everything
+else in `.env.example` is optional and fails open. See the file itself for the
+full annotated list.
 
 ## Run
 
