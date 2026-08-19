@@ -444,7 +444,16 @@ async function handlePublish(cq: TgCallbackQuery): Promise<void> {
   try {
     const res = await publishReviewedContentItem(id);
     if (!res.ok) {
-      await answerCallback(cq.id, PUBLISH_FAIL_MSG[res.reason] ?? "Тест не найден");
+      const base = PUBLISH_FAIL_MSG[res.reason] ?? "Тест не найден";
+      // F14-мин: detail несёт конкретику (номера/факт. число) поверх статического
+      // текста причины. answerCallbackQuery.text ограничен 200 символами Bot API —
+      // обрезаем ИМЕННО ответ на кнопку; полную версию (если она не влезла бы или
+      // просто для истории) дублируем обычным sendMessage в чат.
+      const full = res.detail ? `${base} (${res.detail})` : base;
+      await answerCallback(cq.id, full.length > 200 ? `${full.slice(0, 197)}…` : full);
+      if (res.detail && cq.message) {
+        await sendMessage(cq.message.chat.id, `⛔ Публикация отклонена: ${full}`);
+      }
       return;
     }
     await answerCallback(cq.id, "Опубликовано ✅");

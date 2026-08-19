@@ -95,32 +95,37 @@ export async function setStatus(formData: FormData) {
     // catalog tag). Keeps the review gate identical across the admin UI and the bot.
     const res = await publishReviewedContentItem(id);
     if (!res.ok) {
+      // F14-мин: detail (номера/факт. число, уже посчитанные гейтом) приклеиваем к
+      // статическому тексту причины — без него «дыра в номерах» не говорит, в каких.
+      const withDetail = (msg: string) => (res.detail ? `${msg} (${res.detail})` : msg);
       if (res.reason === "not_reviewed") {
-        fail("Approve the import (review the key) before publishing.");
+        fail(withDetail("Approve the import (review the key) before publishing."));
       }
       if (res.reason === "empty_answer_key") {
-        fail("Can't publish: a question has an empty answer key — fix the import first.");
+        fail(withDetail("Can't publish: a question has an empty answer key — fix the import first."));
       }
       if (res.reason === "unresolved_question_type") {
         fail(
-          "Can't publish: a question type is empty or unresolved — add QTYPE per the authoring spec " +
-            "and re-upload the file.",
+          withDetail(
+            "Can't publish: a question type is empty or unresolved — add QTYPE per the authoring spec " +
+              "and re-upload the file.",
+          ),
         );
       }
       if (res.reason === "question_number_gap") {
-        fail("Can't publish: question numbers have a gap or duplicate — fix the import first.");
+        fail(withDetail("Can't publish: question numbers have a gap or duplicate — fix the import first."));
       }
       if (res.reason === "answer_key_count_mismatch") {
-        fail("Can't publish: a question is missing its answer key — fix the import first.");
+        fail(withDetail("Can't publish: a question is missing its answer key — fix the import first."));
       }
       if (res.reason === "missing_listening_audio") {
-        fail("Can't publish: this listening test has no audio yet — attach the mp3 first.");
+        fail(withDetail("Can't publish: this listening test has no audio yet — attach the mp3 first."));
       }
       if (res.reason === "full_missing_band_scale") {
-        fail("Can't publish: a full test needs a band scale table (getBandFor40) — fix the import first.");
+        fail(withDetail("Can't publish: a full test needs a band scale table (getBandFor40) — fix the import first."));
       }
       if (res.reason === "full_wrong_question_count") {
-        fail("Can't publish: a full test must have exactly 40 questions — fix the import first.");
+        fail(withDetail("Can't publish: a full test must have exactly 40 questions — fix the import first."));
       }
       redirect("/admin"); // not_found
     }
