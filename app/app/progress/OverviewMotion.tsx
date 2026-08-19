@@ -37,6 +37,20 @@ export function OverviewMotion() {
     if (prefersReduced()) return;
     const root = document.querySelector<HTMLElement>("[data-overview-root]");
     if (!root) return;
+
+    // Полную entrance-хореографию играем один раз за сессию — всё уже в финальном
+    // состоянии (server-render), так что возвращающийся/частый пользователь видит
+    // данные сразу, не платя ~1.3 с анимации на каждом заходе (тот же гейт, что
+    // на Badges; Overview/League заходят чаще всего).
+    let firstPlay = true;
+    try {
+      firstPlay = !sessionStorage.getItem("ov-motion-played");
+      if (firstPlay) sessionStorage.setItem("ov-motion-played", "1");
+    } catch {
+      firstPlay = true;
+    }
+    if (!firstPlay) return;
+
     const anims: Animation[] = [];
 
     root.querySelectorAll<HTMLElement>("[data-countup]").forEach((el) => {

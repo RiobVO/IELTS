@@ -4,48 +4,40 @@ import { Skeleton } from "@/components/core/Skeleton";
 
 /**
  * Скелетон раздела Progress. loading.tsx не получает searchParams, поэтому зеркалим
- * таб-бар + дефолтный (league) таб — самый частый вход; при переходе в badges свап
- * контента даст короткий рефлоу, что допустимо для fallback.
+ * таб-бар + ДЕФОЛТНЫЙ (overview) таб — самый частый вход (роутер дефолтит на overview).
+ * При переходе в league/badges свап контента даст короткий рефлоу, что допустимо для
+ * fallback; зато на дефолтном приземлении нет мигания подиумом и layout-shift.
  */
 export default function Loading() {
   return (
     <AppShellSkeleton active="progress">
-      <div style={S.arena}>
-        <div style={S.wrap}>
-          {/* tab bar */}
-          <div style={{ display: "flex", gap: 9, marginBottom: 18 }}>
-            <Skeleton w={104} h={38} r="var(--radius-full)" />
-            <Skeleton w={104} h={38} r="var(--radius-full)" />
-          </div>
+      <div style={S.wrap}>
+        {/* tab bar (overview / league / badges) */}
+        <div style={{ display: "flex", gap: 9, marginBottom: 18 }}>
+          <Skeleton w={104} h={38} r="var(--radius-full)" />
+          <Skeleton w={92} h={38} r="var(--radius-full)" />
+          <Skeleton w={92} h={38} r="var(--radius-full)" />
+        </div>
 
-          <div style={S.head}>
-            <Skeleton w={46} h={46} r={14} />
-            <div style={{ flex: 1 }}>
-              <Skeleton w={180} h={26} style={{ marginBottom: 8 }} />
-              <Skeleton w={120} h={14} />
-            </div>
-          </div>
+        {/* head */}
+        <div style={{ marginBottom: 16 }}>
+          <Skeleton w={150} h={28} style={{ marginBottom: 8 }} />
+          <Skeleton w={300} h={14} />
+        </div>
 
-          <Skeleton w="100%" h={44} r="var(--radius-md)" style={{ marginBottom: 18 }} />
+        {/* trajectory hero */}
+        <Skeleton w="100%" h={300} r="var(--radius-xl)" style={{ marginBottom: 16 }} />
 
-          {/* podium */}
-          <div style={S.podium}>
-            {[120, 168, 96].map((h, i) => (
-              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                <Skeleton w={i === 1 ? 78 : 60} h={i === 1 ? 78 : 60} r="50%" />
-                <Skeleton w={70} h={14} />
-                <Skeleton w="100%" h={h} r="14px 14px 0 0" />
-              </div>
-            ))}
-          </div>
+        {/* forecast + readiness */}
+        <div style={S.grid}>
+          <Skeleton w="100%" h={196} r="var(--radius-xl)" />
+          <Skeleton w="100%" h={196} r="var(--radius-xl)" />
+        </div>
 
-          <Skeleton w="100%" h={80} r="var(--radius-xl)" style={{ margin: "18px 0 10px" }} />
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} w="100%" h={60} r="var(--radius-md)" />
-            ))}
-          </div>
+        {/* league / badges previews */}
+        <div style={S.previews}>
+          <Skeleton w="100%" h={72} r="var(--radius-lg)" />
+          <Skeleton w="100%" h={72} r="var(--radius-lg)" />
         </div>
       </div>
     </AppShellSkeleton>
@@ -53,8 +45,9 @@ export default function Loading() {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  arena: { minHeight: "100%", background: "radial-gradient(120% 80% at 50% -8%, color-mix(in oklab, var(--brand) 14%, white) 0%, var(--bg-base) 52%)" },
   wrap: { maxWidth: 960, margin: "0 auto", padding: "22px 16px 44px" },
-  head: { display: "flex", alignItems: "center", gap: 13, marginBottom: 16 },
-  podium: { display: "grid", gridTemplateColumns: "1fr 1.12fr 1fr", alignItems: "end", gap: 12, marginTop: 8 },
+  // auto-fit → две колонки на широком, одна на узком, без брейкпоинтов (совпадает с
+  // ov-grid/ov-previews по числу колонок, минимум layout-shift при гидратации).
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 14, marginBottom: 12 },
+  previews: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12 },
 };

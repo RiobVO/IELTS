@@ -32,6 +32,18 @@ export function LeagueMotion() {
     if (prefersReduced()) return;
     const root = document.querySelector<HTMLElement>("[data-league-root]");
     if (!root) return;
+
+    // Entrance-хореографию играем один раз за сессию (тот же гейт, что на Badges):
+    // на повторных заходах доска уже финальна в DOM, не переигрываем ~1.3 с.
+    let firstPlay = true;
+    try {
+      firstPlay = !sessionStorage.getItem("lb-motion-played");
+      if (firstPlay) sessionStorage.setItem("lb-motion-played", "1");
+    } catch {
+      firstPlay = true;
+    }
+    if (!firstPlay) return;
+
     const anims: Animation[] = [];
 
     root.querySelectorAll<HTMLElement>("[data-countup]").forEach((el) =>

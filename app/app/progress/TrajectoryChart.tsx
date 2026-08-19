@@ -182,9 +182,23 @@ export function TrajectoryChart({
         <polyline data-draw={combinedLen} points={combinedAttr} fill="none" stroke="var(--brand)" strokeWidth={2.5}
           strokeDasharray={combinedLen} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
 
-        {combined.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={2.5} fill={SECTION_COLOR[p.section]} />
-        ))}
+        {/* Секцию несёт НЕ только цвет: Reading — круг, Listening — ромб. Форма
+            остаётся различимой при дальтонизме (WCAG 1.4.1); цвет — вторичный сигнал. */}
+        {combined.map((p, i) =>
+          p.section === "listening" ? (
+            <rect
+              key={i}
+              x={p.x - 2.6}
+              y={p.y - 2.6}
+              width={5.2}
+              height={5.2}
+              transform={`rotate(45 ${p.x} ${p.y})`}
+              fill={SECTION_COLOR[p.section]}
+            />
+          ) : (
+            <circle key={i} cx={p.x} cy={p.y} r={2.6} fill={SECTION_COLOR[p.section]} />
+          ),
+        )}
 
         {/* Визир + подсвеченная точка (только при наведении/фокусе). */}
         {act && (

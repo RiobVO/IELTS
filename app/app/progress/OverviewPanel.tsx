@@ -321,18 +321,26 @@ function TrajectoryHero({
       />
 
       <div style={S.legend}>
-        <LegendDot color="var(--brand)" label="Combined" />
-        <LegendDot color="var(--sky-500)" label="Reading" />
-        <LegendDot color="var(--violet-300)" label="Listening" />
+        <LegendDot color="var(--brand)" label="Combined" shape="line" />
+        <LegendDot color="var(--sky-500)" label="Reading" shape="circle" />
+        <LegendDot color="var(--violet-300)" label="Listening" shape="diamond" />
       </div>
     </div>
   );
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+// Форма свотча повторяет форму точек на графике (круг/ромб) — легенда перестаёт
+// быть color-only, читается при дальтонизме.
+function LegendDot({ color, label, shape }: { color: string; label: string; shape: "line" | "circle" | "diamond" }) {
+  const swatch: React.CSSProperties =
+    shape === "line"
+      ? { width: 14, height: 3, borderRadius: "var(--radius-full)" }
+      : shape === "diamond"
+        ? { width: 9, height: 9, borderRadius: 2, transform: "rotate(45deg)" }
+        : { width: 9, height: 9, borderRadius: "50%" };
   return (
     <span style={S.legendItem}>
-      <span style={{ ...S.legendSwatch, background: color }} />
+      <span style={{ ...S.legendSwatch, ...swatch, background: color }} />
       {label}
     </span>
   );
@@ -374,7 +382,7 @@ function ForecastCard({ forecast }: { forecast: Forecast }) {
     reached: "Target reached — you're already there \u{1F3AF}",
     on_track: `On track for band ${forecast.targetBand} by ${forecast.horizonDate ? fmtDate(Date.parse(`${forecast.horizonDate}T00:00:00Z`)) : "exam day"}`,
     behind: `Behind pace for band ${forecast.targetBand} — more practice closes the gap`,
-    no_target: "Set a target band during onboarding to see if you're on pace",
+    no_target: "No target band set yet — add one to see if you're on pace",
     insufficient: "",
   };
   const verdictStyle = verdict === "reached" || verdict === "on_track" ? S.verdictGood : verdict === "behind" ? S.verdictWarn : S.verdictNeutral;
@@ -386,13 +394,13 @@ function ForecastCard({ forecast }: { forecast: Forecast }) {
         <p style={S.lowConf}>Early estimate — based on only {forecast.pointCount} mocks, confidence grows as you sit more.</p>
       )}
       <div style={S.forecastRow}>
-        <span style={S.forecastBig}>
-          {/* При низкой уверенности цифра приблизительная — честный «~», чтобы
-              её не читали как точный прогноз (коридор рядом несёт разброс). */}
+        {/* Цвет числа отражает вердикт: brand-акцент для reached/on_track, нейтральный
+            ink для behind — праздничный фиолетовый под отстающим прогнозом вводил в
+            заблуждение. Число статично (не count-up с нуля): точный чувствительный
+            band «просто верен», а не отсчитывается ради эффекта. */}
+        <span style={{ ...S.forecastBig, color: verdict === "behind" ? "var(--text-primary)" : "var(--brand)" }}>
           {forecast.status === "low_confidence" && <span style={S.forecastApprox}>~</span>}
-          <span data-countup={forecast.projectedBand ?? 0} data-decimals="1">
-            {forecast.projectedBand?.toFixed(1)}
-          </span>
+          <span>{forecast.projectedBand?.toFixed(1)}</span>
         </span>
         <span style={S.forecastUnit}>projected band</span>
       </div>
@@ -401,6 +409,9 @@ function ForecastCard({ forecast }: { forecast: Forecast }) {
           {forecast.interval.low.toFixed(1)}–{forecast.interval.high.toFixed(1)} likely by{" "}
           {forecast.horizonDate ? fmtDate(Date.parse(`${forecast.horizonDate}T00:00:00Z`)) : "then"}
         </p>
+      )}
+      {forecast.slopePerWeek != null && forecast.slopePerWeek > 0 && (
+        <p style={S.forecastPace}>Improving ~{forecast.slopePerWeek.toFixed(2)} band per week lately</p>
       )}
       {verdictText[verdict] && <div style={verdictStyle}>{verdictText[verdict]}</div>}
     </div>
@@ -504,7 +515,7 @@ function LeaguePreview({ rank }: { rank: number | null }) {
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={S.previewLabel}>League</div>
-        <div style={S.previewValue}>{rank != null ? `#${rank}` : "Unranked"}</div>
+        <div style={S.previewValue}>{rank != null ? `#${rank}` : "Not ranked"}</div>
       </div>
       <Icon name="chevron-right" size={17} strokeWidth={2.2} style={{ color: "var(--text-disabled)", flex: "none" }} />
     </Link>
@@ -602,7 +613,8 @@ const S: Record<string, React.CSSProperties> = {
   forecastBig: { fontFamily: "var(--font-mono)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" },
   forecastApprox: { fontSize: 28, fontWeight: 700, color: "var(--text-muted)", marginRight: 2, verticalAlign: "0.06em" },
   forecastUnit: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
-  forecastRange: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "6px 0 12px" },
+  forecastRange: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "6px 0 6px" },
+  forecastPace: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "0 0 12px", lineHeight: 1.4 },
   verdictGood: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--success-text)", background: "var(--success-subtle)", borderRadius: "var(--radius-md)", padding: "9px 13px" },
   verdictWarn: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", background: "var(--surface-inset)", borderRadius: "var(--radius-md)", padding: "9px 13px" },
   verdictNeutral: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--brand-active)", background: "var(--brand-subtle)", borderRadius: "var(--radius-md)", padding: "9px 13px" },
