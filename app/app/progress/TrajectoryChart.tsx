@@ -16,7 +16,7 @@
  * месте) — интерактив лишь надстройка после гидрации, как OverviewMotion.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface ChartPoint {
   x: number;
@@ -71,13 +71,29 @@ export function TrajectoryChart({
   const svgRef = useRef<SVGSVGElement>(null);
   const [active, setActive] = useState<number | null>(null);
   // Видимость сплит-серий: обе включены по умолчанию, тап по легенде гасит шумную
-  // Reading/Listening, оставляя чистую Combined-линию (Combined не гасится).
+  // Reading/Listening, оставляя чистую Combined-линию (Combined не гасится). Стартуем
+  // пустым (совпадает с SSR — избегаем hydration mismatch), затем подтягиваем выбор
+  // из sessionStorage: пользователь, погасивший серию, не включает её заново каждую
+  // навигацию/перезагрузку (тот же per-session-паттерн, что motion-гейт).
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("ov-series-hidden");
+      if (raw) setHidden(new Set(JSON.parse(raw) as string[]));
+    } catch {
+      // sessionStorage недоступен (private mode) — остаёмся на «всё видно».
+    }
+  }, []);
   const toggle = useCallback((s: string) => {
     setHidden((h) => {
       const n = new Set(h);
       if (n.has(s)) n.delete(s);
       else n.add(s);
+      try {
+        sessionStorage.setItem("ov-series-hidden", JSON.stringify([...n]));
+      } catch {
+        // персист необязателен — тогл работает и без него.
+      }
       return n;
     });
   }, []);
