@@ -10,6 +10,7 @@ import {
   skinRunnerGate,
   skinRunnerBrand,
   skinRunnerAudioDefer,
+  skinRunnerAudioLabel,
   injectProgressBridge,
 } from "@/lib/import/runner/skin-runner";
 import { hasConsumedTrial } from "@/lib/exam/access";
@@ -119,9 +120,14 @@ export async function GET(
   // bando re-skin на read-time: (1) аудио-гейт (listening) — светлый overlay вместо тёмного;
   // (2) шапка — bando-знак вместо чужого логотипа «IELTS™» + снос чужого telegram-канала;
   // (3) отложенный старт аудио-стрима до первого жеста — анти-egress на Storage
-  // (BACKLOG OPS-1: голое открытие страницы больше не тянет весь mp3).
+  // (BACKLOG OPS-1: голое открытие страницы больше не тянет весь mp3);
+  // (4) текст гейта — «Preparing…»/«Audio ready» вместо «Downloading…»/«Download
+  // complete»: на тёплом CF edge-кэше буферизация мгновенная, а старый текст читался
+  // как полная перекачка файла заново при каждом открытии.
   // No-op для незнакомых шаблонов.
-  const skinned = skinRunnerAudioDefer(skinRunnerBrand(skinRunnerGate(withProgress)));
+  const skinned = skinRunnerAudioLabel(
+    skinRunnerAudioDefer(skinRunnerBrand(skinRunnerGate(withProgress))),
+  );
   // Лимит mock из ?min= (iframe передаёт его сюда). Route доступен прямым GET →
   // defense-in-depth: та же валидация, что на exam-странице. searchParams.get даёт
   // null при отсутствии (у страницы — undefined) → явно ведём его в NaN → null,
