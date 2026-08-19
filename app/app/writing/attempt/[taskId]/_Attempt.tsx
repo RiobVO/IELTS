@@ -501,11 +501,15 @@ const CSS = `
 @media (min-width:1024px){
   .wa-editmain{flex-direction:row;align-items:flex-start;gap:14px}
   .wa-coach{width:280px;flex:none;position:sticky;top:88px}
-  /* Task 1 split: chart-left / field-right. The editor column is narrower, so keep
-     its coach stacked under the textarea (no 280px sidebar that would cramp it). */
+  /* Task 1 split: chart-left / field-right. Editor column is narrower, so no 280px
+     sidebar (it would cramp the field). Coach stays full-width but sits ABOVE the
+     textarea via order — under a min-560px field an empty draft's nudge would
+     otherwise fall below the fold, exactly when "start with the overview" matters.
+     order is safe here: the only focusable in .wa-editmain is the textarea, so
+     tab-order ≠ visual-order is a non-issue (coach is a non-interactive role=status). */
   .wa-grid[data-part="task1"]{grid-template-columns:minmax(340px,1fr) 1fr;gap:22px}
   .wa-grid[data-part="task1"] .wa-editmain{flex-direction:column}
-  .wa-grid[data-part="task1"] .wa-coach{width:100%;position:static}
+  .wa-grid[data-part="task1"] .wa-coach{width:100%;position:static;order:-1}
   /* Task 1 наконец разбился на 2 колонки — рейл больше не стоит перед editor. */
   .wa-grid[data-part="task1"] .wa-actionbar{position:static;padding-bottom:18px}
 }
