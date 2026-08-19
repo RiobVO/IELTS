@@ -323,7 +323,7 @@ function TrajectoryHero({
       <div style={S.legend}>
         <LegendDot color="var(--brand)" label="Combined" shape="line" />
         <LegendDot color="var(--info-text)" label="Reading" shape="circle" />
-        <LegendDot color="var(--violet-700)" label="Listening" shape="diamond" />
+        <LegendDot color="var(--green-600)" label="Listening" shape="diamond" />
       </div>
     </div>
   );
@@ -564,8 +564,11 @@ const OV_CSS = `
 .ov-chart{position:relative}
 .ov-chart-svg:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 40%,transparent);border-radius:var(--radius-md)}
 .ov-cross{transition:opacity .1s}
-.ov-tip{position:absolute;z-index:5;transform:translate(-50%,calc(-100% - 14px));pointer-events:none;background:var(--surface-inverse);color:var(--surface-inverse-ink);border-radius:10px;padding:8px 11px;box-shadow:var(--shadow-lg);white-space:nowrap;font-family:var(--font-ui)}
+.ov-tip{position:absolute;z-index:5;pointer-events:none;background:var(--surface-inverse);color:var(--surface-inverse-ink);border-radius:10px;padding:8px 11px;box-shadow:var(--shadow-lg);white-space:nowrap;font-family:var(--font-ui)}
 .ov-tip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--surface-inverse)}
+.ov-tip-left::after{left:16px;transform:none}
+.ov-tip-right::after{left:auto;right:16px;transform:none}
+.ov-tip-below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:var(--surface-inverse)}
 .ov-tip-date{font-size:var(--text-2xs);color:color-mix(in oklab,var(--surface-inverse-ink) 68%,transparent);margin-bottom:3px}
 .ov-tip-band{font-size:var(--text-sm);font-weight:600;display:flex;align-items:center;gap:6px}
 .ov-tip-band b{font-family:var(--font-mono);font-weight:700}
@@ -643,7 +646,7 @@ const S: Record<string, React.CSSProperties> = {
 
   previewCard: { display: "flex", alignItems: "center", gap: 13, padding: "15px 17px", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-lg)", textDecoration: "none", boxShadow: "var(--shadow-sm)" },
   previewIcon: { width: 42, height: 42, flex: "none", borderRadius: 12, display: "grid", placeItems: "center" },
-  previewLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
+  previewLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-muted)" },
   previewValue: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   previewHint: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-muted)" },
 };

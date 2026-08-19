@@ -25,8 +25,21 @@ export default function Loading() {
           <Skeleton w={300} h={14} />
         </div>
 
-        {/* trajectory hero */}
-        <Skeleton w="100%" h={300} r="var(--radius-xl)" style={{ marginBottom: 16 }} />
+        {/* trajectory hero — карта с aspect-ratio-графиком, чтобы высота скелета
+            масштабировалась как реальный hero (chart height = width·230/680) и не
+            давала 40px-снапа при гидратации. */}
+        <div style={S.heroCard}>
+          <Skeleton w={130} h={18} style={{ marginBottom: 6 }} />
+          <Skeleton w={220} h={12} style={{ marginBottom: 12 }} />
+          <div style={{ width: "100%", aspectRatio: "680 / 230" }}>
+            <Skeleton w="100%" h="100%" r="var(--radius-md)" />
+          </div>
+          <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
+            {[52, 60, 66].map((wpx, i) => (
+              <Skeleton key={i} w={wpx} h={12} />
+            ))}
+          </div>
+        </div>
 
         {/* forecast + readiness */}
         <div style={S.grid}>
@@ -46,6 +59,7 @@ export default function Loading() {
 
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 960, margin: "0 auto", padding: "22px 16px 44px" },
+  heroCard: { border: "1.5px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px 22px", marginBottom: 16 },
   // auto-fit → две колонки на широком, одна на узком, без брейкпоинтов (совпадает с
   // ov-grid/ov-previews по числу колонок, минимум layout-shift при гидратации).
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 14, marginBottom: 12 },
