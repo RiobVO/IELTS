@@ -2,6 +2,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { answerKey, contentItem, passage, question } from "@/db/schema";
 import { cronSecret, l1FeatureEnabled, publicSiteUrl } from "@/env";
+import { logError } from "@/lib/monitoring/log-error";
 import { normalizeEvidence } from "@/lib/exam/review-snapshot";
 
 /** Персист режет каждое объяснение до этой длины — страховка от аномального ответа. */
@@ -141,6 +142,11 @@ export async function triggerL1Generation(contentItemId: string): Promise<void> 
       body: JSON.stringify({ contentItemId }),
     });
   } catch (e) {
-    console.error("triggerL1Generation fetch failed", contentItemId, e);
+    await logError({
+      source: "server",
+      message: `l1 trigger fetch failed: ${e instanceof Error ? e.message : String(e)}`,
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "l1Trigger", contentItemId },
+    });
   }
 }
