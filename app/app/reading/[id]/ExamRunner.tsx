@@ -17,6 +17,7 @@ import { isNextRedirectError } from "@/lib/exam/is-redirect-error";
 import { countWords, parseChoiceCount, parseWordLimit } from "@/lib/exam/format-guard";
 import { strategyHints } from "@/lib/exam/strategy-hints";
 import { parseConfidenceMap, type ConfidenceLevel } from "@/lib/practice/confidence-calibration";
+import { bridgeLettersFor, groupMembers, toggleGroupLetter } from "@/lib/exam/listening-multi";
 
 interface Question {
   id: string;
@@ -25,6 +26,8 @@ interface Question {
   prompt_html: string;
   options: { value: string; label: string }[] | null;
   passage_id: string | null;
+  // choose-TWO/THREE группа (общий ключ у членов) — см. listening-multi.ts.
+  group_key: string | null;
 }
 interface Passage {
   title: string | null;
@@ -219,6 +222,7 @@ export default function ExamRunner({
   questions,
   durationSeconds,
   audioSrc,
+  listeningSection,
   title,
   category,
   initialAnnotations,
@@ -238,6 +242,11 @@ export default function ExamRunner({
   durationSeconds: number | null;
   /** Listening: audio for the whole test. Absent for Reading. */
   audioSrc?: string | null;
+  /** Серверная истина «это listening-тест» (content_item, не наличие аудио): у
+   *  listening-черновика/недозалитого теста audioSrc может быть null, а грейдинг-
+   *  семантика choose-TWO (общий стейт группы + позиционная буква) зависит от
+   *  секции, не от аудио. Аудио-UI при этом гейтится audioSrc, как раньше. */
+  listeningSection: boolean;
   title: string;
   category: string;
   /** Reader highlights/notes for this test (W2-1) — reading mode only. */
@@ -329,6 +338,11 @@ export default function ExamRunner({
   // (замыкание могло устареть), сам повтор — через ref на актуальный runAutosave
   // (self-reference внутри useCallback невозможен).
   const saveRetryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Синхронный снапшот answers. Хендлеры записи (set/toggle/restart) обновляют его
+  // СИНХРОННО в обработчике события и считают следующий стейт ОТ НЕГО — passive
+  // useEffect отстаёт от rapid-событий (untoggle → мгновенный Check: устаревший ref
+  // воскрешал бы снятую букву через union в toServerValue). Эффект остаётся как
+  // страховка для путей, меняющих answers мимо хендлеров.
   const answersRef = useRef(answers);
   useEffect(() => {
     answersRef.current = answers;
@@ -476,10 +490,36 @@ export default function ExamRunner({
     });
   }, []);
 
+  // Listening choose-TWO/THREE (mcq_multi + group_key): сервер грейдит text_accept
+  // ОДНОЙ буквой на члена группы, как мост __multiFor (bridge.ts) — раздаёт по позиции
+  // из отсортированного НАБОРА ГРУППЫ. Атомизированный раннер хранит СЫРОЙ массив в
+  // answers (нужен для чекбоксов/resume), поэтому ПЕРЕД отправкой на сервер
+  // (checkAnswer/reviewMistake/submit — НЕ сам answers-стейт/autosave) транслируем
+  // через bridgeLettersFor. Набор — union значений ВСЕХ членов группы (answersRef —
+  // синхронный снапшот; событийные хендлеры видят его актуальным), а не локальный
+  // массив одного вопроса: члены могли разойтись в застарелом стейте (resume попытки,
+  // сохранённой до шаринга стейта в toggle). Гейт — по listeningSection (серверная
+  // секция), не по audioSrc: у listening-теста без аудио трансформация обязана
+  // работать так же. Reading mcq_multi (mcq_set, полный набор) и mcq_multi без
+  // group_key (fallback) — не трогаем, шлём как есть.
+  const toServerValue = useCallback(
+    (n: number, v: string | string[]): string | string[] => {
+      if (!listeningSection) return v;
+      const q = questions.find((x) => x.number === n);
+      if (!q || q.qtype !== "mcq_multi" || q.group_key == null) return v;
+      const members = groupMembers(questions, q.group_key);
+      // Значение проверяемого вопроса перекрываем переданным v — оно свежее ref
+      // (прилетает из props QuestionBlock тем же рендером, что и клик).
+      return bridgeLettersFor({ ...answersRef.current, [String(n)]: v }, members)[n] ?? "";
+    },
+    [listeningSection, questions],
+  );
+
   const runCheck = useCallback(
     (n: number, v: string | string[]) => {
+      const serverValue = toServerValue(n, v);
       setCheckBusy((b) => ({ ...b, [n]: true }));
-      void checkAnswer(attemptId, n, v)
+      void checkAnswer(attemptId, n, serverValue)
         .then((res) => {
           if (!res) return;
           setChecked((c) => ({ ...c, [n]: res.correct }));
@@ -495,13 +535,13 @@ export default function ExamRunner({
       // SR-ревью (тот же гейт practice; сервер грейдит сам, verdict клиента не шлём).
       // Fire-and-forget — сбой не ломает UX проверки. Не-focus и mock (focus==null) не трогаем.
       if (focus != null && n === focus) {
-        void reviewMistake(attemptId, n, v).catch((e) => {
+        void reviewMistake(attemptId, n, serverValue).catch((e) => {
           console.error("reviewMistake call failed", e);
           reportClientError(e, "reviewMistake call failed");
         });
       }
     },
-    [attemptId, focus],
+    [attemptId, focus, toServerValue],
   );
 
   const runReveal = useCallback(
@@ -520,30 +560,54 @@ export default function ExamRunner({
     [attemptId],
   );
 
-  // useCallback → стабильные ссылки, чтобы memo(QuestionBlock) реально срабатывал
-  // (functional setState, deps пусты).
+  // useCallback → стабильные ссылки, чтобы memo(QuestionBlock) реально срабатывал.
+  // Следующий стейт считаем от answersRef.current (не functional updater): ref
+  // обновляется тут же синхронно, поэтому он всегда свежий к моменту следующего
+  // события — даже двух подряд в одном тике (каждый хендлер продолжает цепочку от
+  // ref'а предыдущего).
   const set = useCallback(
     (n: number, v: string) => {
-      setAnswers((a) => ({ ...a, [String(n)]: v }));
+      const next = { ...answersRef.current, [String(n)]: v };
+      answersRef.current = next;
+      setAnswers(next);
       dropVerdict(n);
     },
     [dropVerdict],
   );
   // mcq_multi: переключаем букву в наборе ответа (string[]). Порядок грейдеру не важен
   // (mcq_set сверяет множества), сортируем лишь для стабильного отображения.
+  // Listening choose-TWO/THREE (group_key): группа — ОДИН логический контрол, как в
+  // мосте (__multiFor читает единый чекбокс-блок): итоговый набор пишем во ВСЕ члены
+  // группы (блоки визуально синхронны, answered-индикатор и грейдинг когерентны) и
+  // снимаем вердикты всех членов. Набор строим union'ом текущих значений членов —
+  // они могли разойтись в застарелом стейте (resume попытки до этого шаринга).
+  // Reading (listeningSection=false) идёт прежней per-question веткой.
   const toggle = useCallback(
     (n: number, letter: string) => {
-      setAnswers((a) => {
-        const cur = a[String(n)];
-        const arr = Array.isArray(cur) ? cur : cur ? [cur] : [];
-        const next = arr.includes(letter)
-          ? arr.filter((x) => x !== letter)
-          : [...arr, letter].sort();
-        return { ...a, [String(n)]: next };
-      });
+      const q = questions.find((x) => x.number === n);
+      if (listeningSection && q?.qtype === "mcq_multi" && q.group_key != null) {
+        const members = groupMembers(questions, q.group_key);
+        // Единый набор группы — чистый toggleGroupLetter (union → toggle → sort);
+        // источник prev — синхронный answersRef (см. его комментарий).
+        const nextSet = toggleGroupLetter(answersRef.current, members, letter);
+        const out = { ...answersRef.current };
+        for (const m of members) out[String(m)] = nextSet;
+        answersRef.current = out;
+        setAnswers(out);
+        for (const m of members) dropVerdict(m);
+        return;
+      }
+      const cur = answersRef.current[String(n)];
+      const arr = Array.isArray(cur) ? cur : cur ? [cur] : [];
+      const next = arr.includes(letter)
+        ? arr.filter((x) => x !== letter)
+        : [...arr, letter].sort();
+      const out = { ...answersRef.current, [String(n)]: next };
+      answersRef.current = out;
+      setAnswers(out);
       dropVerdict(n);
     },
-    [dropVerdict],
+    [dropVerdict, listeningSection, questions],
   );
   const flag = useCallback((n: number) => setFlags((f) => ({ ...f, [String(n)]: !f[String(n)] })), []);
 
@@ -593,12 +657,27 @@ export default function ExamRunner({
   // тикает каждую секунду, и при прошедшем transfer-дедлайне сброшенный guard дал бы
   // немедленный повторный авто-сабмит (в офлайне — бесконечный шторм). Авто-ветки
   // дополнительно гейтятся !submitError; повтор — ТОЛЬКО явный клик Retry.
+  // Сабмит: та же трансформация listening choose-TWO, что и toServerValue выше, но по
+  // ВСЕМ вопросам сразу — сырой answers-стейт (autosave/resume) не трогаем, платится
+  // только payload на submitAttempt. Гейт listeningSection — серверная секция (см.
+  // toServerValue), не наличие аудио.
+  const buildSubmitAnswers = (): Record<string, string | string[]> => {
+    if (!listeningSection) return answers;
+    const out: Record<string, string | string[]> = { ...answers };
+    for (const q of questions) {
+      if (q.qtype === "mcq_multi" && q.group_key != null) {
+        out[String(q.number)] = toServerValue(q.number, answers[String(q.number)] ?? "");
+      }
+    }
+    return out;
+  };
+
   const submit = () => {
     if (pending) return;
     setSubmitError(false);
     startSubmit(async () => {
       try {
-        await submitAttempt(attemptId, answers);
+        await submitAttempt(attemptId, buildSubmitAnswers());
       } catch (e) {
         if (isNextRedirectError(e)) throw e; // успешный сабмит — не ошибка, доносим редирект
         console.error("submitAttempt call failed", e);
@@ -733,6 +812,9 @@ export default function ExamRunner({
   const togglePause = () => setPaused((p) => !p);
   const restart = () => {
     if (typeof window !== "undefined" && !window.confirm("Restart this test? Your answers and timing will be cleared.")) return;
+    // Ref — синхронно, как в set/toggle: тоггл сразу после Restart не должен
+    // восстанавливать прежние ответы из отставшего снапшота.
+    answersRef.current = {};
     setAnswers({});
     setFlags({});
     setCurrent(questions[0]?.number ?? 1);

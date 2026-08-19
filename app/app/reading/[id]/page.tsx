@@ -14,7 +14,7 @@ import {
   hasSubmittedAttempt,
   startAttempt,
 } from "@/lib/exam/access";
-import { categoryLabel } from "@/lib/labels";
+import { categoryLabel, LISTENING_CATEGORIES } from "@/lib/labels";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import { normalizePassageHtml } from "@/lib/reading/normalize-passage";
@@ -50,6 +50,9 @@ interface Question {
   options: { value: string; label: string }[] | null;
   // passage_id → группировка вопросов по Part в нижнем навигаторе (read существующей колонки).
   passage_id: string | null;
+  // group_key → choose-TWO/THREE группа (общий ключ у членов); нужен ExamRunner для
+  // listening-мультивыбора (позиционная буква вместо сырого массива на сервер).
+  group_key: string | null;
 }
 
 export default async function ReadingTestPage({
@@ -161,6 +164,14 @@ export default async function ReadingTestPage({
     existing ? null : modeParam,
     isDraftPreview, // adminDraftBypass — только когда isAdmin уже подтверждён выше
   );
+
+  // Серверная истина «это listening-тест» для грейдинг-семантики choose-TWO в
+  // ExamRunner. По category (enum-партиция part_*/full_listening ↔ passage_*/
+  // full_reading, все парсеры пишут section+category в lockstep), НЕ по audioSrc:
+  // listening-черновик/недозалитый тест без аудио обязан слать те же позиционные
+  // буквы. category уже в кэшированной выборке getExamContent — content_item.section
+  // в кэш не добавляем (смена shape поймала бы stale-кэш окно деплоя).
+  const listeningSection = (LISTENING_CATEGORIES as readonly string[]).includes(test.category);
 
   // Listening: one audio file for the whole test. Local public/ path now;
   // a full Storage URL (signed, §11) once audio lives in the cloud.
@@ -281,6 +292,7 @@ export default async function ReadingTestPage({
         questions={(questionsData ?? []) as Question[]}
         durationSeconds={test.duration_seconds}
         audioSrc={audioSrc}
+        listeningSection={listeningSection}
         title={test.title}
         category={test.category}
         initialAnnotations={annotations as never}
