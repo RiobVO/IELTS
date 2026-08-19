@@ -139,7 +139,10 @@ describe("computeForecast — пороги данных", () => {
     // noisy на 5 точках: ybar=5.8, slope=0.025, intercept=5.3; x0=59 (2026-03-01).
     // projectedRaw=6.775; ssResid=0.675, df=3, residualStd=√0.225=0.47434;
     // SE=0.47434·√(1+0.2+39²/1000)=0.47434·√2.721=0.78246; t(3)=1.638 → hw=1.28167.
-    // low=round½(5.4933)=5.5, high=round½(8.0567)=8.0.
+    // Кап: lastActual=6.0 (day40), daysToHorizon=19, maxGain=19/30=0.6333 → верх кап 6.6333,
+    // projectedRaw 6.775 связывается → projectedCapped=6.6333. Центр коридора сдвигается,
+    // но после округления к 0.5 границы совпадают с доканными: low=round½(6.6333−1.28167)=
+    // round½(5.3517)=5.5, high=round½(6.6333+1.28167)=round½(7.915)=8.0 — ожидание не меняется.
     const noisy: ForecastPoint[] = [
       { t: day(0), band: 5.0 },
       { t: day(10), band: 6.0 },
@@ -164,14 +167,17 @@ describe("computeForecast — пороги данных", () => {
 });
 
 describe("computeForecast — проекция, кламп, округление", () => {
-  it("проецирует по наклону на день экзамена (идеально линейная история)", () => {
-    // examDate = день 60 → 5.0 + 0.05*60 = 8.0.
+  it("проекцию по наклону ограничивает кап прироста (наклон RISING круче потолка)", () => {
+    // examDate = день 60 → projectedRaw = 5.0 + 0.05*60 = 8.0. НО наклон RISING 0.05/день
+    // (≈1.5 band/мес) круче капа 1/30 (1 band/мес), поэтому проекция на 20 дней вперёд от
+    // последней точки (band 7.0, day40) ограничена: maxGain=20/30=0.6667 → projectedCapped=
+    // 7.6667 → round½=7.5 (не 8.0). Идеальный фит → hw=0.5, коридор центрирован на 7.6667:
+    // low=round½(7.1667)=7.0, high=round½(8.1667)=8.0.
     const f = computeForecast(RISING, "2026-03-02", 7, NOW_AT_LAST); // 2026-03-02 = day(60)
     expect(f.horizonSource).toBe("exam_date");
     expect(f.horizonDate).toBe("2026-03-02");
-    expect(f.projectedBand).toBe(8.0);
-    // Идеальный фит → остатки 0 → пол коридора ±0.5.
-    expect(f.interval).toEqual({ low: 7.5, high: 8.5 });
+    expect(f.projectedBand).toBe(7.5);
+    expect(f.interval).toEqual({ low: 7.0, high: 8.0 });
   });
 
   it("клампит проекцию сверху к 9.0", () => {
@@ -202,6 +208,68 @@ describe("computeForecast — проекция, кламп, округление
   });
 });
 
+describe("computeForecast — кап прироста (extrapolation trap)", () => {
+  it("крутой ранний тренд + дальний горизонт → проекция ограничена, а не 9.0", () => {
+    // Реплика прод-случая: низкие ранние моки, крутой наклон. Дни 0,5,10,15, bands 2→5
+    // (наклон 0.2/день). NOW=day15, exam через 75 дней (day90 = 2026-04-01).
+    // OLS: intercept=2.0, x0=90 → projectedRaw=2.0+0.2*90=20 → БЕЗ капа упёрлось бы в 9.0.
+    // Кап: lastActual=5.0, daysToHorizon=75, maxGain=75/30=2.5 → projectedCapped=5.0+2.5=7.5.
+    // Идеальный фит → hw=0.5, коридор центрирован на 7.5: low=7.0, high=8.0 (НЕ high=9.0).
+    const steep: ForecastPoint[] = [0, 5, 10, 15].map((d, i) => ({
+      t: day(d),
+      band: 2.0 + i * 1.0,
+    }));
+    const now = new Date(day(15));
+    const f = computeForecast(steep, "2026-04-01", 7, now); // day(90)
+    expect(f.projectedBand).toBe(7.5); // lastActual 5.0 + maxGain 2.5, НЕ 9.0
+    expect(f.projectedBand).toBeLessThan(9.0);
+    expect(f.interval).toEqual({ low: 7.0, high: 8.0 }); // коридор вокруг капнутой точки, high<9.0
+    // Никаких NaN/Infinity на всех выходах.
+    expect(Number.isFinite(f.projectedBand!)).toBe(true);
+    expect(Number.isFinite(f.interval!.low)).toBe(true);
+    expect(Number.isFinite(f.interval!.high)).toBe(true);
+    expect(Number.isFinite(f.slopePerWeek!)).toBe(true);
+  });
+
+  it("короткий горизонт: точка не пробивает окно капа округлением к 0.5 наружу", () => {
+    // lastActual=7.0, горизонт 8 дней → maxGain=8/30=0.2667, окно капа [6.733,7.267].
+    // Крутой сырой тренд даёт projectedRaw≈7.6, projectedCapped=7.267 — БЛИЖАЙШАЯ 0.5 это
+    // 7.5, но это прирост +0.5 > заявленного +0.2667. Дожатие внутрь: gainHigh=floorHalf(
+    // 7.267)=7.0 → projectedBand=7.0, а не 7.5 (иначе target 7.5 ложно дал бы on_track).
+    // Дни 0,10,20,30, bands 5.0,5.8,6.4,7.0; NOW=day30, exam=day38 (2026-02-08).
+    const steepShort: ForecastPoint[] = [
+      { t: day(0), band: 5.0 },
+      { t: day(10), band: 5.8 },
+      { t: day(20), band: 6.4 },
+      { t: day(30), band: 7.0 },
+    ];
+    const now = new Date(day(30));
+    const f = computeForecast(steepShort, "2026-02-08", 7.5, now); // day(38)
+    const lastActual = 7.0;
+    const maxGain = 8 / 30;
+    const capHigh = Math.floor((lastActual + maxGain) * 2) / 2; // floorHalf → 7.0
+    expect(f.projectedBand).toBeLessThanOrEqual(capHigh);
+    expect(f.projectedBand).toBe(7.0); // НЕ 7.5
+    expect(Math.abs(f.projectedBand! - lastActual)).toBeLessThanOrEqual(maxGain + 1e-9);
+    expect(f.verdict).toBe("behind"); // 7.0 < target 7.5, округление наружу не завышает
+    expect(Number.isFinite(f.projectedBand!)).toBe(true);
+  });
+
+  it("пологий тренд (кап не связывает) → результат идентичен доканному (регрессия)", () => {
+    // Наклон 0.02/день (≈0.6 band/мес) НИЖЕ капа 1/30 (1 band/мес), поэтому кап инертен.
+    // bands 6.0..6.8 на днях 0..40; exam day60. projectedRaw=6.0+0.02*60=7.2.
+    // lastActual=6.8, maxGain=20/30=0.6667 → верх кап 7.4667 > 7.2 → НЕ связывает,
+    // projectedCapped=projectedRaw=7.2 → всё как до капа: projectedBand=7.0, коридор ±0.5.
+    const gentle: ForecastPoint[] = [0, 10, 20, 30, 40].map((d, i) => ({
+      t: day(d),
+      band: 6.0 + i * 0.2,
+    }));
+    const f = computeForecast(gentle, "2026-03-02", 7, NOW_AT_LAST); // day(60)
+    expect(f.projectedBand).toBe(7.0);
+    expect(f.interval).toEqual({ low: 6.5, high: 7.5 });
+  });
+});
+
 describe("computeForecast — тренд", () => {
   it("восходящий → up", () => {
     expect(computeForecast(RISING, "2026-03-01", 7, NOW_AT_LAST).trend).toBe("up");
@@ -227,12 +295,12 @@ describe("computeForecast — вердикт", () => {
   });
 
   it("проекция дотягивает до target → on_track", () => {
-    const f = computeForecast(RISING, "2026-03-02", 7.5, NOW_AT_LAST); // projected 8.0 ≥ 7.5, latest 7.0 < 7.5
+    const f = computeForecast(RISING, "2026-03-02", 7.5, NOW_AT_LAST); // projected 7.5 (капнута) ≥ 7.5, latest 7.0 < 7.5
     expect(f.verdict).toBe("on_track");
   });
 
   it("проекция не дотягивает → behind", () => {
-    const f = computeForecast(RISING, "2026-03-02", 8.5, NOW_AT_LAST); // projected 8.0 < 8.5
+    const f = computeForecast(RISING, "2026-03-02", 8.5, NOW_AT_LAST); // projected 7.5 (капнута) < 8.5
     expect(f.verdict).toBe("behind");
   });
 
