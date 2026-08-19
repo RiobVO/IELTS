@@ -50,26 +50,26 @@ export async function importRunner(
   const dup = await findDuplicateTest(parsed, opts.sourceFilePath);
   if (dup) throw new DuplicateTestError(dup);
 
-  // Атомизация reading (стратегия A, PRACTICE_PLAN): тот же HTML прогоняется вторым
-  // парсером (parseTest) ради текста пассажей + prompt/options, которые прищепляются
-  // к runner-набору по номеру вопроса. Runner остаётся SoT для answer_key/qtype/
-  // категории — mock (runner_html ниже) не меняется. Best-effort: сбой atom-парса
-  // или несовпадение номеров → warning + fallback на runner-набор (Practice
-  // остаётся practice-lite, импорт успешен). Listening — вне scope: у него нет
-  // текста пассажа и типизация расходится (отдельная задача).
-  if (parsed.section === "reading") {
-    try {
-      const merge = mergeAtomization(parsed, parseTest(html));
-      if (merge.atomized) {
-        parsed = merge.parsed;
-      } else if (merge.reason) {
-        parsed.warnings.push(merge.reason);
-      }
-    } catch (e) {
-      parsed.warnings.push(
-        `atomization skipped — parseTest failed (${String((e as Error)?.message ?? e).slice(0, 120)})`,
-      );
+  // Атомизация (стратегия A, PRACTICE_PLAN): тот же HTML прогоняется вторым
+  // парсером (parseTest — сам диспатчит в parse-listening для listening) ради
+  // текста пассажей + prompt/options, которые прищепляются к runner-набору по
+  // номеру вопроса. Runner остаётся SoT для answer_key/категории — mock
+  // (runner_html ниже) не меняется. Listening больше не вне scope: merge несёт
+  // отдельную политику под неё (groupKey из atom, qtype-promotion для choose-TWO
+  // членов mcq_single→mcq_multi) — см. atomize-merge.ts. Best-effort: сбой
+  // atom-парса или несовпадение номеров → warning + fallback на runner-набор
+  // (Practice остаётся practice-lite, импорт успешен).
+  try {
+    const merge = mergeAtomization(parsed, parseTest(html));
+    if (merge.atomized) {
+      parsed = merge.parsed;
+    } else if (merge.reason) {
+      parsed.warnings.push(merge.reason);
     }
+  } catch (e) {
+    parsed.warnings.push(
+      `atomization skipped — parseTest failed (${String((e as Error)?.message ?? e).slice(0, 120)})`,
+    );
   }
 
   // Mint the id up front so the fallible work (audio fetch/upload + sanitize + anti-leak)

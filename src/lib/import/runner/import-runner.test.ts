@@ -38,12 +38,39 @@ vi.mock("../source-html-storage", () => ({ uploadSourceHtml }));
 import { importRunner } from "./import-runner";
 import { MAX_IMPORT_AUDIO_BYTES } from "../audio-cap";
 
+// Listening-runner видит choose-TWO членов как одиночные mcq_single (text_accept с
+// обеими буквами per-member) и НИКОГДА не даёт groupKey — фикстура зеркалит это.
+const listeningQ = (number: number, over: Record<string, unknown> = {}) => ({
+  number, passageOrder: 1, qtype: "mcq_single", promptHtml: "", options: null,
+  groupKey: null, evidenceRef: null,
+  answer: { mode: "text_accept", accept: ["A", "C"], explanation: null, evidence: null },
+  ...over,
+});
 const listeningParsed = () => ({
   section: "listening",
   title: "Test",
-  passages: [{ order: 1, audioPath: null }],
-  questions: [{}, {}],
+  passages: [{ order: 1, title: null, bodyHtml: "", audioPath: null, questionsHtml: null }],
+  questions: [listeningQ(1), listeningQ(2)],
   warnings: [],
+});
+// Валидный atom-взгляд на тот же файл: parse-listening распознаёт .mcq.multi[data-qs]
+// → mcq_multi + groupKey + options. Ключ atom НАМЕРЕННО другой формы (mcq_set) —
+// тесты доказывают answer-провенанс от runner, а не совпадение значений. audioPath
+// у atom — реалистичный внешний <audio src> (parse-listening пишет его в пассажи):
+// тесты доказывают, что хотлинк НЕ утекает в persist.
+const listeningAtomParsed = () => ({
+  ...listeningParsed(),
+  title: "atom-ignored",
+  passages: [{ order: 1, title: "Part 1", bodyHtml: "Part 1", audioPath: "https://external-cdn/source.mp3", questionsHtml: null }],
+  questions: [1, 2].map((n) =>
+    listeningQ(n, {
+      qtype: "mcq_multi",
+      groupKey: "1-2",
+      promptHtml: "Choose TWO",
+      options: [{ value: "A", label: "Alpha" }, { value: "C", label: "Gamma" }],
+      answer: { mode: "mcq_set", accept: ["A", "C"], explanation: null, evidence: null },
+    }),
+  ),
 });
 
 beforeEach(() => {
@@ -63,6 +90,7 @@ describe("importRunner atomicity (#12)", () => {
   // Атомарность (#12) не тронута: persist по-прежнему один и после anti-leak.
   it("сбой audio-fetch деградирует: persist БЕЗ аудио + warning, hasAudio=false", async () => {
     parseRunner.mockReturnValue({ parsed: listeningParsed(), externalAudioSrc: "http://cdn/x.mp3" });
+    parseTest.mockReturnValue(listeningAtomParsed()); // атомизация чистая — единственный warning ниже про аудио
     fetchAudio.mockRejectedValue(new Error("redirect refused"));
     const res = await importRunner("<html/>", {});
     expect(uploadAudio).not.toHaveBeenCalled();
@@ -79,6 +107,7 @@ describe("importRunner atomicity (#12)", () => {
   // чтобы бот отдельной строкой попросил пережать mp3. Аплоада нет (аудио не в bucket).
   it("аудио > лимита: persist БЕЗ аудио, audioTooLarge=true, upload не вызван", async () => {
     parseRunner.mockReturnValue({ parsed: listeningParsed(), externalAudioSrc: "http://cdn/big.mp3" });
+    parseTest.mockReturnValue(listeningAtomParsed()); // атомизация чистая — тест проверяет только кап
     fetchAudio.mockResolvedValue(new ArrayBuffer(MAX_IMPORT_AUDIO_BYTES + 1)); // на байт больше капа
     const res = await importRunner("<html/>", {});
     expect(uploadAudio).not.toHaveBeenCalled();
@@ -116,15 +145,21 @@ describe("importRunner atomicity (#12)", () => {
 
   it("persist один раз с pre-generated id + runner_html при успехе", async () => {
     parseRunner.mockReturnValue({ parsed: listeningParsed(), externalAudioSrc: "http://cdn/x.mp3" });
+    parseTest.mockReturnValue(listeningAtomParsed());
     fetchAudio.mockResolvedValue(new Uint8Array([1]).buffer);
     uploadAudio.mockResolvedValue("https://pub/audio.mp3");
     const res = await importRunner("<html/>", { sourceFilePath: "f.html" });
     expect(persist).toHaveBeenCalledTimes(1);
-    const [, opts] = persist.mock.calls[0];
+    const [parsedArg, opts] = persist.mock.calls[0] as [
+      { passages: Array<{ audioPath: string | null }> },
+      { id: string; sourceFilePath: string; runnerHtml: string },
+    ];
     expect(opts).toMatchObject({ sourceFilePath: "f.html", runnerHtml: "<runner/>" });
     expect(typeof opts.id).toBe("string");
     expect(res.id).toBe(opts.id);
     expect(res.hasAudio).toBe(true);
+    // порядок merge→attach: в persist уходит НАШ Storage-URL, atom-хотлинк отброшен мержем
+    expect(parsedArg.passages[0]!.audioPath).toBe("https://pub/audio.mp3");
   });
 
   // Бэкап исходника — воспроизводимость, но best-effort: сбой не должен ронять
@@ -141,10 +176,12 @@ describe("importRunner atomicity (#12)", () => {
   });
 });
 
-// Атомизация reading (стратегия A): importRunner прищепляет текст пассажей из
-// parseTest к runner-набору ДО persist, чтобы Practice стал богатым. Ключ/qtype/
-// категория — из runner (SoT); mock не меняется. Best-effort: сбой atom-парса или
-// несовпадение номеров → fallback на runner-набор, импорт успешен.
+// Атомизация (стратегия A): importRunner прищепляет текст пассажей из parseTest
+// к runner-набору ДО persist, чтобы Practice стал богатым — для ОБЕИХ секций.
+// Ключ/категория — из runner (SoT); mock не меняется. Listening дополнительно
+// берёт groupKey из atom + promotion mcq_single→mcq_multi (политика в
+// atomize-merge.ts). Best-effort: сбой atom-парса или несовпадение номеров →
+// fallback на runner-набор, импорт успешен.
 const readingQ = (number: number, over: Record<string, unknown> = {}) => ({
   number, passageOrder: 1, qtype: "tfng", promptHtml: "", options: null,
   groupKey: null, evidenceRef: null,
@@ -165,7 +202,7 @@ const atomParsed = () => ({
   questions: [readingQ(1, { promptHtml: "Q1?" }), readingQ(2, { promptHtml: "Q2?" })],
 });
 
-describe("importRunner reading atomization", () => {
+describe("importRunner atomization (reading + listening)", () => {
   it("reading: мержит текст пассажа из parseTest в parsed до persist", async () => {
     parseRunner.mockReturnValue({ parsed: readingParsed(), externalAudioSrc: null });
     parseTest.mockReturnValue(atomParsed());
@@ -202,10 +239,38 @@ describe("importRunner reading atomization", () => {
     expect(parsedArg.warnings.some((w) => /atomi/i.test(w))).toBe(true);
   });
 
-  it("listening: parseTest НЕ вызывается (вне scope этого фикса)", async () => {
+  it("listening: parseTest вызывается, мерж применён (qtype/groupKey choose-TWO из atom, answer от runner)", async () => {
     parseRunner.mockReturnValue({ parsed: listeningParsed(), externalAudioSrc: null });
+    parseTest.mockReturnValue(listeningAtomParsed());
     await importRunner("<html/>", {});
-    expect(parseTest).not.toHaveBeenCalled();
+    expect(parseTest).toHaveBeenCalledTimes(1);
     expect(persist).toHaveBeenCalledTimes(1);
+    const [parsedArg] = persist.mock.calls[0] as [{
+      warnings: string[];
+      passages: Array<{ bodyHtml: string }>;
+      questions: Array<{ qtype: string; groupKey: string | null; promptHtml: string; answer: unknown }>;
+    }];
+    expect(parsedArg.warnings).toEqual([]); // мерж чистый, без fallback-warning
+    expect(parsedArg.passages[0]!.bodyHtml).toBe("Part 1");
+    for (const q of parsedArg.questions) {
+      // члены choose-TWO группы: promotion mcq_single→mcq_multi + groupKey из atom
+      expect(q.qtype).toBe("mcq_multi");
+      expect(q.groupKey).toBe("1-2");
+      expect(q.promptHtml).toBe("Choose TWO");
+      // грейдинг-инвариант: ключ строго от runner (text_accept с обеими буквами),
+      // atom-версия (mcq_set) НЕ просачивается
+      expect(q.answer).toEqual({ mode: "text_accept", accept: ["A", "C"], explanation: null, evidence: null });
+    }
+  });
+
+  it("listening: parseTest бросил → fallback на runner-набор + warning, импорт успешен", async () => {
+    parseRunner.mockReturnValue({ parsed: listeningParsed(), externalAudioSrc: null });
+    parseTest.mockImplementation(() => { throw new Error("cheerio boom"); });
+    const res = await importRunner("<html/>", {});
+    expect(persist).toHaveBeenCalledTimes(1);
+    const [parsedArg] = persist.mock.calls[0] as [{ questions: Array<{ qtype: string }>; warnings: string[] }];
+    expect(parsedArg.questions[0]!.qtype).toBe("mcq_single"); // не атомизировано
+    expect(parsedArg.warnings.some((w) => /atomi/i.test(w))).toBe(true);
+    expect(res.id).toBeTruthy();
   });
 });
