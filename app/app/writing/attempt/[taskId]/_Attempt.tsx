@@ -20,6 +20,14 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
   const isTask1 = task.taskPart === "task1";
   const timerTotal = (isTask1 ? 20 : 40) * 60;
   const ringRef = isTask1 ? 150 : 250;
+  // IELTS Writing marking criteria — Task 1 is scored on Task Achievement, Task 2 on
+  // Task Response; the other three are shared. Mirrors coach.ts NudgeCriterion.
+  const criteria = [
+    isTask1 ? "Task Achievement" : "Task Response",
+    "Coherence & Cohesion",
+    "Lexical Resource",
+    "Grammar",
+  ];
 
   const [phase, setPhase] = useState<Phase>("edit");
   const [essay, setEssay] = useState("");
@@ -125,6 +133,19 @@ export function Attempt({ task, targetBand }: { task: CatalogTask; targetBand: n
             <div style={S.targetTop}>Aiming for</div>
             <div style={S.targetBand}>{targetBand.toFixed(1)}</div>
             <p style={S.targetHelp}>Every fix in your report points at this band.</p>
+          </div>
+
+          <div style={S.reportCard}>
+            <div style={S.reportOver}>What your report checks</div>
+            <div style={S.reportList}>
+              {criteria.map((c) => (
+                <div key={c} style={S.reportItem}>
+                  <span style={S.reportTick}><Icon name="check" size={13} strokeWidth={3} /></span>
+                  {c}
+                </div>
+              ))}
+            </div>
+            <p style={S.reportFoot}>You get a band on each — and the exact fixes to lift them.</p>
           </div>
         </div>
 
@@ -549,6 +570,13 @@ const S: Record<string, CSSProperties> = {
   targetTop: { fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-muted)" },
   targetBand: { fontFamily: "var(--font-mono)", fontSize: 34, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.1, marginTop: 4 },
   targetHelp: { margin: "8px 0 0", fontSize: 13, color: "var(--text-secondary)" },
+
+  reportCard: { background: "var(--surface)", border: "2px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-solid)", padding: 18 },
+  reportOver: { fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 14 },
+  reportList: { display: "flex", flexDirection: "column", gap: 11 },
+  reportItem: { display: "flex", alignItems: "center", gap: 10, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" },
+  reportTick: { flex: "none", width: 22, height: 22, borderRadius: "var(--radius-full)", background: "var(--success-subtle)", color: "var(--success-text)", display: "grid", placeItems: "center" },
+  reportFoot: { margin: "14px 0 0", fontSize: 12.5, lineHeight: 1.45, color: "var(--text-muted)" },
 
   editor: { display: "flex", flexDirection: "column", gap: 12, minHeight: 0 },
   editorHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
