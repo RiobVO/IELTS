@@ -39,7 +39,7 @@ export interface TrajectoryChartProps {
   grid: { band: number; y: number }[];
   target: { y: number; band: number } | null;
   exam: { x: number; rightEdge: boolean } | null;
-  ends: { x: number; y: number; band: number; section: "reading" | "listening" }[];
+  forecast: { lastX: number; lastY: number; horizonX: number; projY: number } | null;
   xLabelLeft: string;
   xLabelRight: string;
   latestBand: number;
@@ -63,7 +63,7 @@ function fmtFull(ms: number): string {
 export function TrajectoryChart({
   w, h, padL, padR, padT, padB,
   combined,
-  reading, listening, grid, target, exam, ends,
+  reading, listening, grid, target, exam, forecast,
   xLabelLeft, xLabelRight, latestBand,
 }: TrajectoryChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -156,6 +156,13 @@ export function TrajectoryChart({
   const soleSection: "reading" | "listening" = hasReading ? "reading" : "listening";
 
 
+  // Пилюля текущего балла: всегда НАД последней точкой, с отступом от боковых краёв.
+  // Последняя точка НЕ обязательно справа-сверху — когда все моки свежие, а ось тянется
+  // до экзамена, она сидит слева-внизу, и центрированная пилюля роняется на подпись оси X.
+  const lastPt = combined[combined.length - 1];
+  const lastLblXPct = (lastPt.x / w) * 100;
+  const lastLblYPct = (lastPt.y / h) * 100;
+  const latestTx = lastLblXPct < 18 ? "0%" : lastLblXPct > 82 ? "-100%" : "-50%";
 
   return (
     <>
@@ -190,6 +197,16 @@ export function TrajectoryChart({
 
         {exam && (
           <line x1={exam.x} x2={exam.x} y1={padT} y2={h - padB} stroke="var(--brand-active)" strokeWidth={1.5} strokeDasharray="3 3" />
+        )}
+
+        {forecast && (
+          // Короткий пунктирный стаб-прогноз к правому краю окна (без большого конуса —
+          // полный интервал в карточке Forecast). «Compact marker», как и договорились.
+          <line
+            data-fade
+            x1={forecast.lastX} y1={forecast.lastY} x2={forecast.horizonX} y2={forecast.projY}
+            stroke="var(--brand)" strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round"
+          />
         )}
 
         {/* Reading и Listening — две самостоятельные линии-тренда (равнозначные,
@@ -234,19 +251,9 @@ export function TrajectoryChart({
           </g>
         )}
 
-        {/* Конец каждой линии — заливной маркер в цвете своей секции (у остальных точек
-            маркер-кольцо). Раньше тут была одна brand-точка «последнего мока»: она
-            принадлежала общей Combined-линии, а без неё сидела чужим цветом на чужой линии. */}
-        {ends.map((e) =>
-          hidden.has(e.section) ? null : e.section === "listening" ? (
-            <rect key={`end-${e.section}`} x={e.x - 4} y={e.y - 4} width={8} height={8}
-              transform={`rotate(45 ${e.x} ${e.y})`} fill={SECTION_COLOR.listening}
-              stroke="var(--surface)" strokeWidth={2} />
-          ) : (
-            <circle key={`end-${e.section}`} cx={e.x} cy={e.y} r={4.5} fill={SECTION_COLOR.reading}
-              stroke="var(--surface)" strokeWidth={2} />
-          ),
-        )}
+        <circle data-pop cx={combined[combined.length - 1].x} cy={combined[combined.length - 1].y} r={5}
+          fill="var(--brand)" stroke="var(--surface)" strokeWidth={2}
+          style={{ transformBox: "fill-box", transformOrigin: "center" }} />
 
         {/* Прозрачная область-приёмник поверх — ловит курсор и между линиями. */}
         <rect x={padL} y={padT} width={w - padL - padR} height={h - padT - padB} fill="transparent" style={{ cursor: "crosshair" }} />
@@ -274,28 +281,14 @@ export function TrajectoryChart({
             Exam
           </span>
         )}
-        {/* Прямая подпись на конце КАЖДОЙ линии, в её цвете — «твой текущий балл по
-            этой секции». Ставится над точкой, с отступом от боковых краёв. */}
-        {!act &&
-          ends.map((e) => {
-            if (hidden.has(e.section)) return null;
-            const xPct = (e.x / w) * 100;
-            const tx = xPct < 18 ? "0%" : xPct > 82 ? "-100%" : "-50%";
-            return (
-              <span
-                key={`lbl-${e.section}`}
-                className="ov-lbl ov-lbl-end"
-                style={{
-                  left: `${xPct}%`,
-                  top: `${(e.y / h) * 100}%`,
-                  transform: `translate(${tx}, calc(-100% - 9px))`,
-                  background: SECTION_COLOR[e.section],
-                }}
-              >
-                {e.band.toFixed(1)}
-              </span>
-            );
-          })}
+        {!act && (
+          <span
+            className="ov-lbl ov-lbl-latest"
+            style={{ left: `${lastLblXPct}%`, top: `${lastLblYPct}%`, transform: `translate(${latestTx}, calc(-100% - 10px))` }}
+          >
+            {latestBand.toFixed(1)}
+          </span>
+        )}
         <span className="ov-lbl ov-lbl-axis" style={{ left: `${(padL / w) * 100}%`, bottom: 0 }}>{xLabelLeft}</span>
         <span className="ov-lbl ov-lbl-axis ov-lbl-axis-r" style={{ left: `${((w - padR) / w) * 100}%`, bottom: 0 }}>{xLabelRight}</span>
       </div>
