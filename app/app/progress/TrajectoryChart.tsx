@@ -36,9 +36,9 @@ export interface TrajectoryChartProps {
   /** Облако СВИДЕТЕЛЬСТВ: каждый реальный мок. Маркеры + приёмник наведения — НЕ линия. */
   combined: ChartPoint[];
   /** Единственная линия «твоего band» во времени. null, пока сдана лишь одна секция. */
-  overall: { path: string; len: number; firstX: number; lastX: number } | null;
-  reading: { path: string; len: number } | null;
-  listening: { path: string; len: number } | null;
+  overall: { path: string; firstX: number; lastX: number } | null;
+  reading: { path: string } | null;
+  listening: { path: string } | null;
   grid: { band: number; y: number }[];
   target: { y: number; band: number } | null;
   exam: { x: number; rightEdge: boolean } | null;
@@ -269,7 +269,6 @@ export function TrajectoryChart({
           // Короткий пунктирный стаб-прогноз к правому краю окна (без большого конуса —
           // полный интервал в карточке Forecast). «Compact marker», как и договорились.
           <line
-            data-fade
             x1={forecast.lastX} y1={forecast.lastY} x2={forecast.horizonX} y2={forecast.projY}
             stroke="var(--brand)" strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round"
           />
@@ -279,8 +278,8 @@ export function TrajectoryChart({
         {areaD && <path d={areaD} fill={`url(#${gradId})`} pointerEvents="none" />}
 
         {overall && (
-          <path data-draw={overall.len} d={overall.path} fill="none" stroke="var(--brand)" strokeWidth={2.5}
-            strokeDasharray={overall.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={overall.path} fill="none" stroke="var(--brand)" strokeWidth={2.5}
+            strokeLinecap="round" strokeLinejoin="round" />
         )}
 
         {/* Секционные тренды — ПОДЧИНЁННЫЕ (тонкий пунктир против сплошной overall), но
@@ -288,7 +287,8 @@ export function TrajectoryChart({
             лежит ровно на её линии: сплошная 2.5px поверх пунктира 1.4px съедала его
             целиком — легенда обещала Listening, а на графике от него были одни ромбы.
             Сверху пунктир читается как «здесь overall и есть эта секция» — это правда.
-            data-draw не ставим: draw-in гонит stroke-dashoffset, а он уже занят узором. */}
+            Линии статичны с первого кадра (без draw-in): запись экрана на первой
+            загрузке не должна ловить кадр без данных или с недорисованной линией. */}
         {reading && !hidden.has("reading") && (
           <path d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.4}
             strokeDasharray="4 3" opacity={0.85} strokeLinecap="round" strokeLinejoin="round" />

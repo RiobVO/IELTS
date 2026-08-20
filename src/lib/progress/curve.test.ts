@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { monotoneSegs, bezierAt, smoothD, smoothLen, type Scaled } from "./curve";
+import { monotoneSegs, bezierAt, smoothD, type Scaled } from "./curve";
 
 /**
  * Регрессия из реальных данных владельца (скрин 2026-07-15): серия моков, все ровно
@@ -119,7 +119,7 @@ describe("monotoneSegs — кривая не врёт про данные", () =
   });
 });
 
-describe("smoothD / smoothLen", () => {
+describe("smoothD", () => {
   it("две точки дают ровно один сегмент — прямую", () => {
     const pts: Scaled[] = [{ x: 0, y: Y2 }, { x: 100, y: Y2 }];
     expect(monotoneSegs(pts)).toHaveLength(1);
@@ -132,12 +132,5 @@ describe("smoothD / smoothLen", () => {
     const d = smoothD([{ x: 0, y: Y2 }, { x: 100, y: Y2 }, { x: 200, y: Y35 }]);
     expect(d.startsWith("M 0.0 221.4")).toBe(true);
     expect(d.match(/C /g)).toHaveLength(2);
-  });
-
-  it("smoothLen конечен и не короче прямой между концами", () => {
-    const pts: Scaled[] = [{ x: 0, y: Y2 }, { x: 100, y: Y35 }, { x: 200, y: Y2 }];
-    const len = smoothLen(pts);
-    expect(Number.isFinite(len)).toBe(true);
-    expect(len).toBeGreaterThan(Math.hypot(100, Y2 - Y35) * 2);
   });
 });

@@ -2,11 +2,13 @@
 
 /**
  * Overview screen entrance motion (client island over server-rendered markup).
- * Everything is already at its final state in the DOM (chart lines fully drawn,
- * bars at their real width, numbers printed) — so SSR / no-JS / reduced-motion
- * show the real trajectory immediately. This only layers WAAPI entrance motion
- * via data attributes, same convention as LeagueMotion/BadgesMotion. Renders
- * nothing.
+ * Chart lines are NOT animated — they must be visible from the very first frame
+ * (a screen recording of the first load must never catch an undrawn/invisible
+ * line). Everything else is already at its final state in the DOM (bars at
+ * their real width, numbers printed) — SSR / no-JS / reduced-motion show the
+ * real trajectory immediately. This only layers WAAPI entrance motion (count-up,
+ * last-point pop, bar grow, row stagger) via data attributes, same convention as
+ * LeagueMotion/BadgesMotion. Renders nothing.
  */
 
 import { useEffect } from "react";
@@ -59,35 +61,13 @@ export function OverviewMotion() {
       if (Number.isFinite(to)) countUp(el, to, 900, decimals);
     });
 
-    // Chart lines (combined/reading/listening) — draw-in via stroke-dashoffset.
-    // Server renders the FINAL offset (0, fully drawn); the animation only
-    // overlays a visual play from full length -> 0, never touching the attr.
-    root.querySelectorAll<SVGGeometryElement>("[data-draw]").forEach((el, i) => {
-      const len = Number(el.dataset.draw) || 0;
-      anims.push(
-        el.animate(
-          [{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
-          { duration: 900, delay: 150 + i * 130, easing: EASE_OUT, fill: "backwards" },
-        ),
-      );
-    });
-
-    // Forecast cone/tail — projection, not history: fade in rather than draw in.
-    root.querySelectorAll<SVGElement>("[data-fade]").forEach((el, i) => {
-      anims.push(
-        el.animate(
-          [{ opacity: 0 }, { opacity: 1 }],
-          { duration: 500, delay: 650 + i * 90, easing: EASE_OUT, fill: "backwards" },
-        ),
-      );
-    });
-
-    // Last-point callout — pops in once the line has drawn.
+    // Last-point callout — pops in early; the line itself is no longer drawn-in,
+    // so this no longer waits on it.
     root.querySelectorAll<SVGElement>("[data-pop]").forEach((el, i) => {
       anims.push(
         el.animate(
           [{ transform: "scale(0)", opacity: 0 }, { transform: "scale(1)", opacity: 1 }],
-          { duration: 420, delay: 950 + i * 60, easing: EASE_OUT, fill: "backwards" },
+          { duration: 420, delay: 250 + i * 60, easing: EASE_OUT, fill: "backwards" },
         ),
       );
     });
