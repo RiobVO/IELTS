@@ -311,9 +311,6 @@ function TrajectoryHero({
   // Линия экзамена — только если дата попадает в окно моков; далёкий экзамен несёт
   // карточка Forecast («by …»), а не растянутая на месяцы ось.
   const examInWindow = Number.isFinite(examMs) && examMs > Date.now() && examMs <= xMax;
-  // Прогноз на графике — короткий пунктирный стаб к правому краю окна (не конус до
-  // далёкого горизонта). Полный интервал/дата — в карточке Forecast.
-  const showForecast = forecast.status !== "insufficient" && forecast.projectedBand != null;
 
   // Геометрия для конкретного размера холста (viewBox). Домен (выше) от размера не
   // зависит; здесь — шкалы/пути/координаты. Считаем дважды: широкий десктоп и более
@@ -326,10 +323,17 @@ function TrajectoryHero({
     const cPts = scalePoints(pts, xScale, yScale);
     const rPts = trajectory.reading.length >= 2 ? scalePoints(trajectory.reading, xScale, yScale) : null;
     const lPts = trajectory.listening.length >= 2 ? scalePoints(trajectory.listening, xScale, yScale) : null;
-    const lastScaled = cPts[cPts.length - 1];
     const targetY = targetBand != null ? yScale(Math.min(Math.max(targetBand, yMin), yMax)) : null;
     const examX = examInWindow ? xScale(examMs) : null;
-    const projY = showForecast ? yScale(forecast.projectedBand!) : null;
+    // Конец каждой линии — «твой текущий балл по этой секции»: заливной маркер +
+    // прямая подпись в цвете секции (dataviz: значение на конце линии, выборочно).
+    const endOf = (sec: "reading" | "listening") => {
+      const idx = pts.reduce((acc, p, i) => (p.section === sec ? i : acc), -1);
+      return idx >= 0 ? { x: cPts[idx].x, y: cPts[idx].y, band: pts[idx].band, section: sec } : null;
+    };
+    const ends = [endOf("reading"), endOf("listening")].filter(
+      (e): e is { x: number; y: number; band: number; section: "reading" | "listening" } => e !== null,
+    );
     return {
       w: CW,
       h: CH,
@@ -346,7 +350,7 @@ function TrajectoryHero({
       grid: gridBands.map((b) => ({ band: b, y: yScale(b) })),
       target: targetY != null ? { y: targetY, band: targetBand! } : null,
       exam: examX != null ? { x: examX, rightEdge: examX > CW - PAD.r - 28 } : null,
-      forecast: showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: CW - PAD.r, projY: projY! } : null,
+      ends,
       xLabelLeft: fmtDate(xMin),
       xLabelRight: fmtDate(xMax),
       latestBand: last.band,
@@ -620,9 +624,9 @@ const OV_CSS = `
 .ov-lbl-grid{font-family:var(--font-mono);font-weight:600;color:var(--text-secondary);transform:translate(-100%,-50%)}
 .ov-lbl-target{color:var(--warn-text);font-weight:700;transform:translate(-100%,-140%)}
 .ov-lbl-exam{color:var(--brand-active);font-weight:700}
-/* Текущий балл — не бледная цифра у линии, а brand-пилюля слева от последней точки:
-   белым по фиолетовому это самый читаемый и главный числовой акцент графика. */
-.ov-lbl-latest{font-family:var(--font-mono);font-weight:800;color:var(--text-on-brand);background:var(--brand);padding:2px 8px;border-radius:var(--radius-full);box-shadow:var(--shadow-sm);transform:translate(calc(-100% - 11px),-50%)}
+/* Балл на конце линии — плотная пилюля в цвете своей секции (фон задаётся инлайном
+   на элементе): самый читаемый числовой акцент, и он привязан к своей линии. */
+.ov-lbl-end{font-family:var(--font-mono);font-weight:800;color:var(--text-on-brand);padding:2px 8px;border-radius:var(--radius-full);box-shadow:var(--shadow-sm)}
 .ov-lbl-axis{color:var(--text-secondary);font-weight:600}
 .ov-lbl-axis-r{transform:translate(-100%,0)}
 .ov-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
