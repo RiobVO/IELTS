@@ -59,9 +59,12 @@ RLS lives in `migrations/0001_rls` — `answer_key` is locked to the service rol
 
 ## Verify (acceptance gate)
 
-`npm run verify` runs against `DATABASE_URL` and prints `[OK]`/`[FAIL]` per check
-(migrate up → 16 tables · down → clean revert · up → idempotent · anon denied on
-`answer_key` · `/api/health` → 200), exit 0 only if all pass.
+`npm run verify` runs against `VERIFY_DATABASE_URL` and prints `[OK]`/`[FAIL]` per
+check (migrate up → 36 tables · down → clean revert · up → idempotent · anon denied
+on `answer_key` · `/api/health` → 200), exit 0 only if all pass.
+
+It is **destructive** — it drops and recreates `public` — and refuses a non-local
+host unless `VERIFY_ALLOW_REMOTE=1`.
 
 No live Supabase? Use the bundled local Postgres:
 
