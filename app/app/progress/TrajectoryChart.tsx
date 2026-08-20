@@ -43,8 +43,8 @@ export interface TrajectoryChartProps {
   target: { y: number; band: number } | null;
   exam: { x: number; rightEdge: boolean } | null;
   forecast: { lastX: number; lastY: number; horizonX: number; projY: number } | null;
-  xLabelLeft: string;
-  xLabelRight: string;
+  /** Засечки/подписи оси X — равномерно по домену (4 на десктопе, 3 в портрете). */
+  xTicks: { x: number; label: string }[];
   /** Пилюля текущего балла: overall, если он есть; иначе последний мок единственной секции. */
   latest: { x: number; y: number; band: number; isOverall: boolean };
 }
@@ -78,7 +78,7 @@ export function TrajectoryChart({
   w, h, padL, padR, padT, padB,
   combined, overall,
   reading, listening, grid, target, exam, forecast,
-  xLabelLeft, xLabelRight, latest,
+  xTicks, latest,
 }: TrajectoryChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [active, setActive] = useState<number | null>(null);
@@ -231,10 +231,26 @@ export function TrajectoryChart({
           </linearGradient>
         </defs>
 
-        {/* Только ЛИНИИ сетки/цели/экзамена — подписи вынесены в HTML-оверлей ниже
-            (фикс-кегль на любой ширине; SVG-текст на 360px схлопывался до ~4.8px). */}
+        {/* Каркас графика (вариант «научный/точный»): сетка по обеим осям + рамка осей
+            + засечки. Без него маркеры висели в белом поле — «точки», а не график:
+            уровень точки читался только по бледной горизонтали, а положение во времени
+            не читалось никак. Подписи вынесены в HTML-оверлей ниже (фикс-кегль на любой
+            ширине; SVG-текст на 360px схлопывался до ~4.8px). */}
         {grid.map((g) => (
           <line key={g.band} x1={padL} x2={w - padR} y1={g.y} y2={g.y} stroke="var(--border-subtle)" strokeWidth={1} />
+        ))}
+        {xTicks.map((tk, i) => (
+          <line key={i} x1={tk.x} x2={tk.x} y1={padT} y2={h - padB} stroke="var(--border-subtle)" strokeWidth={1} />
+        ))}
+
+        {/* Рамка осей — единственные СПЛОШНЫЕ линии хрома: они держат плот как объект. */}
+        <line x1={padL} x2={padL} y1={padT} y2={h - padB} stroke="var(--border-strong)" strokeWidth={1} />
+        <line x1={padL} x2={w - padR} y1={h - padB} y2={h - padB} stroke="var(--border-strong)" strokeWidth={1} />
+        {grid.map((g) => (
+          <line key={`ty${g.band}`} x1={padL - 4} x2={padL} y1={g.y} y2={g.y} stroke="var(--border-strong)" strokeWidth={1} />
+        ))}
+        {xTicks.map((tk, i) => (
+          <line key={`tx${i}`} x1={tk.x} x2={tk.x} y1={h - padB} y2={h - padB + 4} stroke="var(--border-strong)" strokeWidth={1} />
         ))}
 
         {target && (
@@ -262,15 +278,18 @@ export function TrajectoryChart({
         {/* Wash под Combined — над recessive-сеткой, под data-линиями (премиум-слои). */}
         {areaD && <path d={areaD} fill={`url(#${gradId})`} pointerEvents="none" />}
 
-        {/* Секционные тренды — вспомогательные (1.5px) рядом с overall. Когда overall'а
-            нет (сдана одна секция), единственная линия обязана нести основной вес. */}
+        {/* Секционные тренды — ПОДЧИНЁННЫЕ: тонкий пунктир против сплошной overall.
+            Иначе они спорят с главной линией за внимание, а на участке, где overall
+            равен единственной известной секции, ещё и лежат ровно под ней — сплошная
+            поверх сплошной читалась бы как одна линия неясно чего.
+            data-draw не ставим: draw-in гонит stroke-dashoffset, а он уже занят узором. */}
         {reading && !hidden.has("reading") && (
-          <path data-draw={reading.len} d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={overall ? 1.5 : 2.5}
-            strokeDasharray={reading.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.4}
+            strokeDasharray="4 3" opacity={0.85} strokeLinecap="round" strokeLinejoin="round" />
         )}
         {listening && !hidden.has("listening") && (
-          <path data-draw={listening.len} d={listening.path} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={overall ? 1.5 : 2.5}
-            strokeDasharray={listening.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={listening.path} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={1.4}
+            strokeDasharray="4 3" opacity={0.85} strokeLinecap="round" strokeLinejoin="round" />
         )}
         {overall && (
           <path data-draw={overall.len} d={overall.path} fill="none" stroke="var(--brand)" strokeWidth={2.5}
@@ -348,8 +367,21 @@ export function TrajectoryChart({
             {latest.band.toFixed(1)}
           </span>
         )}
-        <span className="ov-lbl ov-lbl-axis" style={{ left: `${(padL / w) * 100}%`, bottom: 0 }}>{xLabelLeft}</span>
-        <span className="ov-lbl ov-lbl-axis ov-lbl-axis-r" style={{ left: `${((w - padR) / w) * 100}%`, bottom: 0 }}>{xLabelRight}</span>
+        {/* Крайние подписи прижимаем внутрь плота, средние центрируем по засечке —
+            иначе первая/последняя вылезают за холст. */}
+        {xTicks.map((tk, i) => (
+          <span
+            key={i}
+            className="ov-lbl ov-lbl-axis"
+            style={{
+              left: `${(tk.x / w) * 100}%`,
+              bottom: 0,
+              transform: i === 0 ? "none" : i === xTicks.length - 1 ? "translate(-100%, 0)" : "translate(-50%, 0)",
+            }}
+          >
+            {tk.label}
+          </span>
+        ))}
       </div>
 
       {act && (

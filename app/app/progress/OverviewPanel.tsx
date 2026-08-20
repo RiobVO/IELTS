@@ -290,6 +290,14 @@ function TrajectoryHero({
     const targetY = targetBand != null ? yScale(Math.min(Math.max(targetBand, yMin), yMax)) : null;
     const examX = examInWindow ? xScale(examMs) : null;
     const projY = showForecast ? yScale(forecast.projectedBand!) : null;
+    // Засечки оси X: равномерно по домену. Раньше подписей было ровно две (по краям) —
+    // между ними шкалу приходилось достраивать в уме, и поле читалось как «точки в
+    // пустоте», а не как график. На узком мобильном холсте 4 подписи склеились бы — 3.
+    const tickCount = CW >= 600 ? 4 : 3;
+    const xTicks = Array.from({ length: tickCount }, (_, i) => {
+      const t = xMin + ((xMax - xMin) * i) / (tickCount - 1);
+      return { x: xScale(t), label: fmtDate(t) };
+    });
     return {
       w: CW,
       h: CH,
@@ -307,8 +315,7 @@ function TrajectoryHero({
       target: targetY != null ? { y: targetY, band: targetBand! } : null,
       exam: examX != null ? { x: examX, rightEdge: examX > CW - PAD.r - 28 } : null,
       forecast: showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: CW - PAD.r, projY: projY! } : null,
-      xLabelLeft: fmtDate(xMin),
-      xLabelRight: fmtDate(xMax),
+      xTicks,
       latest,
     };
   };
@@ -601,8 +608,7 @@ const OV_CSS = `
 /* Текущий балл — не бледная цифра у линии, а brand-пилюля слева от последней точки:
    белым по фиолетовому это самый читаемый и главный числовой акцент графика. */
 .ov-lbl-latest{font-family:var(--font-mono);font-weight:800;color:var(--text-on-brand);background:var(--brand);padding:2px 8px;border-radius:var(--radius-full);box-shadow:var(--shadow-sm);transform:translate(calc(-100% - 11px),-50%)}
-.ov-lbl-axis{color:var(--text-secondary);font-weight:600}
-.ov-lbl-axis-r{transform:translate(-100%,0)}
+.ov-lbl-axis{color:var(--text-secondary);font-weight:600;font-family:var(--font-mono)}
 /* Текстовая альтернатива графика: вне экрана, но В дереве доступности (display:none
    вырезал бы её и оттуда). clip+1px — стандартный приём; white-space:nowrap
    обязателен, иначе строки таблицы схлопываются в одну колонку при переносе. */
