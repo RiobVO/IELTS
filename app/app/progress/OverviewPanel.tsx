@@ -589,6 +589,7 @@ const OV_CSS = `
 .ov-preview:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
 .ov-preview:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 45%,transparent)}
 .ov-chart{position:relative}
+.ov-chart-svg:focus{outline:none}
 .ov-chart-svg:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 40%,transparent);border-radius:var(--radius-md)}
 .ov-cross{transition:opacity .1s}
 .ov-tip{position:absolute;z-index:5;pointer-events:none;background:var(--surface-inverse);color:var(--surface-inverse-ink);border-radius:10px;padding:8px 11px;box-shadow:var(--shadow-lg);white-space:nowrap;font-family:var(--font-ui)}
