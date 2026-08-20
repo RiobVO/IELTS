@@ -189,16 +189,58 @@ function scalePoints(pts: TrajectoryPoint[], xScale: (t: number) => number, ySca
   return pts.map((p) => ({ x: xScale(p.t), y: yScale(p.band) }));
 }
 
-function polylineLength(pts: Scaled[]): number {
-  let len = 0;
-  for (let i = 1; i < pts.length; i++) {
-    len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-  }
-  return len;
+// Гладкая линия (Catmull-Rom → кубический Безье) — вид «как в реальных графиках».
+// Точки данных остаются ТОЧНЫМИ (маркеры рисуются ровно на них); кривая лишь
+// связывает их визуально. Математику траектории/прогноза это не трогает.
+interface Seg {
+  p1: Scaled;
+  c1: Scaled;
+  c2: Scaled;
+  p2: Scaled;
 }
-
-function pointsAttr(pts: Scaled[]): string {
-  return pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+function catmullSegs(pts: Scaled[]): Seg[] {
+  const segs: Seg[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    segs.push({
+      p1,
+      p2,
+      c1: { x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 },
+      c2: { x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 },
+    });
+  }
+  return segs;
+}
+function smoothD(pts: Scaled[]): string {
+  if (pts.length === 0) return "";
+  if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (const s of catmullSegs(pts)) {
+    d += ` C ${s.c1.x.toFixed(1)} ${s.c1.y.toFixed(1)}, ${s.c2.x.toFixed(1)} ${s.c2.y.toFixed(1)}, ${s.p2.x.toFixed(1)} ${s.p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+// Длина кривой сэмплированием — для draw-in (stroke-dashoffset). С запасом (×1.02),
+// чтобы dasharray статик-рендера гарантированно перекрывал путь без разрывов до гидрации.
+function smoothLen(pts: Scaled[]): number {
+  let len = 0;
+  for (const s of catmullSegs(pts)) {
+    let px = s.p1.x;
+    let py = s.p1.y;
+    for (let t = 1; t <= 40; t++) {
+      const u = t / 40;
+      const m = 1 - u;
+      const x = m * m * m * s.p1.x + 3 * m * m * u * s.c1.x + 3 * m * u * u * s.c2.x + u * u * u * s.p2.x;
+      const y = m * m * m * s.p1.y + 3 * m * m * u * s.c1.y + 3 * m * u * u * s.c2.y + u * u * u * s.p2.y;
+      len += Math.hypot(x - px, y - py);
+      px = x;
+      py = y;
+    }
+  }
+  return len * 1.02;
 }
 
 function TrajectoryHero({
@@ -260,7 +302,8 @@ function TrajectoryHero({
   const yScale = (b: number) => PAD_T + (1 - (b - yMin) / (yMax - yMin)) * PLOT_H;
 
   const combinedPts = scalePoints(pts, xScale, yScale);
-  const combinedLen = polylineLength(combinedPts);
+  const combinedPath = smoothD(combinedPts);
+  const combinedLen = smoothLen(combinedPts);
   const readingPts = trajectory.reading.length >= 2 ? scalePoints(trajectory.reading, xScale, yScale) : null;
   const listeningPts = trajectory.listening.length >= 2 ? scalePoints(trajectory.listening, xScale, yScale) : null;
 
@@ -307,10 +350,10 @@ function TrajectoryHero({
         padT={PAD_T}
         padB={PAD_B}
         combined={combined}
-        combinedAttr={pointsAttr(combinedPts)}
+        combinedPath={combinedPath}
         combinedLen={Number(combinedLen.toFixed(1))}
-        reading={readingPts ? { attr: pointsAttr(readingPts), len: Number(polylineLength(readingPts).toFixed(1)) } : null}
-        listening={listeningPts ? { attr: pointsAttr(listeningPts), len: Number(polylineLength(listeningPts).toFixed(1)) } : null}
+        reading={readingPts ? { path: smoothD(readingPts), len: Number(smoothLen(readingPts).toFixed(1)) } : null}
+        listening={listeningPts ? { path: smoothD(listeningPts), len: Number(smoothLen(listeningPts).toFixed(1)) } : null}
         grid={gridBands.map((b) => ({ band: b, y: yScale(b) }))}
         target={targetY != null ? { y: targetY, band: targetBand! } : null}
         exam={examX != null ? { x: examX, rightEdge: examX > CHART_W - PAD_R - 28 } : null}
