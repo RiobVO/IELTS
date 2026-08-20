@@ -17,6 +17,7 @@ import {
   type SkillReadiness,
   type Skill,
 } from "@/lib/progress/overview";
+import { smoothD, smoothLen, type Scaled } from "@/lib/progress/curve";
 import { computeStats, badgeProgress, type Criteria } from "@/lib/progress/badges";
 import { getActiveBadges, type ActiveBadge } from "@/lib/content/badges";
 import { listUserHistory as listWritingHistory } from "@/lib/writing/read";
@@ -178,67 +179,8 @@ function fmtDate(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
-interface Scaled {
-  x: number;
-  y: number;
-}
-
 function scalePoints(pts: TrajectoryPoint[], xScale: (t: number) => number, yScale: (b: number) => number): Scaled[] {
   return pts.map((p) => ({ x: xScale(p.t), y: yScale(p.band) }));
-}
-
-// Гладкая линия (Catmull-Rom → кубический Безье) — вид «как в реальных графиках».
-// Точки данных остаются ТОЧНЫМИ (маркеры рисуются ровно на них); кривая лишь
-// связывает их визуально. Математику траектории/прогноза это не трогает.
-interface Seg {
-  p1: Scaled;
-  c1: Scaled;
-  c2: Scaled;
-  p2: Scaled;
-}
-function catmullSegs(pts: Scaled[]): Seg[] {
-  const segs: Seg[] = [];
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] ?? pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] ?? p2;
-    segs.push({
-      p1,
-      p2,
-      c1: { x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 },
-      c2: { x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 },
-    });
-  }
-  return segs;
-}
-function smoothD(pts: Scaled[]): string {
-  if (pts.length === 0) return "";
-  if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
-  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
-  for (const s of catmullSegs(pts)) {
-    d += ` C ${s.c1.x.toFixed(1)} ${s.c1.y.toFixed(1)}, ${s.c2.x.toFixed(1)} ${s.c2.y.toFixed(1)}, ${s.p2.x.toFixed(1)} ${s.p2.y.toFixed(1)}`;
-  }
-  return d;
-}
-// Длина кривой сэмплированием — для draw-in (stroke-dashoffset). С запасом (×1.02),
-// чтобы dasharray статик-рендера гарантированно перекрывал путь без разрывов до гидрации.
-function smoothLen(pts: Scaled[]): number {
-  let len = 0;
-  for (const s of catmullSegs(pts)) {
-    let px = s.p1.x;
-    let py = s.p1.y;
-    for (let t = 1; t <= 40; t++) {
-      const u = t / 40;
-      const m = 1 - u;
-      const x = m * m * m * s.p1.x + 3 * m * m * u * s.c1.x + 3 * m * u * u * s.c2.x + u * u * u * s.p2.x;
-      const y = m * m * m * s.p1.y + 3 * m * m * u * s.c1.y + 3 * m * u * u * s.c2.y + u * u * u * s.p2.y;
-      len += Math.hypot(x - px, y - py);
-      px = x;
-      py = y;
-    }
-  }
-  return len * 1.02;
 }
 
 function TrajectoryHero({

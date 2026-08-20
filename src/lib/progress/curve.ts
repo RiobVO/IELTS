@@ -1,0 +1,109 @@
+/**
+ * Гладкая линия графика траектории: монотонная кубика Фритча–Карлсона → кубический
+ * Безье. Чистая геометрия в системе координат viewBox — ни band, ни прогноз, ни
+ * домен оси здесь не считаются. Точки данных остаются ТОЧНЫМИ (маркеры рисуются
+ * ровно на них); кривая лишь связывает их визуально.
+ *
+ * Почему НЕ равномерный Catmull-Rom, который стоял здесь раньше: его касательная в
+ * точке берётся из соседей по обе стороны (c2.y = p2.y - (p3.y - p1.y)/6), поэтому
+ * резкий скачок у СЛЕДУЮЩЕЙ точки протаскивал кривую за пределы данных ДО неё. На
+ * реальных данных это было видно глазом: серия моков, все ровно на band 2.0, а линия
+ * между ними провисала ниже 2.0 — ниже собственной сетки; на скачке 2.0→3.5 вместо
+ * пика вырастал бритвенный касп с выбросом. График врал про данные.
+ *
+ * Монотонная кубика ограничивает касательные так, что на отрезке между двумя точками
+ * кривая НЕ МОЖЕТ выйти за их диапазон: плоский участок остаётся плоским (все наклоны
+ * нулевые → нулевые касательные), в локальном экстремуме касательная зануляется
+ * (m[i-1]*m[i] <= 0) → пик приходит ровно в точку и не перелетает. См. curve.test.ts —
+ * инвариант «кривая не выходит за диапазон соседних точек» там проверяется сэмплированием.
+ */
+
+export interface Scaled {
+  x: number;
+  y: number;
+}
+
+export interface Seg {
+  p1: Scaled;
+  c1: Scaled;
+  c2: Scaled;
+  p2: Scaled;
+}
+
+export function monotoneSegs(pts: Scaled[]): Seg[] {
+  const n = pts.length;
+  if (n < 2) return [];
+
+  // Наклоны секущих. Два мока с одинаковым timestamp дают h=0 — наклон берём нулевым,
+  // иначе деление на ноль; вертикальный отрезок кривая всё равно не описывает.
+  const h: number[] = [];
+  const m: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const dx = pts[i + 1].x - pts[i].x;
+    h.push(dx);
+    m.push(dx === 0 ? 0 : (pts[i + 1].y - pts[i].y) / dx);
+  }
+
+  const t: number[] = new Array(n);
+  t[0] = m[0];
+  t[n - 1] = m[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (m[i - 1] * m[i] <= 0) {
+      // Локальный экстремум (или плоскость) — касательная 0, иначе кривая перелетит.
+      t[i] = 0;
+    } else {
+      // Взвешенное гармоническое среднее: деление безопасно — сюда попадаем только
+      // когда оба наклона ненулевые и одного знака.
+      const w1 = 2 * h[i] + h[i - 1];
+      const w2 = h[i] + 2 * h[i - 1];
+      t[i] = (w1 + w2) / (w1 / m[i - 1] + w2 / m[i]);
+    }
+  }
+
+  const segs: Seg[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    segs.push({
+      p1: pts[i],
+      p2: pts[i + 1],
+      c1: { x: pts[i].x + h[i] / 3, y: pts[i].y + (t[i] * h[i]) / 3 },
+      c2: { x: pts[i + 1].x - h[i] / 3, y: pts[i + 1].y - (t[i + 1] * h[i]) / 3 },
+    });
+  }
+  return segs;
+}
+
+/** Точка кубического Безье при параметре u ∈ [0,1]. */
+export function bezierAt(s: Seg, u: number): Scaled {
+  const m = 1 - u;
+  return {
+    x: m * m * m * s.p1.x + 3 * m * m * u * s.c1.x + 3 * m * u * u * s.c2.x + u * u * u * s.p2.x,
+    y: m * m * m * s.p1.y + 3 * m * m * u * s.c1.y + 3 * m * u * u * s.c2.y + u * u * u * s.p2.y,
+  };
+}
+
+export function smoothD(pts: Scaled[]): string {
+  if (pts.length === 0) return "";
+  if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (const s of monotoneSegs(pts)) {
+    d += ` C ${s.c1.x.toFixed(1)} ${s.c1.y.toFixed(1)}, ${s.c2.x.toFixed(1)} ${s.c2.y.toFixed(1)}, ${s.p2.x.toFixed(1)} ${s.p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+/**
+ * Длина кривой сэмплированием — для draw-in (stroke-dashoffset). С запасом (×1.02),
+ * чтобы dasharray статик-рендера гарантированно перекрывал путь без разрывов до гидрации.
+ */
+export function smoothLen(pts: Scaled[]): number {
+  let len = 0;
+  for (const s of monotoneSegs(pts)) {
+    let prev = s.p1;
+    for (let i = 1; i <= 40; i++) {
+      const p = bezierAt(s, i / 40);
+      len += Math.hypot(p.x - prev.x, p.y - prev.y);
+      prev = p;
+    }
+  }
+  return len * 1.02;
+}
