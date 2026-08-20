@@ -273,13 +273,21 @@ function TrajectoryHero({
     );
   }
 
-  // Y domain always spans the practical band range [4,9], widened to fit any
-  // outlier (history) or forecast figure that falls outside it.
-  const bandValues = pts.map((p) => p.band);
-  if (forecast.projectedBand != null) bandValues.push(forecast.projectedBand);
-  if (forecast.interval) bandValues.push(forecast.interval.low, forecast.interval.high);
-  const yMin = Math.floor(Math.min(4, ...bandValues) * 2) / 2;
-  const yMax = Math.ceil(Math.max(9, ...bandValues) * 2) / 2;
+  // Y domain — подгоняется под ТО, ЧТО реально на графике: баллы моков, цель и
+  // проекция, + запас, округлённо по сетке 0.5, в пределах band [1,9]. Раньше ось
+  // жёстко держала весь диапазон 4–9 → низкие плоские данные вжимались в самый низ,
+  // а верх пустовал. Это окно обзора, НЕ шкала грейдинга — числа не меняются.
+  const yVals = pts.map((p) => p.band);
+  if (targetBand != null) yVals.push(targetBand);
+  if (forecast.projectedBand != null) yVals.push(forecast.projectedBand);
+  let yMin = Math.max(1, Math.floor((Math.min(...yVals) - 0.5) * 2) / 2);
+  let yMax = Math.min(9, Math.ceil((Math.max(...yVals) + 0.5) * 2) / 2);
+  // Гарантируем минимум ~2.5 балла по вертикали, иначе на плоских данных сетка
+  // схлопывается в одну-две линии.
+  if (yMax - yMin < 2.5) {
+    yMax = Math.min(9, yMin + 2.5);
+    yMin = Math.max(1, yMax - 2.5);
+  }
 
   // X domain — ФОКУС НА СДАННЫХ МОКАХ. Это НЕ формула (грейдинг/прогноз/«до экзамена»
   // считаются так же), а окно обзора графика: ось охватывает моки + небольшой запас.
