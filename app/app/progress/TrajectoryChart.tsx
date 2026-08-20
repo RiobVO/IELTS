@@ -161,6 +161,14 @@ export function TrajectoryChart({
       ? `${combined[0].x.toFixed(1)},${baseline.toFixed(1)} ${combinedAttr} ${combined[combined.length - 1].x.toFixed(1)},${baseline.toFixed(1)}`
       : null;
 
+  // Пилюля текущего балла: всегда НАД последней точкой, с отступом от боковых краёв.
+  // Последняя точка НЕ обязательно справа-сверху — когда все моки свежие, а ось тянется
+  // до экзамена, она сидит слева-внизу, и центрированная пилюля роняется на подпись оси X.
+  const lastPt = combined[combined.length - 1];
+  const lastLblXPct = (lastPt.x / w) * 100;
+  const lastLblYPct = (lastPt.y / h) * 100;
+  const latestTx = lastLblXPct < 18 ? "0%" : lastLblXPct > 82 ? "-100%" : "-50%";
+
   return (
     <>
     <div className="ov-chart">
@@ -208,7 +216,7 @@ export function TrajectoryChart({
             <polygon
               data-fade
               points={`${forecast.lastX.toFixed(1)},${forecast.lastY.toFixed(1)} ${forecast.horizonX.toFixed(1)},${forecast.highY.toFixed(1)} ${forecast.horizonX.toFixed(1)},${forecast.lowY.toFixed(1)}`}
-              fill="color-mix(in oklab, var(--brand) 16%, transparent)"
+              fill="color-mix(in oklab, var(--brand) 9%, transparent)"
             />
             <line
               data-fade
@@ -291,7 +299,10 @@ export function TrajectoryChart({
           </span>
         )}
         {!act && (
-          <span className="ov-lbl ov-lbl-latest" style={{ left: `${(combined[combined.length - 1].x / w) * 100}%`, top: `${(combined[combined.length - 1].y / h) * 100}%` }}>
+          <span
+            className="ov-lbl ov-lbl-latest"
+            style={{ left: `${lastLblXPct}%`, top: `${lastLblYPct}%`, transform: `translate(${latestTx}, calc(-100% - 10px))` }}
+          >
             {latestBand.toFixed(1)}
           </span>
         )}
