@@ -194,7 +194,6 @@ export async function BadgesPanel() {
   return (
     <AppShell active="progress">
       <style>{BDG_CSS}</style>
-      <div className="bdg-arena">
       <div data-badges-root className="bdg-wrap" style={S.wrap}>
         <ProgressTabs tab="badges" />
         {/* Header */}
@@ -385,7 +384,6 @@ export async function BadgesPanel() {
           </aside>
         </div>
       </div>
-      </div>
       <BadgesMotion />
     </AppShell>
   );
@@ -447,7 +445,6 @@ function Node({ n, current }: { n: TrackNode; current: boolean }) {
 
 // Адаптив + интерактив (hover/keyframes) — в классах; брейкпоинт-свойства не inline.
 const BDG_CSS = `
-.bdg-arena{min-height:100%;overflow-x:hidden;background:radial-gradient(120% 80% at 50% -8%, color-mix(in oklab, var(--brand) 13%, white) 0%, var(--bg-base) 52%)}
 .bdg-wrap{padding:22px 16px 48px}
 .bdg-cols{display:grid;grid-template-columns:1fr;gap:14px}
 .bdg-hero{flex-wrap:wrap;padding:20px;align-items:center}

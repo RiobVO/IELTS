@@ -37,14 +37,12 @@ interface AttemptRow {
 }
 
 /**
- * Overview — единый якорь раздела Progress. Герой «Траектория» и «Прогноз» слиты
- * в ОДНУ карту-якорь (band-график + headline-число прогноза сверху + detail-полоса
- * снизу), под ней — поддерживающий ряд Readiness + превью League/Badges. Раздел
- * несёт общую «арену» (радиальный brand-wash), тот же фон, что и League/Badges, —
- * это визуальный клей всех трёх табов. Вычислительное ядро (Trajectory/Forecast/
- * Readiness) — src/lib/progress/overview.ts; здесь только owner-путь чтения и рендер.
- * Один Promise.all — R/L из RLS-scoped supabase, W/S band из owner-путей writing/read
- * и speaking/read, лига/бейджи — тем же способом, что дашборд/BadgesPanel.
+ * Overview — герой «Траектория» (band-график) + Прогноз + Readiness + компактные
+ * превью League/Badges. Вычислительное ядро (Trajectory/Forecast/Readiness) —
+ * src/lib/progress/overview.ts; здесь только owner-путь чтения и рендер. Один
+ * Promise.all — R/L из RLS-scoped supabase, W/S band из owner-путей writing/read
+ * и speaking/read (те же файлы, что кормят их каталоги), лига/бейджи — тем же
+ * способом, что дашборд/BadgesPanel.
  */
 export async function OverviewPanel() {
   const user = await requireUser();
@@ -111,7 +109,7 @@ export async function OverviewPanel() {
   const examDate = (profile?.exam_date as string | null) ?? null;
 
   // Ядро прогноза рассчитано на окно ≤20 последних точек — полную историю
-  // подаём только на график (trajectory.combined ниже, в AnchorHero).
+  // подаём только на график (trajectory.combined ниже, в TrajectoryHero).
   const forecast = computeForecast(trajectory.combined.slice(-20), examDate, targetBand);
 
   const lastBand = (pts: TrajectoryPoint[]) => (pts.length ? pts[pts.length - 1].band : null);
@@ -138,28 +136,25 @@ export async function OverviewPanel() {
   return (
     <AppShell active="progress">
       <style>{OV_CSS}</style>
-      <div data-overview-root className="ov-arena">
-        <div className="ov-wrap" style={S.wrap}>
-          <ProgressTabs tab="overview" />
-          <header style={S.head}>
-            <span style={S.headIcon}>
-              <Icon name="bar-chart" size={21} strokeWidth={2.3} style={{ color: "var(--text-on-brand)" }} />
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={S.h1}>Overview</h1>
-              <p style={S.sub}>Your band trajectory, forecast, and readiness in one place.</p>
-            </div>
-          </header>
-
-          <AnchorHero trajectory={trajectory} forecast={forecast} targetBand={targetBand} examDate={examDate} />
-
-          <div className="ov-grid">
-            <ReadinessCard readiness={readiness} />
-            <div className="ov-previews">
-              <LeaguePreview rank={rank} />
-              <BadgesPreview earned={earnedTotal} total={badges.length} next={nextBadge} />
-            </div>
+      <div data-overview-root className="ov-wrap" style={S.wrap}>
+        <ProgressTabs tab="overview" />
+        <div style={S.head}>
+          <div>
+            <h1 style={S.h1}>Overview</h1>
+            <p style={S.sub}>Your band trajectory, forecast, and readiness in one place.</p>
           </div>
+        </div>
+
+        <TrajectoryHero trajectory={trajectory} forecast={forecast} targetBand={targetBand} examDate={examDate} />
+
+        <div className="ov-grid">
+          <ForecastCard forecast={forecast} />
+          <ReadinessCard readiness={readiness} />
+        </div>
+
+        <div className="ov-previews">
+          <LeaguePreview rank={rank} />
+          <BadgesPreview earned={earnedTotal} total={badges.length} next={nextBadge} />
         </div>
       </div>
       <OverviewMotion />
@@ -168,12 +163,8 @@ export async function OverviewPanel() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Anchor hero — trajectory chart + forecast headline fused into one surface.  */
-/* Server computes ALL SVG geometry; the client island (OverviewMotion) only   */
-/* layers draw-in / fade / count-up motion on top, and TrajectoryChart adds    */
-/* the hover crosshair + tooltip. The chart stays on a light surface so its    */
-/* WCAG-tuned grid/target/series contrast is preserved; the "committed" brand  */
-/* moment lives in the hero's top band only.                                   */
+/* Trajectory hero — server-computed SVG geometry; the client island only     */
+/* layers draw-in / fade / count-up motion on top (see OverviewMotion).       */
 /* -------------------------------------------------------------------------- */
 
 const CHART_W = 680;
@@ -210,7 +201,7 @@ function pointsAttr(pts: Scaled[]): string {
   return pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
 }
 
-function AnchorHero({
+function TrajectoryHero({
   trajectory,
   forecast,
   targetBand,
@@ -223,22 +214,19 @@ function AnchorHero({
 }) {
   const pts = trajectory.combined;
 
-  // Empty — no mocks yet. The hero is the invitation to start the trajectory.
   if (pts.length === 0) {
     return (
-      <div className="ov-hero" style={S.hero}>
-        <div style={S.heroEmpty}>
-          <div style={S.heroEmptyIcon}>
-            <Icon name="bar-chart" size={26} strokeWidth={2.2} />
-          </div>
-          <h2 style={S.heroEmptyTitle}>Sit your first full mock to start your trajectory</h2>
-          <p style={S.heroEmptyText}>
-            Band scores come from full 40-question mocks. Once you&apos;ve sat one, your line starts here.
-          </p>
-          <Button trailingIcon="arrow-right" href="/app/reading?category=full_reading" style={{ marginTop: 4 }}>
-            Sit a full mock
-          </Button>
+      <div className="ov-hero" style={S.heroCard}>
+        <div style={S.heroEmptyIcon}>
+          <Icon name="bar-chart" size={26} strokeWidth={2.2} />
         </div>
+        <h2 style={S.heroEmptyTitle}>Sit your first full mock to start your trajectory</h2>
+        <p style={S.heroEmptyText}>
+          Band scores come from full 40-question mocks. Once you&apos;ve sat one, your line starts here.
+        </p>
+        <Button trailingIcon="arrow-right" href="/app/reading?category=full_reading" style={{ marginTop: 4 }}>
+          Sit a full mock
+        </Button>
       </div>
     );
   }
@@ -303,80 +291,66 @@ function AnchorHero({
   }));
 
   return (
-    <div className="ov-hero" style={S.hero}>
-      <HeroBand forecast={forecast} targetBand={targetBand} latest={last.band} count={pts.length} />
-
-      <div className="ov-hero-chart">
-        <TrajectoryChart
-          w={CHART_W}
-          h={CHART_H}
-          padL={PAD_L}
-          padR={PAD_R}
-          padT={PAD_T}
-          padB={PAD_B}
-          combined={combined}
-          combinedAttr={pointsAttr(combinedPts)}
-          combinedLen={Number(combinedLen.toFixed(1))}
-          reading={readingPts ? { attr: pointsAttr(readingPts), len: Number(polylineLength(readingPts).toFixed(1)) } : null}
-          listening={listeningPts ? { attr: pointsAttr(listeningPts), len: Number(polylineLength(listeningPts).toFixed(1)) } : null}
-          grid={gridBands.map((b) => ({ band: b, y: yScale(b) }))}
-          target={targetY != null ? { y: targetY, band: targetBand! } : null}
-          exam={examX != null ? { x: examX, rightEdge: examX > CHART_W - PAD_R - 28 } : null}
-          forecast={showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: horizonX!, projY: projY!, lowY: lowY!, highY: highY! } : null}
-          xLabelLeft={fmtDate(xMin)}
-          xLabelRight={fmtDate(xMax)}
-          latestBand={last.band}
-        />
+    <div className="ov-hero" style={S.heroCard}>
+      <div style={S.heroHead}>
+        <h2 style={S.heroTitle}>
+          <Icon name="bar-chart" size={18} strokeWidth={2.4} style={{ color: "var(--brand)" }} /> Trajectory
+        </h2>
+        <p style={S.heroSub}>Band across every full mock — hover any point for the detail.</p>
       </div>
 
-      <ForecastStrip forecast={forecast} />
+      <TrajectoryChart
+        w={CHART_W}
+        h={CHART_H}
+        padL={PAD_L}
+        padR={PAD_R}
+        padT={PAD_T}
+        padB={PAD_B}
+        combined={combined}
+        combinedAttr={pointsAttr(combinedPts)}
+        combinedLen={Number(combinedLen.toFixed(1))}
+        reading={readingPts ? { attr: pointsAttr(readingPts), len: Number(polylineLength(readingPts).toFixed(1)) } : null}
+        listening={listeningPts ? { attr: pointsAttr(listeningPts), len: Number(polylineLength(listeningPts).toFixed(1)) } : null}
+        grid={gridBands.map((b) => ({ band: b, y: yScale(b) }))}
+        target={targetY != null ? { y: targetY, band: targetBand! } : null}
+        exam={examX != null ? { x: examX, rightEdge: examX > CHART_W - PAD_R - 28 } : null}
+        forecast={showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: horizonX!, projY: projY!, lowY: lowY!, highY: highY! } : null}
+        xLabelLeft={fmtDate(xMin)}
+        xLabelRight={fmtDate(xMax)}
+        latestBand={last.band}
+      />
+
     </div>
   );
 }
 
-/* Hero band — the forecast headline. State-driven: a projected band once the
-   core can project, otherwise an unlock track toward the first forecast. The
-   latest-band chip anchors the right on every non-empty state. */
-function HeroBand({
-  forecast,
-  targetBand,
-  latest,
-  count,
-}: {
-  forecast: Forecast;
-  targetBand: number | null;
-  latest: number;
-  count: number;
-}) {
-  const eyebrow = targetBand != null ? `Your run at Band ${targetBand}` : "Your band forecast";
-  const chip = (
-    <div style={S.heroChip}>
-      <span style={S.heroChipLabel}>Latest</span>
-      <span style={S.heroChipVal}>{latest.toFixed(1)}</span>
-      <span style={S.heroChipMeta}>· {count} {count === 1 ? "mock" : "mocks"}</span>
-    </div>
-  );
+/* -------------------------------------------------------------------------- */
+/* Forecast card                                                              */
+/* -------------------------------------------------------------------------- */
 
+function ForecastCard({ forecast }: { forecast: Forecast }) {
   if (forecast.status === "insufficient") {
+    // Не «замок», а трек прогресса к прогнозу: показываем сколько моков уже
+    // сдано из трёх нужных — момент движения вперёд, а не заглушка «данных нет».
     const done = Math.min(forecast.pointCount, 3);
     const remaining = Math.max(0, 3 - forecast.pointCount);
     return (
-      <div className="ov-hero-band" style={S.heroBand}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={S.heroEyebrow}>Forecast</div>
-          <div style={S.heroHeadline}>
-            {remaining === 0
-              ? "Crunching your first projection"
-              : `${remaining} more full ${remaining === 1 ? "mock" : "mocks"} to unlock your forecast`}
-          </div>
-          <div style={S.unlockRow} role="img" aria-label={`${done} of 3 mocks toward your first forecast`}>
-            {[0, 1, 2].map((i) => (
-              <span key={i} style={{ ...S.unlockPip, ...(i < done ? S.unlockPipOn : null) }} />
-            ))}
-            <span style={S.unlockMeta}>{done}/3 mocks</span>
-          </div>
+      <div style={S.card}>
+        <h2 style={S.sectionTitle}>Forecast</h2>
+        <p style={S.forecastEmpty}>
+          {remaining === 0
+            ? "Crunching your first projection — sit one more mock to refine it."
+            : `${remaining} more full ${remaining === 1 ? "mock" : "mocks"} and we'll project your exam-day band.`}
+        </p>
+        <div style={S.unlockRow} role="img" aria-label={`${done} of 3 mocks toward your first forecast`}>
+          {[0, 1, 2].map((i) => (
+            <span key={i} style={{ ...S.unlockPip, ...(i < done ? S.unlockPipOn : null) }} />
+          ))}
+          <span style={S.unlockMeta}>{done}/3 mocks</span>
         </div>
-        {chip}
+        <Button trailingIcon="arrow-right" href="/app/reading?category=full_reading" variant="secondary" style={{ color: "var(--brand-active)" }}>
+          Sit a full mock
+        </Button>
       </div>
     );
   }
@@ -392,73 +366,39 @@ function HeroBand({
   const verdictStyle = verdict === "reached" || verdict === "on_track" ? S.verdictGood : verdict === "behind" ? S.verdictWarn : S.verdictNeutral;
 
   return (
-    <div className="ov-hero-band" style={S.heroBand}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={S.heroEyebrow}>{eyebrow}</div>
-        <div style={S.forecastRow}>
-          {/* Цвет числа отражает вердикт: brand-акцент для reached/on_track, нейтральный
-              ink для behind — праздничный фиолетовый под отстающим прогнозом вводил в
-              заблуждение. Число статично (не count-up с нуля): точный чувствительный
-              band «просто верен», а не отсчитывается ради эффекта. */}
-          <span style={{ ...S.forecastBig, color: verdict === "behind" ? "var(--text-primary)" : "var(--brand)" }}>
-            {forecast.status === "low_confidence" && <span style={S.forecastApprox}>~</span>}
-            <span>{forecast.projectedBand?.toFixed(1)}</span>
-          </span>
-          <span style={S.forecastUnit}>projected band</span>
-        </div>
-        {verdictText[verdict] && <div style={{ ...verdictStyle, marginTop: 12 }}>{verdictText[verdict]}</div>}
-      </div>
-      {chip}
-    </div>
-  );
-}
-
-/* Forecast detail strip — the methodology that used to live in the Forecast
-   card, demoted below the chart: the likely range, what it's built on, and
-   recent pace. Non-native audience needs "likely range" spelled out. */
-function ForecastStrip({ forecast }: { forecast: Forecast }) {
-  if (forecast.status === "insufficient") return null;
-
-  const items: React.ReactNode[] = [];
-  if (forecast.interval) {
-    items.push(
-      <span key="range">
-        <b style={S.stripB}>
-          {forecast.interval.low.toFixed(1)}–{forecast.interval.high.toFixed(1)}
-        </b>{" "}
-        likely by {forecast.horizonDate ? fmtDate(Date.parse(`${forecast.horizonDate}T00:00:00Z`)) : "then"}
-      </span>,
-    );
-    items.push(
-      <span key="basis">
-        the 80% range from your last {forecast.pointCount} {forecast.pointCount === 1 ? "mock" : "mocks"} — narrows as you sit more
-      </span>,
-    );
-  }
-  if (forecast.slopePerWeek != null && forecast.slopePerWeek > 0) {
-    items.push(
-      <span key="pace">
-        improving <b style={S.stripB}>~{forecast.slopePerWeek.toFixed(2)}</b> band/week lately
-      </span>,
-    );
-  }
-  if (forecast.status === "low_confidence") {
-    items.push(
-      <span key="conf" style={{ color: "var(--text-muted)" }}>
-        early estimate — confidence grows as you sit more
-      </span>,
-    );
-  }
-  if (items.length === 0) return null;
-
-  return (
-    <div className="ov-hero-strip">
-      {items.map((node, i) => (
-        <span key={i} style={S.stripItem}>
-          {i > 0 && <span aria-hidden="true" style={S.stripDot} />}
-          {node}
+    <div style={S.card}>
+      <h2 style={S.sectionTitle}>Forecast</h2>
+      {forecast.status === "low_confidence" && (
+        <p style={S.lowConf}>Early estimate — based on only {forecast.pointCount} mocks, confidence grows as you sit more.</p>
+      )}
+      <div style={S.forecastRow}>
+        {/* Цвет числа отражает вердикт: brand-акцент для reached/on_track, нейтральный
+            ink для behind — праздничный фиолетовый под отстающим прогнозом вводил в
+            заблуждение. Число статично (не count-up с нуля): точный чувствительный
+            band «просто верен», а не отсчитывается ради эффекта. */}
+        <span style={{ ...S.forecastBig, color: verdict === "behind" ? "var(--text-primary)" : "var(--brand)" }}>
+          {forecast.status === "low_confidence" && <span style={S.forecastApprox}>~</span>}
+          <span>{forecast.projectedBand?.toFixed(1)}</span>
         </span>
-      ))}
+        <span style={S.forecastUnit}>projected band</span>
+      </div>
+      {forecast.interval && (
+        <p style={S.forecastRange}>
+          {forecast.interval.low.toFixed(1)}–{forecast.interval.high.toFixed(1)} likely by{" "}
+          {forecast.horizonDate ? fmtDate(Date.parse(`${forecast.horizonDate}T00:00:00Z`)) : "then"}
+        </p>
+      )}
+      {forecast.interval && (
+        // Объясняем, ЧТО такое диапазон и на чём он построен — не-native аудитории
+        // «likely range» не самоочевиден; заодно закрывает methodology-пробел.
+        <p style={S.forecastBasis}>
+          The range you&apos;re 80% likely to land in, from your last {forecast.pointCount} {forecast.pointCount === 1 ? "mock" : "mocks"} — it narrows as you sit more.
+        </p>
+      )}
+      {forecast.slopePerWeek != null && forecast.slopePerWeek > 0 && (
+        <p style={S.forecastPace}>Improving ~{forecast.slopePerWeek.toFixed(2)} band per week lately</p>
+      )}
+      {verdictText[verdict] && <div style={verdictStyle}>{verdictText[verdict]}</div>}
     </div>
   );
 }
@@ -597,18 +537,12 @@ function BadgesPreview({
 /* Styles                                                                     */
 /* -------------------------------------------------------------------------- */
 
-// Адаптив Overview. База = мобильный (стек); ≥768px = поддерживающий ряд в две
-// колонки. Брейкпоинт-свойства только в классах. Классы графика/легенды/тултипа
-// (.ov-chart*, .ov-tip*, .ov-lbl*, .ov-leg*) потребляются клиентским
-// TrajectoryChart — держим их verbatim.
+// Адаптив Overview. База = мобильный (стек); ≥768px = две колонки для
+// forecast/readiness и превью-карточек. Брейкпоинт-свойства только в классах.
 const OV_CSS = `
-.ov-arena{min-height:100%;overflow-x:hidden;background:radial-gradient(120% 80% at 50% -8%, color-mix(in oklab, var(--brand) 13%, white) 0%, var(--bg-base) 52%)}
 .ov-wrap{padding:22px 16px 40px}
-.ov-grid{display:grid;grid-template-columns:1fr;gap:14px}
-.ov-previews{display:flex;flex-direction:column;gap:12px}
-.ov-hero-band{display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px;padding:20px 22px 18px;background:linear-gradient(160deg, color-mix(in oklab, var(--brand) 12%, var(--surface)) 0%, var(--surface) 62%);border-bottom:1px solid var(--border-subtle)}
-.ov-hero-chart{padding:16px 18px 4px}
-.ov-hero-strip{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;padding:12px 20px 16px;font-family:var(--font-ui);font-size:var(--text-2xs);color:var(--text-secondary);line-height:1.5}
+.ov-grid{display:grid;grid-template-columns:1fr;gap:14px;margin:16px 0}
+.ov-previews{display:grid;grid-template-columns:1fr;gap:12px}
 .ov-preview{transition:transform .12s,box-shadow .12s}
 .ov-preview:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
 .ov-preview:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 45%,transparent)}
@@ -651,10 +585,8 @@ const OV_CSS = `
 .ov-legend-note{font-family:var(--font-ui);font-size:var(--text-2xs);color:var(--text-muted);line-height:1.45;margin:8px 0 0;max-width:60ch}
 @media (min-width:768px){
   .ov-wrap{padding:26px 28px 44px}
-  .ov-grid{grid-template-columns:1.3fr 1fr;align-items:start}
-  .ov-hero-band{padding:24px 26px 20px}
-  .ov-hero-chart{padding:18px 22px 4px}
-  .ov-hero-strip{padding:14px 24px 18px}
+  .ov-grid{grid-template-columns:1.15fr 1fr}
+  .ov-previews{grid-template-columns:1fr 1fr}
 }
 @media (prefers-reduced-motion:reduce){
   .ov-preview{transition:none}
@@ -665,50 +597,38 @@ const OV_CSS = `
 
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 960, margin: "0 auto", width: "100%" },
-  head: { display: "flex", alignItems: "center", gap: 13, marginBottom: 18 },
-  headIcon: { width: 44, height: 44, flex: "none", borderRadius: 13, display: "grid", placeItems: "center", background: "linear-gradient(165deg, var(--brand), var(--brand-active))", boxShadow: "0 0 26px -6px color-mix(in oklab, var(--brand) 78%, transparent)" },
-  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: 0, letterSpacing: "var(--tracking-tight)" },
-  sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "3px 0 0" },
+  head: { marginBottom: 16 },
+  h1: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: 0 },
+  sub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", margin: "4px 0 0" },
 
-  // Hero — the section anchor: heavier shadow than the supporting cards below,
-  // so the hierarchy reads hero-first. Overflow-hidden clips the band gradient
-  // to the rounded corners.
-  hero: { background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-md)", overflow: "hidden", marginBottom: 16 },
+  heroCard: { background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px 22px", boxShadow: "var(--shadow-sm)" },
+  heroHead: { marginBottom: 10 },
+  heroTitle: { display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--text-primary)", margin: 0 },
+  heroSub: { fontFamily: "var(--font-ui)", fontSize: "var(--text-xs)", color: "var(--text-muted)", margin: "3px 0 0" },
 
-  heroBand: {},
-  heroEyebrow: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--brand-active)" },
-  heroHeadline: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--text-primary)", margin: "8px 0 12px", lineHeight: 1.25, maxWidth: "22ch" },
-  forecastRow: { display: "flex", alignItems: "baseline", gap: 8, marginTop: 6 },
-  forecastBig: { fontFamily: "var(--font-mono)", fontSize: 46, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" },
-  forecastApprox: { fontSize: 30, fontWeight: 700, color: "var(--text-muted)", marginRight: 2, verticalAlign: "0.06em" },
-  forecastUnit: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
-
-  // Latest-band chip — a small glass tile on the tinted band; anchors the right.
-  heroChip: { display: "inline-flex", alignItems: "baseline", gap: 5, flex: "none", padding: "7px 12px", borderRadius: "var(--radius-full)", background: "color-mix(in oklab, var(--surface) 78%, transparent)", border: "1px solid var(--border)", boxShadow: "var(--shadow-xs)" },
-  heroChipLabel: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "var(--tracking-caps)", textTransform: "uppercase", color: "var(--text-muted)" },
-  heroChipVal: { fontFamily: "var(--font-mono)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums" },
-  heroChipMeta: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--text-muted)" },
-
-  unlockRow: { display: "flex", alignItems: "center", gap: 6, marginTop: 4 },
-  unlockPip: { width: 30, height: 6, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", boxShadow: "inset 0 0 0 1px var(--border)" },
-  unlockPipOn: { background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", boxShadow: "0 0 8px -2px color-mix(in oklab, var(--brand) 70%, transparent)" },
-  unlockMeta: { marginLeft: 4, fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--text-muted)" },
-
-  verdictGood: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--success-text)", background: "var(--success-subtle)", borderRadius: "var(--radius-md)", padding: "9px 13px", display: "inline-block" },
-  verdictWarn: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", background: "var(--surface-inset)", borderRadius: "var(--radius-md)", padding: "9px 13px", display: "inline-block" },
-  verdictNeutral: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--brand-active)", background: "var(--brand-subtle)", borderRadius: "var(--radius-md)", padding: "9px 13px", display: "inline-block" },
-
-  stripItem: { display: "inline-flex", alignItems: "center", gap: 4 },
-  stripDot: { width: 3, height: 3, borderRadius: "50%", background: "var(--text-disabled)", margin: "0 4px", flex: "none" },
-  stripB: { fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--text-primary)" },
-
-  heroEmpty: { padding: "26px 24px 28px" },
   heroEmptyIcon: { width: 48, height: 48, borderRadius: 14, display: "grid", placeItems: "center", background: "var(--brand-subtle)", color: "var(--brand)", marginBottom: 12 },
   heroEmptyTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 6px" },
   heroEmptyText: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-muted)", lineHeight: 1.5, margin: "0 0 14px", maxWidth: 480 },
 
   card: { background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "18px 20px", boxShadow: "var(--shadow-sm)" },
   sectionTitle: { fontFamily: "var(--font-ui)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--text-primary)", margin: 0 },
+
+  forecastEmpty: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", lineHeight: 1.5, margin: "10px 0 12px" },
+  unlockRow: { display: "flex", alignItems: "center", gap: 6, margin: "0 0 16px" },
+  unlockPip: { width: 30, height: 6, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", boxShadow: "inset 0 0 0 1px var(--border)" },
+  unlockPipOn: { background: "linear-gradient(90deg, var(--brand), var(--brand-hover))", boxShadow: "0 0 8px -2px color-mix(in oklab, var(--brand) 70%, transparent)" },
+  unlockMeta: { marginLeft: 4, fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--text-muted)" },
+  lowConf: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "8px 0 0", lineHeight: 1.4 },
+  forecastRow: { display: "flex", alignItems: "baseline", gap: 8, marginTop: 12 },
+  forecastBig: { fontFamily: "var(--font-mono)", fontSize: 42, fontWeight: 900, color: "var(--brand)", lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" },
+  forecastApprox: { fontSize: 28, fontWeight: 700, color: "var(--text-muted)", marginRight: 2, verticalAlign: "0.06em" },
+  forecastUnit: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-muted)" },
+  forecastRange: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "6px 0 4px" },
+  forecastBasis: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "0 0 10px", lineHeight: 1.45, maxWidth: "46ch" },
+  forecastPace: { fontFamily: "var(--font-ui)", fontSize: "var(--text-2xs)", color: "var(--text-muted)", margin: "0 0 12px", lineHeight: 1.4 },
+  verdictGood: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--success-text)", background: "var(--success-subtle)", borderRadius: "var(--radius-md)", padding: "9px 13px" },
+  verdictWarn: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", background: "var(--surface-inset)", borderRadius: "var(--radius-md)", padding: "9px 13px" },
+  verdictNeutral: { fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--brand-active)", background: "var(--brand-subtle)", borderRadius: "var(--radius-md)", padding: "9px 13px" },
 
   readyHead: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 },
   readyCount: { fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text-muted)", flex: "none" },
