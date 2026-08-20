@@ -528,6 +528,7 @@ export function TrajectoryChart({
               : listening
                 ? " Listening also shows the section's own trend."
                 : ""}
+          {" Practice runs are training, not a measurement — only mock sittings plot here and feed the forecast."}
         </p>
       )}
     </>
