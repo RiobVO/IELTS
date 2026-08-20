@@ -295,8 +295,11 @@ function TrajectoryHero({
   const firstT = pts[0].t;
   const lastT = pts[pts.length - 1].t;
   const dataSpan = lastT - firstT;
-  const leftPad = dataSpan > 0 ? dataSpan * 0.08 : 3 * DAY_MS;
-  const rightPad = dataSpan > 0 ? Math.max(dataSpan * 0.25, 2 * DAY_MS) : 3 * DAY_MS;
+  const leftPad = dataSpan > 0 ? Math.max(dataSpan * 0.06, 0.25 * DAY_MS) : 3 * DAY_MS;
+  // Правый запас — только под короткий стаб прогноза. Жёсткий пол в 2 дня съедал
+  // треть холста на коротком размахе моков (3 дня → 38% пустоты), поэтому он теперь
+  // доля от размаха с маленьким полом.
+  const rightPad = dataSpan > 0 ? Math.max(dataSpan * 0.18, 0.5 * DAY_MS) : 3 * DAY_MS;
   const xMin = firstT - leftPad;
   const xMax = lastT + rightPad;
   const examMs = examDate ? Date.parse(`${examDate}T00:00:00Z`) : NaN;
