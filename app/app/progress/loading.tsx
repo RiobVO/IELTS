@@ -11,7 +11,11 @@ import { Skeleton } from "@/components/core/Skeleton";
 export default function Loading() {
   return (
     <AppShellSkeleton active="progress">
-      <div style={S.wrap}>
+      {/* Тот же gutter, что у ov-wrap/lb-wrap/bdg-wrap — иначе на десктопе скелет
+          стоит на 16px, а реальный контент на 28px, и колонка снапится вбок при
+          гидратации. Брейкпоинт-свойство только в классе, не inline. */}
+      <style>{".pg-skel{padding:22px 16px 40px}@media (min-width:768px){.pg-skel{padding:26px 28px 44px}}"}</style>
+      <div className="pg-skel" style={S.wrap}>
         {/* tab bar (overview / league / badges) */}
         <div style={{ display: "flex", gap: 9, marginBottom: 18 }}>
           <Skeleton w={104} h={38} r="var(--radius-full)" />
@@ -58,7 +62,7 @@ export default function Loading() {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  wrap: { maxWidth: 960, margin: "0 auto", padding: "22px 16px 44px" },
+  wrap: { maxWidth: 960, margin: "0 auto", width: "100%" },
   heroCard: { border: "1.5px solid var(--border)", borderRadius: "var(--radius-xl)", padding: "20px 22px", marginBottom: 16 },
   // auto-fit → две колонки на широком, одна на узком, без брейкпоинтов (совпадает с
   // ov-grid/ov-previews по числу колонок, минимум layout-shift при гидратации).
