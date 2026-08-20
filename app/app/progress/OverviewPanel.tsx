@@ -281,22 +281,19 @@ function TrajectoryHero({
   const yMin = Math.floor(Math.min(4, ...bandValues) * 2) / 2;
   const yMax = Math.ceil(Math.max(9, ...bandValues) * 2) / 2;
 
-  // X domain: full point history, widened to the forecast horizon and/or the
-  // exam date when either falls beyond the last real point in EITHER direction
-  // (an exam date can in principle sit before the first history point).
-  let xMin = pts[0].t;
-  let xMax = pts[pts.length - 1].t;
-  if (forecast.horizonDate) xMax = Math.max(xMax, Date.parse(`${forecast.horizonDate}T00:00:00Z`));
+  // X domain — ФОКУС НА СДАННЫХ МОКАХ. Это НЕ формула (грейдинг/прогноз/«до экзамена»
+  // считаются так же), а окно обзора графика: ось охватывает моки + небольшой запас.
+  // Горизонт прогноза и дата экзамена больше НЕ растягивают её на месяцы вперёд —
+  // иначе свежие моки схлопываются в невидимую полоску у левого края. Полный прогноз
+  // живёт в карточке Forecast; на графике — короткий пунктирный стаб + линия цели.
+  const firstT = pts[0].t;
+  const lastT = pts[pts.length - 1].t;
+  const dataSpan = lastT - firstT;
+  const leftPad = dataSpan > 0 ? dataSpan * 0.08 : 3 * DAY_MS;
+  const rightPad = dataSpan > 0 ? Math.max(dataSpan * 0.25, 2 * DAY_MS) : 3 * DAY_MS;
+  const xMin = firstT - leftPad;
+  const xMax = lastT + rightPad;
   const examMs = examDate ? Date.parse(`${examDate}T00:00:00Z`) : NaN;
-  const examInRange = Number.isFinite(examMs) && examMs > Date.now();
-  if (examInRange) {
-    xMin = Math.min(xMin, examMs);
-    xMax = Math.max(xMax, examMs);
-  }
-  if (xMin === xMax) {
-    xMin -= 7 * DAY_MS;
-    xMax += 7 * DAY_MS;
-  }
 
   const xScale = (t: number) => PAD_L + ((t - xMin) / (xMax - xMin)) * PLOT_W;
   const yScale = (b: number) => PAD_T + (1 - (b - yMin) / (yMax - yMin)) * PLOT_H;
@@ -311,17 +308,19 @@ function TrajectoryHero({
   for (let b = Math.ceil(yMin); b <= Math.floor(yMax); b++) gridBands.push(b);
 
   const targetY = targetBand != null ? yScale(Math.min(Math.max(targetBand, yMin), yMax)) : null;
-  const examX = examInRange ? xScale(examMs) : null;
+  // Линия экзамена — только если дата попадает в окно моков; далёкий экзамен несёт
+  // карточка Forecast («by …»), а не растянутая на месяцы ось.
+  const examInWindow = Number.isFinite(examMs) && examMs > Date.now() && examMs <= xMax;
+  const examX = examInWindow ? xScale(examMs) : null;
 
   const last = pts[pts.length - 1];
   const lastScaled = combinedPts[combinedPts.length - 1];
 
-  // Forecast cone/tail — only once the core has enough points to project.
-  const showForecast = forecast.status !== "insufficient" && forecast.projectedBand != null && forecast.interval && forecast.horizonDate;
-  const horizonX = showForecast ? xScale(Date.parse(`${forecast.horizonDate}T00:00:00Z`)) : null;
+  // Прогноз на графике — короткий пунктирный стаб от последней точки к правому краю
+  // окна (не конус до далёкого горизонта). Полный интервал/дата — в карточке Forecast.
+  const showForecast = forecast.status !== "insufficient" && forecast.projectedBand != null;
+  const stubX = CHART_W - PAD_R;
   const projY = showForecast ? yScale(forecast.projectedBand!) : null;
-  const lowY = showForecast ? yScale(forecast.interval!.low) : null;
-  const highY = showForecast ? yScale(forecast.interval!.high) : null;
 
   // Геометрия готова — передаём в клиентский график плоскими числами/строками.
   // Он рисует тот же SVG (SSR-идентично) и добавляет визир + hover-подсказку.
@@ -357,7 +356,7 @@ function TrajectoryHero({
         grid={gridBands.map((b) => ({ band: b, y: yScale(b) }))}
         target={targetY != null ? { y: targetY, band: targetBand! } : null}
         exam={examX != null ? { x: examX, rightEdge: examX > CHART_W - PAD_R - 28 } : null}
-        forecast={showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: horizonX!, projY: projY!, lowY: lowY!, highY: highY! } : null}
+        forecast={showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: stubX, projY: projY! } : null}
         xLabelLeft={fmtDate(xMin)}
         xLabelRight={fmtDate(xMax)}
         latestBand={last.band}
