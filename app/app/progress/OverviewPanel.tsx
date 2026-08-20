@@ -167,14 +167,12 @@ export async function OverviewPanel() {
 /* layers draw-in / fade / count-up motion on top (see OverviewMotion).       */
 /* -------------------------------------------------------------------------- */
 
-const CHART_W = 680;
-const CHART_H = 230;
-const PAD_L = 44;
-const PAD_R = 18;
-const PAD_T = 18;
-const PAD_B = 28;
-const PLOT_W = CHART_W - PAD_L - PAD_R;
-const PLOT_H = CHART_H - PAD_T - PAD_B;
+// Padding общий для обоих форматов графика; размеры холста (viewBox) — параметры
+// geomFor: широкий на десктопе, более квадратный в мобильном портрете (чтобы график
+// не превращался в узкую полоску на телефоне).
+const PAD = { l: 44, r: 18, t: 18, b: 28 };
+const CHART_DESKTOP = { w: 680, h: 272 };
+const CHART_MOBILE = { w: 440, h: 320 };
 
 function fmtDate(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", { day: "numeric", month: "short" });
@@ -303,42 +301,53 @@ function TrajectoryHero({
   const xMax = lastT + rightPad;
   const examMs = examDate ? Date.parse(`${examDate}T00:00:00Z`) : NaN;
 
-  const xScale = (t: number) => PAD_L + ((t - xMin) / (xMax - xMin)) * PLOT_W;
-  const yScale = (b: number) => PAD_T + (1 - (b - yMin) / (yMax - yMin)) * PLOT_H;
-
-  const combinedPts = scalePoints(pts, xScale, yScale);
-  const combinedPath = smoothD(combinedPts);
-  const combinedLen = smoothLen(combinedPts);
-  const readingPts = trajectory.reading.length >= 2 ? scalePoints(trajectory.reading, xScale, yScale) : null;
-  const listeningPts = trajectory.listening.length >= 2 ? scalePoints(trajectory.listening, xScale, yScale) : null;
-
   const gridBands: number[] = [];
   for (let b = Math.ceil(yMin); b <= Math.floor(yMax); b++) gridBands.push(b);
 
-  const targetY = targetBand != null ? yScale(Math.min(Math.max(targetBand, yMin), yMax)) : null;
+  const last = pts[pts.length - 1];
   // Линия экзамена — только если дата попадает в окно моков; далёкий экзамен несёт
   // карточка Forecast («by …»), а не растянутая на месяцы ось.
   const examInWindow = Number.isFinite(examMs) && examMs > Date.now() && examMs <= xMax;
-  const examX = examInWindow ? xScale(examMs) : null;
-
-  const last = pts[pts.length - 1];
-  const lastScaled = combinedPts[combinedPts.length - 1];
-
-  // Прогноз на графике — короткий пунктирный стаб от последней точки к правому краю
-  // окна (не конус до далёкого горизонта). Полный интервал/дата — в карточке Forecast.
+  // Прогноз на графике — короткий пунктирный стаб к правому краю окна (не конус до
+  // далёкого горизонта). Полный интервал/дата — в карточке Forecast.
   const showForecast = forecast.status !== "insufficient" && forecast.projectedBand != null;
-  const stubX = CHART_W - PAD_R;
-  const projY = showForecast ? yScale(forecast.projectedBand!) : null;
 
-  // Геометрия готова — передаём в клиентский график плоскими числами/строками.
-  // Он рисует тот же SVG (SSR-идентично) и добавляет визир + hover-подсказку.
-  const combined = pts.map((p, i) => ({
-    x: combinedPts[i].x,
-    y: combinedPts[i].y,
-    band: p.band,
-    dateMs: p.t,
-    section: p.section,
-  }));
+  // Геометрия для конкретного размера холста (viewBox). Домен (выше) от размера не
+  // зависит; здесь — шкалы/пути/координаты. Считаем дважды: широкий десктоп и более
+  // квадратный мобильный, чтобы график в портрете не был узкой полоской.
+  const geomFor = (CW: number, CH: number) => {
+    const PW = CW - PAD.l - PAD.r;
+    const PH = CH - PAD.t - PAD.b;
+    const xScale = (t: number) => PAD.l + ((t - xMin) / (xMax - xMin)) * PW;
+    const yScale = (b: number) => PAD.t + (1 - (b - yMin) / (yMax - yMin)) * PH;
+    const cPts = scalePoints(pts, xScale, yScale);
+    const rPts = trajectory.reading.length >= 2 ? scalePoints(trajectory.reading, xScale, yScale) : null;
+    const lPts = trajectory.listening.length >= 2 ? scalePoints(trajectory.listening, xScale, yScale) : null;
+    const lastScaled = cPts[cPts.length - 1];
+    const targetY = targetBand != null ? yScale(Math.min(Math.max(targetBand, yMin), yMax)) : null;
+    const examX = examInWindow ? xScale(examMs) : null;
+    const projY = showForecast ? yScale(forecast.projectedBand!) : null;
+    return {
+      w: CW,
+      h: CH,
+      padL: PAD.l,
+      padR: PAD.r,
+      padT: PAD.t,
+      padB: PAD.b,
+      combined: pts.map((p, i) => ({ x: cPts[i].x, y: cPts[i].y, band: p.band, dateMs: p.t, section: p.section })),
+      combinedPath: smoothD(cPts),
+      combinedLen: Number(smoothLen(cPts).toFixed(1)),
+      reading: rPts ? { path: smoothD(rPts), len: Number(smoothLen(rPts).toFixed(1)) } : null,
+      listening: lPts ? { path: smoothD(lPts), len: Number(smoothLen(lPts).toFixed(1)) } : null,
+      grid: gridBands.map((b) => ({ band: b, y: yScale(b) })),
+      target: targetY != null ? { y: targetY, band: targetBand! } : null,
+      exam: examX != null ? { x: examX, rightEdge: examX > CW - PAD.r - 28 } : null,
+      forecast: showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: CW - PAD.r, projY: projY! } : null,
+      xLabelLeft: fmtDate(xMin),
+      xLabelRight: fmtDate(xMax),
+      latestBand: last.band,
+    };
+  };
 
   return (
     <div className="ov-hero" style={S.heroCard}>
@@ -346,30 +355,17 @@ function TrajectoryHero({
         <h2 style={S.heroTitle}>
           <Icon name="bar-chart" size={18} strokeWidth={2.4} style={{ color: "var(--brand)" }} /> Trajectory
         </h2>
-        <p style={S.heroSub}>Band across every full mock — hover any point for the detail.</p>
+        <p style={S.heroSub}>Band across every full mock — tap or hover any point for the detail.</p>
       </div>
 
-      <TrajectoryChart
-        w={CHART_W}
-        h={CHART_H}
-        padL={PAD_L}
-        padR={PAD_R}
-        padT={PAD_T}
-        padB={PAD_B}
-        combined={combined}
-        combinedPath={combinedPath}
-        combinedLen={Number(combinedLen.toFixed(1))}
-        reading={readingPts ? { path: smoothD(readingPts), len: Number(smoothLen(readingPts).toFixed(1)) } : null}
-        listening={listeningPts ? { path: smoothD(listeningPts), len: Number(smoothLen(listeningPts).toFixed(1)) } : null}
-        grid={gridBands.map((b) => ({ band: b, y: yScale(b) }))}
-        target={targetY != null ? { y: targetY, band: targetBand! } : null}
-        exam={examX != null ? { x: examX, rightEdge: examX > CHART_W - PAD_R - 28 } : null}
-        forecast={showForecast ? { lastX: lastScaled.x, lastY: lastScaled.y, horizonX: stubX, projY: projY! } : null}
-        xLabelLeft={fmtDate(xMin)}
-        xLabelRight={fmtDate(xMax)}
-        latestBand={last.band}
-      />
-
+      {/* Десктоп — широкий формат; мобильный — более квадратный viewBox (нормальная
+          высота в портрете). Переключение по брейкпоинту (CSS); оба SSR-рендерятся. */}
+      <div className="ov-chart-wide">
+        <TrajectoryChart {...geomFor(CHART_DESKTOP.w, CHART_DESKTOP.h)} />
+      </div>
+      <div className="ov-chart-narrow">
+        <TrajectoryChart {...geomFor(CHART_MOBILE.w, CHART_MOBILE.h)} />
+      </div>
     </div>
   );
 }
@@ -597,6 +593,11 @@ const OV_CSS = `
 .ov-preview:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
 .ov-preview:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 45%,transparent)}
 .ov-chart{position:relative}
+/* Мобильный портретный формат по умолчанию (mobile-first); широкий — с ≥768px. */
+.ov-chart-wide{display:none}
+/* Толщины штрихов/колец не зависят от масштаба viewBox — линии остаются чёткими
+   и на узком мобильном холсте, и на широком десктопном. */
+.ov-chart-svg :is(path,line,circle,rect,polyline){vector-effect:non-scaling-stroke}
 .ov-chart-svg:focus{outline:none}
 .ov-chart-svg:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 40%,transparent);border-radius:var(--radius-md)}
 .ov-cross{transition:opacity .1s}
@@ -640,6 +641,8 @@ const OV_CSS = `
   .ov-wrap{padding:26px 28px 44px}
   .ov-grid{grid-template-columns:1.15fr 1fr}
   .ov-previews{grid-template-columns:1fr 1fr}
+  .ov-chart-wide{display:block}
+  .ov-chart-narrow{display:none}
 }
 @media (prefers-reduced-motion:reduce){
   .ov-preview{transition:none}
