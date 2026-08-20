@@ -33,9 +33,10 @@ export interface TrajectoryChartProps {
   padR: number;
   padT: number;
   padB: number;
+  /** Облако СВИДЕТЕЛЬСТВ: каждый реальный мок. Маркеры + приёмник наведения — НЕ линия. */
   combined: ChartPoint[];
-  combinedPath: string;
-  combinedLen: number;
+  /** Единственная линия «твоего band» во времени. null, пока сдана лишь одна секция. */
+  overall: { path: string; len: number; firstX: number; lastX: number } | null;
   reading: { path: string; len: number } | null;
   listening: { path: string; len: number } | null;
   grid: { band: number; y: number }[];
@@ -44,7 +45,8 @@ export interface TrajectoryChartProps {
   forecast: { lastX: number; lastY: number; horizonX: number; projY: number } | null;
   xLabelLeft: string;
   xLabelRight: string;
-  latestBand: number;
+  /** Пилюля текущего балла: overall, если он есть; иначе последний мок единственной секции. */
+  latest: { x: number; y: number; band: number; isOverall: boolean };
 }
 
 // Три РАЗНЫХ hue на белом плоте, каждый ≥3:1 (WCAG 1.4.11): reading — синий
@@ -62,11 +64,21 @@ function fmtFull(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 }
 
+/**
+ * Предыдущий мок ТОЙ ЖЕ секции. `combined` — облако свидетельств из двух разных тестов,
+ * поэтому «предыдущая точка» и «предыдущий мок этого предмета» — разные вещи, и дельта
+ * имеет смысл только для второго. Пинится overview.test.ts (инвариант combined).
+ */
+function prevSameSection(pts: ChartPoint[], i: number): ChartPoint | null {
+  for (let j = i - 1; j >= 0; j--) if (pts[j].section === pts[i].section) return pts[j];
+  return null;
+}
+
 export function TrajectoryChart({
   w, h, padL, padR, padT, padB,
-  combined, combinedPath, combinedLen,
+  combined, overall,
   reading, listening, grid, target, exam, forecast,
-  xLabelLeft, xLabelRight, latestBand,
+  xLabelLeft, xLabelRight, latest,
 }: TrajectoryChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [active, setActive] = useState<number | null>(null);
@@ -151,7 +163,10 @@ export function TrajectoryChart({
   if (combined.length === 0) return null;
 
   const act = active != null ? combined[active] : null;
-  const prev = active != null && active > 0 ? combined[active - 1] : null;
+  // Предыдущий мок ТОЙ ЖЕ секции, а не предыдущая точка смешанного облака. Раньше
+  // тултип у Reading 3.5 писал «+1.5 vs previous mock», сравнивая с Listening 2.0 —
+  // это не рост на 1.5 балла, это другой предмет.
+  const prev = act && active != null ? prevSameSection(combined, active) : null;
   const delta = act && prev ? act.band - prev.band : null;
   // Тултип ставится РОВНО над точкой (left/top = координата точки в %); от overflow
   // спасаем не клампом центра (он рассинхронил бы стрелку), а сменой якоря: у левого
@@ -163,27 +178,31 @@ export function TrajectoryChart({
   const tipBelow = pointYPct < 26;
   const tipTx = tipEdge === "left" ? "16px" : tipEdge === "right" ? "calc(-100% + 16px)" : "-50%";
   const tipTy = tipBelow ? "16px" : "calc(-100% - 14px)";
-  // Сплит-легенда/тогл имеют смысл только когда есть ОБЕ серии (иначе combined ==
-  // единственной сплит-линии — гасить нечего, а подпись не должна называть отсутствующую).
+  // Тогл имеет смысл только когда нарисованы ОБЕ секционные линии: иначе он гасил бы
+  // единственную линию. Секции, чьи точки на графике есть, но линии нет, всё равно
+  // получают ключ — иначе форма маркера (○/◇) остаётся необъяснённой.
   const hasSplit = !!reading && !!listening;
+  const sectionsPresent = (["reading", "listening"] as const).filter((s) =>
+    combined.some((p) => p.section === s),
+  );
 
-  // Мягкая заливка-wash под Combined-линией к базовой линии плота — глубина без
-  // шума (série-hue ~10%, dataviz marks-spec). Только при ≥2 точках (иначе линии нет).
+  // Мягкая заливка-wash под overall-линией к базовой линии плота — глубина без шума
+  // (série-hue ~10%, dataviz marks-spec). Только под overall: заливать площадь под
+  // облаком из двух разных тестов нечем — это не одна величина.
   const baseline = h - padB;
-  const areaD =
-    combined.length >= 2
-      ? `${combinedPath} L ${combined[combined.length - 1].x.toFixed(1)} ${baseline.toFixed(1)} L ${combined[0].x.toFixed(1)} ${baseline.toFixed(1)} Z`
-      : null;
+  const areaD = overall
+    ? `${overall.path} L ${overall.lastX.toFixed(1)} ${baseline.toFixed(1)} L ${overall.firstX.toFixed(1)} ${baseline.toFixed(1)} Z`
+    : null;
   // Уникальный id градиента на размер холста — на странице два SVG (mobile/desktop),
   // одинаковый id дал бы дубль в DOM и коллизию url(#…).
   const gradId = `ov-area-grad-${w}`;
 
-  // Пилюля текущего балла: всегда НАД последней точкой, с отступом от боковых краёв.
-  // Последняя точка НЕ обязательно справа-сверху — когда все моки свежие, а ось тянется
-  // до экзамена, она сидит слева-внизу, и центрированная пилюля роняется на подпись оси X.
-  const lastPt = combined[combined.length - 1];
-  const lastLblXPct = (lastPt.x / w) * 100;
-  const lastLblYPct = (lastPt.y / h) * 100;
+  // Пилюля текущего балла: НАД точкой `latest` (конец overall-линии, либо последний мок,
+  // если overall'а ещё нет), с отступом от боковых краёв. Точка НЕ обязательно
+  // справа-сверху — когда все моки свежие, а ось тянется до экзамена, она сидит
+  // слева-внизу, и центрированная пилюля роняется на подпись оси X.
+  const lastLblXPct = (latest.x / w) * 100;
+  const lastLblYPct = (latest.y / h) * 100;
   const latestTx = lastLblXPct < 18 ? "0%" : lastLblXPct > 82 ? "-100%" : "-50%";
 
   return (
@@ -196,7 +215,7 @@ export function TrajectoryChart({
         height="auto"
         role="img"
         tabIndex={0}
-        aria-label={`Band trajectory across ${combined.length} full ${combined.length === 1 ? "mock" : "mocks"}, latest band ${latestBand.toFixed(1)}. Every point is listed in the table after this chart.`}
+        aria-label={`Band trajectory across ${combined.length} full ${combined.length === 1 ? "mock" : "mocks"}. ${latest.isOverall ? `Overall band now ${latest.band.toFixed(1)}` : `Latest mock band ${latest.band.toFixed(1)}`}. Every mock is listed in the table after this chart.`}
         className="ov-chart-svg"
         style={{ display: "block", width: "100%", height: "auto", touchAction: "pan-y" }}
         onPointerMove={onMove}
@@ -243,16 +262,20 @@ export function TrajectoryChart({
         {/* Wash под Combined — над recessive-сеткой, под data-линиями (премиум-слои). */}
         {areaD && <path d={areaD} fill={`url(#${gradId})`} pointerEvents="none" />}
 
+        {/* Секционные тренды — вспомогательные (1.5px) рядом с overall. Когда overall'а
+            нет (сдана одна секция), единственная линия обязана нести основной вес. */}
         {reading && !hidden.has("reading") && (
-          <path data-draw={reading.len} d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={1.5}
+          <path data-draw={reading.len} d={reading.path} fill="none" stroke={SECTION_COLOR.reading} strokeWidth={overall ? 1.5 : 2.5}
             strokeDasharray={reading.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
         {listening && !hidden.has("listening") && (
-          <path data-draw={listening.len} d={listening.path} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={1.5}
+          <path data-draw={listening.len} d={listening.path} fill="none" stroke={SECTION_COLOR.listening} strokeWidth={overall ? 1.5 : 2.5}
             strokeDasharray={listening.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
         )}
-        <path data-draw={combinedLen} d={combinedPath} fill="none" stroke="var(--brand)" strokeWidth={2.5}
-          strokeDasharray={combinedLen} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
+        {overall && (
+          <path data-draw={overall.len} d={overall.path} fill="none" stroke="var(--brand)" strokeWidth={2.5}
+            strokeDasharray={overall.len} strokeDashoffset={0} strokeLinecap="round" strokeLinejoin="round" />
+        )}
 
         {/* Маркер-кольцо на КАЖДОЙ реальной точке (заливка = surface, обводка = цвет
             секции) — данные читаются точно, даже когда линия гладкая. Секцию несёт НЕ
@@ -285,7 +308,9 @@ export function TrajectoryChart({
           </g>
         )}
 
-        <circle data-pop cx={combined[combined.length - 1].x} cy={combined[combined.length - 1].y} r={5}
+        {/* «Ты здесь» — на конце overall-линии (или на последнем моке, если overall'а нет).
+            Brand-заливкой, в отличие от секционных колец: это другая величина. */}
+        <circle data-pop cx={latest.x} cy={latest.y} r={5}
           fill="var(--brand)" stroke="var(--surface)" strokeWidth={2}
           style={{ transformBox: "fill-box", transformOrigin: "center" }} />
 
@@ -320,7 +345,7 @@ export function TrajectoryChart({
             className="ov-lbl ov-lbl-latest"
             style={{ left: `${lastLblXPct}%`, top: `${lastLblYPct}%`, transform: `translate(${latestTx}, calc(-100% - 10px))` }}
           >
-            {latestBand.toFixed(1)}
+            {latest.band.toFixed(1)}
           </span>
         )}
         <span className="ov-lbl ov-lbl-axis" style={{ left: `${(padL / w) * 100}%`, bottom: 0 }}>{xLabelLeft}</span>
@@ -352,7 +377,9 @@ export function TrajectoryChart({
                       : "color-mix(in oklab, var(--surface-inverse-ink) 62%, transparent)",
               }}
             >
-              {delta === 0 ? "No change vs previous mock" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} vs previous mock`}
+              {delta === 0
+                ? `No change vs previous ${SECTION_LABEL[act.section]} mock`
+                : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} vs previous ${SECTION_LABEL[act.section]} mock`}
             </div>
           )}
         </div>
@@ -391,12 +418,14 @@ export function TrajectoryChart({
           чипа, из которых кликаются два, а Combined читался как disabled-кнопка.
           Разделитель отбивает «ключ» от «контролов» — без лишней копирайт-подписи. */}
       <div className="ov-legend">
-        <span className="ov-leg-key">
-          <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--brand)" }} /> Combined
-        </span>
-        {hasSplit && (
+        {overall && (
+          <span className="ov-leg-key">
+            <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--brand)" }} /> Overall
+          </span>
+        )}
+        {hasSplit ? (
           <>
-            <span className="ov-leg-div" aria-hidden="true" />
+            {overall && <span className="ov-leg-div" aria-hidden="true" />}
             <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("reading")} aria-label={hidden.has("reading") ? "Show Reading line" : "Hide Reading line"} onClick={() => toggle("reading")}>
               <span className="ov-leg-swatch ov-leg-circle" style={{ background: SECTION_COLOR.reading }} /> Reading
             </button>
@@ -404,10 +433,20 @@ export function TrajectoryChart({
               <span className="ov-leg-swatch ov-leg-diamond" style={{ background: SECTION_COLOR.listening }} /> Listening
             </button>
           </>
+        ) : (
+          sectionsPresent.map((s) => (
+            <span key={s} className="ov-leg-key">
+              <span className={`ov-leg-swatch ov-leg-${s === "reading" ? "circle" : "diamond"}`} style={{ background: SECTION_COLOR[s] }} />{" "}
+              {SECTION_LABEL[s]}
+            </span>
+          ))
         )}
       </div>
-      {hasSplit && (
-        <p className="ov-legend-note">Combined is your band across every mock; Reading and Listening split it by section. Tap or click a section to hide its line.</p>
+      {overall && (
+        <p className="ov-legend-note">
+          Overall is your band right now — the average of your latest Reading and Listening, the way IELTS averages sections.
+          {hasSplit ? " Reading and Listening show each section on its own; tap or click one to hide its line." : ""}
+        </p>
       )}
     </>
   );
