@@ -323,6 +323,16 @@ function TrajectoryHero({
       const t = xMin + ((xMax - xMin) * i) / (tickCount - 1);
       return { x: xScale(t), label: fmtDate(t) };
     });
+    // Подписи режутся до дня; на окне короче ~2 суток соседние засечки попадают в
+    // один день и печатали дубль «Jul 14 / Jul 14», который читается как баг. Гасим
+    // ПОДРЯД идущий повтор до пустой строки — сама засечка/вертикаль сетки остаётся,
+    // пропадает только текст. Время в подпись сознательно не добавляем: сервер
+    // рендерит в UTC, юзеру это «время мимо часов на стене».
+    let prevLabel = xTicks[0]?.label;
+    for (let i = 1; i < xTicks.length; i++) {
+      if (xTicks[i].label === prevLabel) xTicks[i] = { ...xTicks[i], label: "" };
+      else prevLabel = xTicks[i].label;
+    }
     return {
       w: CW,
       h: CH,

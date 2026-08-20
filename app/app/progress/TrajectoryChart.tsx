@@ -405,19 +405,21 @@ export function TrajectoryChart({
         )}
         {/* Крайние подписи прижимаем внутрь плота, средние центрируем по засечке —
             иначе первая/последняя вылезают за холст. */}
-        {xTicks.map((tk, i) => (
-          <span
-            key={i}
-            className="ov-lbl ov-lbl-axis"
-            style={{
-              left: `${(tk.x / w) * 100}%`,
-              bottom: 0,
-              transform: i === 0 ? "none" : i === xTicks.length - 1 ? "translate(-100%, 0)" : "translate(-50%, 0)",
-            }}
-          >
-            {tk.label}
-          </span>
-        ))}
+        {xTicks.map((tk, i) =>
+          tk.label ? (
+            <span
+              key={i}
+              className="ov-lbl ov-lbl-axis"
+              style={{
+                left: `${(tk.x / w) * 100}%`,
+                bottom: 0,
+                transform: i === 0 ? "none" : i === xTicks.length - 1 ? "translate(-100%, 0)" : "translate(-50%, 0)",
+              }}
+            >
+              {tk.label}
+            </span>
+          ) : null
+        )}
       </div>
 
       {act && (
