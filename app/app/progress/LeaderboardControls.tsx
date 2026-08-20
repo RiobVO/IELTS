@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/core/icons";
+import { PILL } from "./pill";
 
 interface Option {
   value: string;
@@ -10,6 +11,10 @@ interface Option {
  * Период / охват лидерборда — bando-табы. URL-фильтрация остаётся серверной
  * (чипы это next/link на ?period=&scope=); клиентский роутер не нужен. Scope
  * получает иконку: globe для global, map-pin для региональных охватов.
+ *
+ * Активный чип метится ТИШЕ, чем активный таб раздела (ProgressTabs): фильтр —
+ * второй уровень иерархии, и solid-brand на обоих давал до трёх рядов
+ * неразличимых пилюль с двумя «активными» подряд.
  */
 export default function LeaderboardControls({
   period,
@@ -63,7 +68,7 @@ function Tab({
   icon?: IconName;
 }) {
   return (
-    <Link href={href} className="lc-tab" style={{ ...TAB, ...(active ? TAB_ON : null) }}>
+    <Link href={href} className="lc-tab" aria-current={active ? "true" : undefined} style={{ ...PILL, ...(active ? TAB_ON : null) }}>
       {icon && <Icon name={icon} size={14} strokeWidth={2.3} />}
       {label}
     </Link>
@@ -71,23 +76,10 @@ function Tab({
 }
 
 const ROW: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 9 };
-const TAB: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 7,
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-sm)",
-  fontWeight: 700,
-  padding: "8px 15px",
-  borderRadius: "var(--radius-full)",
-  border: "1px solid var(--border)",
-  background: "var(--surface)",
-  color: "var(--text-secondary)",
-  textDecoration: "none",
-  whiteSpace: "nowrap",
-};
+// --text-link на --brand-subtle = 5.75:1 (AA). Тихая заливка вместо solid-brand:
+// «выбранный фильтр», а не «текущий раздел».
 const TAB_ON: React.CSSProperties = {
-  background: "var(--brand)",
-  color: "var(--text-on-brand)",
-  borderColor: "transparent",
+  background: "var(--brand-subtle)",
+  color: "var(--text-link)",
+  borderColor: "var(--brand-border)",
 };

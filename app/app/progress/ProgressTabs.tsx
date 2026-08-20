@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/core/icons";
+import { PILL } from "./pill";
 
 /**
  * Под-навигация раздела Progress — route-табы Overview / League / Badges. Это НЕ
  * JS-tablist: переключение таба меняет URL (`?tab=`), поэтому три next/link с
  * `aria-current` на активной — правильнее ARIA-tablist (сохраняет back/forward,
- * deep-link, no-JS). Пилюли по образцу `LeaderboardControls` (тот же TAB/TAB_ON,
- * тап-таргет 44px на touch). Рендерится внутри wrap каждой панели → наследует её
+ * deep-link, no-JS). Геометрия пилюли — общий `PILL` (тап-таргет 44px на touch);
+ * активная несёт solid-brand — это ВЕРХНИЙ уровень иерархии на странице, фильтры
+ * лидерборда метятся тише. Рендерится внутри wrap каждой панели → наследует её
  * gutter.
  */
 export function ProgressTabs({ tab }: { tab: "overview" | "league" | "badges" }) {
@@ -22,7 +24,7 @@ export function ProgressTabs({ tab }: { tab: "overview" | "league" | "badges" })
 
 function TabLink({ href, active, icon, label }: { href: string; active: boolean; icon: IconName; label: string }) {
   return (
-    <Link href={href} className="pg-tab" aria-current={active ? "page" : undefined} style={{ ...TAB, ...(active ? TAB_ON : null) }}>
+    <Link href={href} className="pg-tab" aria-current={active ? "page" : undefined} style={{ ...PILL, ...(active ? TAB_ON : null) }}>
       <Icon name={icon} size={15} strokeWidth={2.3} />
       {label}
     </Link>
@@ -30,21 +32,6 @@ function TabLink({ href, active, icon, label }: { href: string; active: boolean;
 }
 
 const NAV: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 9, marginBottom: 18 };
-const TAB: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 7,
-  fontFamily: "var(--font-ui)",
-  fontSize: "var(--text-sm)",
-  fontWeight: 700,
-  padding: "8px 15px",
-  borderRadius: "var(--radius-full)",
-  border: "1px solid var(--border)",
-  background: "var(--surface)",
-  color: "var(--text-secondary)",
-  textDecoration: "none",
-  whiteSpace: "nowrap",
-};
 const TAB_ON: React.CSSProperties = {
   background: "var(--brand)",
   color: "var(--text-on-brand)",
