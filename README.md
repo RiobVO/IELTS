@@ -46,11 +46,18 @@ auto-gets a `profile` row via the `on_auth_user_created` trigger
 ## Database
 
 ```bash
-npm run db:migrate # apply migrations (up)
+npm run db:migrate # apply migrations (up) — targets DIRECT_URL
 npm run db:status  # show applied / pending
-npm run db:down    # revert all (down)
+npm run db:up:local / db:down:local   # round-trips on the throwaway local DB
+npm run db:down    # DANGER: reverts ALL migrations (drops the schema)
 npm run db:generate# (future) regenerate Drizzle SQL from src/db/schema.ts
 ```
+
+`db:down` reverts **every** migration, i.e. drops the schema and its data. A
+hand-set `DIRECT_URL` once let it through to production; `down` and `bootstrap`
+now refuse a non-`localhost` target unless `ALLOW_REMOTE_MIGRATE=1`. Use the
+`db:*:local` pair for round-trips and never hand-edit `DIRECT_URL`. The only
+backup is the daily `pg_dump` in `.github/workflows/db-backup.yml`.
 
 Migrations are hand-authored up/down SQL in `migrations/` (applied by
 `scripts/migrate.ts`); `src/db/schema.ts` is the typed Drizzle source of truth.
