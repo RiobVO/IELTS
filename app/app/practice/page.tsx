@@ -216,10 +216,16 @@ export default async function PracticePage({
     const b = a.perTypeBreakdown as Breakdown;
     if (!b) continue;
     for (const [type, v] of Object.entries(b)) {
+      // Null-guard тем же паттерном, что aggregateWeakness (src/lib/practice/weakness.ts) —
+      // битый/null leaf breakdown'а не должен ронять серверный рендер.
+      if (!v || typeof v !== "object") continue;
+      const correct = Number(v.correct);
+      const total = Number(v.total);
+      if (!Number.isFinite(correct) || !Number.isFinite(total)) continue;
       const cur = agg[type] ?? { correct: 0, total: 0, rLost: 0, lLost: 0 };
-      cur.correct += v.correct;
-      cur.total += v.total;
-      const lost = v.total - v.correct;
+      cur.correct += correct;
+      cur.total += total;
+      const lost = total - correct;
       if (sec === "listening") cur.lLost += lost;
       else cur.rLost += lost;
       agg[type] = cur;
