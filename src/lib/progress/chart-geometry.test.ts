@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildTrajectory, computeForecast, type Trajectory, type TrajectoryAttempt, type Forecast } from "./overview";
-import { buildChartGeometry, CHART_DESKTOP, CHART_MOBILE, type ChartGeom } from "./chart-geometry";
+import { buildChartGeometry, dedupeConsecutiveLabels, CHART_DESKTOP, CHART_MOBILE, type ChartGeom } from "./chart-geometry";
 
 // Всё время в тестах — от фиксированной точки, никакого Date.now() (детерминизм).
 const NOW_MS = Date.parse("2026-07-15T12:00:00Z");
@@ -10,6 +10,10 @@ const EPS = 1e-6;
 // Чуть шире EPS — для сумм/делений с накоплением погрешности плавающей точки
 // (шаг xTicks, восстановление Y-окна из grid).
 const EPS_LOOSE = 1e-3;
+// Допуск восстановления временного окна (recoverXWindow) — тот же, что у
+// регресс-пина X-домена ниже: xScale — деление в пикселях, обратное решение
+// накапливает суб-миллисекундную погрешность на широких доменах.
+const T_TOL_MS = 1000;
 
 const SIZES = [CHART_DESKTOP, CHART_MOBILE] as const;
 
@@ -76,6 +80,25 @@ function recoverYWindow(geom: Pick<ChartGeom, "grid" | "padT" | "h" | "padB">): 
   return { yMin, yMax: yMin + yRange };
 }
 
+/**
+ * Восстанавливает временное окно [xMin, xMax] из двух точек (t,x) с РАЗНЫМ t —
+ * обратное решение линейной xScale (тот же приём, что recoverYWindow для Y).
+ * Требует p1.t !== p2.t (иначе k = 0/0 = NaN) — вызывающая сторона обязана
+ * гарантировать ненулевой временной размах сама (span=0 — отдельная ветка,
+ * см. регресс-пин ниже, случай «в»). Используется и общим assertInvariants
+ * (инвариант tMs), и именованным регресс-пином X-домена.
+ */
+function recoverXWindow(
+  p1: { t: number; x: number },
+  p2: { t: number; x: number },
+  geom: Pick<ChartGeom, "padL" | "padR" | "w">,
+): { xMin: number; xMax: number } {
+  const PW = geom.w - geom.padL - geom.padR;
+  const k = (p2.x - p1.x) / (p2.t - p1.t);
+  const xMin = p1.t - (p1.x - geom.padL) / k;
+  return { xMin, xMax: xMin + PW / k };
+}
+
 /* -------------------------------------------------------------------------- */
 /* assertInvariants — единая проверка всех 10 инвариантов геометрии.           */
 /* -------------------------------------------------------------------------- */
@@ -134,7 +157,10 @@ function assertInvariants(geom: ChartGeom, ctx: string): void {
     finite(g.band, "grid.band");
   }
   for (const x of pointXs) finite(x, "pointXs");
-  for (const t of xTicks) finite(t.x, "xTicks.x");
+  for (const t of xTicks) {
+    finite(t.x, "xTicks.x");
+    finite(t.tMs, "xTicks.tMs");
+  }
   if (target) finite(target.y, "target.y");
   if (exam) finite(exam.x, "exam.x");
   if (forecast) {
@@ -204,6 +230,36 @@ function assertInvariants(geom: ChartGeom, ctx: string): void {
         const d = xTicks[i].x - xTicks[i - 1].x;
         if (Math.abs(d - step) > EPS_LOOSE) fail(`шаг xTicks неравномерен на i=${i}: Δ=${d} vs ${step}`);
       }
+    }
+  }
+
+  // 7b. xTicks.tMs — сырой t засечки (клиент переформатирует его в свою TZ):
+  // шаг равномерен по времени, а крайние засечки совпадают с реальным X-доменом,
+  // восстановленным ПО ДАННЫМ (recoverXWindow из combined[0]/combined[последняя]),
+  // а не по собственной формуле xTicks — иначе баг в передаче tMs, совпадающий по
+  // форме с багом в xScale, остался бы незамеченным. Восстановление требует
+  // ненулевой временной размах данных (иначе naklon k=0/0=NaN) — при span=0 (все
+  // моки в один момент) домен считается веткой ±3 дня, это отдельно покрыто
+  // регресс-пином ниже (случай «в»), здесь просто пропускаем.
+  if (xTicks.length > 1) {
+    const tStep = (xTicks[xTicks.length - 1].tMs - xTicks[0].tMs) / (xTicks.length - 1);
+    for (let i = 1; i < xTicks.length; i++) {
+      const d = xTicks[i].tMs - xTicks[i - 1].tMs;
+      if (Math.abs(d - tStep) > EPS_LOOSE) fail(`шаг xTicks.tMs неравномерен на i=${i}: Δ=${d} vs ${tStep}`);
+    }
+  }
+  if (xTicks.length > 0 && combined[combined.length - 1].dateMs > combined[0].dateMs) {
+    const recoveredX = recoverXWindow(
+      { t: combined[0].dateMs, x: combined[0].x },
+      { t: combined[combined.length - 1].dateMs, x: combined[combined.length - 1].x },
+      geom,
+    );
+    if (Math.abs(xTicks[0].tMs - recoveredX.xMin) > T_TOL_MS) {
+      fail(`xTicks[0].tMs=${xTicks[0].tMs} !~ восстановленный xMin=${recoveredX.xMin}`);
+    }
+    const lastTick = xTicks[xTicks.length - 1];
+    if (Math.abs(lastTick.tMs - recoveredX.xMax) > T_TOL_MS) {
+      fail(`xTicks[последняя].tMs=${lastTick.tMs} !~ восстановленный xMax=${recoveredX.xMax}`);
     }
   }
 
@@ -574,6 +630,33 @@ describe("Контракт пустого входа", () => {
   });
 });
 
+describe("dedupeConsecutiveLabels", () => {
+  it("гасит подряд идущий повтор до пустой строки", () => {
+    expect(dedupeConsecutiveLabels(["A", "A", "B"])).toEqual(["A", "", "B"]);
+  });
+
+  it("гасит ВСЕ подряд идущие повторы одной подписи", () => {
+    expect(dedupeConsecutiveLabels(["A", "A", "A"])).toEqual(["A", "", ""]);
+  });
+
+  it("не трогает неповторяющиеся подряд подписи (A,B,A — не глобальный дедуп)", () => {
+    expect(dedupeConsecutiveLabels(["A", "B", "A"])).toEqual(["A", "B", "A"]);
+  });
+
+  it("пустой массив → пустой массив", () => {
+    expect(dedupeConsecutiveLabels([])).toEqual([]);
+  });
+
+  it("один элемент — без изменений", () => {
+    expect(dedupeConsecutiveLabels(["A"])).toEqual(["A"]);
+  });
+
+  it("[A,\"\",A] — старая семантика: пустая подпись обновляет prevLabel, поэтому " +
+    "второй A НЕ гасится (prevLabel после i=1 становится \"\", а \"A\" ей не равна)", () => {
+    expect(dedupeConsecutiveLabels(["A", "", "A"])).toEqual(["A", "", "A"]);
+  });
+});
+
 /**
  * Регресс-пин замороженного X-домена (решение владельца, не подлежит вкусовщине).
  * Коэффициенты 0.06/0.18 + полы 0.25d/0.5d + ветка span=0 → ±3d СОЗНАТЕЛЬНО
@@ -592,20 +675,8 @@ describe("Регресс-пин замороженного X-домена", () =
     return { xMin: firstT - leftPad, xMax: lastT + rightPad };
   }
 
-  // Обратное решение xScale: из двух известных (t,x) — наклон k [px/ms], затем
-  // xMin из первой точки и xMax из PW/k. Точное решение (xScale линейна), не оценка.
-  function recoverXWindow(
-    p1: { t: number; x: number },
-    p2: { t: number; x: number },
-    geom: Pick<ChartGeom, "padL" | "padR" | "w">,
-  ): { xMin: number; xMax: number } {
-    const PW = geom.w - geom.padL - geom.padR;
-    const k = (p2.x - p1.x) / (p2.t - p1.t);
-    const xMin = p1.t - (p1.x - geom.padL) / k;
-    return { xMin, xMax: xMin + PW / k };
-  }
-
-  const T_TOL_MS = 1000;
+  // recoverXWindow (обратное решение линейной xScale) — на уровне модуля, переиспользуется
+  // и assertInvariants (инвариант xTicks.tMs), см. выше.
   const X_TOL = 0.01;
 
   describe("(а) размах ~10 дней — выигрывают доли 0.06/0.18", () => {

@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pickPointIndex } from "@/lib/progress/hit-test";
+import { dedupeConsecutiveLabels } from "@/lib/progress/chart-geometry";
 
 export interface ChartPoint {
   x: number;
@@ -51,8 +52,10 @@ export interface TrajectoryChartProps {
   targetEdge: { band: number; above: boolean } | null;
   exam: { x: number; rightEdge: boolean } | null;
   forecast: { lastX: number; lastY: number; horizonX: number; projY: number } | null;
-  /** Засечки/подписи оси X — равномерно по домену (4 на десктопе, 3 в портрете). */
-  xTicks: { x: number; label: string }[];
+  /** Засечки/подписи оси X — равномерно по домену (4 на десктопе, 3 в портрете).
+   *  tMs — сырой t засечки (см. mounted-гейт ниже: до маунта используется готовый
+   *  SSR label в UTC, после — tMs переформатируется в TZ браузера). */
+  xTicks: { x: number; tMs: number; label: string }[];
   /** Пилюля текущего балла: band последнего мока. section — форма маркера «ты
    *  здесь» должна совпадать с формой секции (круг/ромб), а не всегда быть кругом. */
   latest: { x: number; y: number; band: number; section: "reading" | "listening" };
@@ -69,8 +72,28 @@ const SECTION_COLOR = { reading: "var(--info-text)", listening: "var(--green-600
 const SECTION_DOT = { reading: "var(--sky-500)", listening: "var(--green-500)" } as const;
 const SECTION_LABEL = { reading: "Reading", listening: "Listening" } as const;
 
-function fmtFull(ms: number): string {
-  return new Date(ms).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
+// TZ юзера, а не сервера/браузера-при-SSR: без timeZone `toLocaleDateString`
+// читает часовой пояс ПРОЦЕССА — на сервере это TZ инстанса (UTC на проде, но не
+// гарантированно локально), на клиенте — TZ браузера. У юзера не в UTC ось/тултип
+// раньше могли разъезжаться на календарный день у полуночных сабмитов. Решение:
+// SSR и первый клиентский рендер ЖЁСТКО в UTC (см. mounted-гейт ниже — оба
+// прогона исполняют этот же код с mounted=false и потому дают побайтово
+// одинаковую разметку, без suppressHydrationWarning), после маунта клиент
+// переформатирует из tMs/dateMs в TZ браузера.
+function fmtFull(ms: number, useUTC: boolean): string {
+  return new Date(ms).toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    ...(useUTC ? { timeZone: "UTC" } : {}),
+  });
+}
+
+// Подписи оси X после маунта — тот же формат, что fmtDate на сервере, но БЕЗ
+// timeZone: "UTC" (то есть в TZ браузера). До маунта используется готовый
+// xTicks[i].label (уже отформатирован сервером в UTC) — см. mounted-гейт ниже.
+function fmtAxis(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
 /**
@@ -90,6 +113,12 @@ export function TrajectoryChart({
   xTicks, latest,
 }: TrajectoryChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  // SSR/первый клиентский рендер держим на UTC-базлайне (mounted=false в обоих
+  // случаях — совпадение побайтовое, без suppressHydrationWarning); после маунта
+  // переключаемся на TZ браузера для оси/sr-таблицы (тултип — client-only, ему
+  // гейт не нужен, см. fmtFull ниже).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [active, setActive] = useState<number | null>(null);
   // Видимость сплит-серий: обе включены по умолчанию, тап по легенде гасит шумную
   // Reading/Listening, оставляя чистую Combined-линию (Combined не гасится). Стартуем
@@ -169,6 +198,13 @@ export function TrajectoryChart({
   // (в текущем потоке TrajectoryHero не вызывает нас с пустым, но контракт
   // держим честным — ниже идёт доступ к combined[last]). Все хуки уже вызваны.
   if (combined.length === 0) return null;
+
+  // Подписи оси: до маунта — готовый SSR label (UTC, побайтово совпадает с первым
+  // клиентским рендером); после маунта — tMs переформатирован в TZ браузера и
+  // передедуплен той же функцией, что и на сервере (семантика идентична).
+  const axisLabels = mounted
+    ? dedupeConsecutiveLabels(xTicks.map((tk) => fmtAxis(tk.tMs)))
+    : xTicks.map((tk) => tk.label);
 
   const act = active != null ? combined[active] : null;
   // Предыдущий мок ТОЙ ЖЕ секции, а не предыдущая точка смешанного облака. Раньше
@@ -406,7 +442,7 @@ export function TrajectoryChart({
         {/* Крайние подписи прижимаем внутрь плота, средние центрируем по засечке —
             иначе первая/последняя вылезают за холст. */}
         {xTicks.map((tk, i) =>
-          tk.label ? (
+          axisLabels[i] ? (
             <span
               key={i}
               className="ov-lbl ov-lbl-axis"
@@ -416,7 +452,7 @@ export function TrajectoryChart({
                 transform: i === 0 ? "none" : i === xTicks.length - 1 ? "translate(-100%, 0)" : "translate(-50%, 0)",
               }}
             >
-              {tk.label}
+              {axisLabels[i]}
             </span>
           ) : null
         )}
@@ -428,7 +464,10 @@ export function TrajectoryChart({
           role="status"
           style={{ left: `${pointXPct}%`, top: `${pointYPct}%`, transform: `translate(${tipTx}, ${tipTy})` }}
         >
-          <div className="ov-tip-date">{fmtFull(act.dateMs)}</div>
+          {/* Тултип рендерится только после взаимодействия (курсор/тап/клавиатура) —
+              это гарантированно client-only, до маунта его не существует, поэтому
+              гейта не требует: всегда в TZ браузера. */}
+          <div className="ov-tip-date">{fmtFull(act.dateMs, false)}</div>
           <div className="ov-tip-band">
             <span className="ov-tip-dot" style={{ background: SECTION_DOT[act.section] }} />
             {SECTION_LABEL[act.section]} · <b>{act.band.toFixed(1)}</b>
@@ -461,7 +500,14 @@ export function TrajectoryChart({
           даём зрячему клавиатурному пользователю, но `img` не widget-роль, и в
           browse-режиме NVDA/JAWS перехватят стрелки раньше компонента — обещать им
           ридаут было нельзя. Второй экземпляр графика (mobile/desktop) скрыт через
-          display:none на обёртке, значит и его таблица из дерева доступности выпадает. */}
+          display:none на обёртке, значит и его таблица из дерева доступности выпадает.
+
+          SSR-строка этой таблицы раньше форматировалась в TZ ПРОЦЕССА (сервер), а
+          первый клиентский рендер — в TZ БРАУЗЕРА: у полуночных сабмитов при юзере
+          не в UTC это был латентный hydration mismatch (React молча берёт
+          клиентскую версию, но разметка временно расходилась с SSR). mounted-гейт
+          чинит это: до маунта — та же UTC-строка, что и на сервере (побайтово),
+          после — локальная TZ браузера. */}
       <table className="ov-sr-only">
         <caption>Band by full mock, oldest first</caption>
         <thead>
@@ -470,7 +516,7 @@ export function TrajectoryChart({
         <tbody>
           {combined.map((p, i) => (
             <tr key={i}>
-              <td>{fmtFull(p.dateMs)}</td>
+              <td>{fmtFull(p.dateMs, !mounted)}</td>
               <td>{SECTION_LABEL[p.section]}</td>
               <td>{p.band.toFixed(1)}</td>
             </tr>
