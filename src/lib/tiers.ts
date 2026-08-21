@@ -9,12 +9,16 @@ export type Tier = "basic" | "premium" | "ultra";
 const TIER_RANK: Record<Tier, number> = { basic: 0, premium: 1, ultra: 2 };
 
 /**
- * Basic-tier daily limit on submitted tests (BRIEF §4.8). Set high at launch (no
- * monetization yet) so it's effectively unlimited for a real student, while still
- * capping run-away abuse per account; tighten it as an upsell when paid tiers go
- * live. Premium/Ultra are unlimited.
+ * Basic-tier caps on Reading/Listening test STARTS (BRIEF §4.8, owner decision
+ * 2026-07-17: R/L content itself is free for every tier — these are the only
+ * remaining limits, sized to the free daily-plan norm ("2 practice/day, 2
+ * mocks/week") rather than abuse-prevention headroom like the old 25/day. Both
+ * are combined across Reading+Listening (no per-section split) and count
+ * ATTEMPT CREATION, not submission — see access.ts gate (b). Premium/Ultra are
+ * unlimited either way; going over either cap is the upsell.
  */
-export const BASIC_DAILY_LIMIT = 25;
+export const BASIC_PRACTICE_DAILY_LIMIT = 2;
+export const BASIC_MOCK_WEEKLY_LIMIT = 2;
 
 /**
  * Basic-tier daily cap on NEW vocab cards introduced per day (SRS anti-cram, Vocab

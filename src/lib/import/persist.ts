@@ -167,14 +167,14 @@ export async function persistTest(
         title: parsed.title,
         sourceFilePath: opts.sourceFilePath ?? null,
         durationSeconds: parsed.durationSeconds,
-        // Full mock tests (Reading/Listening) are a Premium feature; single
-        // passages/parts stay Basic. Gating at the source means the catalog lock
-        // (meetsTier) and the server tier-gates apply to every new import without
-        // a manual step. Already-imported tests are backfilled separately.
-        tierRequired:
-          parsed.category === "full_reading" || parsed.category === "full_listening"
-            ? "premium"
-            : "basic",
+        // Owner decision 2026-07-17: ALL Reading/Listening content is free — no
+        // tier lock on any R/L category, including the full 40Q mocks. Paid
+        // tiers now apply only to Writing/Speaking. Previously full_reading/
+        // full_listening imported as premium (history: git log this line) —
+        // that gate is removed at the source; the Basic caps (2 practice/day +
+        // 2 mock/week, tiers.ts) are a separate mechanism (access.ts) and are
+        // untouched by this.
+        tierRequired: "basic",
         bandType: parsed.bandType as ContentInsert["bandType"],
         questionTypes: parsed.questionTypes,
         bandScale: parsed.bandScale, // raw->band table for Full tests; null otherwise

@@ -8,7 +8,7 @@ import PricingScreen from "../app/upgrade/PricingScreen";
 export const metadata: Metadata = {
   title: "Pricing | bando",
   description:
-    "Start free. Upgrade to Premium to see exactly which IELTS question types cost you points, with explanations and full mock tests.",
+    "Start free with capped daily practice and weekly mock tests. Upgrade to Premium for unlimited Reading & Listening plus AI Writing feedback.",
 };
 
 const headLink: React.CSSProperties = {

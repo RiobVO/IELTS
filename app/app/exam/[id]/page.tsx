@@ -137,8 +137,11 @@ export default async function ExamPage({
     resume = converted.length > 0 ? { ...existing, mode: "practice" } : null;
   }
   const mode = adminPreview ? "practice" : (existing?.mode ?? modeParam);
-  // Кап — только на создание НОВОГО mock; резюм существующей попытки не расходует
-  // слот и не должен блокироваться (tier-гейт применяется всегда).
+  // Basic caps (2 practice/день + 2 mock/неделю, owner decision 2026-07-17) —
+  // только на создание НОВОГО attempt; резюм существующей попытки (mode=null
+  // ниже) не расходует слот и не должен блокироваться (tier-гейт применяется
+  // всегда). Эта проверка — soft early-check; авторитетная живёт внутри
+  // транзакции startAttempt.
   await enforceAccess(
     user.id,
     userTier,
@@ -181,8 +184,9 @@ export default async function ExamPage({
   // tier < tierRequired молча съел бы свой единственный trial на QA-прогоне.
   const isTrial = !isDraftPreview && !meetsTier(userTier, test.tierRequired);
   // `resume` из батча выше (с mock→practice конверсией admin-preview) — резюм без
-  // повторного SELECT той же строки.
-  const { attemptId } = await startAttempt(user.id, id, mode, isTrial, resume);
+  // повторного SELECT той же строки. userTier — авторитетная Basic-кап проверка
+  // теперь внутри транзакции startAttempt (не только soft-check в enforceAccess).
+  const { attemptId } = await startAttempt(user.id, id, mode, isTrial, resume, userTier);
   // Лимит mock из URL (?min=) — от пресетов ModeStart; clamp против ручных значений
   // (та же валидация, что в /app/reading). В iframe уходит только для mock: раннер
   // синхронизирует внутренний mock-таймер с этим значением (forceRunnerMode).

@@ -42,26 +42,23 @@ function buildCards(speakingEnabled: boolean): PlanCardMeta[] {
       tagline: "Get started for free.",
       cta: "Start free",
       features: [
-        { t: "Unlimited Reading & Listening practice", on: true },
+        { t: "2 practice starts/day + 2 mock starts/week, all Reading & Listening tests", on: true },
         { t: "Per-type breakdown — what you miss", on: true },
         { t: "Answer explanations & evidence", on: true },
         ...(speakingEnabled ? [{ t: "1 free Speaking analysis to try", on: true, hero: true }] : []),
         { t: "League, badges & streaks", on: true },
-        { t: "1 trial full mock test", on: true },
-        { t: "Full 40-question mock tests + band", on: false },
         { t: "AI Writing feedback", on: false },
       ],
     },
     {
       id: "premium",
       name: "Premium",
-      tagline: "Sit full mocks. Know your real band.",
+      tagline: "No caps. Plus AI Writing feedback.",
       popular: true,
       cta: "Upgrade to Premium",
       features: [
-        { t: "Everything in Basic, free", on: true },
-        { t: "Full 40-question mock tests + real band", on: true, hero: true },
-        { t: "Sit it under real exam timing", on: true },
+        { t: "Everything in Basic", on: true },
+        { t: "Unlimited practice & mock starts", on: true, hero: true },
         { t: "Drill any weak type on demand", on: true },
         { t: "AI Writing feedback — Task 1 & 2 (5/day)", on: true, hero: true },
         { t: "Priority new content", on: true },
@@ -85,8 +82,8 @@ function buildCards(speakingEnabled: boolean): PlanCardMeta[] {
 
 const FAQ = [
   { q: "Is this a subscription?", a: "No — each plan is a one-time purchase for the period you pick, with no auto-renew. There's nothing to cancel: your access runs until the end of the paid period, then you're back on the free plan unless you buy again." },
-  { q: "What's the difference between free and paid?", a: "Reading & Listening practice — including the per-type breakdown and full answer explanations — are free, and your first full mock test is free to try, no card. After that you pay for full 40-question mock tests with an official band score, and AI Writing feedback (AI Speaking on Ultra)." },
-  { q: "Premium vs Ultra?", a: "Premium adds full 40-question mock tests with your real band, plus AI Writing feedback (5 checks a day). Ultra adds AI Speaking feedback for Part 2 and raises Writing to 20 checks a day — everything in Premium included." },
+  { q: "What's the difference between free and paid?", a: "Reading & Listening — including full 40-question mock tests with an official band score, the per-type breakdown, and full answer explanations — are free on Basic, capped at 2 practice starts a day and 2 mock starts a week, no card needed. Upgrading removes those caps and adds AI Writing feedback (AI Speaking too on Ultra)." },
+  { q: "Premium vs Ultra?", a: "Premium removes the Basic practice/mock caps and adds AI Writing feedback (5 checks a day). Ultra adds AI Speaking feedback for Part 2 and raises Writing to 20 checks a day — everything in Premium included." },
   { q: "Are the tests like the real IELTS?", a: "Yes — real Cambridge material in a runner that mirrors the computer-delivered exam: same interface, timer, drag-and-drop." },
   { q: "How accurate is the band?", a: "Reading & Listening use the official Cambridge band scale. Writing is scored by AI on the 4 official criteria as a coaching estimate to guide practice — not an official score. AI Speaking on Ultra works the same way." },
   { q: "What payment methods work?", a: "Local cards and payment providers — the exact options appear at checkout once paid plans launch." },
@@ -150,7 +147,7 @@ export default function PricingScreen({
         </span>
         <h1 style={S.h1}>Pick your plan</h1>
         <p style={S.lead}>
-          Practice and review free. Upgrade for full mock exams with your <i style={{ fontFamily: "var(--font-reading)" }}>real</i> band — and AI Writing feedback.
+          Reading &amp; Listening, including full mocks with your <i style={{ fontFamily: "var(--font-reading)" }}>real</i> band, are free on Basic with daily/weekly caps. Upgrade to go unlimited — and unlock AI Writing feedback.
         </p>
       </div>
 
