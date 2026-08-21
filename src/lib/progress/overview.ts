@@ -21,7 +21,10 @@
 /* Общие константы + помощники band-арифметики                                 */
 /* -------------------------------------------------------------------------- */
 
-const BAND_MIN = 4.0; // нижний кламп прогноза (по ТЗ; историю НЕ клампим — она правдива)
+// Нижний кламп прогноза = 1.0 (минимум шкалы IELTS за реально сданный тест; band 0
+// «не пытался сдавать» в данные не попадает — его отсекает запрос попыток в
+// OverviewPanel, `.gt("band_score", 0)`). Историю НЕ клампим — она правдива в любом случае.
+const BAND_MIN = 1.0;
 const BAND_MAX = 9.0;
 const DAY_MS = 86_400_000;
 
@@ -38,7 +41,7 @@ function ceilHalf(x: number): number {
   return Math.ceil(x * 2) / 2;
 }
 
-/** Кламп в [4.0, 9.0] + округление к 0.5 — ТОЛЬКО для выходов прогноза (ТЗ). */
+/** Кламп в [1.0, 9.0] + округление к 0.5 — ТОЛЬКО для выходов прогноза (ТЗ). */
 function clampRoundBand(x: number): number {
   return roundHalf(Math.min(BAND_MAX, Math.max(BAND_MIN, x)));
 }
@@ -196,7 +199,7 @@ export interface ForecastPoint {
 export interface Forecast {
   status: ForecastStatus;
   pointCount: number;
-  /** clamp[4,9] + 0.5-шаг; null при insufficient. */
+  /** clamp[1,9] + 0.5-шаг; null при insufficient. */
   projectedBand: number | null;
   /** доверительный коридор из разброса остатков; null при insufficient. */
   interval: { low: number; high: number } | null;
@@ -408,8 +411,9 @@ export function computeForecast(
   // капа, округлённое ВНУТРЬ к сетке 0.5 (коридор НЕ трогаем — он про неопределённость,
   // ему шире окна можно). При band на сетке 0.5 gainLow ≤ lastActual ≤ gainHigh (инверсии
   // нет); maxGain<0.5 схлопывает окно к lastActual — честно для ультра-короткого горизонта.
-  // Финальный clampRoundBand держит контракт [4,9] (дожатие к lastActual<4 иначе пробило бы
-  // нижний кламп на band-2–3 истории с коротким горизонтом).
+  // Финальный clampRoundBand держит контракт [1,9] — на band-2–3 историях нижний кламп
+  // почти никогда не участвует (пол теперь 1.0, а не 4.0); упереться в него может только
+  // экстремально нисходящая проекция на дальнем горизонте.
   const gainLow = ceilHalf(lastActual - maxGain);
   const gainHigh = floorHalf(lastActual + maxGain);
   // Инверсия окна (gainLow > gainHigh): при off-grid lastActual и maxGain < 0.5 ни одной
