@@ -168,6 +168,7 @@ function assertInvariants(geom: ChartGeom, ctx: string): void {
     finite(forecast.lastY, "forecast.lastY");
     finite(forecast.horizonX, "forecast.horizonX");
     finite(forecast.projY, "forecast.projY");
+    finite(forecast.band, "forecast.band");
   }
   finite(latest.x, "latest.x");
   finite(latest.y, "latest.y");
@@ -186,7 +187,6 @@ function assertInvariants(geom: ChartGeom, ctx: string): void {
   if (!(yMin >= 1 - EPS)) fail(`yMin=${yMin} < 1`);
   if (!(yMax <= 9 + EPS)) fail(`yMax=${yMax} > 9`);
   if (!(yMax - yMin >= 2.5 - EPS)) fail(`окно ${yMax - yMin} < 2.5`);
-  void PH;
 
   // 5. target: линия XOR бейдж (структурно — count ∈ {0,1}, никогда 2).
   const targetCount = (target != null ? 1 : 0) + (targetEdge != null ? 1 : 0);
@@ -201,12 +201,20 @@ function assertInvariants(geom: ChartGeom, ctx: string): void {
     }
   }
 
-  // 6. Прогноз-стаб внутри плота.
+  // 6. Прогноз-стаб внутри плота; clamped/band согласованы с восстановленным
+  // Y-окном — пересчитываем ТОТ ЖЕ yScale(band) независимо от geom, из yMin/yMax
+  // восстановленных в п.4, и сверяем, что кламп сработал ровно тогда, когда сырой
+  // Y вышел за рамку плота (±EPS).
   if (forecast) {
     if (!(forecast.projY >= padT - EPS && forecast.projY <= h - padB + EPS)) fail(`forecast.projY=${forecast.projY} за рамкой`);
     if (forecast.lastX !== latest.x) fail(`forecast.lastX=${forecast.lastX} !== latest.x=${latest.x}`);
     if (forecast.lastY !== latest.y) fail(`forecast.lastY=${forecast.lastY} !== latest.y=${latest.y}`);
     if (forecast.horizonX !== w - padR) fail(`forecast.horizonX=${forecast.horizonX} !== w-padR=${w - padR}`);
+    const rawProjY = padT + (1 - (forecast.band - yMin) / (yMax - yMin)) * PH;
+    const expectedClamped = rawProjY < padT - EPS || rawProjY > h - padB + EPS;
+    if (forecast.clamped !== expectedClamped) {
+      fail(`forecast.clamped=${forecast.clamped}, ожидалось ${expectedClamped} (rawProjY=${rawProjY}, band=${forecast.band})`);
+    }
   }
 
   // 7. xTicks: длина, дедуп подряд-повторов, равномерный шаг, края у padL/(w-padR).
@@ -430,6 +438,18 @@ describe("Фикстура 7: target внутри окна", () => {
       expect(geom.target).not.toBeNull();
       expect(geom.targetEdge).toBeNull();
     });
+
+    // Данные 4.5–6.0 → окно ровно [4.0, 6.5] (span 2.5, минимум не растягивает).
+    // projectedBand=5.75 лежит строго внутри — кламп не должен сработать, никакого
+    // бейджа-стрелки рядом с target-линией.
+    it(`target в окне + forecast в окне → forecast.clamped=false (${size.w}x${size.h})`, () => {
+      const geom = geomFor(trajectory, { status: "ok", projectedBand: 5.75 }, 5.5, null, size);
+      assertInvariants(geom, `fixture=target-in-window+forecast-on size=${size.w}x${size.h}`);
+      expect(geom.target).not.toBeNull();
+      expect(geom.forecast).not.toBeNull();
+      expect(geom.forecast!.clamped).toBe(false);
+      expect(geom.forecast!.band).toBe(5.75);
+    });
   }
 });
 
@@ -602,18 +622,22 @@ describe("Фикстура 15: forecast-стаб вне Y-окна (упражн
   const belowTrajectory = buildTrajectory(belowAttempts);
 
   for (const size of SIZES) {
-    it(`projectedBand выше окна клампится к верхней кромке (${size.w}x${size.h})`, () => {
+    it(`projectedBand выше окна клампится к верхней кромке, clamped=true, band сохранён (${size.w}x${size.h})`, () => {
       const geom = geomFor(aboveTrajectory, { status: "ok", projectedBand: 4.0 }, null, null, size);
       assertInvariants(geom, `fixture=forecast-above-window size=${size.w}x${size.h}`);
       expect(geom.forecast).not.toBeNull();
       expect(geom.forecast!.projY).toBeCloseTo(geom.padT, 5);
+      expect(geom.forecast!.clamped).toBe(true);
+      expect(geom.forecast!.band).toBe(4.0);
     });
 
-    it(`projectedBand ниже окна клампится к нижней кромке (${size.w}x${size.h})`, () => {
+    it(`projectedBand ниже окна клампится к нижней кромке, clamped=true, band сохранён (${size.w}x${size.h})`, () => {
       const geom = geomFor(belowTrajectory, { status: "ok", projectedBand: 5.0 }, null, null, size);
       assertInvariants(geom, `fixture=forecast-below-window size=${size.w}x${size.h}`);
       expect(geom.forecast).not.toBeNull();
       expect(geom.forecast!.projY).toBeCloseTo(geom.h - geom.padB, 5);
+      expect(geom.forecast!.clamped).toBe(true);
+      expect(geom.forecast!.band).toBe(5.0);
     });
   }
 });
