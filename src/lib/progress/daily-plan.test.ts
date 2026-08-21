@@ -256,6 +256,18 @@ describe("computeDailyPlan — порядок и vocab target/progress", () => {
     expect(item.target).toBe(10);
     expect(item.progress).toBe(3);
   });
+
+  it("vocab.sublabel = «N due today» при dueToday>0", () => {
+    const plan = computeDailyPlan(mkInput({ vocab: { dueToday: 12, reviewedToday: 0, goal: 10 } }));
+    const item = plan.items.find((i) => i.kind === "vocab")!;
+    expect(item.sublabel).toBe("12 due today");
+  });
+
+  it("vocab.sublabel = null при dueToday=0", () => {
+    const plan = computeDailyPlan(mkInput({ vocab: { dueToday: 0, reviewedToday: 0, goal: 10 } }));
+    const item = plan.items.find((i) => i.kind === "vocab")!;
+    expect(item.sublabel).toBeNull();
+  });
 });
 
 describe("computeDailyPlan — пустой вход", () => {

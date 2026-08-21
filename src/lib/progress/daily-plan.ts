@@ -108,12 +108,14 @@ export function computeDailyPlan(input: DailyPlanInput): DailyPlan {
     });
   }
 
-  // Vocabulary всегда в плане — даже пустой вход даёт минимум этот пункт.
+  // Vocabulary всегда в плане — даже пустой вход даёт минимум этот пункт. sublabel —
+  // сколько слов due осталось сегодня (нужно на дашборде рядом с N/M-парой); при
+  // dueToday=0 показывать нечего (пункт уже done через vocab.dueToday === 0 ниже).
   items.push({
     id: "vocab",
     kind: "vocab",
     label: "Review your vocabulary",
-    sublabel: null,
+    sublabel: vocab.dueToday > 0 ? `${vocab.dueToday} due today` : null,
     href: "/app/vocabulary",
     target: vocab.goal,
     progress: vocab.reviewedToday,

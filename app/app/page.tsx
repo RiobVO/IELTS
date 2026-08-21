@@ -823,9 +823,11 @@ function TodayPlanCard({ plan, catalogEmpty }: { plan: DailyPlan; catalogEmpty: 
 }
 
 function TodayPlanRow({ item }: { item: DailyPlanItem }) {
-  // sublabel сейчас всегда null (ядро его не заполняет) — прогресс-пару
-  // (target/progress) несут vocab/drill/mock; остальные пункты — только label.
-  const sub = item.target != null ? `${item.progress ?? 0}/${item.target}` : item.sublabel;
+  // Пара N/M (target/progress — drill/mock/vocab-норма) и sublabel (напр. vocab
+  // "K due today") — независимые сигналы, оба показываем через " · ", если есть;
+  // при одном из них — только оно; без обоих — строки нет.
+  const pair = item.target != null ? `${item.progress ?? 0}/${item.target}` : null;
+  const sub = pair && item.sublabel ? `${pair} · ${item.sublabel}` : pair ?? item.sublabel;
   return (
     <Link
       className="dash-today-row"
