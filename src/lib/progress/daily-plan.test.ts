@@ -14,8 +14,8 @@ function mkInput(overrides: Partial<DailyPlanInput> = {}): DailyPlanInput {
     secondDrill: null,
     mistakes: { due: 0, reviewedToday: 0 },
     vocab: { dueToday: 5, reviewedToday: 0, goal: 10 },
-    drillDoneToday: false,
-    mockDoneThisWeek: false,
+    drillsToday: 0,
+    mocksThisWeek: 0,
     hasAttempts: true,
     catalog: { hasPublishedTests: true, fullMockCategory: "full_reading" as const },
     ...overrides,
@@ -157,13 +157,43 @@ describe("computeDailyPlan — done-правила и allDone", () => {
         daysUntilExam: 20,
         mistakes: { due: 0, reviewedToday: 3 },
         vocab: { dueToday: 0, reviewedToday: 0, goal: 10 },
-        drillDoneToday: true,
-        mockDoneThisWeek: true,
+        drillsToday: 2,
+        mocksThisWeek: 2,
       }),
     );
     expect(plan.allDone).toBe(true);
     expect(plan.doneCount).toBe(plan.totalCount);
     expect(plan.totalCount).toBe(4);
+  });
+
+  it("drill: 1/2 за день не done, 2/2 done; target/progress несут норму", () => {
+    const one = computeDailyPlan(mkInput({ drillsToday: 1 })).items.find((i) => i.kind === "drill")!;
+    expect(one.done).toBe(false);
+    expect(one.target).toBe(2);
+    expect(one.progress).toBe(1);
+    const two = computeDailyPlan(mkInput({ drillsToday: 2 })).items.find((i) => i.kind === "drill")!;
+    expect(two.done).toBe(true);
+  });
+
+  it("mock: 1/2 за неделю не done, 2/2 done; target/progress несут норму", () => {
+    const one = computeDailyPlan(mkInput({ daysUntilExam: 20, mocksThisWeek: 1 })).items.find(
+      (i) => i.kind === "mock",
+    )!;
+    expect(one.done).toBe(false);
+    expect(one.target).toBe(2);
+    expect(one.progress).toBe(1);
+    const two = computeDailyPlan(mkInput({ daysUntilExam: 20, mocksThisWeek: 2 })).items.find(
+      (i) => i.kind === "mock",
+    )!;
+    expect(two.done).toBe(true);
+  });
+
+  it("drill2 done синхронно с drill (общий дневной счётчик), без своей target-пары", () => {
+    const plan = computeDailyPlan(mkInput({ daysUntilExam: 5, secondDrill: weak2, drillsToday: 2 }));
+    const drill2 = plan.items.find((i) => i.kind === "drill2")!;
+    expect(drill2.done).toBe(true);
+    expect(drill2.target).toBeNull();
+    expect(drill2.progress).toBeNull();
   });
 
   it("due=0 + hasAttempts → «Review your mistakes» без числа, done=true", () => {
@@ -205,8 +235,8 @@ describe("computeDailyPlan — порядок и vocab target/progress", () => {
         daysUntilExam: 5,
         secondDrill: weak2,
         mistakes: { due: 0, reviewedToday: 0 }, // done
-        drillDoneToday: false, // не done
-        mockDoneThisWeek: true, // done
+        drillsToday: 0, // не done
+        mocksThisWeek: 2, // done
       }),
     );
     expect(kinds(plan)).toEqual(["mistakes", "vocab", "drill", "drill2", "mock"]);
