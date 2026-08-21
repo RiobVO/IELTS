@@ -166,31 +166,39 @@ describe("computeDailyPlan — done-правила и allDone", () => {
     expect(plan.totalCount).toBe(4);
   });
 
-  it("drill: 1/2 за день не done, 2/2 done; target/progress несут норму", () => {
-    const one = computeDailyPlan(mkInput({ drillsToday: 1 })).items.find((i) => i.kind === "drill")!;
-    expect(one.done).toBe(false);
-    expect(one.target).toBe(2);
-    expect(one.progress).toBe(1);
-    const two = computeDailyPlan(mkInput({ drillsToday: 2 })).items.find((i) => i.kind === "drill")!;
-    expect(two.done).toBe(true);
+  it("drill: границы нормы 2/день — 0/1 не done, 2/3 done; target=2, progress=drillsToday (не клампится)", () => {
+    for (const [drillsToday, done] of [[0, false], [1, false], [2, true], [3, true]] as const) {
+      const item = computeDailyPlan(mkInput({ drillsToday })).items.find((i) => i.kind === "drill")!;
+      expect(item.done).toBe(done);
+      expect(item.target).toBe(2);
+      expect(item.progress).toBe(drillsToday);
+    }
   });
 
-  it("mock: 1/2 за неделю не done, 2/2 done; target/progress несут норму", () => {
-    const one = computeDailyPlan(mkInput({ daysUntilExam: 20, mocksThisWeek: 1 })).items.find(
-      (i) => i.kind === "mock",
-    )!;
-    expect(one.done).toBe(false);
-    expect(one.target).toBe(2);
-    expect(one.progress).toBe(1);
-    const two = computeDailyPlan(mkInput({ daysUntilExam: 20, mocksThisWeek: 2 })).items.find(
-      (i) => i.kind === "mock",
-    )!;
-    expect(two.done).toBe(true);
+  it("mock: границы нормы 2/неделю — 0/1 не done, 2/3 done; target=2, progress=mocksThisWeek (не клампится)", () => {
+    for (const [mocksThisWeek, done] of [[0, false], [1, false], [2, true], [3, true]] as const) {
+      const item = computeDailyPlan(mkInput({ daysUntilExam: 20, mocksThisWeek })).items.find(
+        (i) => i.kind === "mock",
+      )!;
+      expect(item.done).toBe(done);
+      expect(item.target).toBe(2);
+      expect(item.progress).toBe(mocksThisWeek);
+    }
   });
 
-  it("drill2 done синхронно с drill (общий дневной счётчик), без своей target-пары", () => {
-    const plan = computeDailyPlan(mkInput({ daysUntilExam: 5, secondDrill: weak2, drillsToday: 2 }));
-    const drill2 = plan.items.find((i) => i.kind === "drill2")!;
+  it("mock: лейбл несёт норму — «Take 2 full mocks this week»", () => {
+    const item = computeDailyPlan(mkInput({ daysUntilExam: 20 })).items.find((i) => i.kind === "mock")!;
+    expect(item.label).toBe("Take 2 full mocks this week");
+  });
+
+  it("drill2: без своей target-пары, done делит общий дневной счётчик с drill — 1/2 оба не done, 2/2 оба done", () => {
+    const notDone = computeDailyPlan(mkInput({ daysUntilExam: 5, secondDrill: weak2, drillsToday: 1 }));
+    expect(notDone.items.find((i) => i.kind === "drill")!.done).toBe(false);
+    expect(notDone.items.find((i) => i.kind === "drill2")!.done).toBe(false);
+
+    const done = computeDailyPlan(mkInput({ daysUntilExam: 5, secondDrill: weak2, drillsToday: 2 }));
+    expect(done.items.find((i) => i.kind === "drill")!.done).toBe(true);
+    const drill2 = done.items.find((i) => i.kind === "drill2")!;
     expect(drill2.done).toBe(true);
     expect(drill2.target).toBeNull();
     expect(drill2.progress).toBeNull();
