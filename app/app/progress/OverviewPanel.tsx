@@ -236,6 +236,11 @@ function TrajectoryHero({
 /* Forecast card                                                              */
 /* -------------------------------------------------------------------------- */
 
+// Порог презентации, НЕ математики: интервал шире 3 банд на короткой истории
+// («1.0–9.0») читается не как диапазон, а как «модель не знает» — числа только
+// пугают. Ядро прогноза (overview.ts) не трогаем, это чисто про то, что рисуем.
+const WIDE_INTERVAL_BANDS = 3;
+
 function ForecastCard({ forecast }: { forecast: Forecast }) {
   if (forecast.status === "insufficient") {
     // Не «замок», а трек прогресса к прогнозу: показываем сколько моков уже
@@ -299,18 +304,27 @@ function ForecastCard({ forecast }: { forecast: Forecast }) {
         </span>
         <span style={S.forecastUnit}>projected band</span>
       </div>
-      {forecast.interval && (
-        <p style={S.forecastRange}>
-          {forecast.interval.low.toFixed(1)}–{forecast.interval.high.toFixed(1)} likely by{" "}
-          {forecast.horizonDate ? fmtDate(Date.parse(`${forecast.horizonDate}T00:00:00Z`)) : "then"}
-        </p>
-      )}
-      {forecast.interval && (
-        // Объясняем, ЧТО такое диапазон и на чём он построен — не-native аудитории
-        // «likely range» не самоочевиден; заодно закрывает methodology-пробел.
-        <p style={S.forecastBasis}>
-          The range you&apos;re 80% likely to land in, from your last {forecast.pointCount} {forecast.pointCount === 1 ? "mock" : "mocks"} — it narrows as you sit more.
-        </p>
+      {forecast.interval && forecast.interval.high - forecast.interval.low > WIDE_INTERVAL_BANDS ? (
+        // На короткой истории интервал может растянуться почти на всю шкалу —
+        // «1.0–9.0» не несёт информации и только пугает. Вместо чисел — честное
+        // «рано считать», тот же приглушённый тон, что forecastBasis/lowConf.
+        <p style={S.forecastBasis}>Too early to call a likely range — it narrows with every mock you sit.</p>
+      ) : (
+        forecast.interval && (
+          <>
+            <p style={S.forecastRange}>
+              {forecast.interval.low.toFixed(1)}–{forecast.interval.high.toFixed(1)} likely by{" "}
+              {forecast.horizonDate ? fmtDate(Date.parse(`${forecast.horizonDate}T00:00:00Z`)) : "then"}
+            </p>
+            {/* Объясняем, ЧТО такое диапазон и на чём он построен — не-native
+                аудитории «likely range» не самоочевиден; заодно закрывает
+                methodology-пробел. */}
+            <p style={S.forecastBasis}>
+              The range you&apos;re 80% likely to land in, from your last {forecast.pointCount}{" "}
+              {forecast.pointCount === 1 ? "mock" : "mocks"} — it narrows as you sit more.
+            </p>
+          </>
+        )
       )}
       {forecast.slopePerWeek != null && forecast.slopePerWeek > 0 && (
         <p style={S.forecastPace}>Improving ~{forecast.slopePerWeek.toFixed(2)} band per week lately</p>
@@ -499,6 +513,9 @@ const OV_CSS = `
    тонкой рамкой; нет продового warn-border токена, поэтому рамка смешана из
    --warn-text и поверхности. */
 .ov-lbl-target-edge{background:var(--surface);border:1px solid color-mix(in oklab, var(--warn-text) 35%, var(--surface));color:var(--warn-text);font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;padding:2px 8px;border-radius:var(--radius-full)}
+/* Тот же приём для прогноз-стаба, клампнутого к кромке (forecast.clamped) — brand-
+   тон вместо warn-тона target-бейджа: разные сигналы, одна форма подачи. */
+.ov-lbl-fc-edge{background:var(--surface);border:1px solid color-mix(in oklab, var(--brand) 35%, var(--surface));color:var(--brand-active);font-family:var(--font-mono);font-size:var(--text-2xs);font-weight:700;padding:2px 8px;border-radius:var(--radius-full)}
 .ov-lbl-exam{color:var(--brand-active);font-weight:700}
 /* Текущий балл — не бледная цифра у линии, а brand-пилюля слева от последней точки:
    белым по фиолетовому это самый читаемый и главный числовой акцент графика. */

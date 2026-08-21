@@ -51,7 +51,10 @@ export interface TrajectoryChartProps {
   /** Цель ВНЕ окна обзора Y — бейдж у кромки плота вместо кламп-линии (см. коммент у SVG-линии target). */
   targetEdge: { band: number; above: boolean } | null;
   exam: { x: number; rightEdge: boolean } | null;
-  forecast: { lastX: number; lastY: number; horizonX: number; projY: number } | null;
+  /** clamped — projY прижат к кромке плота, потому что projectedBand лежит вне
+   *  Y-окна обзора; band — сырой прогноз-балл (на сетке 0.5), для честного бейджа
+   *  у конца стаба вместо тихого клампа к кромке (см. targetEdge выше по духу). */
+  forecast: { lastX: number; lastY: number; horizonX: number; projY: number; clamped: boolean; band: number } | null;
   /** Засечки/подписи оси X — равномерно по домену (4 на десктопе, 3 в портрете).
    *  tMs — сырой t засечки (см. mounted-гейт ниже: до маунта используется готовый
    *  SSR label в UTC, после — tMs переформатируется в TZ браузера). */
@@ -222,17 +225,33 @@ export function TrajectoryChart({
   const tipBelow = pointYPct < 26;
   const tipTx = tipEdge === "left" ? "16px" : tipEdge === "right" ? "calc(-100% + 16px)" : "-50%";
   const tipTy = tipBelow ? "16px" : "calc(-100% - 14px)";
-  // Тогл имеет смысл только когда нарисованы ОБЕ секционные линии: иначе он гасил бы
-  // единственную линию. Секции, чьи точки на графике есть, но линии нет, всё равно
-  // получают ключ — иначе форма маркера (○/◇) остаётся необъяснённой.
-  const hasSplit = !!reading && !!listening;
+  // Тогл имеет смысл на СЕКЦИЮ, у которой есть собственная линия (reading/listening
+  // non-null, ≥2 точек этой секции) — гасить нечего, если линии нет. Раньше тогл
+  // требовал ОБЕ секции разом (hasSplit): при единственной секции combined совпадал
+  // с ней ровно, и тогл выключил бы единственную линию графика. Теперь сквозная
+  // Combined-линия есть всегда при ≥2 моках, гасить одиночный секционный пунктир
+  // безопасно. Секции без линии всё равно получают статичный ключ — иначе форма
+  // маркера (○/◇) остаётся необъяснённой.
   const sectionsPresent = (["reading", "listening"] as const).filter((s) =>
     combined.some((p) => p.section === s),
   );
+  const hasAnyButton = sectionsPresent.some((s) => (s === "reading" ? reading : listening) != null);
 
   // Ключ «Target N» в легенде — короткий золотой свотч, когда цель нарисована (линией
   // внутри окна) ИЛИ бейджем у кромки (вне окна): обе формы — про одну и ту же цель.
   const targetLegendBand = target ? target.band : targetEdge ? targetEdge.band : null;
+
+  // Бейдж прогноз-стаба, клампнутого к кромке (forecast.clamped из chart-geometry.ts):
+  // честная стрелка+число вместо тихого клампа, который на растущих аккаунтах читался
+  // как «уже у цели». Направление — по тому, к какой кромке прижат projY (кламп
+  // Math.min/Math.max в геометрии даёт ровно padT или h-padB, без промежуточных
+  // значений). Анти-коллизия: target-бейдж у ТОЙ ЖЕ кромки (targetEdge.above совпадает
+  // с направлением клампа) — сдвигаем прогноз-бейдж на ~22px глубже в плот, иначе
+  // «Target 8.5 ↑» и «↗ 4.5» ложатся друг на друга у потолка.
+  const fcClampedTop = forecast?.clamped ? forecast.projY === padT : null;
+  const fcEdgeCollision = fcClampedTop != null && !!targetEdge && targetEdge.above === fcClampedTop;
+  const fcEdgeOffset = 6 + (fcEdgeCollision ? 22 : 0);
+  const fcEdgeTop = fcClampedTop == null ? 0 : fcClampedTop ? padT + fcEdgeOffset : h - padB - fcEdgeOffset;
 
   // Пилюля текущего балла: НАД точкой `latest` (последний мок), с отступом от боковых
   // краёв. Точка НЕ обязательно справа-сверху — когда все моки свежие, а ось тянется
@@ -249,7 +268,6 @@ export function TrajectoryChart({
         ref={svgRef}
         viewBox={`0 0 ${w} ${h}`}
         width="100%"
-        height="auto"
         role="img"
         tabIndex={0}
         aria-label={`Band trajectory across ${combined.length} full ${combined.length === 1 ? "mock" : "mocks"}. Latest mock band ${latest.band.toFixed(1)}. Every mock is listed in the table after this chart.`}
@@ -423,6 +441,21 @@ export function TrajectoryChart({
             Target {targetEdge.band} {targetEdge.above ? "↑" : "↓"}
           </span>
         )}
+        {forecast?.clamped && (
+          // Прогноз-стаб клампнут к кромке (см. коммент у fcClampedTop выше) — бейдж
+          // говорит настоящий band вместо того, чтобы линия молча утыкалась в кромку и
+          // читалась как «прогноз уже здесь».
+          <span
+            className="ov-lbl ov-lbl-fc-edge"
+            style={{
+              left: `${((w - padR) / w) * 100}%`,
+              top: `${(fcEdgeTop / h) * 100}%`,
+              transform: fcClampedTop ? "translate(-100%, 0)" : "translate(-100%, -100%)",
+            }}
+          >
+            {fcClampedTop ? "↗" : "↘"} {forecast.band.toFixed(1)}
+          </span>
+        )}
         {exam && (
           <span
             className="ov-lbl ov-lbl-exam"
@@ -525,9 +558,10 @@ export function TrajectoryChart({
       </table>
 
       {/* Легенда — сиблинг .ov-chart, не внутри, иначе % оверлея подписей считались
-          бы от более высокого контейнера. Тогл R/L показываем ТОЛЬКО когда есть обе
-          секции: при single-section combined совпадает со сплит-линией, гасить нечего,
-          а note не должна называть несуществующую серию.
+          бы от более высокого контейнера. Тогл на КАЖДУЮ секцию с собственной линией
+          (reading/listening non-null) — секция без линии (<2 точек, только маркер)
+          остаётся статичным ключом: гасить нечего, а note не должна называть
+          несуществующую серию.
 
           Combined — КЛЮЧ легенды (bare-текст), R/L — bordered pill-кнопки. Раньше все
           трое несли общий `.ov-leg-item` и стояли в один ряд: три одинаковых на вид
@@ -539,24 +573,27 @@ export function TrajectoryChart({
             <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--brand)" }} /> Combined
           </span>
         )}
-        {hasSplit ? (
-          <>
-            {line && <span className="ov-leg-div" aria-hidden="true" />}
-            <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("reading")} aria-label={hidden.has("reading") ? "Show Reading line" : "Hide Reading line"} onClick={() => toggle("reading")}>
-              <span className="ov-leg-swatch ov-leg-circle" style={{ background: SECTION_COLOR.reading }} /> Reading
+        {hasAnyButton && <span className="ov-leg-div" aria-hidden="true" />}
+        {sectionsPresent.map((s) => {
+          const sLine = s === "reading" ? reading : listening;
+          const swatch = <span className={`ov-leg-swatch ov-leg-${s === "reading" ? "circle" : "diamond"}`} style={{ background: SECTION_COLOR[s] }} />;
+          return sLine ? (
+            <button
+              key={s}
+              type="button"
+              className="ov-leg-item ov-leg-btn"
+              aria-pressed={!hidden.has(s)}
+              aria-label={hidden.has(s) ? `Show ${SECTION_LABEL[s]} line` : `Hide ${SECTION_LABEL[s]} line`}
+              onClick={() => toggle(s)}
+            >
+              {swatch} {SECTION_LABEL[s]}
             </button>
-            <button type="button" className="ov-leg-item ov-leg-btn" aria-pressed={!hidden.has("listening")} aria-label={hidden.has("listening") ? "Show Listening line" : "Hide Listening line"} onClick={() => toggle("listening")}>
-              <span className="ov-leg-swatch ov-leg-diamond" style={{ background: SECTION_COLOR.listening }} /> Listening
-            </button>
-          </>
-        ) : (
-          sectionsPresent.map((s) => (
+          ) : (
             <span key={s} className="ov-leg-key">
-              <span className={`ov-leg-swatch ov-leg-${s === "reading" ? "circle" : "diamond"}`} style={{ background: SECTION_COLOR[s] }} />{" "}
-              {SECTION_LABEL[s]}
+              {swatch} {SECTION_LABEL[s]}
             </span>
-          ))
-        )}
+          );
+        })}
         {targetLegendBand != null && (
           <span className="ov-leg-key">
             <span className="ov-leg-swatch ov-leg-line" style={{ background: "var(--warn-text)" }} /> Target {targetLegendBand}
@@ -565,16 +602,18 @@ export function TrajectoryChart({
       </div>
       {line && (
         // Вторая фраза строится из фактически нарисованных линий (reading/listening
-        // пропсы), не из предположения «всегда обе»: при одной секции или когда у
-        // секции <2 точек линии нет, note раньше всё равно называл обе.
+        // пропсы), не из предположения «всегда обе» — при одной секции или когда у
+        // секции <2 точек линии нет, note не называет несуществующую. Tap-подсказка
+        // теперь звучит и на одну секцию: тогл доступен на любую секцию со своей
+        // линией, не только когда нарисованы обе.
         <p className="ov-legend-note">
           Combined is your band across every full mock, in order.
           {reading && listening
             ? " Reading and Listening show each section's own trend; tap or click one to hide its line."
             : reading
-              ? " Reading also shows the section's own trend."
+              ? " Reading also shows the section's own trend; tap or click it to hide its line."
               : listening
-                ? " Listening also shows the section's own trend."
+                ? " Listening also shows the section's own trend; tap or click it to hide its line."
                 : ""}
           {" Practice runs are training, not a measurement — only mock sittings plot here and feed the forecast."}
         </p>
