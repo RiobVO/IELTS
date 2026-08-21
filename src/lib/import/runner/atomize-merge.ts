@@ -12,10 +12,27 @@ export interface MergeResult {
 /**
  * Прищепляет атомизацию (реальный текст пассажей + prompt/options) из parseTest к
  * базовому ParsedTest из parseRunner. Runner остаётся source of truth для answer_key
- * (грейдинг-путь) и для meta уровня content_item (number, category, duration,
- * bandScale, tierRequired) — это НИКОГДА не берётся из atom, для обеих секций.
- * Исключение — questionTypes: для listening пересчитывается из итоговых qtype
- * (после promotion, см. ниже), для reading остаётся runner как есть.
+ * (грейдинг-путь) и для meta уровня content_item (number, duration, tierRequired) —
+ * это НИКОГДА не берётся из atom, для обеих секций.
+ *
+ * Исключение — category/bandScale, и ТОЛЬКО для listening (review 2026-07-17,
+ * BRIEF §4.8): runner-парсер listening (parse-runner.ts) не видит реальные
+ * .part[data-part] границы вообще — он лишь угадывает full/не-full по числу
+ * вопросов/наличию band(), и ЛЮБОЙ не-full импорт хардкодит как part_1, вне
+ * зависимости от того, какая часть в файле на самом деле. Atom (parse-listening.ts)
+ * читает настоящую разметку частей, а строгий гейт по номерам вопросов ниже уже
+ * ДОКАЗАЛ, что atom распарсил ТОТ ЖЕ набор вопросов из этой самой разметки —
+ * это и есть основание доверять его category/bandScale больше, чем runner-догадке.
+ * Без этого проброса detectListeningCategory (parse-listening.ts) вообще не
+ * доходил до persist — единственный реальный листенинг-импорт путь (Telegram/
+ * admin, importRunner) молча оставался на старой runner-эвристике.
+ * Reading category остаётся runner (см. тест "meta уровня content_item — из
+ * runner, НЕ из atom" ниже) — успешная атомизация вопросов reading не доказывает
+ * ничего про НЕСВЯЗАННЫЙ rubric-текст, на который опирается atom's passage_N/
+ * full_reading детекция, так что то же доверие сюда не переносится.
+ *
+ * Ещё одно исключение — questionTypes: для listening пересчитывается из итоговых
+ * qtype (после promotion, см. ниже), для reading остаётся runner как есть.
  *
  * audioPath пассажей — ТОЛЬКО от runner: atom-пассажи parse-listening несут исходный
  * внешний <audio src> (хотлинк), который не должен утечь в persist; Storage-URL
@@ -126,5 +143,13 @@ export function mergeAtomization(runner: ParsedTest, atom: ParsedTest): MergeRes
     ? [...new Set(questions.map((q) => q.qtype))]
     : runner.questionTypes;
 
-  return { parsed: { ...runner, passages, questions, questionTypes }, atomized: true };
+  // Listening only — see the doc-comment above for why: atom's part-count
+  // detection is trustworthy here specifically because the question-set gate
+  // above already proved it read the same real markup runner can't see.
+  const listeningMeta = isListening ? { category: atom.category, bandScale: atom.bandScale } : {};
+
+  return {
+    parsed: { ...runner, passages, questions, questionTypes, ...listeningMeta },
+    atomized: true,
+  };
 }

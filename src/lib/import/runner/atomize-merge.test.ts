@@ -291,6 +291,79 @@ describe("mergeAtomization", () => {
     expect(m.answer).toEqual({ mode: "exact", accept: ["D"], explanation: null, evidence: null });
   });
 
+  it("listening: category/bandScale берутся из atom, а НЕ из runner (review 2026-07-17, BRIEF §4.8)", () => {
+    // Runner-эвристика (parse-runner.ts) не видит .part[data-part] и хардкодит
+    // part_1 для любого не-full импорта — здесь файл на самом деле Part 3.
+    const runner = base({
+      section: "listening",
+      category: "part_1",
+      bandScale: null,
+      passages: [passage(1)],
+      questions: [q(1)],
+    });
+    const atom = base({
+      section: "listening",
+      category: "part_3", // atom видел реальную разметку .part[data-part="3"]
+      bandScale: null,
+      passages: [passage(1, { bodyHtml: "Part 3" })],
+      questions: [q(1, { promptHtml: "P" })],
+    });
+
+    const res = mergeAtomization(runner, atom);
+
+    expect(res.atomized).toBe(true);
+    expect(res.parsed.category).toBe("part_3");
+  });
+
+  it("listening full: bandScale тоже берётся из atom (runner видел иначе/не увидел вовсе)", () => {
+    const runner = base({
+      section: "listening",
+      category: "full_listening",
+      bandScale: null, // runner не нашёл band() в этом прогоне
+      passages: [passage(1)],
+      questions: [q(1)],
+    });
+    const atom = base({
+      section: "listening",
+      category: "full_listening",
+      bandScale: { "0": 5, "40": 9 },
+      passages: [passage(1, { bodyHtml: "Part 1" })],
+      questions: [q(1, { promptHtml: "P" })],
+    });
+
+    const res = mergeAtomization(runner, atom);
+
+    expect(res.atomized).toBe(true);
+    expect(res.parsed.category).toBe("full_listening");
+    expect(res.parsed.bandScale).toEqual({ "0": 5, "40": 9 });
+  });
+
+  it("reading: category/bandScale ОСТАЮТСЯ из runner, даже когда атомизация успешна (регресс — не обобщать listening-фикс на reading)", () => {
+    // Reading's atom-category приходит из rubric-текста, НЕ связанного с DOM
+    // вопросов — успешная атомизация вопросов её не подтверждает так, как для
+    // listening (там atom.category читает ТУ ЖЕ разметку .part, что и вопросы).
+    const runner = base({
+      section: "reading",
+      category: "passage_1",
+      bandScale: null,
+      passages: [passage(1)],
+      questions: [q(1)],
+    });
+    const atom = base({
+      section: "reading",
+      category: "full_reading", // должно быть проигнорировано
+      bandScale: { "0": 4, "40": 9 }, // тоже проигнорировано
+      passages: [passage(1, { bodyHtml: "<p>Real text</p>" })],
+      questions: [q(1, { promptHtml: "P" })],
+    });
+
+    const res = mergeAtomization(runner, atom);
+
+    expect(res.atomized).toBe(true);
+    expect(res.parsed.category).toBe("passage_1");
+    expect(res.parsed.bandScale).toBeNull();
+  });
+
   it("listening: qtype-расхождение НЕ choose-TWO (runner map_labelling, atom mcq_single) → qtype остаётся runner, groupKey всё равно из atom", () => {
     const runner = base({
       section: "listening",

@@ -291,3 +291,19 @@ describe.skipIf(!fullTemplate)("real sample — Full Test Template (40Q / 3 pass
     );
   });
 });
+
+// Роутинг-регресс (review 2026-07-17): isListening() расширили с `.part[data-part]`
+// на bare `.part`, чтобы malformed listening-файлы тоже доходили до parse-listening
+// (см. parse-listening.test.ts). Full Reading использует `.passage-section`/
+// `.questions-section` — другие CSS-классы, не литеральный `.part` — так что
+// расширение его не задевает; adversarial-вариант (+ случайный <audio>) доказывает
+// это явно, а не полагается на отсутствие <audio> в фикстуре как на случайность.
+describe("isListening routing regression — full reading остаётся reading", () => {
+  it("adversarial: FULL_HTML + случайный <audio> без .part — остаётся full_reading, не listening", () => {
+    const html = FULL_HTML.replace("<body>", '<body><audio src="unrelated.mp3"></audio>');
+    const t = parseTest(html);
+    expect(t.section).toBe("reading");
+    expect(t.category).toBe("full_reading");
+    expect(t.passages).toHaveLength(2);
+  });
+});
