@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef, type CSSProperties } from "react";
+import { useState, useTransition, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/core/icons";
 import { Badge } from "@/components/core/Badge";
 import { Button } from "@/components/core/Button";
-import { CountUp } from "@/components/core/CountUp";
 import { QuestionFilter } from "@/components/exam/QuestionFilter";
 import { CatalogNotice } from "@/components/app/CatalogNotice";
 import { Input } from "@/components/core/Input";
@@ -252,6 +251,13 @@ export function PracticeCatalog({
     setSkill((s) => (s === k ? null : k));
     if (k === "reading" || k === "listening") revealCatalog();
   };
+  // Goal module's "Drill" CTA — unlike selectSkill's toggle (used by the skill-
+  // card grid below), this must be idempotent: clicking "Drill" while already
+  // filtered to that skill should confirm/scroll, never remove the filter.
+  const drillTo = (k: "reading" | "listening") => {
+    setSkill(k);
+    revealCatalog();
+  };
   const clearSkill = () => setSkill(null);
   const drill = () => {
     if (!drillWeakest) return;
@@ -320,7 +326,7 @@ export function PracticeCatalog({
           </div>
           <h1 className="pc-h1" style={S.h1}>Pick what to drill.</h1>
           <p style={S.sub}>Browse every Reading and Listening test, or filter straight to the question type you want to fix.</p>
-          <GoalModule target={targetBand} best={bestBand} reading={readingProgress} listening={listeningProgress} vocab={vocabProgress} />
+          <GoalModule target={targetBand} best={bestBand} reading={readingProgress} listening={listeningProgress} vocab={vocabProgress} onDrill={drillTo} />
         </div>
         <div className="pc-herocol">
           <HeroCard hero={hero} />
@@ -547,31 +553,33 @@ export function PracticeCatalog({
   );
 }
 
-/* ── Goal module (dark aurora card: target selector + Reading/Listening
-   diamonds + Vocabulary neon tube) ─────────────────────────────────────────
-   Merges the old separate Target pill and "Your progress" card into one bold
-   module — the owner's final call after two lighter iterations read as
-   "dated 2000s" on a live walkthrough. Visual language: resume-card's radius/
-   3D shadow (S.hero — same depth, so the left/right hero columns pair up) +
-   a dark aurora background in the dashboard's hero recipe (app/app/page.tsx
-   .hero-aurora / heroAurora keyframe — same gradient tokens, reimplemented
-   locally as pure CSS so no pointer/tilt JS is pulled in, matching "аврора —
-   CSS-градиенты/blur, без JS"). Target selector keeps GoalBar's exact state
-   machine (optimistic set → setTargetBand → Saved/Error aria-live), just
-   restyled: the <select> itself IS the giant band number now (appearance:
-   none, huge font) instead of a small mono pill. */
+/* ── Goal module (light card: target pill + gap ring + status rows) ───────
+   Owner's final call after a dark aurora-glass round read "too purple, not
+   warm/friendly" — back to the page's normal light surface tokens; violet is
+   an ACCENT only (ring fill, CTA, chip), matching a mock-up: ring + an
+   encouraging headline + three soft status rows, one carrying a CTA where
+   work remains. Target selector keeps the exact state machine every earlier
+   round built up (optimistic set → serialized async transition →
+   setTargetBand → Saved/Error aria-live) — only the chrome changes, pill-
+   sized now instead of a giant number (that role moved to the ring's center
+   digit). */
 function GoalModule({
   target,
   best,
   reading,
   listening,
   vocab,
+  onDrill,
 }: {
   target: number | null;
   best: number | null;
   reading: SectionProgress;
   listening: SectionProgress;
   vocab: VocabProgressStat;
+  /** Reading/Listening row CTA — PracticeCatalog's drillTo: filters to the
+   *  skill (idempotent, unlike the skill-card grid's toggle) + reveals the
+   *  test list below. */
+  onDrill: (section: "reading" | "listening") => void;
 }) {
   const [value, setValue] = useState(target);
   const [pending, startTransition] = useTransition();
@@ -621,7 +629,7 @@ function GoalModule({
     });
   };
 
-  // Saved/Error замещают gap-текст транзиентно — не плодим лишний элемент.
+  // Saved/Error замещают "N% to go" транзиентно — не плодим лишний элемент.
   const tail = error ? (
     <span style={S.pgError}>Couldn&apos;t save — try again</span>
   ) : saved ? (
@@ -630,58 +638,147 @@ function GoalModule({
     </span>
   ) : null;
 
-  // Target unset (onboarding normally guarantees it) — the ROWS below still
-  // carry real progress regardless, so only the target zone itself is skipped
-  // (the old GoalBar bailed its whole render on this edge; merged into one
-  // module that would've silently dropped the rows too — narrower guard here).
+  // Target unset (onboarding normally guarantees it) — the pill/select needs a
+  // real value so it's skipped, but the ring/headline fall back to the same
+  // 7.0 default SkillBand already uses elsewhere on this page for the same
+  // edge (targetBand ?? 7), so the hero zone never looks broken/empty.
   const targetValue = value;
+  const ringTarget = targetValue ?? 7;
+  const reached = best != null && best >= ringTarget;
+  const pctToGo =
+    targetValue != null && best != null && best < targetValue
+      ? Math.round((1 - best / targetValue) * 100)
+      : null;
+
+  let headline: string;
+  let subcopy: string | null;
+  if (best == null) {
+    headline = "Sit a full mock to get your band";
+    subcopy = null;
+  } else if (reached) {
+    headline = "Target reached ✓";
+    subcopy = "Keep it warm.";
+  } else {
+    headline = `You're at ${best.toFixed(1)}!`;
+    // Neutral encouragement only — the actual forecast lives on /app/progress,
+    // this card doesn't promise a timeline.
+    subcopy = "Every mock and drill closes the gap.";
+  }
 
   return (
     <div className="pg-card" style={S.pgCard}>
-      <span className="pg-aurora" aria-hidden="true" />
-      <div className="pg-inner">
+      <div className="pg-head">
         {targetValue != null && (
+          <span className="pg-goalpill" style={S.pgGoalPill}>
+            <span style={S.pgGoalPillLab}>Goal · Band</span>
+            <span style={S.pgSelectWrap} className="pg-selectwrap">
+              <select
+                aria-label="Target band"
+                className="pg-select"
+                value={targetValue.toFixed(1)}
+                onChange={change}
+                aria-busy={pending}
+                style={S.pgSelect}
+              >
+                {BANDS.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+              <Icon name="chevron-down" size={14} strokeWidth={2.5} style={S.pgChevron} />
+            </span>
+          </span>
+        )}
+        {tail ?? (pctToGo != null && <span style={S.pgPctToGo}>{pctToGo}% to go</span>)}
+        <span role="status" aria-live="polite" style={S.srOnly}>{status}</span>
+      </div>
+
+      <div className="pg-hero">
+        <GapRing best={best} target={ringTarget} reached={reached} />
+        <div>
+          <div style={S.pgHeadline}>{headline}</div>
+          {subcopy && <p style={S.pgSubcopy}>{subcopy}</p>}
+        </div>
+      </div>
+
+      <div className="pg-rows">
+        <SectionRow tone="reading" label="Reading" progress={reading} onDrill={onDrill} />
+        <SectionRow tone="listening" label="Listening" progress={listening} onDrill={onDrill} />
+        <VocabRow vocab={vocab} />
+      </div>
+    </div>
+  );
+}
+
+/* Gap ring — SVG circle draw-in using the same trick as the dashboard's
+   BandGauge (app/app/_DashMotion.tsx): the base/resting stroke-dashoffset IS
+   the final value, the CSS keyframe only supplies the "from" (both fill-mode),
+   so there's no JS/flash gymnastics to get right — unlike DrawBar's width in
+   earlier rounds, an SVG stroke doesn't need a "reset then re-enable" dance.
+   Center shows the gap-to-target, a reached checkmark, or "—" with no band. */
+const RING_SIZE = 104;
+const RING_STROKE = 10;
+const RING_R = RING_SIZE / 2 - RING_STROKE / 2 - 2;
+const RING_CX = RING_SIZE / 2;
+
+function GapRing({ best, target, reached }: { best: number | null; target: number; reached: boolean }) {
+  const frac = best != null ? Math.max(0, Math.min(1, best / target)) : 0;
+  const valLen = +(frac * 100).toFixed(2);
+  const gap = best != null ? Math.max(0, target - best) : 0;
+
+  return (
+    <div
+      className="pg-ring-stage"
+      style={{ width: RING_SIZE, height: RING_SIZE }}
+      role="img"
+      aria-label={
+        best == null
+          ? "No band yet"
+          : reached
+            ? `Target reached, best band ${best.toFixed(1)}`
+            : `${gap.toFixed(1)} band to go to reach your target`
+      }
+    >
+      <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} aria-hidden="true">
+        <defs>
+          <linearGradient id="pgRingGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor={reached ? "var(--success-edge)" : "var(--brand-edge)"} />
+            <stop offset="1" stopColor={reached ? "var(--success)" : "var(--brand)"} />
+          </linearGradient>
+        </defs>
+        <circle cx={RING_CX} cy={RING_CX} r={RING_R} pathLength={100} fill="none" stroke="var(--surface-inset)" strokeWidth={RING_STROKE} />
+        {best != null && (
+          <circle
+            className="pg-ring-val"
+            cx={RING_CX}
+            cy={RING_CX}
+            r={RING_R}
+            pathLength={100}
+            fill="none"
+            stroke="url(#pgRingGrad)"
+            strokeWidth={RING_STROKE}
+            strokeLinecap="round"
+            strokeDasharray={`${valLen} 100`}
+            transform={`rotate(-90 ${RING_CX} ${RING_CX})`}
+            style={{ "--val-len": String(valLen) } as CSSProperties}
+          />
+        )}
+      </svg>
+      <div className="pg-ring-center">
+        {best == null ? (
+          <span style={S.pgRingEm}>—</span>
+        ) : reached ? (
+          <Icon name="circle-check" size={30} strokeWidth={2.2} style={{ color: "var(--success-edge)" }} />
+        ) : (
           <>
-            <div className="pg-target">
-              <span style={S.pgTargetLab}>Target</span>
-              {/* appearance:none — the select IS the giant number, not a separate
-                  static span next to a small control (one source of truth). */}
-              <span style={S.pgSelectWrap} className="pg-selectwrap">
-                <select
-                  aria-label="Target band"
-                  className="pg-select"
-                  value={targetValue.toFixed(1)}
-                  onChange={change}
-                  aria-busy={pending}
-                  style={S.pgSelect}
-                >
-                  {BANDS.map((b) => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
-                <Icon name="chevron-down" size={16} strokeWidth={2.5} style={S.pgChevron} />
-              </span>
-              <div style={S.pgGapWrap}>
-                {best == null ? (
-                  tail ?? <span style={S.pgHint}>Take a test to measure your gap</span>
-                ) : (
-                  tail ?? (best >= targetValue ? (
-                    <span style={S.pgReached}>Target reached</span>
-                  ) : (
-                    <span style={S.pgGap}>+{(targetValue - best).toFixed(1)} to target</span>
-                  ))
-                )}
-              </div>
-              <span role="status" aria-live="polite" style={S.srOnly}>{status}</span>
-            </div>
-            <div className="pg-divider" aria-hidden="true" />
+            {/* Static, not CountUp: SSR already renders the final value (same
+                pattern as everywhere else count-up is used), but re-playing
+                0→gap here doubles as a visible flash on the hero digit — this
+                number isn't worth that trade next to the ring's own draw-in,
+                which already carries the "arriving" motion for this figure. */}
+            <span style={S.pgRingNum}>+{gap.toFixed(1)}</span>
+            <span style={S.pgRingSub}>to go</span>
           </>
         )}
-        <div className="pg-rows">
-          <SkillRow tone="reading" label="Reading" progress={reading} baseDelay={ROW_DELAY.reading} />
-          <SkillRow tone="listening" label="Listening" progress={listening} baseDelay={ROW_DELAY.listening} />
-          <VocabRow vocab={vocab} delayMs={ROW_DELAY.vocab} />
-        </div>
       </div>
     </div>
   );
@@ -717,151 +814,109 @@ function HeroCard({ hero }: { hero: HeroData }) {
   );
 }
 
-/* ── Goal module rows (Reading / Listening diamonds, Vocabulary neon tube) ──
-   Reading/Listening: one diamond per published test (◆ done = brand glow, ◇
-   not done = glass outline), lit in a staggered cascade. A catalog can outgrow
-   a diamond row (30 diamonds would be noise) — past DIAMOND_MAX it falls back
-   to the same neon tube Vocabulary uses (DrawBar, reused verbatim below).
-   total===0 (post-wipe section) skips both and shows a muted note. */
+/* ── Status rows (Reading / Listening / Vocabulary) ────────────────────────
+   Soft tinted pills, not bars: success tint when nothing's left, a neutral
+   row + "Drill"/"Review" CTA where work remains, muted when there's simply
+   nothing to show yet. Diamonds and neon tubes from the previous round are
+   gone entirely — this design carries no per-test detail, only the aggregate
+   + a way in. The R/L/V chip is decorative (aria-hidden); the skill name is
+   now plain visible text right next to it, so it doubles as the accessible
+   name with no sr-only span needed (earlier rounds hid the word and relied on
+   sr-only — simpler now that the word itself is on-screen). */
 const PROGRESS_TILE: Record<"reading" | "listening" | "vocab", { bg: string; fg: string; letter: string }> = {
   reading: { bg: "var(--brand-subtle)", fg: "var(--text-link)", letter: "R" },
   listening: { bg: "var(--info-subtle)", fg: "var(--info-text)", letter: "L" },
   vocab: { bg: "var(--success-subtle)", fg: "var(--success-text)", letter: "V" },
 };
-const DIAMOND_MAX = 12;
-/** Row-level cascade offset (ms) — diamonds/tube within a row step by ~60ms on
- *  top of this, so the three rows light up in a gentle top-to-bottom sweep
- *  rather than all at once. */
-const ROW_DELAY = { reading: 0, listening: 80, vocab: 160 } as const;
 
-function SkillRow({
+const ROW_TONE: Record<"success" | "warn" | "neutral" | "muted", { bg: string; fg: string; bd: string }> = {
+  success: { bg: "var(--success-subtle)", fg: "var(--success-text)", bd: "color-mix(in oklab, var(--success) 35%, transparent)" },
+  warn: { bg: "var(--warn-subtle)", fg: "var(--warn-text)", bd: "color-mix(in oklab, var(--warn) 35%, transparent)" },
+  neutral: { bg: "var(--surface-inset)", fg: "var(--text-secondary)", bd: "var(--border)" },
+  muted: { bg: "var(--surface-inset)", fg: "var(--text-muted)", bd: "var(--border-subtle)" },
+};
+
+function StatusRow({
+  tone,
+  chipTone,
+  label,
+  status,
+  cta,
+}: {
+  tone: keyof typeof ROW_TONE;
+  chipTone: "reading" | "listening" | "vocab";
+  label: string;
+  status: string;
+  cta?: ReactNode;
+}) {
+  const t = ROW_TONE[tone];
+  const chip = PROGRESS_TILE[chipTone];
+  return (
+    <div className="pg-row" style={{ background: t.bg, borderColor: t.bd }}>
+      <span aria-hidden="true" style={{ ...S.pgChip, background: chip.bg, color: chip.fg }}>{chip.letter}</span>
+      <span style={S.pgRowLabel}>{label}</span>
+      <span style={{ ...S.pgRowStatus, color: t.fg }}>{status}</span>
+      {cta}
+    </div>
+  );
+}
+
+function SectionRow({
   tone,
   label,
   progress,
-  baseDelay,
+  onDrill,
 }: {
   tone: "reading" | "listening";
   label: string;
   progress: SectionProgress;
-  baseDelay: number;
+  onDrill: (section: "reading" | "listening") => void;
 }) {
-  const { done, total } = progress;
-  const t = PROGRESS_TILE[tone];
+  const { total, left } = progress;
+  if (total === 0) {
+    return <StatusRow tone="muted" chipTone={tone} label={label} status="New tests soon" />;
+  }
+  if (left === 0) {
+    return <StatusRow tone="success" chipTone={tone} label={label} status="0 left ✓" />;
+  }
   return (
-    <div className="pg-row">
-      {/* The R/L/V chip is the only visual marker (no word label) — it stays
-          aria-hidden (a single letter reads worse than the full word), so the
-          accessible name lives in an sr-only span next to it (reuses S.srOnly,
-          same visually-hidden pattern as the status/results-count announcements
-          elsewhere on this page). */}
-      <span aria-hidden="true" style={{ ...S.pgChip, background: t.bg, color: t.fg }}>{t.letter}</span>
-      <span style={S.srOnly}>{label}</span>
-      {total === 0 ? (
-        <span style={S.pgStatMuted}>New tests soon</span>
-      ) : (
-        <>
-          {total > DIAMOND_MAX ? (
-            <DrawBar pct={Math.round((done / total) * 100)} delayMs={baseDelay} />
-          ) : (
-            <Diamonds done={done} total={total} baseDelay={baseDelay} />
-          )}
-          <span style={S.pgStat}>
-            <CountUp value={done} duration={600} />/<CountUp value={total} duration={600} />
-          </span>
-        </>
-      )}
-    </div>
+    <StatusRow
+      tone="neutral"
+      chipTone={tone}
+      label={label}
+      status={`${left} left`}
+      cta={
+        <Button variant="secondary" size="sm" trailingIcon="arrow-right" onClick={() => onDrill(tone)}>
+          Drill
+        </Button>
+      }
+    />
   );
 }
 
-/** One ◆/◇ per published test, done-ones lit in a staggered cascade (~60ms/diamond,
- *  pure CSS `animation-delay` — no JS, no flash risk: unlike DrawBar's width, an
- *  opacity/scale entrance never needs a "reset to zero" step, so the same
- *  from-only-keyframe trick BandGauge/pc-grow already use elsewhere is enough). */
-function Diamonds({ done, total, baseDelay }: { done: number; total: number; baseDelay: number }) {
-  return (
-    <span className="pg-diamonds" aria-hidden="true">
-      {Array.from({ length: total }, (_, i) => (
-        <span
-          key={i}
-          className={i < done ? "pg-diamond is-done" : "pg-diamond"}
-          style={i < done ? { animationDelay: `${baseDelay + i * 60}ms` } : undefined}
-        />
-      ))}
-    </span>
-  );
-}
-
-function VocabRow({ vocab, delayMs }: { vocab: VocabProgressStat; delayMs: number }) {
-  // Bar width clamps at 100% (can't overshoot the track); the numbers next to it
-  // stay raw (reviewedToday can exceed goal — that's a good thing, not a bug to hide).
-  const pct = vocab.goal > 0 ? Math.round((vocab.reviewedToday / vocab.goal) * 100) : 0;
-  const t = PROGRESS_TILE.vocab;
-  return (
-    <div className="pg-row">
-      <span aria-hidden="true" style={{ ...S.pgChip, background: t.bg, color: t.fg }}>{t.letter}</span>
-      <span style={S.srOnly}>Vocabulary</span>
-      <DrawBar pct={pct} delayMs={delayMs} />
-      {vocab.dueToday === 0 ? (
-        vocab.reviewedToday >= vocab.goal ? (
-          <span style={S.pgStatDone}>All done today ✓</span>
-        ) : (
-          // Nothing due right now, but the goal isn't met either — "All done"
-          // would overclaim (goal ≠ due). Bar/numbers stay as-is either way.
-          <span style={S.pgStat}>No reviews due</span>
-        )
-      ) : (
-        <span style={S.pgStat}>
-          <CountUp value={vocab.reviewedToday} duration={600} />/<CountUp value={vocab.goal} duration={600} /> · <CountUp value={vocab.dueToday} duration={600} /> due
-        </span>
-      )}
-    </div>
-  );
-}
-
-/** Bar fill draws in 0→pct on mount — same SSR-safe trick as CountUp: server/no-JS
- *  renders the final width directly (no FOUC, no layout shift — the track's height
- *  is fixed, only this inner width moves), client replays 0→pct once mounted.
- *
- *  The `.pg-fill` base class carries NO transition — only `.is-drawing` does.
- *  A naive "setWidth(0) then rAF→setWidth(pct)" flashes: the very first commit
- *  (width 0) already has the transition class attached, so the browser animates
- *  the *reset* (final → 0) before it animates the draw-in. Fix: reset width with
- *  the transition class still absent (snap, no motion) → let that frame paint →
- *  THEN attach `.is-drawing` at width 0 → let THAT frame paint → only then set
- *  the final width, so the browser has a transitioned width:0 to animate from.
- *  prefers-reduced-motion skips all of this — width stays at its final value and
- *  `.is-drawing` is never attached, so the first frame is already static/final. */
-function DrawBar({ pct, delayMs }: { pct: number; delayMs: number }) {
-  const clamped = Math.max(0, Math.min(100, pct));
-  const [width, setWidth] = useState(clamped);
-  const [drawing, setDrawing] = useState(false);
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    setDrawing(false);
-    setWidth(0);
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        setDrawing(true);
-        setWidth(clamped);
-      });
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
-  }, [clamped]);
-  return (
-    <span style={S.pgTrack} aria-hidden="true">
-      <span
-        className={drawing ? "pg-fill is-drawing" : "pg-fill"}
-        style={{ width: `${width}%`, transitionDelay: `${delayMs}ms` }}
+function VocabRow({ vocab }: { vocab: VocabProgressStat }) {
+  if (vocab.dueToday > 0) {
+    return (
+      <StatusRow
+        tone="warn"
+        chipTone="vocab"
+        label="Vocabulary"
+        status={`${vocab.dueToday} due`}
+        cta={
+          <Button variant="secondary" size="sm" trailingIcon="arrow-right" href="/app/vocabulary">
+            Review
+          </Button>
+        }
       />
-    </span>
-  );
+    );
+  }
+  // Nothing due right now, but the goal isn't met either — "All done" would
+  // overclaim (goal ≠ due).
+  if (vocab.reviewedToday >= vocab.goal) {
+    return <StatusRow tone="success" chipTone="vocab" label="Vocabulary" status="All done today ✓" />;
+  }
+  return <StatusRow tone="neutral" chipTone="vocab" label="Vocabulary" status="No reviews due" />;
 }
-
 /* ── Skill card (live Reading / Listening / Writing / Speaking) ──────────────
    Tactile bando tile: letter chip (soft fill / ink text) + Live pill, name +
    count, a BAND block (the user's best band on a 0–9 rail with a target marker),
@@ -1243,30 +1298,24 @@ const CSS = `
 .pc-drill:hover{border-color:var(--brand)!important}
 .pc-drill:active{transform:translateY(3px);box-shadow:none!important}
 .pc-drilllink:hover{text-decoration:underline}
-/* Goal module — dark aurora card. Aurora is pure CSS (radial-gradient blobs +
-   a slow drift keyframe, same recipe/tokens as the dashboard hero's
-   .hero-aurora in app/app/page.tsx) — no pointer/tilt JS pulled in, unlike
-   that hero's HeroMotion wrapper. .pg-card clips the blobs via overflow. */
-.pg-card{position:relative;overflow:hidden}
-.pg-aurora{position:absolute;inset:-12%;pointer-events:none;z-index:0;opacity:.55;background:radial-gradient(40% 55% at 18% 20%,color-mix(in oklab,var(--violet-400) 42%,transparent),transparent 60%),radial-gradient(55% 60% at 85% 0%,rgba(255,255,255,.18),transparent 60%),radial-gradient(65% 75% at 95% 100%,color-mix(in oklab,var(--violet-500) 60%,transparent),transparent 66%);animation:pgAurora 16s var(--ease-in-out) infinite alternate}
-.pg-inner{position:relative;z-index:1}
-.pg-target{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+/* Goal module — light card. .pg-head: target pill + "N% to go". .pg-hero: ring
+   + headline, stacks on narrow viewports (flex-wrap, no order/reorder — DOM
+   order already matches: ring first, text second). .pg-ring-val draws in via
+   the same from-only-keyframe trick as the dashboard's BandGauge (.gauge-val),
+   just under a local name so this file doesn't reach into app/app/page.tsx. */
+.pg-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .pg-selectwrap:hover select{opacity:.85}
-/* The <select> itself is styled white-on-transparent for the dark card, but its
-   native OPEN popup is a system menu that ignores most of that — only color/
-   background-color on <option> carry through (inconsistently, but this is the
-   standard mitigation). Without it some platforms render white-on-white. */
+/* Native OPEN popup is a system menu that ignores most inline styling — only
+   color/background-color on <option> carry through (inconsistently, but this
+   is the standard mitigation). Without it some platforms render white-on-white. */
 .pg-select option{color:var(--text-primary);background:var(--surface)}
-.pg-divider{height:1px;background:rgba(255,255,255,.14);margin:16px 0}
+.pg-hero{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.pg-ring-stage{position:relative;flex:none}
+.pg-ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.pg-ring-val{stroke-dashoffset:0;animation:pgRingDraw var(--duration-deliberate) var(--ease-out) 150ms both}
 .pg-rows{display:flex;flex-direction:column;gap:10px}
-.pg-row{display:flex;align-items:center;gap:9px}
-.pg-diamonds{display:flex;flex-wrap:wrap;align-items:center;gap:4px;flex:1;min-width:0}
-.pg-diamond{width:9px;height:9px;flex:none;border-radius:2px;transform:rotate(45deg);background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.32)}
-.pg-diamond.is-done{background:linear-gradient(135deg,var(--violet-200),#fff);border-color:transparent;box-shadow:0 0 7px 1px color-mix(in oklab, var(--violet-200) 85%, transparent);animation:pgIgnite 420ms var(--ease-out) both}
-.pg-fill{display:block;height:100%;border-radius:var(--radius-full);background:linear-gradient(90deg,var(--violet-300),#fff);box-shadow:0 0 9px 1px color-mix(in oklab, var(--violet-200) 85%, transparent)}
-.pg-fill.is-drawing{transition:width 700ms cubic-bezier(.16,1,.3,1)}
-@keyframes pgAurora{0%{transform:translate3d(-3%,-2%,0) scale(1.04)}50%{transform:translate3d(3%,2%,0) scale(1.12)}100%{transform:translate3d(-1%,3%,0) scale(1.05)}}
-@keyframes pgIgnite{from{opacity:.35;transform:rotate(45deg) scale(.4)}}
+.pg-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:8px;padding:12px 14px;border-radius:var(--radius-md);border:1.5px solid transparent;transition:var(--transition-colors)}
+@keyframes pgRingDraw{from{stroke-dashoffset:var(--val-len)}}
 .pc-gloss{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-xs)}
 .pc-gloss>summary{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;cursor:pointer;list-style:none;font-family:var(--font-ui);font-size:13px;font-weight:700;color:var(--text-primary)}
 .pc-gloss>summary::-webkit-details-marker{display:none}
@@ -1306,14 +1355,13 @@ const CSS = `
 @keyframes pc-fade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
 @media (pointer:coarse){.pc-showall{min-height:44px}.pc-goalsel{min-height:44px}.pg-select{min-height:44px}}
 /* iOS зумит вьюпорт при фокусе поля с font-size <16px. */
-@media (max-width:430px){.pc-goalsel{font-size:16px!important}}
+@media (max-width:430px){.pc-goalsel{font-size:16px!important}.pg-select{font-size:16px!important}}
 /* Микро-текст: overline-эйбрау и R/L-пилюля в строке теста — смысловые лейблы → 12px. */
 @media (max-width:430px){.pc-overline{font-size:12px!important}.pc-row-pill{font-size:12px!important}}
 @media (prefers-reduced-motion:reduce){
   .pc-bars span{animation:none!important;transform:none!important}
   .pc-goalsaved{animation:none!important}
-  .pg-aurora{animation:none!important}
-  .pg-diamond.is-done{animation:none!important}
+  .pg-ring-val{animation:none!important}
 }
 `;
 
@@ -1346,38 +1394,33 @@ const S: Record<string, CSSProperties> = {
   rail: { height: 8, borderRadius: "var(--radius-full)", background: "color-mix(in oklab, white 25%, transparent)", overflow: "hidden", marginTop: 14 },
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
 
-  // Goal module — dark aurora card (target selector + Reading/Listening/Vocabulary
-  // rows). Radius + 3D shadow match S.hero (resume card) exactly so the left/right
-  // hero columns pair up; background is the dashboard focus-hero's dark gradient
-  // recipe (app/app/page.tsx S.focus), .pg-aurora (CSS block above) layers the blur
-  // blobs on top. All text light-on-dark — no light-theme tokens carried over.
-  // Opacities/color-mix % below are picked against the gradient's LIGHTER stop
-  // (var(--brand-active) itself — the worst case; the black-mixed stop only
-  // improves contrast), computed via oklch→sRGB, not eyeballed: rgba(255,255,255,
-  // .85/.80) ≈ 5.2–4.8:1, color-mix(success 45%, white) ≈ 4.8:1, color-mix(error
-  // 30%, white) ≈ 4.7:1 — all clear WCAG AA 4.5:1 for the small (11–13px) text
-  // that uses them, with margin (the aurora glow only ever lightens further).
-  pgCard: { position: "relative", overflow: "hidden", marginTop: 20, borderRadius: "var(--radius-xl)", boxShadow: "0 5px 0 0 var(--brand-edge)", background: "linear-gradient(150deg, var(--brand-active), color-mix(in oklab, var(--brand-active) 78%, black))", padding: 22, color: "#fff" },
-  pgTargetLab: { fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,.85)" },
+  // Goal module — light card (target pill + gap ring + status rows). Same
+  // surface/radius/shadow language as the neighboring skill-cards below —
+  // violet is an accent only (pill fill, ring gradient, chip), not a theme.
+  pgCard: { display: "flex", flexDirection: "column", gap: 20, marginTop: 20, padding: 24, borderRadius: "var(--radius-xl)", border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
+  pgGoalPill: { display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 6px 6px 14px", borderRadius: "var(--radius-full)", background: "var(--brand-subtle)", border: "1px solid var(--brand-border)" },
+  pgGoalPillLab: { fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-link)" },
   pgSelectWrap: { position: "relative", display: "inline-flex", alignItems: "center" },
-  // The select IS the big number (appearance:none, huge font) — >28px, so weight
-  // 800 + tight tracking per the typography rule.
-  pgSelect: { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", fontFamily: "var(--font-ui)", fontWeight: 800, letterSpacing: "-0.02em", fontSize: 40, lineHeight: 1, color: "#fff", background: "transparent", border: "none", padding: "0 26px 0 0", cursor: "pointer" },
-  pgChevron: { position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "rgba(255,255,255,.65)" },
-  pgGapWrap: { marginTop: 6 },
-  pgHint: { fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,.85)" },
-  pgGap: { fontSize: 13, fontWeight: 700, color: "#fff" },
-  pgReached: { fontSize: 13, fontWeight: 700, color: "color-mix(in oklab, var(--success) 45%, white)" },
-  pgSaved: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "color-mix(in oklab, var(--success) 45%, white)" },
-  pgError: { display: "inline-flex", alignItems: "center", fontSize: 12, fontWeight: 700, color: "color-mix(in oklab, var(--error) 30%, white)" },
+  pgSelect: { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 14, color: "var(--text-link)", background: "transparent", border: "none", padding: "0 20px 0 4px", cursor: "pointer" },
+  pgChevron: { position: "absolute", right: 2, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--text-link)" },
+  pgPctToGo: { fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
+  pgSaved: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: "var(--success-text)" },
+  pgError: { display: "inline-flex", alignItems: "center", fontSize: 12, fontWeight: 700, color: "var(--error-text)" },
 
-  // Goal module rows — light chip (self-contained contrast, reads fine on the dark
-  // card regardless of bg) + neon track/stat text in light-on-dark tokens.
+  // Hero zone — ring + headline. Headline stays <28px (matches S.hero's own
+  // heroTitle:20 next door) so weight caps at 700 per the typography rule; the
+  // ring's center digit is the one >28px figure, weight 800 + tight tracking.
+  pgHeadline: { fontFamily: "var(--font-ui)", fontSize: 21, fontWeight: 700, lineHeight: 1.25, color: "var(--text-primary)" },
+  pgSubcopy: { margin: "4px 0 0", fontSize: 13, lineHeight: 1.45, color: "var(--text-secondary)" },
+  pgRingNum: { fontFamily: "var(--font-mono)", fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: "var(--text-primary)" },
+  pgRingSub: { fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-muted)" },
+  pgRingEm: { fontFamily: "var(--font-mono)", fontSize: 26, fontWeight: 700, color: "var(--text-muted)" },
+
+  // Status rows — chip colour is per-skill (PROGRESS_TILE), row bg/text colour
+  // is per-status (ROW_TONE, computed at the call site).
   pgChip: { width: 18, height: 18, flex: "none", borderRadius: "var(--radius-sm)", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 700 },
-  pgTrack: { position: "relative", display: "block", flex: 1, minWidth: 0, height: 6, borderRadius: "var(--radius-full)", background: "rgba(255,255,255,.16)", overflow: "hidden" },
-  pgStat: { flex: "none", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.85)", whiteSpace: "nowrap" },
-  pgStatDone: { flex: "none", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "color-mix(in oklab, var(--success) 45%, white)", whiteSpace: "nowrap" },
-  pgStatMuted: { flex: "none", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,.80)", whiteSpace: "nowrap" },
+  pgRowLabel: { fontFamily: "var(--font-ui)", fontSize: 14, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-primary)" },
+  pgRowStatus: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", marginLeft: "auto" },
 
   // Skills — sentence-case label (не uppercase-эйбрау) + опц. контекст-хелп про BAND
   skillHeadWrap: { display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 },
