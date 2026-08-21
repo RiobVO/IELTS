@@ -31,7 +31,13 @@ export default async function AppLayout({
   // аналитике (ключ задан), иначе chunk грузился бы зря без ключа.
   const analyticsOn = posthogConfig() !== null;
   return (
-    <div className={`app-serif ${literata.variable}`}>
+    // translate="no" + класс notranslate — сигнал Google Translate и подобным
+    // расширениям не трогать DOM внутри /app: их мутации ломают React-реконсиляцию
+    // (facebook/react#11538, NotFoundError removeChild), error_log фиксирует это
+    // неделями с 2026-07-07. Отключаем перевод здесь осознанно — продукт сам
+    // тренирует английский, автоперевод не нужен. Лендинг вне /app остаётся переводимым.
+    <div translate="no" className={`app-serif notranslate ${literata.variable}`}>
+
       {user && analyticsOn ? <AnalyticsIdentify userId={user.id} /> : null}
       {children}
     </div>
