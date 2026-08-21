@@ -1,10 +1,14 @@
 /**
  * Section progress (Reading/Listening skill-cards, /app/practice) — «пройдено N из M,
- * осталось K». Чистая функция: вызывающая сторона (app/app/practice/page.tsx) уже
- * знает, какой тест кликабелен (Start) и какой заблокирован (Unlock) — тот же
- * `startable`-флаг должен попасть сюда, а не пересчитываться заново, иначе счётчик
- * разойдётся с кнопками под ним (например, после понижения тира юзер видит "5 of 8",
- * а половина карточек в списке — 🔒).
+ * осталось K». Знаменатель `total` — ВЕСЬ опубликованный каталог секции, тот же
+ * набор, что даёт карте строку «N tests» — счётчик обязан с ней согласовываться.
+ *
+ * Был startable-вариант (total только по кликабельным сейчас тестам) — отвергнут
+ * живым прогоном на проде 2026-07-16 (Basic-аккаунт владельца): на Reading карта
+ * читала «4 tests» / «All 2 done» (2 из 4 locked → нечитаемый бред), на Listening
+ * (все 3 теста locked) total схлопывался в 0 и строка исчезала целиком. Недоступность
+ * по тиру юзер и так видит на самих строках списка (замок/Unlock) — «K left» под
+ * замком осознанно остаётся в счёте, это upsell-точка, а не баг.
  */
 
 export interface SectionProgress {
@@ -13,22 +17,15 @@ export interface SectionProgress {
   left: number;
 }
 
-/**
- * `total` — только startable-тесты (доступные юзеру прямо сейчас, как считает тот же
- * предикат, что рисует Start/Unlock). `done` — startable И attempted: тест, попытка
- * по которому есть, но который сейчас не startable (например, даунгрейд тира после
- * прохождения по trial), не попадает ни в total, ни в done — инвариант `done <= total`
- * держится всегда.
- */
+/** `total` = tests.length (весь published-каталог секции), `done` = attempted среди
+ *  них, `left = total − done`. */
 export function computeSectionProgress(
-  tests: ReadonlyArray<{ id: string; startable: boolean }>,
+  tests: ReadonlyArray<{ id: string }>,
   attemptedIds: ReadonlySet<string>,
 ): SectionProgress {
-  let total = 0;
+  const total = tests.length;
   let done = 0;
   for (const t of tests) {
-    if (!t.startable) continue;
-    total += 1;
     if (attemptedIds.has(t.id)) done += 1;
   }
   return { done, total, left: total - done };

@@ -282,17 +282,19 @@ export default async function PracticePage({
     };
   });
 
-  // Section progress ("Done N of M · K left" на skill-картах) — startable ЗДЕСЬ то
-  // же самое, что рисует Start/Unlock ниже (t.locked уже посчитан выше с trial-лейн).
-  // attempted — из lifetime attemptedRows (см. Promise.all выше), НЕ из bestRawById
-  // (то оконное, best-score display).
+  // Section progress ("Done N of M · K left" на skill-картах) — знаменатель ВЕСЬ
+  // published-каталог секции (тот же набор, что даёт карте «N tests»), без
+  // locked-фильтра: startable-вариант отвергнут живым прогоном 2026-07-16 (Basic
+  // видел «4 tests» / «All 2 done» на Reading, пустую строку на Listening — см.
+  // section-progress.ts). attempted — из lifetime attemptedRows (см. Promise.all
+  // выше), НЕ из bestRawById (то оконное, best-score display).
   const attemptedIds = new Set(attemptedRows.map((r) => r.contentItemId));
   const readingProgress = computeSectionProgress(
-    tests.filter((t) => t.section === "reading").map((t) => ({ id: t.id, startable: !t.locked })),
+    tests.filter((t) => t.section === "reading").map((t) => ({ id: t.id })),
     attemptedIds,
   );
   const listeningProgress = computeSectionProgress(
-    tests.filter((t) => t.section === "listening").map((t) => ({ id: t.id, startable: !t.locked })),
+    tests.filter((t) => t.section === "listening").map((t) => ({ id: t.id })),
     attemptedIds,
   );
 
