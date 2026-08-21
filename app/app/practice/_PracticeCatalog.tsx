@@ -708,7 +708,6 @@ function ProgressPanel({
 
   return (
     <div style={S.pcpCard}>
-      <span style={S.pcpHead}>Your progress</span>
       <ProgressRow tone="reading" label="Reading" pct={sectionPct(reading)} delayMs={0} right={sectionRight(reading)} />
       <ProgressRow tone="listening" label="Listening" pct={sectionPct(listening)} delayMs={90} right={sectionRight(listening)} />
       <ProgressRow
@@ -752,8 +751,13 @@ function ProgressRow({
   const t = PROGRESS_TILE[tone];
   return (
     <div className="pcp-row">
+      {/* The R/L/V chip is the only visual marker now (no more word label) — it
+          stays aria-hidden (a single letter reads worse than the full word), so
+          the accessible name has to live somewhere: an sr-only span carries the
+          full skill name (reuses S.srOnly, the same visually-hidden pattern
+          already used for the goal-bar status/results-count announcements). */}
       <span aria-hidden="true" style={{ ...S.pcpChip, background: t.bg, color: t.fg }}>{t.letter}</span>
-      <span style={S.pcpLabel}>{label}</span>
+      <span style={S.srOnly}>{label}</span>
       <DrawBar pct={pct} delayMs={delayMs} />
       {right}
     </div>
@@ -1279,11 +1283,11 @@ const S: Record<string, CSSProperties> = {
   heroMeta: { fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, marginTop: 12 },
 
   // Your progress — compact card under the Target pill (same border/radius/bg/
-  // shadow tokens as S.goal; pcpHead mirrors goalLab's "Target" mini-label exactly).
-  pcpHead: { fontSize: 12, fontWeight: 700, color: "var(--text-muted)" },
-  pcpCard: { marginTop: 14, display: "flex", flexDirection: "column", gap: 6, padding: "10px 12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
+  // shadow tokens as S.goal). No visible heading or word labels — the R/L/V chip
+  // (aria-hidden) is the only visual marker per row, accessible name carried by
+  // an sr-only span (S.srOnly) next to it.
+  pcpCard: { marginTop: 14, display: "flex", flexDirection: "column", gap: 5, padding: "8px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-solid)" },
   pcpChip: { width: 18, height: 18, flex: "none", borderRadius: "var(--radius-sm)", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 700 },
-  pcpLabel: { flex: "none", whiteSpace: "nowrap", fontFamily: "var(--font-ui)", fontSize: 12, fontWeight: 700, letterSpacing: "0.01em", color: "var(--text-primary)" },
   pcpTrack: { position: "relative", display: "block", flex: 1, minWidth: 0, height: 5, borderRadius: "var(--radius-full)", background: "var(--surface-inset)", overflow: "hidden" },
   pcpStat: { flex: "none", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap" },
   pcpStatDone: { flex: "none", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--success-text)", whiteSpace: "nowrap" },
