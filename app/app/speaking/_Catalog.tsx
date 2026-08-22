@@ -96,11 +96,16 @@ export function SpeakingCatalog({
             Speak a Part 2 long-turn for 1–2 minutes and get an estimated band with an annotated transcript — not a verdict.
           </p>
         </div>
-        <div style={S.tierPill}>
-          <Icon name={locked ? "lock" : "sparkles"} size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} />
-          <span style={S.tierPillText}>
-            {isUltra ? "Ultra · unlimited" : locked ? "Ultra feature" : "1 free analysis"}
-          </span>
+        <div style={S.headerSide}>
+          <div style={S.tierPill}>
+            <Icon name={locked ? "lock" : "sparkles"} size={15} strokeWidth={2.3} style={{ color: "var(--text-link)" }} />
+            <span style={S.tierPillText}>
+              {isUltra ? "Ultra · unlimited" : locked ? "Ultra feature" : "1 free analysis"}
+            </span>
+          </div>
+          {/* Точка входа в историю анализов из каталога — раньше история была
+              достижима только с result-экранов (навигационный тупик). */}
+          <Button variant="ghost" size="sm" icon="clock" href="/app/speaking/history">History</Button>
         </div>
       </header>
 
@@ -316,6 +321,8 @@ const S: Record<string, CSSProperties> = {
   wrap: { maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-ui)", color: "var(--text-primary)" },
 
   header: { display: "flex", gap: 18, flexWrap: "wrap" },
+  // Правый слот хедера: статус-pill + переход в History одной группой (зеркало Writing).
+  headerSide: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", flex: "none" },
   overline: { display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--text-link)", textTransform: "uppercase", marginBottom: 12 },
   overlineDot: { width: 7, height: 7, borderRadius: "var(--radius-full)", background: "var(--brand)" },
   h1: { margin: 0, lineHeight: 1.0, fontWeight: 800, letterSpacing: "-0.025em", color: "var(--text-primary)", textWrap: "balance" },
