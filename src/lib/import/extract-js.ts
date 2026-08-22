@@ -1,4 +1,4 @@
-import vm from "node:vm";
+import { Worker } from "node:worker_threads";
 
 /**
  * Extracts the JS data object literals embedded at the end of a test file
@@ -8,16 +8,87 @@ import vm from "node:vm";
  * arbitrary code execution.
  */
 
-// vm's `timeout` bounds execution TIME but NOT heap: a poison literal/function could
-// allocate until the import process OOMs (#20). It's admin-only (import needs requireAdmin /
-// Telegram whitelist) with a global-free context, so it's self-DoS, not injection. A size
-// gate on the vm input is the proportional bound — it keeps the parse pipeline synchronous
-// (a worker with resourceLimits would force the whole parser async for a low-severity vector)
-// and needs no new dependency. Real IELTS literals are well under 4 MB; band functions are
-// tiny. Combined with the timeout (V8 interrupts an alloc loop at loop backedges) and the
-// caller's try/catch (a huge single string throws RangeError > max string length), this
-// closes the realistic OOM vectors.
+// vm's `timeout` bounds execution TIME but NOT heap: a poison literal/function can allocate
+// until the process OOMs (`FATAL ERROR: heap out of memory`, exit 134) — a fatal V8 abort the
+// caller's try/catch CANNOT catch, taking down the whole import server (#20). Import is admin-
+// only (requireAdmin / Telegram whitelist), but any client-supplied HTML reaches it, so a
+// single malformed/hostile file could kill the process. Fix: run every evaluation inside a
+// worker_threads isolate with `resourceLimits.maxOldGenerationSizeMb`. On a heap bomb the
+// WORKER is terminated with ERR_WORKER_OUT_OF_MEMORY (a normal 'error' event on the parent),
+// on a CPU bomb the inner vm `timeout` fires, and a wall-clock backstop terminates a wedged
+// worker — all three surface as an ordinary rejected promise the caller rejects the import on,
+// process intact. Kept: the global-free vm context (same escape posture) and the size gate
+// below (cheap pre-filter — rejects absurd input before paying for a worker spawn).
 const MAX_VM_INPUT = 4 * 1024 * 1024; // 4 MB
+
+// Isolate resource caps. maxOldGenerationSizeMb is the load-bearing bound: a retained-
+// allocation bomb grows old-gen past this and V8 terminates the worker (verified empirically
+// at ~100 ms for `while(true) a.push(new Array(1e6))`). WALL_CLOCK_MS is a pure plumbing
+// backstop, not a defense layer — it doesn't gate memory (resourceLimits, ~100ms) or CPU
+// (the inner vm timeout, 1000ms) any tighter than those already do. It only needs to outlast
+// worker spawn + a legit eval's own runtime under cold-start/parallel load, so it's set well
+// above VM_TIMEOUT_MS to give slow spawns headroom without delaying the real limits above.
+const WORKER_OLD_GEN_MB = 64;
+const WORKER_YOUNG_GEN_MB = 16;
+const VM_TIMEOUT_MS = 1000;
+const WALL_CLOCK_MS = 5000;
+
+// Inline worker source (eval:true) — NO separate on-disk file, so Next/webpack bundling never
+// has to resolve or trace it. Runs the untrusted code in a global-free vm context on its own
+// thread and posts back a structured-cloneable result (data objects / number tables are plain
+// JSON — clone is a faithful deep copy). Any throw (vm timeout, ReferenceError from the empty
+// context, DataCloneError on non-data output) comes back as `{ ok:false }`; a heap bomb never
+// reaches postMessage — the worker is killed and the parent sees an 'error' event instead.
+const WORKER_SRC = `
+const { parentPort, workerData } = require('node:worker_threads');
+const vm = require('node:vm');
+try {
+  const value = vm.runInNewContext(workerData.code, Object.create(null), { timeout: workerData.timeout });
+  parentPort.postMessage({ ok: true, value });
+} catch (err) {
+  parentPort.postMessage({ ok: false, error: String((err && err.message) || err) });
+}
+`;
+
+/**
+ * Evaluate `code` in a memory- and time-capped worker isolate. Resolves with the value,
+ * rejects on any failure (OOM / timeout / eval error / crash). The worker is always
+ * terminated (no leak) — on success, on failure, and on the wall-clock backstop.
+ */
+function runInWorker<T>(code: string, timeout: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const worker = new Worker(WORKER_SRC, {
+      eval: true,
+      workerData: { code, timeout },
+      resourceLimits: {
+        maxOldGenerationSizeMb: WORKER_OLD_GEN_MB,
+        maxYoungGenerationSizeMb: WORKER_YOUNG_GEN_MB,
+      },
+    });
+    let settled = false;
+    const finish = (fn: () => void): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      // terminate() is idempotent and safe on an already-exited worker — guarantees no leak.
+      void worker.terminate();
+      fn();
+    };
+    const timer = setTimeout(
+      () => finish(() => reject(new Error(`worker timed out after ${WALL_CLOCK_MS}ms`))),
+      WALL_CLOCK_MS,
+    );
+    worker.on("message", (msg: { ok: boolean; value?: T; error?: string }) => {
+      if (msg.ok) finish(() => resolve(msg.value as T));
+      else finish(() => reject(new Error(msg.error ?? "worker evaluation failed")));
+    });
+    // OOM (ERR_WORKER_OUT_OF_MEMORY) and any other worker crash arrive here — catchable.
+    worker.on("error", (err) => finish(() => reject(err)));
+    worker.on("exit", (exitCode) => {
+      if (exitCode !== 0) finish(() => reject(new Error(`worker exited with code ${exitCode}`)));
+    });
+  });
+}
 
 /** Пропускает whitespace + //- и /* *​/-комментарии начиная с i. Нужен и в пре-скане
  * между `=` и `{`, и был бы уязвим без него: комментарий там ронял extractObjectLiteral
@@ -91,21 +162,23 @@ export function extractObjectLiteral(src: string, name: string): string | null {
   return null;
 }
 
-/** Evaluate an object literal as pure data in an isolated, global-free context. */
-export function evalDataObject<T = unknown>(literal: string): T {
+/**
+ * Evaluate an object literal as pure data in an isolated, global-free worker.
+ * Not `async`: the size gate throws synchronously (kept byte-for-byte, callers rely on it),
+ * then the worker call is returned as a promise the caller awaits.
+ */
+export function evalDataObject<T = unknown>(literal: string): Promise<T> {
   if (literal.length > MAX_VM_INPUT) {
     throw new RangeError(`data literal too large (${literal.length} > ${MAX_VM_INPUT})`);
   }
-  return vm.runInNewContext(`(${literal})`, Object.create(null), {
-    timeout: 1000,
-  }) as T;
+  return runInWorker<T>(`(${literal})`, VM_TIMEOUT_MS);
 }
 
-export function extractData<T = unknown>(src: string, name: string): T | null {
+export async function extractData<T = unknown>(src: string, name: string): Promise<T | null> {
   const lit = extractObjectLiteral(src, name);
   if (lit == null) return null;
   try {
-    return evalDataObject<T>(lit);
+    return await evalDataObject<T>(lit);
   } catch {
     return null;
   }
@@ -188,19 +261,17 @@ function extractFunctionText(src: string, name: string): string | null {
  * materialize the scale as a {raw: band} table. Deterministic — pure evaluation
  * of a self-contained numeric function, no LLM, no external access.
  */
-export function extractFunctionTable(
+export async function extractFunctionTable(
   src: string,
   name: string,
   min: number,
   max: number,
-): Record<number, number> | null {
+): Promise<Record<number, number> | null> {
   const fnText = extractFunctionText(src, name);
   if (fnText == null || fnText.length > MAX_VM_INPUT) return null;
   const harness = `${fnText}\n(function(){const t={};for(let r=${min};r<=${max};r++){const v=${name}(r);if(typeof v==='number')t[r]=v;}return t;})()`;
   try {
-    const table = vm.runInNewContext(harness, Object.create(null), {
-      timeout: 1000,
-    }) as Record<number, number>;
+    const table = await runInWorker<Record<number, number>>(harness, VM_TIMEOUT_MS);
     return table && Object.keys(table).length > 0 ? table : null;
   } catch {
     return null;

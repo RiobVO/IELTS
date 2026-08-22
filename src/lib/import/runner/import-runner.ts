@@ -36,7 +36,7 @@ export async function importRunner(
   html: string,
   opts: { sourceFilePath?: string; createdBy?: string },
 ): Promise<ImportRunnerResult> {
-  const { parsed: runnerParsed, externalAudioSrc } = parseRunner(html);
+  const { parsed: runnerParsed, externalAudioSrc } = await parseRunner(html);
   let parsed = runnerParsed;
   // Пустой парс = источник не распознан. Отказ честнее молчаливого 0-вопросного драфта.
   // P4: сообщение различает «контейнер ключа не найден» от «найден, но номера не распознаны»
@@ -65,7 +65,7 @@ export async function importRunner(
   // practice-lite, импорт успешен; категория/bandScale в этом случае — runner-
   // эвристика, единственный доступный источник).
   try {
-    const merge = mergeAtomization(parsed, parseTest(html));
+    const merge = mergeAtomization(parsed, await parseTest(html));
     if (merge.atomized) {
       parsed = merge.parsed;
     } else if (merge.reason) {

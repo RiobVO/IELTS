@@ -1,6 +1,6 @@
 // Тесты Full-Reading парсера (BRIEF §4.2). Inline-фикстура повторяет селекторы
 // parse-reading-full.ts; маршрут через диспетчер parseTest (≥2 .passage-section).
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseTest } from "./parse-test";
@@ -64,7 +64,10 @@ const FULL_HTML = `<!doctype html><html><head><title>Full Reading - Template</ti
 </body></html>`;
 
 describe("parseFullReading — inline (2 passages)", () => {
-  const t = parseTest(FULL_HTML); // через диспетчер
+  let t: Awaited<ReturnType<typeof parseTest>>;
+  beforeAll(async () => {
+    t = await parseTest(FULL_HTML); // через диспетчер
+  });
   const q = (n: number) => t.questions.find((x) => x.number === n)!;
 
   it("диспетчеризуется в full reading и строит по пассажу на секцию", () => {
@@ -229,8 +232,8 @@ const FULL_ONE_PAGE_HTML = `<!doctype html><html><head><title>Cambridge Style Fu
 </body></html>`;
 
 describe("parseFullReading gap fixtures", () => {
-  it("atomizes ungrouped .mc-question radio MCQ blocks", () => {
-    const t = parseTest(FULL_UNGROUPED_MCQ_HTML);
+  it("atomizes ungrouped .mc-question radio MCQ blocks", async () => {
+    const t = await parseTest(FULL_UNGROUPED_MCQ_HTML);
     const q32 = t.questions.find((q) => q.number === 32)!;
 
     expect(t.category).toBe("full_reading");
@@ -242,8 +245,8 @@ describe("parseFullReading gap fixtures", () => {
     expect(t.warnings).toHaveLength(0);
   });
 
-  it("maps radio-rendered choose-TWO MCQ pairs to mcq_multi", () => {
-    const t = parseTest(FULL_RADIO_CHOOSE_TWO_HTML);
+  it("maps radio-rendered choose-TWO MCQ pairs to mcq_multi", async () => {
+    const t = await parseTest(FULL_RADIO_CHOOSE_TWO_HTML);
     const q21 = t.questions.find((q) => q.number === 21)!;
     const q22 = t.questions.find((q) => q.number === 22)!;
 
@@ -256,8 +259,8 @@ describe("parseFullReading gap fixtures", () => {
     expect(t.warnings).toHaveLength(0);
   });
 
-  it("routes one-page .passage-part full reading through the full parser", () => {
-    const t = parseTest(FULL_ONE_PAGE_HTML);
+  it("routes one-page .passage-part full reading through the full parser", async () => {
+    const t = await parseTest(FULL_ONE_PAGE_HTML);
 
     expect(t.category).toBe("full_reading");
     expect(t.passages).toHaveLength(3);
@@ -275,8 +278,8 @@ describe("parseFullReading gap fixtures", () => {
 
 const fullTemplate = sample("Full Test Template.html");
 describe.skipIf(!fullTemplate)("real sample — Full Test Template (40Q / 3 passages)", () => {
-  it("3 пассажа / 40 вопросов с band-шкалой, каждый вопрос с ключом", () => {
-    const t = parseTest(fullTemplate!);
+  it("3 пассажа / 40 вопросов с band-шкалой, каждый вопрос с ключом", async () => {
+    const t = await parseTest(fullTemplate!);
     expect(t.section).toBe("reading");
     expect(t.category).toBe("full_reading");
     expect(t.passages).toHaveLength(3);
@@ -299,9 +302,9 @@ describe.skipIf(!fullTemplate)("real sample — Full Test Template (40Q / 3 pass
 // расширение его не задевает; adversarial-вариант (+ случайный <audio>) доказывает
 // это явно, а не полагается на отсутствие <audio> в фикстуре как на случайность.
 describe("isListening routing regression — full reading остаётся reading", () => {
-  it("adversarial: FULL_HTML + случайный <audio> без .part — остаётся full_reading, не listening", () => {
+  it("adversarial: FULL_HTML + случайный <audio> без .part — остаётся full_reading, не listening", async () => {
     const html = FULL_HTML.replace("<body>", '<body><audio src="unrelated.mp3"></audio>');
-    const t = parseTest(html);
+    const t = await parseTest(html);
     expect(t.section).toBe("reading");
     expect(t.category).toBe("full_reading");
     expect(t.passages).toHaveLength(2);

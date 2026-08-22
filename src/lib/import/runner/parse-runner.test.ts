@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseRunner, diagnoseEmptyRunnerParse } from "./parse-runner";
@@ -9,7 +9,10 @@ const reading = readFileSync(join(FIX, "reading.html"), "utf8");
 const listening = readFileSync(join(FIX, "listening.html"), "utf8");
 
 describe("parseRunner — reading", () => {
-  const r = parseRunner(reading);
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(reading);
+  });
   it("определяет section reading и 40 вопросов", () => {
     expect(r.parsed.section).toBe("reading");
     expect(r.parsed.questions).toHaveLength(40);
@@ -45,7 +48,10 @@ describe("parseRunner — acceptableVariants (альтернативное им�
 var correctAnswers = {"1":"raindrops","2":"TRUE"};
 const acceptableVariants = { 1: ['raindrops','raindrop'] };
 </script></body></html>`;
-  const r = parseRunner(html);
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(html);
+  });
   it("варианты из acceptableVariants → text_accept", () => {
     const q1 = r.parsed.questions.find((q) => q.number === 1)!;
     expect(q1.answer.mode).toBe("text_accept");
@@ -58,45 +64,45 @@ const acceptableVariants = { 1: ['raindrops','raindrop'] };
 // Vol7/Mock (QA 2026-07-02): источник без band-функции ронял 40-вопросный тест в
 // passage_1/part_1 (20/10 мин) — категорию страхует счёт вопросов.
 describe("parseRunner — full-категория по числу вопросов (без band-функции)", () => {
-  it("reading 40q без getBandFor40 → full_reading / 60m", () => {
+  it("reading 40q без getBandFor40 → full_reading / 60m", async () => {
     const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":"TRUE"`).join(",");
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>const correctAnswers = {${entries}};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     expect(parsed.category).toBe("full_reading");
     expect(parsed.durationSeconds).toBe(60 * 60);
   });
   // F3-min (2026-07-12): парсер сам не блокирует (publish-гейт — фактический блокер), но
   // должен поднять warning для review-экрана, когда full-тест остался без band-шкалы.
-  it("reading 40q без getBandFor40 → warning про отсутствующую band-шкалу", () => {
+  it("reading 40q без getBandFor40 → warning про отсутствующую band-шкалу", async () => {
     const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":"TRUE"`).join(",");
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>const correctAnswers = {${entries}};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     expect(parsed.bandScale).toBeNull();
     expect(parsed.warnings.some((w) => /band scale/i.test(w))).toBe(true);
   });
-  it("listening 40q без band() → full_listening / 30m", () => {
+  it("listening 40q без band() → full_listening / 30m", async () => {
     const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":["w${i}"]`).join(",");
     const html = `<!doctype html><html><head><title>L</title></head><body><audio></audio>
 <script>const KEY = {${entries}};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     expect(parsed.category).toBe("full_listening");
     expect(parsed.durationSeconds).toBe(30 * 60);
   });
-  it("listening 40q без band() → warning про отсутствующую band-шкалу", () => {
+  it("listening 40q без band() → warning про отсутствующую band-шкалу", async () => {
     const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":["w${i}"]`).join(",");
     const html = `<!doctype html><html><head><title>L</title></head><body><audio></audio>
 <script>const KEY = {${entries}};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     expect(parsed.bandScale).toBeNull();
     expect(parsed.warnings.some((w) => /band scale/i.test(w))).toBe(true);
   });
-  it("одиночный пассаж 13q остаётся passage_1", () => {
+  it("одиночный пассаж 13q остаётся passage_1", async () => {
     const entries = Array.from({ length: 13 }, (_, i) => `"${i + 1}":"TRUE"`).join(",");
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>const correctAnswers = {${entries}};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     expect(parsed.category).toBe("passage_1");
   });
 });
@@ -110,7 +116,10 @@ const correctAnswers = { 1: 'light', 2: 'manager', 11: 'B' };
 const acceptableVariants = { 2: ['manager','managers'] };
 const questionTypes = {"1":"Note completion","2":"Note completion","11":"MCQ"};
 </script></body></html>`;
-  const r = parseRunner(html);
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(html);
+  });
   it("вопросы распознаны, варианты подхвачены", () => {
     expect(r.parsed.section).toBe("listening");
     expect(r.parsed.questions).toHaveLength(3);
@@ -138,7 +147,10 @@ var mcqGroups = {"4-5": {"qs":[4,5],"correct":["A","C"]}};
 </script></body></html>`;
 
 describe("parseRunner — reading mcq_set (#7)", () => {
-  const r = parseRunner(readingWithMcqSet);
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(readingWithMcqSet);
+  });
   const q = (n: number) => r.parsed.questions.find((x) => x.number === n)!;
   it("члены mcqGroups → mcq_set + mcq_multi + groupKey (даже вне correctAnswers)", () => {
     expect(q(4).answer).toMatchObject({ mode: "mcq_set", accept: ["A", "C"] });
@@ -161,28 +173,28 @@ describe("parseRunner — reading mcq_set (#7)", () => {
 // Парсер НЕ меняет выход (mode/accept — тот же NORM-артефакт), только поднимает warning
 // на review-экран: админ обязан добавить mcqGroups-диапазон. Массив длины 1 — не multi.
 describe("parseRunner — array-shaped correct answer without mcqGroups", () => {
-  it("массив длины 2 без mcqGroups → warning; mode/accept НЕ меняются (exact + NORM-артефакт)", () => {
+  it("массив длины 2 без mcqGroups → warning; mode/accept НЕ меняются (exact + NORM-артефакт)", async () => {
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"1":["B","D"]};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     const q1 = parsed.questions.find((q) => q.number === 1)!;
     expect(q1.answer.mode).toBe("exact");
     expect(q1.answer.accept).toEqual(["B,D"]); // выход не тронут: String(["B","D"]) → "B,D"
     expect(parsed.warnings.some((w) => /Q1/.test(w) && /mcqGroups/i.test(w))).toBe(true);
   });
 
-  it("массив длины 1 → НЕ триггерит warning (не multi-select)", () => {
+  it("массив длины 1 → НЕ триггерит warning (не multi-select)", async () => {
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"1":["B"]};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     expect(parsed.warnings.some((w) => /Q1/.test(w) && /mcqGroups/i.test(w))).toBe(false);
   });
 
-  it("номер есть в mcqGroups → array-warning не поднимается (mcqGroups-ветка приоритетна)", () => {
+  it("номер есть в mcqGroups → array-warning не поднимается (mcqGroups-ветка приоритетна)", async () => {
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"1":["B","D"]};
 var mcqGroups = {"1-2": {"qs":[1,2],"correct":["B","D"]}};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     const q1 = parsed.questions.find((q) => q.number === 1)!;
     expect(q1.answer.mode).toBe("mcq_set"); // mcqGroups-ветка отработала
     expect(parsed.warnings.some((w) => /Q1/.test(w) && /mcqGroups/i.test(w) && /array/i.test(w))).toBe(false);
@@ -193,11 +205,11 @@ var mcqGroups = {"1-2": {"qs":[1,2],"correct":["B","D"]}};</script></body></html
 // mcqGroups (Cambridge 21 Reading Test 2 "Multiple Choice (TWO answers)"; Vol7 Test 3
 // "Multiple Choice (Two Answers)"). Warning поднимается, но qtype/mode/accept — как раньше.
 describe("parseRunner — choose-TWO/THREE label without mcqGroups", () => {
-  it('"Multiple Choice (TWO answers)" без mcqGroups → warning; qtype/mode/accept НЕ меняются', () => {
+  it('"Multiple Choice (TWO answers)" без mcqGroups → warning; qtype/mode/accept НЕ меняются', async () => {
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"20":"B","21":"D"};
 var questionTypes = {"20":"Multiple Choice (TWO answers)","21":"Multiple Choice (TWO answers)"};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     const q20 = parsed.questions.find((q) => q.number === 20)!;
     expect(q20.qtype).toBe("mcq_single"); // выход не тронут (CONTAINS multiplechoice)
     expect(q20.answer.mode).toBe("exact");
@@ -205,34 +217,34 @@ var questionTypes = {"20":"Multiple Choice (TWO answers)","21":"Multiple Choice 
     expect(parsed.warnings.some((w) => /Q20/.test(w) && /mcqGroups/i.test(w))).toBe(true);
   });
 
-  it('"Multiple Choice (Two Answers)" без mcqGroups → warning', () => {
+  it('"Multiple Choice (Two Answers)" без mcqGroups → warning', async () => {
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"21":"A","22":"C"};
 var questionTypes = {"21":"Multiple Choice (Two Answers)","22":"Multiple Choice (Two Answers)"};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     expect(parsed.warnings.some((w) => /Q21/.test(w) && /mcqGroups/i.test(w))).toBe(true);
   });
 
-  it('plain "Multiple Choice" → нет choose-many warning', () => {
+  it('plain "Multiple Choice" → нет choose-many warning', async () => {
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"1":"B"};var questionTypes = {"1":"Multiple Choice"};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     expect(parsed.warnings.some((w) => /Q1/.test(w) && /mcqGroups/i.test(w))).toBe(false);
   });
 
-  it('"Note completion (two words)" → нет warning (защита от голого "two")', () => {
+  it('"Note completion (two words)" → нет warning (защита от голого "two")', async () => {
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"1":"raindrops"};var questionTypes = {"1":"Note completion (two words)"};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     expect(parsed.warnings.some((w) => /Q1/.test(w) && /mcqGroups/i.test(w))).toBe(false);
   });
 
-  it("TWO-label, но номер в mcqGroups → нет choose-many warning (mcqGroups приоритетна)", () => {
+  it("TWO-label, но номер в mcqGroups → нет choose-many warning (mcqGroups приоритетна)", async () => {
     const html = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"20":"B"};
 var questionTypes = {"20":"Multiple Choice (TWO answers)"};
 var mcqGroups = {"20-21": {"qs":[20,21],"correct":["B","D"]}};</script></body></html>`;
-    const { parsed } = parseRunner(html);
+    const { parsed } = await parseRunner(html);
     const q20 = parsed.questions.find((q) => q.number === 20)!;
     expect(q20.answer.mode).toBe("mcq_set"); // mcqGroups-ветка отработала
     expect(parsed.warnings.some((w) => /Q20/.test(w) && /mcqGroups/i.test(w))).toBe(false);
@@ -240,7 +252,10 @@ var mcqGroups = {"20-21": {"qs":[20,21],"correct":["B","D"]}};</script></body></
 });
 
 describe("parseRunner — listening", () => {
-  const r = parseRunner(listening);
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(listening);
+  });
   it("определяет section listening и внешний audio src", () => {
     expect(r.parsed.section).toBe("listening");
     expect(r.externalAudioSrc).toMatch(/^https?:\/\/.+\.mp3$/);
@@ -256,7 +271,10 @@ describe("parseRunner — listening", () => {
 });
 
 describe("parseRunner — listening qtype", () => {
-  const r = parseRunner(listening);
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(listening);
+  });
   const qt = (n: number) => r.parsed.questions.find((q) => q.number === n)!.qtype;
   it("маппит qtype из QTYPE range-builder (не всё short_answer)", () => {
     expect(qt(1)).toBe("table_completion");
@@ -276,7 +294,10 @@ var questionTypes = {"1":"True/False/Not Given","2":"Frobnicate","3":"Some Match
 </script></body></html>`;
 
 describe("parseRunner — warnings (review gate)", () => {
-  const w = parseRunner(readingWithIssues).parsed.warnings;
+  let w: string[];
+  beforeAll(async () => {
+    w = (await parseRunner(readingWithIssues)).parsed.warnings;
+  });
   it("флагует неизвестный тип с фоллбэком на short_answer", () => {
     expect(w.some((x) => /Q2/.test(x) && /short_answer/i.test(x))).toBe(true);
   });
@@ -286,8 +307,8 @@ describe("parseRunner — warnings (review gate)", () => {
   it("флагует пустой ключ", () => {
     expect(w.some((x) => /Q2/.test(x) && /key/i.test(x))).toBe(true);
   });
-  it("чистый файл: нет unknown-type / empty-key warnings", () => {
-    const clean = parseRunner(reading).parsed.warnings;
+  it("чистый файл: нет unknown-type / empty-key warnings", async () => {
+    const clean = (await parseRunner(reading)).parsed.warnings;
     expect(clean.some((x) => /unknown type|empty answer key/i.test(x))).toBe(false);
   });
 });
@@ -300,7 +321,10 @@ describe("parseRunner — warnings (review gate)", () => {
 describe("parseRunner — пустой qtype блокирует publish (QTYPE hard-block)", () => {
   const blankHtml = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"1":"TRUE","2":"FALSE"};var questionTypes = {};</script></body></html>`;
-  const w = parseRunner(blankHtml).parsed.warnings;
+  let w: string[];
+  beforeAll(async () => {
+    w = (await parseRunner(blankHtml)).parsed.warnings;
+  });
 
   it("пустой qtype даёт блокирующий warning", () => {
     expect(w.some(isUnresolvedQuestionTypeWarning)).toBe(true);
@@ -310,14 +334,14 @@ describe("parseRunner — пустой qtype блокирует publish (QTYPE h
     expect(w.some((x) => /Q1/.test(x) && /type/i.test(x))).toBe(true);
   });
 
-  it("непустой нераспознанный тип в том же файле тоже остаётся блокирующим", () => {
+  it("непустой нераспознанный тип в том же файле тоже остаётся блокирующим", async () => {
     const mixed = `<!doctype html><html><head><title>R</title></head><body>
 <script>var correctAnswers = {"1":"TRUE"};var questionTypes = {"1":"Frobnicate"};</script></body></html>`;
-    expect(parseRunner(mixed).parsed.warnings.some(isUnresolvedQuestionTypeWarning)).toBe(true);
+    expect((await parseRunner(mixed)).parsed.warnings.some(isUnresolvedQuestionTypeWarning)).toBe(true);
   });
 
-  it("файл с валидными типами на всех вопросах не даёт блокирующих warning'ов", () => {
-    expect(parseRunner(reading).parsed.warnings.some(isUnresolvedQuestionTypeWarning)).toBe(false);
+  it("файл с валидными типами на всех вопросах не даёт блокирующих warning'ов", async () => {
+    expect((await parseRunner(reading)).parsed.warnings.some(isUnresolvedQuestionTypeWarning)).toBe(false);
   });
 });
 
@@ -351,18 +375,18 @@ describe("diagnoseEmptyRunnerParse (P4)", () => {
 // Codex-ревью (2026-07-09): bespoke-ключи "q1".."q40" под распознанным именем давали
 // вопрос с number=NaN (падал на persist-integer) вместо чистого 0-вопросного отказа.
 describe("parseRunner — нечисловые/неположительные ключи не создают вопросов (P4)", () => {
-  it("q-префиксные ключи reading → 0 распознанных вопросов", () => {
-    const { parsed } = parseRunner(`<script>const correctAnswers = {"q1":"A","q2":"B","q40":"C"};</script>`);
+  it("q-префиксные ключи reading → 0 распознанных вопросов", async () => {
+    const { parsed } = await parseRunner(`<script>const correctAnswers = {"q1":"A","q2":"B","q40":"C"};</script>`);
     expect(parsed.questions).toHaveLength(0);
   });
-  it("q-префиксные ключи listening → 0 распознанных вопросов", () => {
-    const { parsed } = parseRunner(
+  it("q-префиксные ключи listening → 0 распознанных вопросов", async () => {
+    const { parsed } = await parseRunner(
       `<script>const KEY = {"q1":["a"],"q2":["b"]};</script><audio></audio><div class="part" data-part="1"></div>`,
     );
     expect(parsed.questions).toHaveLength(0);
   });
-  it("валидные числовые ключи по-прежнему дают вопросы", () => {
-    const { parsed } = parseRunner(`<script>const correctAnswers = {"1":"A","2":"B"};</script>`);
+  it("валидные числовые ключи по-прежнему дают вопросы", async () => {
+    const { parsed } = await parseRunner(`<script>const correctAnswers = {"1":"A","2":"B"};</script>`);
     expect(parsed.questions.map((q) => q.number)).toEqual([1, 2]);
   });
 });

@@ -1,7 +1,7 @@
 // Тесты single-passage парсера (BRIEF §4.2). Inline-фикстура повторяет селекторы
 // parse-test.ts и формы JS-объектов из его контракта (не выдуманная разметка).
 // + блок skipIf на реальном samples/ (регрессия локально, скип в CI).
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseTest } from "./parse-test";
@@ -58,7 +58,10 @@ const SINGLE_HTML = `<!doctype html><html><head><title>Reading - Sample</title><
 </body></html>`;
 
 describe("parseTest — single passage", () => {
-  const t = parseTest(SINGLE_HTML);
+  let t: Awaited<ReturnType<typeof parseTest>>;
+  beforeAll(async () => {
+    t = await parseTest(SINGLE_HTML);
+  });
   const q = (n: number) => t.questions.find((x) => x.number === n)!;
 
   it("диспетчеризуется в single-passage и читает мету из рубрики", () => {
@@ -121,8 +124,8 @@ const DD_BLANK_HTML = `<!doctype html><html><head><title>Reading - Drag</title><
 </body></html>`;
 
 describe("parseTest gap fixtures", () => {
-  it("atomizes drag-and-drop completion blanks rendered as .dd-blank spans", () => {
-    const t = parseTest(DD_BLANK_HTML);
+  it("atomizes drag-and-drop completion blanks rendered as .dd-blank spans", async () => {
+    const t = await parseTest(DD_BLANK_HTML);
     const q31 = t.questions.find((q) => q.number === 31)!;
 
     expect(t.questions).toHaveLength(2);
@@ -132,7 +135,7 @@ describe("parseTest gap fixtures", () => {
     expect(t.warnings).toHaveLength(0);
   });
 
-  it("uses .stmt-text as the prompt for matching-table rows", () => {
+  it("uses .stmt-text as the prompt for matching-table rows", async () => {
     const html = `<!doctype html><html><head><title>Reading - Matching</title></head>
     <body>
       <div class="sectionRubric">Reading Passage 2. You should spend about 20 minutes on the Questions.</div>
@@ -153,7 +156,7 @@ describe("parseTest gap fixtures", () => {
         const questionTypes = { "14": "Matching Information" };
       </script>
     </body></html>`;
-    const t = parseTest(html);
+    const t = await parseTest(html);
     const q14 = t.questions.find((q) => q.number === 14)!;
 
     expect(q14.promptHtml).toBe("examples of strategies to decrease noise");
@@ -165,8 +168,8 @@ describe("parseTest gap fixtures", () => {
 
 const tuatara = sample("P3 Tuatara.html");
 describe.skipIf(!tuatara)("real sample — P3 Tuatara", () => {
-  it("чисто разбирает 14 вопросов, каждый с ключом, без band-шкалы", () => {
-    const t = parseTest(tuatara!);
+  it("чисто разбирает 14 вопросов, каждый с ключом, без band-шкалы", async () => {
+    const t = await parseTest(tuatara!);
     expect(t.section).toBe("reading");
     expect(t.category).toBe("passage_3");
     expect(t.passages).toHaveLength(1);
@@ -182,8 +185,8 @@ describe.skipIf(!tuatara)("real sample — P3 Tuatara", () => {
 
 const banff = sample("Banff National Park.html");
 describe.skipIf(!banff)("real sample — Banff National Park (MCQ)", () => {
-  it("разбирает MCQ-файл: 13 вопросов, есть mcq_set, нет unknown-type", () => {
-    const t = parseTest(banff!);
+  it("разбирает MCQ-файл: 13 вопросов, есть mcq_set, нет unknown-type", async () => {
+    const t = await parseTest(banff!);
     expect(t.questions).toHaveLength(13);
     expect(t.questionTypes).toEqual(expect.arrayContaining(["mcq_single", "mcq_multi"]));
     expect(t.questions.some((x) => x.answer.mode === "mcq_set")).toBe(true);
@@ -198,15 +201,15 @@ describe.skipIf(!banff)("real sample — Banff National Park (MCQ)", () => {
 // (`.passage-part`/`.questions-part`, не литеральный `.part`) — эти тесты
 // доказывают, что расширение их не задело, даже в намеренно adversarial случае.
 describe("isListening routing regression — reading остаётся reading", () => {
-  it("single passage без <audio> — как и раньше, диспетчеризуется в reading", () => {
-    const t = parseTest(SINGLE_HTML);
+  it("single passage без <audio> — как и раньше, диспетчеризуется в reading", async () => {
+    const t = await parseTest(SINGLE_HTML);
     expect(t.section).toBe("reading");
     expect(t.category).toBe("passage_2");
   });
 
-  it("adversarial: тот же single-passage файл + случайный <audio> без .part — audio-присутствия одного недостаточно, остаётся reading", () => {
+  it("adversarial: тот же single-passage файл + случайный <audio> без .part — audio-присутствия одного недостаточно, остаётся reading", async () => {
     const html = SINGLE_HTML.replace("<body>", '<body><audio src="unrelated.mp3"></audio>');
-    const t = parseTest(html);
+    const t = await parseTest(html);
     expect(t.section).toBe("reading");
     expect(t.category).toBe("passage_2");
   });

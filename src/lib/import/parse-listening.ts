@@ -19,7 +19,7 @@ import type {
  * (map labelling). There is no questionTypes object: the type is inferred from
  * each part's .q-instruction, exactly as a human reads it.
  */
-export function parseListening(html: string): ParsedTest {
+export async function parseListening(html: string): Promise<ParsedTest> {
   const $ = cheerio.load(html);
   const warnings: string[] = [];
 
@@ -28,9 +28,9 @@ export function parseListening(html: string): ParsedTest {
     .map((s) => $(s).html() ?? "")
     .join("\n");
   const keyRaw: Record<string, string | string[]> =
-    extractData(script, "KEY") ?? {};
+    (await extractData(script, "KEY")) ?? {};
   const correctRaw: Record<string, string | string[]> =
-    extractData(script, "correctAnswers") ?? {};
+    (await extractData(script, "correctAnswers")) ?? {};
   const key =
     Object.keys(keyRaw).length > 0 ? normalizeKey(keyRaw) : normalizeKey(correctRaw);
   if (Object.keys(key).length === 0) warnings.push("KEY answer object not found.");
@@ -340,8 +340,8 @@ export function parseListening(html: string): ParsedTest {
   let bandScale: Record<string, number> | null = null;
   if (category === "full_listening") {
     const raw =
-      extractFunctionTable(script, "band", 0, 40) ??
-      extractFunctionTable(script, "calculateIELTSScore", 0, 40);
+      (await extractFunctionTable(script, "band", 0, 40)) ??
+      (await extractFunctionTable(script, "calculateIELTSScore", 0, 40));
     if (!raw) warnings.push("band(r) function not found — no band scale.");
     bandScale = raw ? Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v])) : null;
   }
