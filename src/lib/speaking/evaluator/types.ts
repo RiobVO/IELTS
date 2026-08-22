@@ -4,8 +4,10 @@ import { z } from "zod";
 const band = z.number().min(0).max(9);
 
 // Annotation type drives the legend + transcript tint + comment-card accent in the UI:
-// pause/filler/repair surface hesitation, grammar a slip, good a strong move to reinforce.
-const AnnotationType = z.enum(["pause", "filler", "repair", "grammar", "good"]);
+// pause/filler/repair surface hesitation, grammar a slip, good a strong move to reinforce,
+// task = off-task/not-assessable речь (не-английская, чтение вслух и т.п.) — раньше модель
+// шохорнила такое в filler, что путало легенду на дегенеративных записях.
+const AnnotationType = z.enum(["pause", "filler", "repair", "grammar", "good", "task"]);
 
 const CriterionSchema = z.object({
   name: z.enum(["fluency_coherence", "lexical_resource", "grammar_accuracy", "pronunciation"]),

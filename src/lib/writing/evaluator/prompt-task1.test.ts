@@ -73,6 +73,6 @@ describe("buildTask1Prompt", () => {
   });
 
   it("has a stable version", () => {
-    expect(TASK1_PROMPT_VERSION).toBe("writing-task1-v2");
+    expect(TASK1_PROMPT_VERSION).toBe("writing-task1-v3");
   });
 });

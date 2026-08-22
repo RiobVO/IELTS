@@ -4,7 +4,7 @@
 export { confidencePills, axisPct, gapToTarget } from "@/lib/writing/feedback-view";
 export { confidenceLabel as confidenceLabelFor } from "@/lib/writing/labels";
 
-export type AnnoType = "good" | "style" | "grammar";
+export type AnnoType = "good" | "style" | "grammar" | "task";
 
 export interface TypeStyle {
   accent: string; // text/border accent token
@@ -19,4 +19,7 @@ export const TYPE_STYLE: Record<AnnoType, TypeStyle> = {
   good: { accent: "var(--success-text)", tint: "var(--success-subtle)", label: "Good move", legend: "Good move" },
   style: { accent: "var(--warn-text)", tint: "var(--warn-subtle)", label: "Style", legend: "Style & clarity" },
   grammar: { accent: "var(--error-text)", tint: "var(--error-subtle)", label: "Grammar", legend: "Grammar" },
+  // task = off-task/copied content (prompt v4) — нейтральные токены: это не языковая
+  // ошибка, а «здесь нечего оценивать». В легенде показывается только когда есть.
+  task: { accent: "var(--text-secondary)", tint: "var(--surface-inset)", label: "Off-task", legend: "Off-task" },
 };

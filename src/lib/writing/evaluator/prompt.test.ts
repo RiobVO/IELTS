@@ -26,7 +26,7 @@ describe("buildPrompt", () => {
     for (const b of ["Band 9", "Band 8", "Band 7", "Band 6", "Band 5"]) expect(p).toContain(b);
   });
   it("has a stable version", () => {
-    expect(PROMPT_VERSION).toBe("writing-task2-v3");
+    expect(PROMPT_VERSION).toBe("writing-task2-v4");
   });
   it("carries an injection guard for the essay block (#15)", () => {
     const p = buildPrompt(input).toLowerCase();
