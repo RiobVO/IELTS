@@ -25,6 +25,11 @@ concurrency:
   group: db-backup
   cancel-in-progress: false
 
+# Минимальные права токена (Codex-ревью волны 1): без явного блока эффективные
+# права зависят от repo-настройки и могли бы включать write.
+permissions:
+  contents: read
+
 jobs:
   dump:
     runs-on: ubuntu-latest
@@ -76,9 +81,16 @@ jobs:
       # Restore-smoke (TESTING_PLAN §5): size-guard выше ловит пустой gzip, но не
       # «дамп не той/пустой БД» и не нерестворимый дамп. Восстанавливаем в scratch-PG
       # и ассертим КАРКАС приложения. Шаг идёт ПОСЛЕ upload: частичный дамп в
-      # артефактах лучше, чем никакого. ON_ERROR_STOP выключен сознательно — дамп
-      # Supabase несёт auth-объекты/политики, которых нет в ванильном PG; важна не
-      # безошибочность restore, а восстановимость данных приложения.
+      # артефактах лучше, чем никакого.
+      #
+      # Codex-ревью волны 1 (high): прежний вариант глотал ЛЮБОЙ exit-код через
+      # `|| true` и мерил только count(*) таблиц. Теперь: pipefail (shell: bash)
+      # роняет шаг на битом gzip/умершем psql; statement-уровневые ошибки psql
+      # остаются нефатальными БЕЗ ON_ERROR_STOP сознательно (дамп Supabase несёт
+      # auth-объекты/политики, которых нет в ванильном PG); ассерты — по ИМЕНАМ
+      # критических таблиц + представитель post-data секции (unique-constraint
+      # payment: COPY/post-data, оборвавшиеся до неё, больше не зеленеют).
+      # Полный restore-drill (row-counts, RPO/RTO, rollback-репетиция) — волна 4.
       - name: Restore-smoke — dump restores and holds the app schema
         shell: bash
         run: |
@@ -88,13 +100,18 @@ jobs:
             sleep 1
           done
           gunzip -c "${{ steps.meta.outputs.name }}" \
-            | docker exec -i restore-smoke psql -q -U postgres postgres >/dev/null 2>&1 || true
-          tables=$(docker exec restore-smoke psql -tA -U postgres postgres \
-            -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name !~ '^_'")
-          profiles=$(docker exec restore-smoke psql -tA -U postgres postgres \
-            -c "SELECT count(*) FROM profile" 2>/dev/null || echo 0)
-          echo "restored: tables=$tables profiles=$profiles"
+            | docker exec -i restore-smoke psql -q -U postgres postgres >/dev/null
+          q() { docker exec restore-smoke psql -tA -U postgres postgres -c "$1"; }
+          tables=$(q "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name !~ '^_'")
+          missing=$(q "SELECT string_agg(t, ', ') FROM unnest(ARRAY['profile','payment','attempt','content_item','question','answer_key','attempt_review_snapshot']) AS t WHERE to_regclass('public.' || t) IS NULL")
+          profiles=$(q "SELECT count(*) FROM profile")
+          # payment_provider_tx_key живёт в post-data секции дампа — его наличие
+          # доказывает, что restore дошёл до constraints, а не оборвался на COPY.
+          postdata=$(q "SELECT count(*) FROM pg_constraint WHERE conname = 'payment_provider_tx_key'")
+          echo "restored: tables=$tables profiles=$profiles postdata=$postdata missing='${missing}'"
+          [ -z "$missing" ] || { echo "::error::restore-smoke: critical tables missing: $missing"; exit 1; }
           # 37 app-таблиц (verify.ts APP_TABLE_COUNT); profile ≥ 1 — аккаунты
           # пережили даже контент-вайп, пустой profile = дамп не прод-БД.
           [ "$tables" -ge 37 ] || { echo "::error::restore-smoke: only $tables app tables (< 37)"; exit 1; }
           [ "$profiles" -ge 1 ] || { echo "::error::restore-smoke: profile table is empty"; exit 1; }
+          [ "$postdata" -ge 1 ] || { echo "::error::restore-smoke: post-data section missing (payment_provider_tx_key not restored)"; exit 1; }

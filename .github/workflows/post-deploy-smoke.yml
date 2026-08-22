@@ -7,6 +7,14 @@ name: post-deploy-smoke
 # против прода (анти-цель §13). Preview-smoke сознательно НЕ на каждый push:
 # при обычном push в main preview-деплоя не существует; временная ветка с
 # preview — только для рискованных релизов (платежи, iframe, mobile).
+#
+# Codex-ревью волны 1 (high): проверка ТОЛЬКО канонического домена могла
+# озеленить СТАРЫЙ релиз — deployment_status приходит раньше переключения alias,
+# старый деплой отвечает 200, а сломанный новый вставал бы позже. Поэтому пробы
+# двухслойные: (1) прямой URL ИМЕННО ЭТОГО деплоя (environment_url — гонки с
+# alias нет), (2) канонический домен с расширенным окном ретраев (alias/DNS
+# может отставать). Каждая HTML-проба несёт контент-маркер — голый 200 от
+# maintenance/soft-404 страницы не считается.
 
 on:
   deployment_status:
@@ -21,34 +29,55 @@ jobs:
       (github.event.deployment_status.environment == 'Production' ||
        github.event.deployment_status.environment == 'production')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    env:
+      # Через env, НЕ инлайн-интерполяцию в run: значение из внешнего события
+      # не должно попадать в текст скрипта (script-injection поверхность).
+      DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
     steps:
-      - name: Read-only smoke против bando.study
+      - name: Read-only smoke — сам деплой + канонический домен
         shell: bash
         run: |
-          # Канонический домен, не unique-URL деплоя: заодно проверяем алиас/DNS.
-          base="https://bando.study"
-          # Ретраи: алиас домена может отстать от deployment_status на секунды.
-          probe() { # $1=path $2=grep-маркер (опционален)
-            local url="$base$1"
-            for i in 1 2 3; do
+          probe() { # $1=url $2=grep-маркер (опционален) $3=попыток (default 3)
+            local url="$1" marker="$2" attempts="${3:-3}"
+            for i in $(seq 1 "$attempts"); do
               body=$(curl -sS --max-time 15 -w '\n%{http_code}' "$url") || body=$'\nCURL_FAIL'
               code=$(echo "$body" | tail -1)
               if [ "$code" = "200" ]; then
-                if [ -z "$2" ] || echo "$body" | grep -q "$2"; then
+                if [ -z "$marker" ] || echo "$body" | grep -q "$marker"; then
                   echo "[OK] $url"
                   return 0
                 fi
+                echo "attempt $i: $url -> 200, но маркер '$marker' не найден"
+              else
+                echo "attempt $i: $url -> $code"
               fi
-              echo "attempt $i: $url -> $code, retrying"
-              sleep 10
+              [ "$i" -lt "$attempts" ] && sleep 10
             done
-            echo "::error::[FAIL] $url — status/body check failed after 3 attempts"
+            echo "::error::[FAIL] $url — status/marker check failed after $attempts attempts"
             return 1
           }
+
           fail=0
-          probe "/api/health" '"status":"ok"' || fail=1
-          probe "/" || fail=1
-          probe "/pricing" || fail=1
-          probe "/auth" || fail=1
+
+          # Слой 1: НОВЫЙ деплой напрямую (без гонки alias). environment_url
+          # публичен для Production-деплоев; пустое значение — честная ошибка,
+          # иначе слой молча выпадал бы и smoke деградировал к старой дыре.
+          if [ -n "$DEPLOY_URL" ]; then
+            probe "$DEPLOY_URL/api/health" '"status":"ok"' || fail=1
+            probe "$DEPLOY_URL/" "IELTS Reading" || fail=1
+          else
+            echo "::error::environment_url is empty — cannot probe the new deployment directly"
+            fail=1
+          fi
+
+          # Слой 2: канонический домен (alias/DNS/маршрутизация). Окно ретраев
+          # шире (6×10с ≈ минута) — переключение alias может отставать от
+          # deployment_status.
+          base="https://bando.study"
+          probe "$base/api/health" '"status":"ok"' 6 || fail=1
+          probe "$base/" "IELTS Reading" 6 || fail=1
+          probe "$base/pricing" "Premium" 6 || fail=1
+          probe "$base/auth" "Sign in" 6 || fail=1
+
           exit $fail
