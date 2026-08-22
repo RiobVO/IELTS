@@ -1,5 +1,6 @@
 "use server";
 import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { speakingSubmission, speakingFeedback, speakingFeedbackDebug, profile } from "@/db/schema";
@@ -33,6 +34,9 @@ export async function recordConsent(): Promise<void> {
     .set({ recordingConsentAt: new Date() })
     .where(and(eq(profile.id, user.id), isNull(profile.recordingConsentAt)));
   await logAudioEvent(user.id, null, "consent_given");
+  // Attempt-страницы читают hasConsent server-side — без ревалидации закешированная
+  // страница (staleTimes) заново показала бы consent-модал уже согласившемуся.
+  revalidatePath("/app/speaking", "layout");
 }
 
 export async function createSpeakingSubmission(
@@ -127,6 +131,14 @@ export async function getSpeakingStatus(
     return { status: "failed" };
   }
   if (own.status === "pending") triggerEvaluate(submissionId); // re-kick a lost trigger
+  // completed — момент видимости анализа на поверхностях (preview-стейт каталога,
+  // история, список W/S на /app/progress); зеркало getSubmissionStatus (writing):
+  // оценка завершается в internal-роуте без клиентского контекста, ревалидируем в
+  // полле. create/upload/failed поверхностей не меняют — без ревалидации.
+  if (own.status === "completed") {
+    revalidatePath("/app/speaking", "layout");
+    revalidatePath("/app/progress");
+  }
   return { status: own.status };
 }
 
@@ -150,6 +162,9 @@ export async function deleteSpeakingRecording(submissionId: string): Promise<{ o
   // и её — до remove, чтобы текст ушёл даже при сбое storage.
   await db.update(speakingFeedbackDebug).set({ rawOutput: "[redacted: user delete]" })
     .where(eq(speakingFeedbackDebug.submissionId, submissionId));
+  // Транскрипт уже вычищен независимо от исхода storage-remove ниже — result/history
+  // не должны отдавать его из клиентского кеша (staleTimes); ревалидируем до try.
+  revalidatePath("/app/speaking", "layout");
   // Mark the AUDIO deleted ONLY after the object is actually gone. A failed remove used to
   // be swallowed (empty catch) then marked deleted anyway → biometrics silently retained
   // forever (#2). Now record the failure and stay retryable (audio_deleted_at NULL) so the

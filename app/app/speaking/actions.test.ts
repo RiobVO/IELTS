@@ -6,8 +6,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // create→evaluate desync is closed (no upload/insert when the trigger can't fire).
 const {
   getUser, getProfile, counts, recentCount, insertUploading, trigger, signedUpload, logEvent, dbSelect, dbUpdate, loadTask,
-  readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk, logErrorFn,
+  readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk, logErrorFn, revalidatePathMock,
 } = vi.hoisted(() => ({
+    revalidatePathMock: vi.fn(),
     getUser: vi.fn(),
     getProfile: vi.fn(),
     counts: vi.fn(),
@@ -58,6 +59,8 @@ vi.mock("@/db", () => ({
 vi.mock("@/env", () => ({ speakingFeatureEnabled: featureEnabled }));
 // actions.ts теперь логирует через logError (F5) — мокаем, как соседние route-тесты.
 vi.mock("@/lib/monitoring/log-error", () => ({ logError: logErrorFn }));
+// revalidatePath вне request-скоупа Next бросает — мокаем, как publish.test.ts.
+vi.mock("next/cache", () => ({ revalidatePath: revalidatePathMock }));
 
 import { createSpeakingSubmission, deleteSpeakingRecording } from "./actions";
 import { SPEAKING_RATE_MAX } from "@/lib/speaking/lifecycle";
@@ -68,7 +71,7 @@ const TASK = "11111111-1111-1111-1111-111111111111"; // a well-formed task id
 
 beforeEach(() => {
   [getUser, getProfile, counts, recentCount, insertUploading, trigger, signedUpload, logEvent, dbSelect, dbUpdate, featureEnabled, loadTask,
-    readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk, logErrorFn].forEach(
+    readOwn, markDeleted, markDeleteFailed, deleteAudioFn, failStaleSpk, logErrorFn, revalidatePathMock].forEach(
     (m) => m.mockReset(),
   );
   featureEnabled.mockReturnValue(true); // default fully configured; #5 case overrides
@@ -201,6 +204,8 @@ describe("deleteSpeakingRecording (#2)", () => {
     expect(await deleteSpeakingRecording("sub1")).toEqual({ ok: true });
     expect(markDeleted).toHaveBeenCalledWith("sub1", "u1", "user");
     expect(markDeleteFailed).not.toHaveBeenCalled();
+    // Транскрипт вычищен → result/history не должны отдать его из Router Cache.
+    expect(revalidatePathMock).toHaveBeenCalledWith("/app/speaking", "layout");
   });
 
   // N6: raw_output в speaking_feedback_debug — эхо речи (PII). Hard-lock (RLS+REVOKE)
