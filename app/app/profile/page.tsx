@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { and, eq } from "drizzle-orm";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -246,7 +247,7 @@ export default async function ProfilePage() {
 
         {/* NEXT MOVE + momentum */}
         <div className="pf-duo" style={S.duo}>
-          <a href="/app/reading" style={S.nextCard}>
+          <Link href="/app/reading" style={S.nextCard}>
             <span style={S.nextIcon}><Icon name="target" size={24} strokeWidth={2.3} /></span>
             <div style={{ flex: 1 }}>
               <div style={S.nextEyebrow}>Your next move</div>
@@ -254,7 +255,7 @@ export default async function ProfilePage() {
               <div style={S.nextSub}>{weakest ? "Your weakest type — the fastest band win." : "We'll surface your weakest type from the result."}</div>
             </div>
             <span style={{ color: "var(--text-disabled)" }}><Icon name="chevron-right" size={20} strokeWidth={2.3} /></span>
-          </a>
+          </Link>
           <div style={S.weekCard}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 13 }}>
               <span className="pf-sub" style={S.sub}>This week</span>
@@ -286,7 +287,7 @@ export default async function ProfilePage() {
           <div style={S.achCard}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
               <span className="pf-sub" style={S.sub}>Achievements</span>
-              <a href="/app/progress?tab=badges" style={S.achLink}>All {badges.length || 12} →</a>
+              <Link href="/app/progress?tab=badges" style={S.achLink}>All {badges.length || 12} →</Link>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               {preview.map((b, i) => (
@@ -295,7 +296,7 @@ export default async function ProfilePage() {
                 </div>
               ))}
             </div>
-            <div style={S.achFoot}>{earnedCount} earned · <a href="/app/progress?tab=badges" style={S.achFootLink}>see what&apos;s next →</a></div>
+            <div style={S.achFoot}>{earnedCount} earned · <Link href="/app/progress?tab=badges" style={S.achFootLink}>see what&apos;s next →</Link></div>
           </div>
           <div style={S.invite}>
             <div aria-hidden="true" style={S.inviteGlow} />
