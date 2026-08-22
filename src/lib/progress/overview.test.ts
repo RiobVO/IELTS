@@ -4,9 +4,9 @@
 import { describe, it, expect } from "vitest";
 import {
   buildTrajectory,
-  buildOverallSeries,
   computeForecast,
   buildReadiness,
+  midBand,
   maxBandGainPerDay,
   maxForecastBandGain,
   type TrajectoryAttempt,
@@ -597,11 +597,9 @@ describe("computeForecast — граница по числу точек n=0..5",
 /* -------------------------------------------------------------------------- */
 
 describe("buildReadiness", () => {
-  it("все 4 скилла заданы → overall = среднее, округлённое к 0.5", () => {
+  it("все 4 скилла заданы → counted=4, порядок R,L,W,S", () => {
     const r = buildReadiness({ reading: 7, listening: 6, writing: 6.5, speaking: 6, targetBand: 6.5 });
     expect(r.skillsCounted).toBe(4);
-    // среднее (7+6+6.5+6)/4 = 6.375 → округл. к 0.5 = 6.5
-    expect(r.overallBand).toBe(6.5);
     expect(r.skills.map((s) => s.skill)).toEqual(["reading", "listening", "writing", "speaking"]);
   });
 
@@ -617,170 +615,40 @@ describe("buildReadiness", () => {
     expect(speaking.gap).toBe(1);
   });
 
-  it("отсутствующий скилл → band=null, met=false, gap=null, не входит в overall", () => {
+  it("отсутствующий скилл → band=null, met=false, gap=null, не входит в counted", () => {
     const r = buildReadiness({ reading: 7, listening: null, writing: null, speaking: null, targetBand: 6 });
     const listening = r.skills.find((s) => s.skill === "listening")!;
     expect(listening.band).toBeNull();
     expect(listening.met).toBe(false);
     expect(listening.gap).toBeNull();
     expect(r.skillsCounted).toBe(1);
-    expect(r.overallBand).toBe(7); // единственный доступный
   });
 
   it("нет target → met везде false, gap везде null", () => {
     const r = buildReadiness({ reading: 7, listening: 6, writing: 6, speaking: 6, targetBand: null });
     expect(r.skills.every((s) => !s.met && s.gap === null)).toBe(true);
-    expect(r.overallBand).toBe(6.5); // overall не зависит от target
   });
 
-  it("пусто → overall=null, counted=0", () => {
+  it("пусто → counted=0", () => {
     const r = buildReadiness({ reading: null, listening: null, writing: null, speaking: null, targetBand: 6 });
-    expect(r.overallBand).toBeNull();
     expect(r.skillsCounted).toBe(0);
   });
 });
 
 /* -------------------------------------------------------------------------- */
-/* buildOverallSeries                                                          */
+/* midBand — представитель W/S-диапазона для Readiness                         */
 /* -------------------------------------------------------------------------- */
 
-describe("buildOverallSeries", () => {
-  /**
-   * Регрессия из прода (скрин владельца 2026-07-15): Reading 3.5 стоял между
-   * Listening 2.0, и линия через сырой `combined` рисовала «башню» — отрезок
-   * Listening→Reading заявлял скачок +1.5, которого не было (это разные тесты).
-   * Инвариант: overall-линия строится по ОДНОЙ величине и таких зубцов не даёт.
-   */
-  const towerShape: TrajectoryAttempt[] = [
-    { bandScore: 2, section: "listening", submittedAt: new Date(day(0)) },
-    { bandScore: 2, section: "listening", submittedAt: new Date(day(1)) },
-    { bandScore: 3.5, section: "reading", submittedAt: new Date(day(2)) },
-    { bandScore: 2, section: "listening", submittedAt: new Date(day(3)) },
-    { bandScore: 3.5, section: "reading", submittedAt: new Date(day(4)) },
-  ];
-
-  it("не даёт «башни» на форме со скрина: пила из 3 зубцов → одна ступенька", () => {
-    const tr = buildTrajectory(towerShape);
-    const raw = tr.combined.map((p) => p.band);
-    const overall = buildOverallSeries(tr.combined).map((p) => p.band);
-    const changes = (xs: number[]) => xs.slice(1).filter((b, i) => b !== xs[i]).length;
-
-    // Сырое облако: 2 → 3.5 → 2 → 3.5, три смены подряд. Это и была «башня».
-    expect(changes(raw)).toBe(3);
-
-    // Overall: пока сдан только Listening — 2.0; пришёл Reading 3.5 → (3.5+2)/2 = 2.75 →
-    // 3.0, и дальше держится, потому что ни R, ни L больше не менялись.
-    expect(overall).toEqual([2, 2, 3, 3, 3]);
-    // Ровно ОДНА смена — приход новой информации, а не рывок способностей. Пилы нет.
-    expect(changes(overall)).toBe(1);
+describe("midBand", () => {
+  it("середина вне 0.5-сетки округляется к сетке (.25 → вверх, как официальный overall)", () => {
+    expect(midBand(6, 6.5)).toBe(6.5); // 6.25 → 6.5 (раньше в UI утекало «6.3»)
+    expect(midBand(5.5, 6)).toBe(6); // 5.75 → 6.0
   });
 
-  it("линия покрывает ВСЮ историю, а не только хвост с обеими секциями", () => {
-    // Скрин владельца: Listening подряд, Reading только в конце. Пока overall требовал
-    // обе секции, «твой band» появлялся лишь на последней пятой части графика — главная
-    // линия превращалась в огрызок, и график читался как «точки в пустоте».
-    const tr = buildTrajectory(towerShape);
-    const overall = buildOverallSeries(tr.combined);
-    expect(overall).toHaveLength(tr.combined.length);
-    expect(overall[0].t).toBe(tr.combined[0].t);
-    expect(overall[overall.length - 1].t).toBe(tr.combined[tr.combined.length - 1].t);
-  });
-
-  it("считает overall как среднее ПОСЛЕДНИХ R и L, округляя к 0.5 (как официальный)", () => {
-    // L=2.0 один → 2.0; затем R=3.5 → (3.5+2)/2 = 2.75 → 3.0 (официальное: .75 вверх).
-    expect(
-      buildOverallSeries(
-        buildTrajectory([
-          { bandScore: 2, section: "listening", submittedAt: new Date(day(0)) },
-          { bandScore: 3.5, section: "reading", submittedAt: new Date(day(1)) },
-        ]).combined,
-      ),
-    ).toEqual([
-      { t: day(0), band: 2 },
-      { t: day(1), band: 3 },
-    ]);
-
-    // R=6.0 один → 6.0; затем L=7.0 → 6.5 ровно на сетке.
-    expect(
-      buildOverallSeries(
-        buildTrajectory([
-          { bandScore: 6, section: "reading", submittedAt: new Date(day(0)) },
-          { bandScore: 7, section: "listening", submittedAt: new Date(day(1)) },
-        ]).combined,
-      ),
-    ).toEqual([
-      { t: day(0), band: 6 },
-      { t: day(1), band: 6.5 },
-    ]);
-  });
-
-  it("пока сдана одна секция — overall равен ей (та же конвенция, что buildReadiness)", () => {
-    const tr = buildTrajectory([
-      { bandScore: 5, section: "reading", submittedAt: new Date(day(0)) },
-      { bandScore: 6, section: "reading", submittedAt: new Date(day(1)) },
-      { bandScore: 3, section: "listening", submittedAt: new Date(day(2)) },
-    ]);
-    // Первые два мока — только Reading: лучшая оценка из известного = сам Reading.
-    // Затем приходит Listening 3 → (6+3)/2 = 4.5. Ступенька = новая информация.
-    expect(buildOverallSeries(tr.combined)).toEqual([
-      { t: day(0), band: 5 },
-      { t: day(1), band: 6 },
-      { t: day(2), band: 4.5 },
-    ]);
-  });
-
-  it("одна секция за всю историю → overall повторяет её; пустой вход → пусто", () => {
-    const onlyReading = buildTrajectory([
-      { bandScore: 5, section: "reading", submittedAt: new Date(day(0)) },
-      { bandScore: 6, section: "reading", submittedAt: new Date(day(1)) },
-    ]);
-    expect(buildOverallSeries(onlyReading.combined).map((p) => p.band)).toEqual([5, 6]);
-    expect(buildOverallSeries([])).toEqual([]);
-  });
-
-  it("держит ПОСЛЕДНИЙ результат секции, а не первый", () => {
-    const tr = buildTrajectory([
-      { bandScore: 4, section: "reading", submittedAt: new Date(day(0)) },
-      { bandScore: 4, section: "listening", submittedAt: new Date(day(1)) },
-      { bandScore: 8, section: "reading", submittedAt: new Date(day(2)) },
-    ]);
-    // Свежий Reading 8 вытесняет старый 4: (8+4)/2 = 6.
-    expect(buildOverallSeries(tr.combined).map((p) => p.band)).toEqual([4, 4, 6]);
-  });
-
-  it("два мока в один момент дают одну точку — линия не описывает вертикаль", () => {
-    const tr = buildTrajectory([
-      { bandScore: 4, section: "listening", submittedAt: new Date(day(0)) },
-      { bandScore: 4, section: "reading", submittedAt: new Date(day(1)) },
-      { bandScore: 8, section: "reading", submittedAt: new Date(day(1)) },
-    ]);
-    const overall = buildOverallSeries(tr.combined);
-    expect(new Set(overall.map((p) => p.t)).size).toBe(overall.length);
-    // Побеждает последний по сортировке (t, band) мок той же секции: (8+4)/2 = 6.
-    expect(overall).toEqual([
-      { t: day(0), band: 4 },
-      { t: day(1), band: 6 },
-    ]);
-  });
-
-  it("overall всегда лежит между последними R и L — не выходит за свои же данные", () => {
-    const tr = buildTrajectory([
-      { bandScore: 2, section: "listening", submittedAt: new Date(day(0)) },
-      { bandScore: 9, section: "reading", submittedAt: new Date(day(1)) },
-      { bandScore: 4.5, section: "listening", submittedAt: new Date(day(2)) },
-      { bandScore: 5, section: "reading", submittedAt: new Date(day(3)) },
-    ]);
-    for (const p of buildOverallSeries(tr.combined)) {
-      const seen = tr.combined.filter((c) => c.t <= p.t).map((c) => c.band);
-      expect(p.band).toBeGreaterThanOrEqual(Math.min(...seen));
-      expect(p.band).toBeLessThanOrEqual(Math.max(...seen));
-    }
-  });
-
-  it("прогноз продолжает есть сырой combined — buildOverallSeries его не трогает", () => {
-    const tr = buildTrajectory(towerShape);
-    const before = JSON.stringify(tr.combined);
-    buildOverallSeries(tr.combined);
-    expect(JSON.stringify(tr.combined)).toBe(before);
+  it("середина на сетке возвращается как есть", () => {
+    expect(midBand(5.5, 6.5)).toBe(6);
+    expect(midBand(7, 7)).toBe(7);
+    expect(midBand(6, 7)).toBe(6.5);
   });
 });
+
