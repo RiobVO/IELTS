@@ -161,11 +161,16 @@ workflow-файла), `npm audit --audit-level=high` в CI (moderate видны 
 Acceptance: красный любой ступени = красный коммит в журнале CI; время прогона ≤15 мин.
 **Факт 2026-07-19: все 6 джобов зелёные с первого прогона, wall-clock ~2 мин;
 smoke прошёл на живом Production-деплое.** Codex-ревью волны: 2 high исправлены
-тут же — smoke стал двухслойным (прямой environment_url нового деплоя убивает
-гонку «зелёный по старому релизу до переключения alias» + канон с окном 6×10с и
-контент-маркерами на каждой HTML-пробе), restore-smoke без `||true` (pipefail)
+тут же — smoke стал двухслойным (слой 1: /api/health несёт `commit` =
+VERCEL_GIT_COMMIT_SHA, канон обязан отдать sha ИМЕННО этого деплоя — убивает
+гонку «зелёный по старому релизу до переключения alias»; environment_url не
+годится — уникальные URL закрыты Vercel Authentication, 302, проверено живым
+прогоном; слой 2: контент-маркеры на каждой HTML-пробе), restore-smoke без
+`||true` (pipefail)
 с ассертами по именам критических таблиц + post-data представителю
-(payment_provider_tx_key); попутно gitleaks запинен на commit SHA, db-backup
+(unique-constraint payment, структурно по contype — автоимя PG в миграции 0006
+≠ имени в Drizzle-схеме, первый живой прогон поймал ровно это); попутно
+gitleaks запинен на commit SHA, db-backup
 получил минимальный permissions-блок, floor требует численные skipped-счётчики
 (дрейф схемы отчёта = красный). Отклонено осознанно: недетерминизм npm audit —
 это роль детектора (upstream high-advisory обязана красить журнал).

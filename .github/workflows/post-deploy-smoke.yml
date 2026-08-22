@@ -8,13 +8,13 @@ name: post-deploy-smoke
 # при обычном push в main preview-деплоя не существует; временная ветка с
 # preview — только для рискованных релизов (платежи, iframe, mobile).
 #
-# Codex-ревью волны 1 (high): проверка ТОЛЬКО канонического домена могла
-# озеленить СТАРЫЙ релиз — deployment_status приходит раньше переключения alias,
-# старый деплой отвечает 200, а сломанный новый вставал бы позже. Поэтому пробы
-# двухслойные: (1) прямой URL ИМЕННО ЭТОГО деплоя (environment_url — гонки с
-# alias нет), (2) канонический домен с расширенным окном ретраев (alias/DNS
-# может отставать). Каждая HTML-проба несёт контент-маркер — голый 200 от
-# maintenance/soft-404 страницы не считается.
+# Codex-ревью волны 1 (high): проверка «канон отвечает 200» могла озеленить
+# СТАРЫЙ релиз — deployment_status приходит раньше переключения alias. Прямой
+# environment_url не работает: уникальные URL деплоя закрыты Vercel
+# Authentication (302 на SSO; проверено живым прогоном). Решение без секретов:
+# /api/health отдаёт commit (VERCEL_GIT_COMMIT_SHA), слой 1 ждёт на каноне
+# ИМЕННО sha этого деплоя — только затем контент-пробы страниц. Голый 200 от
+# maintenance/soft-404 не считается: каждая HTML-проба несёт маркер.
 
 on:
   deployment_status:
@@ -33,51 +33,57 @@ jobs:
     env:
       # Через env, НЕ инлайн-интерполяцию в run: значение из внешнего события
       # не должно попадать в текст скрипта (script-injection поверхность).
-      DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
+      DEPLOY_SHA: ${{ github.event.deployment.sha }}
     steps:
-      - name: Read-only smoke — сам деплой + канонический домен
+      - name: Smoke — канон отдаёт ИМЕННО этот деплой, страницы живы
         shell: bash
         run: |
-          probe() { # $1=url $2=grep-маркер (опционален) $3=попыток (default 3)
-            local url="$1" marker="$2" attempts="${3:-3}"
-            for i in $(seq 1 "$attempts"); do
-              body=$(curl -sS --max-time 15 -w '\n%{http_code}' "$url") || body=$'\nCURL_FAIL'
-              code=$(echo "$body" | tail -1)
-              if [ "$code" = "200" ]; then
-                if [ -z "$marker" ] || echo "$body" | grep -q "$marker"; then
-                  echo "[OK] $url"
-                  return 0
-                fi
-                echo "attempt $i: $url -> 200, но маркер '$marker' не найден"
-              else
-                echo "attempt $i: $url -> $code"
-              fi
-              [ "$i" -lt "$attempts" ] && sleep 10
-            done
-            echo "::error::[FAIL] $url — status/marker check failed after $attempts attempts"
-            return 1
-          }
+          base="https://bando.study"
 
-          fail=0
-
-          # Слой 1: НОВЫЙ деплой напрямую (без гонки alias). environment_url
-          # публичен для Production-деплоев; пустое значение — честная ошибка,
-          # иначе слой молча выпадал бы и smoke деградировал к старой дыре.
-          if [ -n "$DEPLOY_URL" ]; then
-            probe "$DEPLOY_URL/api/health" '"status":"ok"' || fail=1
-            probe "$DEPLOY_URL/" "IELTS Reading" || fail=1
-          else
-            echo "::error::environment_url is empty — cannot probe the new deployment directly"
-            fail=1
+          if [ -z "$DEPLOY_SHA" ]; then
+            echo "::error::deployment sha is empty — cannot pin the smoke to this deployment"
+            exit 1
           fi
 
-          # Слой 2: канонический домен (alias/DNS/маршрутизация). Окно ретраев
-          # шире (6×10с ≈ минута) — переключение alias может отставать от
-          # deployment_status.
-          base="https://bando.study"
-          probe "$base/api/health" '"status":"ok"' 6 || fail=1
-          probe "$base/" "IELTS Reading" 6 || fail=1
-          probe "$base/pricing" "Premium" 6 || fail=1
-          probe "$base/auth" "Sign in" 6 || fail=1
+          # Слой 1: ждём, пока alias начнёт отдавать НОВЫЙ деплой (окно 12×10с ≈
+          # 2 мин — переключение alias может отставать от deployment_status).
+          # Редкий ложный красный: два push подряд — sha A так и не покажется,
+          # его перекрыл B; красный такого прогона читается вместе со следующим.
+          pinned=""
+          for i in $(seq 1 12); do
+            body=$(curl -sS --max-time 15 "$base/api/health" || echo CURL_FAIL)
+            if echo "$body" | grep -q "\"commit\":\"$DEPLOY_SHA\""; then
+              echo "[OK] canonical serves this deployment ($DEPLOY_SHA)"
+              pinned=1
+              break
+            fi
+            echo "attempt $i: canonical does not serve $DEPLOY_SHA yet"
+            [ "$i" -lt 12 ] && sleep 10
+          done
+          if [ -z "$pinned" ]; then
+            echo "::error::canonical never served deployment $DEPLOY_SHA — alias did not switch (or health lacks the commit field)"
+            exit 1
+          fi
 
+          # Слой 2: контент-пробы страниц (канон уже подтверждённо новый).
+          probe() { # $1=path $2=grep-маркер
+            local url="$base$1"
+            for i in 1 2 3; do
+              body=$(curl -sS --max-time 15 -w '\n%{http_code}' "$url") || body=$'\nCURL_FAIL'
+              code=$(echo "$body" | tail -1)
+              if [ "$code" = "200" ] && echo "$body" | grep -q "$2"; then
+                echo "[OK] $url"
+                return 0
+              fi
+              echo "attempt $i: $url -> $code (или маркер '$2' не найден)"
+              [ "$i" -lt 3 ] && sleep 10
+            done
+            echo "::error::[FAIL] $url — status/marker check failed after 3 attempts"
+            return 1
+          }
+          fail=0
+          probe "/api/health" '"status":"ok"' || fail=1
+          probe "/" "IELTS Reading" || fail=1
+          probe "/pricing" "Premium" || fail=1
+          probe "/auth" "Sign in" || fail=1
           exit $fail
