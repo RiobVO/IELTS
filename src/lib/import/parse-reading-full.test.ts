@@ -4,6 +4,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseTest } from "./parse-test";
+import { isUnresolvedQuestionTypeWarning, UNKNOWN_TYPE_FALLBACK } from "./question-types";
 
 const sample = (name: string): string | null => {
   const p = fileURLToPath(new URL(`../../../samples/${name}`, import.meta.url));
@@ -105,6 +106,53 @@ describe("parseFullReading — inline (2 passages)", () => {
     expect(t.bandScale).not.toBeNull();
     expect(Object.keys(t.bandScale!)).toHaveLength(41);
     expect(t.warnings).toHaveLength(0);
+  });
+});
+
+// Fix 2026-07-19: зеркало кейса parse-test — самодельный «unknown question type label»
+// не матчился publish-гейтом; теперь канонический envelope + fallback (как parse-runner).
+const FULL_UNKNOWN_TYPE_HTML = `<!doctype html><html><head><title>Full Reading - Unknown</title></head>
+<body>
+  <section class="passage-section" data-part="1">
+    <div class="sectionRubric"><h2>Reading Passage 1</h2></div>
+    <div class="passage-content"><p>Body one.</p></div>
+  </section>
+  <section class="passage-section" data-part="2">
+    <div class="sectionRubric"><h2>Reading Passage 2</h2></div>
+    <div class="passage-content"><p>Body two.</p></div>
+  </section>
+  <div class="questions-section" data-part="1">
+    <div class="tfng-question" id="question-1">
+      <p class="tfng-statement-text">Statement one.</p>
+      <label><input type="radio" name="q1" value="TRUE">True</label>
+      <label><input type="radio" name="q1" value="FALSE">False</label>
+    </div>
+    <p>The gas is <input type="text" name="q2"> in the air.</p>
+  </div>
+  <script>
+    const correctAnswers = { "1": "TRUE", "2": "Oxygen" };
+    const questionTypes = { "1": "Quantum Telepathy" };
+    function getBand(s){ return s >= 1 ? 9 : 0; }
+  </script>
+</body></html>`;
+
+describe("parseFullReading — unknown/blank QTYPE попадает под publish-гейт", () => {
+  let t: Awaited<ReturnType<typeof parseTest>>;
+  beforeAll(async () => {
+    t = await parseTest(FULL_UNKNOWN_TYPE_HTML);
+  });
+  const q = (n: number) => t.questions.find((x) => x.number === n)!;
+
+  it("нераспознанный и пустой label дают gate-распознаваемые warning'и (Q1 unknown, Q2 blank)", () => {
+    const unresolved = t.warnings.filter(isUnresolvedQuestionTypeWarning);
+    expect(unresolved.some((w) => w.startsWith("Q1:"))).toBe(true);
+    expect(unresolved.some((w) => w.startsWith("Q2:"))).toBe(true);
+  });
+
+  it("вопросы не теряются: qtype падает на fallback, ключи маршрутизированы", () => {
+    expect(q(1).qtype).toBe(UNKNOWN_TYPE_FALLBACK);
+    expect(q(2).qtype).toBe(UNKNOWN_TYPE_FALLBACK);
+    expect(q(1).answer).toMatchObject({ mode: "exact", accept: ["TRUE"] });
   });
 });
 
