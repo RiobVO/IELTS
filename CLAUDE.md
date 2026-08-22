@@ -66,6 +66,43 @@ Listening-прогон после заливки клиентом аудио. П
 в чистый модуль + сьют инвариантов + seeded-свип) — передана в отдельный чат; новые
 бэклог-пункты W2-9..11.
 
+**Волны 2026-07-16..17 закрыты** (на проде): план дня, счётчики каталога, Google
+Translate краш-класс, Listening free-tier, монетизация R/L пересобрана.
+- **План дня:** норма 2 practice/день + 2 full-mock/нед (`src/lib/progress/daily-plan.ts`
+  `computeDailyPlan`) — прогресс пунктов как счётчики N/M, не булевы флаги; `mocksThisWeek`
+  (`app/app/page.tsx`) — отдельная 8-дневная выборка + `isInCurrentTzWeek`-предикат, НЕ то же
+  окно последних 20 попыток, что `drillsToday`.
+- **Каталог `/app/practice`:** секционные R/L skill-карты несут «Done N of M · K left»
+  (`_PracticeCatalog.tsx`) — знаменатель = весь published-каталог секции, attempted = lifetime
+  `selectDistinct` по `attempt.contentItemId` (НЕ оконный `bestRawById`, тот заточен под
+  best-score дисплей и режется тем же submitted-окном); vocab-пункт плана дашборда несёт
+  сублейбл «N due today».
+- **Google Translate краш-класс закрыт:** внешние DOM-мутации (Google Translate и подобные
+  расширения) роняли React-реконсиляцию (`NotFoundError: removeChild`, `error_log`
+  source='client', повторялось неделями до диагностики) — authed shell `/app` держит
+  `translate="no"` + класс `notranslate` (`app/app/layout.tsx`), лендинг переводим как был.
+  Попутно: null-guard на агрегации `per_type_breakdown` в `/app/practice/page.tsx` (пропуск
+  строки без breakdown вместо падения).
+- **Listening — part-уровень (BRIEF §4.8/§5):** одночастный HTML → `part_N` (persist →
+  `basic`), ≥2 частей → `full_listening`; категория доезжает через
+  `src/lib/import/runner/atomize-merge.ts` (atom-приоритет ТОЛЬКО для listening — reading
+  осознанно остаётся runner-SoT); malformed `data-part` (пропущен/дублируется/невалиден) →
+  fail-safe `full_listening` + warning, вопросы никогда не теряются; `docs/authoring-spec.md`
+  дополнена требованиями для клиента.
+- **Монетизация пересобрана (owner decision 2026-07-17):** весь R/L контент —
+  `tier_required='basic'` (`persist.ts` пишет `basic` безусловно; дата-фикс на 7 строк
+  применён на проде, `full_reading`/`full_listening` больше не premium). Basic ограничен
+  2 practice-старта/UTC-день + 2 mock-старта/UTC-нед (суммарно R+L — та же норма, что план
+  дня выше), Premium/Ultra безлимит, W/S платные как были. Авторитетный кап —
+  транзакционный: `src/lib/exam/access.ts` `startAttempt` берёт `SELECT ... FOR UPDATE` на
+  `profile` первым действием транзакции (порядок локов profile→content_item, тот же
+  инвариант, что `apply-post-submit.ts`), затем resume-под-локом для проигравшего гонки на
+  ОДНОМ item, затем cap-COUNT; `enforceAccess` держит тот же порог только как soft
+  early-check. Миграция `0055` (индекс `attempt(user_id, mode, started_at)`) применена.
+  `PricingScreen.tsx` + `/pricing` metadata + `CatalogNotice.tsx` + BRIEF §4.8 переписаны
+  честно под новую модель. Trial-механика (§4.8, `trial_claim`) вестигиальна — код жив, но
+  при полностью открытом каталоге не триггерится (нет tier-гейта, который бы её вызвал).
+
 ## Commands
 
 ```bash
@@ -135,7 +172,8 @@ the daily cap. Mock path must not change when adding practice features.
 ## Migrations & schema
 
 - `src/db/schema.ts` (Drizzle) is the **typed source of truth**: **37 DB tables** as of
-  `0054_trial_claim` (`verify.ts` `APP_TABLE_COUNT = 37` asserts it; schema.ts types **36** — the legacy
+  `0055_attempt_cap_index` (index-only migration, `APP_TABLE_COUNT` unchanged at 37; `verify.ts`
+  `APP_TABLE_COUNT = 37` asserts it; schema.ts types **36** — the legacy
   `topic` table lingers in the DB, its export dropped as dead code). Keep schema.ts and the SQL in
   **lockstep**; per-table provenance + RLS in **SCHEMA_NOTES.md**.
 - Executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by
@@ -209,6 +247,12 @@ Speaking). Tiers: Writing = Premium, Speaking = Ultra (sub-tier gets one preview
 - **Responsive invariant:** breakpoint-switched props (display/grid/width) live in CSS classes, never
   inline (inline beats media queries). Never reorder interactive DOM via CSS `order`/`display:contents`
   (WCAG 2.4.3/1.3.2 regression) — reorder the DOM.
+- **External DOM mutations break React reconciliation:** Google Translate and similar browser
+  extensions mutate the DOM outside React's control, throwing `NotFoundError: removeChild` —
+  showed up in `error_log` (`source='client'`) and recurred for weeks before diagnosed. Fix is
+  `translate="no"` + a `notranslate` class on the authed `/app` shell (`app/app/layout.tsx`); gate
+  any NEW route surface outside `/app` the same way before it ships. Recognize the crash by its
+  `error_log` signature, don't blame the latest deploy.
 
 ## Git attribution (hard rule)
 
