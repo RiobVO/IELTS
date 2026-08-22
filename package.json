@@ -22,6 +22,7 @@
     "import": "tsx scripts/import-file.ts",
     "import:vocab": "tsx scripts/import-vocab.ts",
     "test": "vitest run",
+    "test:db": "vitest run --config vitest.config.db.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
   },
