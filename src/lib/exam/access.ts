@@ -190,7 +190,14 @@ export async function enforceAccess(
             lt(attempt.startedAt, dayEnd),
           ),
         );
-      if ((usage?.n ?? 0) >= BASIC_PRACTICE_DAILY_LIMIT) redirect("/app/practice?limit=practice");
+      if ((usage?.n ?? 0) >= BASIC_PRACTICE_DAILY_LIMIT) {
+        // cap_hit (§11): отказ по капу иначе НИГДЕ не виден (заблокированный старт
+        // не пишет строку attempt) — без события нельзя судить, работает ли кап
+        // как двигатель апгрейда. after() — как test_start: телеметрия не
+        // блокирует ответ; redirect() бросает, поэтому регистрируем ДО него.
+        after(() => captureServer("cap_hit", userId, { mode: "practice", scope: "daily", check: "soft" }));
+        redirect("/app/practice?limit=practice");
+      }
     } else {
       const weekStart = weekStartUtc(now);
       const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -205,7 +212,11 @@ export async function enforceAccess(
             lt(attempt.startedAt, weekEnd),
           ),
         );
-      if ((usage?.n ?? 0) >= BASIC_MOCK_WEEKLY_LIMIT) redirect("/app/practice?limit=mock");
+      if ((usage?.n ?? 0) >= BASIC_MOCK_WEEKLY_LIMIT) {
+        // cap_hit — зеркало practice-ветки выше (см. комментарий там).
+        after(() => captureServer("cap_hit", userId, { mode: "mock", scope: "weekly", check: "soft" }));
+        redirect("/app/practice?limit=mock");
+      }
     }
   }
 }
@@ -499,7 +510,19 @@ export async function startAttempt(
         );
       // Same notice/redirect path as enforceAccess's soft check, so a race
       // caught only here still lands the user on the exact same explanation.
-      if ((usage?.n ?? 0) >= limit) redirect(`/app/practice?limit=${modeIfNew}`);
+      // cap_hit: сюда доходят только гонки, проскочившие soft-чек (в одном
+      // запросе оба не сработают — soft-редирект не пускает до транзакции);
+      // check:"authoritative" отличает их в телеметрии.
+      if ((usage?.n ?? 0) >= limit) {
+        after(() =>
+          captureServer("cap_hit", userId, {
+            mode: modeIfNew,
+            scope: modeIfNew === "practice" ? "daily" : "weekly",
+            check: "authoritative",
+          }),
+        );
+        redirect(`/app/practice?limit=${modeIfNew}`);
+      }
     }
 
     return openNewAttempt(tx, userId, contentItemId, modeIfNew);
