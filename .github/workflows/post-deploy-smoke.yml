@@ -1,0 +1,54 @@
+name: post-deploy-smoke
+
+# Read-only smoke прода ПОСЛЕ Vercel-деплоя (TESTING_PLAN §5): красный прогон =
+# сигнал rollback-сценария (Vercel → Deployments → Promote предыдущего). Vercel
+# GitHub-интеграция публикует deployment_status — цепляемся к успешному
+# Production-деплою. ТОЛЬКО чтение публичных страниц: никакого stateful E2E
+# против прода (анти-цель §13). Preview-smoke сознательно НЕ на каждый push:
+# при обычном push в main preview-деплоя не существует; временная ветка с
+# preview — только для рискованных релизов (платежи, iframe, mobile).
+
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      (github.event.deployment_status.environment == 'Production' ||
+       github.event.deployment_status.environment == 'production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read-only smoke против bando.study
+        shell: bash
+        run: |
+          # Канонический домен, не unique-URL деплоя: заодно проверяем алиас/DNS.
+          base="https://bando.study"
+          # Ретраи: алиас домена может отстать от deployment_status на секунды.
+          probe() { # $1=path $2=grep-маркер (опционален)
+            local url="$base$1"
+            for i in 1 2 3; do
+              body=$(curl -sS --max-time 15 -w '\n%{http_code}' "$url") || body=$'\nCURL_FAIL'
+              code=$(echo "$body" | tail -1)
+              if [ "$code" = "200" ]; then
+                if [ -z "$2" ] || echo "$body" | grep -q "$2"; then
+                  echo "[OK] $url"
+                  return 0
+                fi
+              fi
+              echo "attempt $i: $url -> $code, retrying"
+              sleep 10
+            done
+            echo "::error::[FAIL] $url — status/body check failed after 3 attempts"
+            return 1
+          }
+          fail=0
+          probe "/api/health" '"status":"ok"' || fail=1
+          probe "/" || fail=1
+          probe "/pricing" || fail=1
+          probe "/auth" || fail=1
+          exit $fail
