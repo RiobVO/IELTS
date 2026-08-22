@@ -50,7 +50,7 @@ npm run db:migrate # apply migrations (up) — targets DIRECT_URL
 npm run db:status  # show applied / pending
 npm run db:up:local / db:down:local   # round-trips on the throwaway local DB
 npm run db:down    # DANGER: reverts ALL migrations (drops the schema)
-npm run db:generate# (future) regenerate Drizzle SQL from src/db/schema.ts
+npm run db:generate# reference only — see below, NOT the migration mechanism
 ```
 
 `db:down` reverts **every** migration, i.e. drops the schema and its data. A
@@ -61,6 +61,9 @@ backup is the daily `pg_dump` in `.github/workflows/db-backup.yml`.
 
 Migrations are hand-authored up/down SQL in `migrations/` (applied by
 `scripts/migrate.ts`); `src/db/schema.ts` is the typed Drizzle source of truth.
+Keep the two in lockstep. Drizzle Kit `generate` is forward-only — it cannot emit
+the `down` half — so it stays a reference for diffing schema drift, never the
+mechanism; its output directory is gitignored.
 RLS lives in `migrations/0001_rls` — `answer_key` is locked to the service role
 (BRIEF §6.1). See **[SCHEMA_NOTES.md](./SCHEMA_NOTES.md)** for resolved ambiguities.
 
