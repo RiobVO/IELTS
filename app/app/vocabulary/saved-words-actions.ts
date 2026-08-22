@@ -1,6 +1,7 @@
 "use server";
 
 import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { contentItem, savedWord } from "@/db/schema";
 import { getUser } from "@/lib/auth";
@@ -162,6 +163,15 @@ export async function deleteSavedWord(id: string): Promise<{ ok: boolean }> {
       .delete(savedWord)
       .where(and(eq(savedWord.id, id), eq(savedWord.userId, user.id)))
       .returning({ id: savedWord.id });
+    if (deleted.length > 0) {
+      // Единственный одношотный экшен файла с ревалидацией: saveWord зовётся
+      // мид-экзамена (ревалидация ре-рендерила бы exam-страницу — её свежесть
+      // закрывает submitAttempt), reviewSavedWord — per-card поток (граница —
+      // router.refresh() в MyWords при finished). Delete же вызывается из
+      // list-view my-words — чистим счётчики «My words» и сам список.
+      revalidatePath("/app/vocabulary/my-words");
+      revalidatePath("/app/vocabulary");
+    }
     return { ok: deleted.length > 0 };
   } catch (e) {
     await logError({

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/core/icons";
 import { Button } from "@/components/core/Button";
 import { Input } from "@/components/core/Input";
@@ -93,6 +94,24 @@ export function ReviewSession({ cards, dueCount, newRemainingToday, deckTitle, r
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const finished = total > 0 && queue.length === 0;
   const neverHadCards = total === 0;
+
+  // Граница сессии (staleTimes.dynamic > 0): один refresh на завершении чистит весь
+  // клиентский Router Cache — дашборд (VocabCard/план дня) и каталог деков покажут
+  // свежие due-счётчики. Именно boundary, а не revalidatePath в per-card actions:
+  // там ревалидация тащила бы SSR страницы в каждый await, гейтящий отклик клика.
+  // Ре-рендер ЭТОЙ страницы безопасен: queue/total — снапшот пропсов в useState,
+  // summary-экран от пустой серверной очереди не свапнется.
+  const router = useRouter();
+  const refreshedRef = useRef(false);
+  useEffect(() => {
+    if (!finished) {
+      refreshedRef.current = false;
+      return;
+    }
+    if (refreshedRef.current) return;
+    refreshedRef.current = true;
+    router.refresh();
+  }, [finished, router]);
 
   // Дополнительные сегменты показываем только если в ИСХОДНОЙ очереди (cards) есть
   // хотя бы одна подходящая карта. На проде enrichment/quiz_prompt пуст → сегменты

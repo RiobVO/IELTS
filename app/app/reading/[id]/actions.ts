@@ -1,6 +1,7 @@
 "use server";
 
 import { and, desc, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
@@ -292,6 +293,13 @@ export async function submitAttempt(
 
   const unlocked = post.awardedBadges.map((b) => b.code).join(",");
   const q = unlocked ? `&unlocked=${encodeURIComponent(unlocked)}` : "";
+  // Сдача меняет данные почти всех страниц зоны (план дня, Done-счётчики каталога,
+  // прогресс, streak/XP/бейджи, mistakes-due) — чистим клиентский Router Cache всей
+  // /app-зоны (staleTimes.dynamic > 0 иначе показал бы стейл до минуты). Только на
+  // выигранном single-fire claim: идемпотентный ре-сабмит и проигравший гонку
+  // редиректят выше без ревалидации. Redirect ниже рендерит страницу результата —
+  // ре-рендера exam-страницы этот вызов не добавляет.
+  revalidatePath("/app", "layout");
   redirect(`/app/reading/${contentItemId}/result?a=${attemptId}${q}`);
 }
 
