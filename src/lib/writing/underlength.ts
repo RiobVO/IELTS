@@ -15,9 +15,11 @@ function underlengthFix(wordCount: number, minWords: number): string {
 // TIGHT, length-specific phrases only. Precision over recall on purpose: a missed
 // match merely yields a (mild) duplicate, whereas a false match would SUPPRESS a
 // mandatory warning. So we only treat the clearest underlength wording as "already
-// said" — generic vocab/grammar advice never matches. Both minimums (150/250) count.
+// said" — generic vocab/grammar advice never matches. The minimums (150/250) count
+// only with a length context («250-word», «150 words»): a bare number match
+// suppressed the safety net on any unrelated mention (fix 2026-07-19).
 const ALREADY_FLAGGED =
-  /\b150\b|\b250\b|word count|word limit|word minimum|word requirement|under[\s-]?length|too short|below the (minimum|word)/i;
+  /\b(150|250)[\s-]?words?\b|word count|word limit|word minimum|word requirement|under[\s-]?length|too short|below the (minimum|word)/i;
 
 function alreadyFlagged(f: Feedback): boolean {
   const text = [
