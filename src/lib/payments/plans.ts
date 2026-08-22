@@ -100,6 +100,62 @@ export function stacksOnExistingPeriod(
 }
 
 /**
+ * Подписанные поля вебхука, сверяемые с доверенной pending-строкой (волна 0a):
+ * «не доверять телу» ≠ «игнорировать тело» — сумма/валюта/статус, которые
+ * ПОДТВЕРДИЛ провайдер, обязаны совпасть с нашим заказом, иначе недоплата с
+ * валидной подписью выдала бы полный доступ. Провайдер-агностичная форма: адаптер
+ * провайдера (0b) мапит своё событие в эти поля. tier/userId/period здесь
+ * НАМЕРЕННО отсутствуют — их из вебхука не принимаем никогда. orderId
+ * зарезервирован под 0b: сверка «orderId принадлежит именно этому заказу»
+ * провайдер-специфична (dual-id схема), generic-строка её не выразит честно.
+ */
+export interface WebhookClaims {
+  amount?: number; // минорные единицы (тийин), как payment.amount
+  currency?: string;
+  status?: string; // только "completed" ведёт к выдаче
+}
+
+export type ClaimsVerdict =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | "missing_field"
+        | "not_completed"
+        | "amount_mismatch"
+        | "currency_mismatch";
+    };
+
+/**
+ * Сверка claims провайдера с pending-строкой. Чистая функция (тестируется без
+ * БД), вызывается ТОЛЬКО в real-режиме (мерчант-ключ задан) — см.
+ * applyCompletedPayment.
+ *
+ * Порядок STATUS-FIRST (Codex-ревью 0a): не-completed событие легитимно БЕЗ
+ * amount/currency — провайдер уведомляет об отмене/ожидании, мы ничего не
+ * выдаём, требовать сумму не за что (presence-first гнал бы такой вебхук в
+ * 500-ретраи). Fail closed остаётся на ГРАНТ-пути: для status="completed"
+ * amount+currency обязательны — адаптер, «забывший» замапить сумму, не проходит
+ * молча. Отсутствующий status = missing_field всегда (без типа события решать
+ * нечего). cancelled с неверной суммой → not_completed, не amount_mismatch.
+ */
+export function reconcileClaims(
+  pending: { amount: number; currency: string },
+  claims: WebhookClaims,
+): ClaimsVerdict {
+  if (claims.status === undefined) return { ok: false, reason: "missing_field" };
+  if (claims.status !== "completed") return { ok: false, reason: "not_completed" };
+  if (claims.amount === undefined || claims.currency === undefined) {
+    return { ok: false, reason: "missing_field" };
+  }
+  if (claims.amount !== pending.amount)
+    return { ok: false, reason: "amount_mismatch" };
+  if (claims.currency !== pending.currency)
+    return { ok: false, reason: "currency_mismatch" };
+  return { ok: true };
+}
+
+/**
  * Все возможные исходы applyCompletedPayment. Именованный union — единый источник
  * правды и для webhook-роута (маппинг в HTTP-код), и для нормализации в событие
  * воронки (paymentFailureReason).
@@ -110,6 +166,7 @@ export type PaymentOutcome =
   | "not_found"
   | "invalid"
   | "expired"
+  | "ignored"
   | "error";
 
 /** Причина неуспеха для события `payment_failed`. */
@@ -120,7 +177,8 @@ export type PaymentFailureReason = "invalid" | "expired" | "error";
  * Чистая функция — тестируется без БД. Событие НЕ порождают:
  *   applied   — успех (его меряет `upgrade`);
  *   duplicate — идемпотентный ретрай провайдера, не отдельный отвал;
- *   not_found — нет доверенной строки → некого атрибутировать (нет userId).
+ *   not_found — нет доверенной строки → некого атрибутировать (нет userId);
+ *   ignored   — не-completed событие (charge ещё может завершиться) — не отвал.
  * Остальные (invalid/expired/error) — реальные потери на денежном пути.
  */
 export function paymentFailureReason(

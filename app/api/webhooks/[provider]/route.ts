@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { applyCompletedPayment, verifyWebhook } from "@/lib/payments";
+import type { WebhookClaims } from "@/lib/payments/plans";
 import type { PaymentProviderKey } from "@/env";
 
 /**
@@ -8,9 +9,10 @@ import type { PaymentProviderKey } from "@/env";
  * (provider, providerTransactionId). Middleware исключает /api/webhooks из
  * auth-сессии: запрос идёт от провайдера, а не от залогиненного юзера.
  *
- * БЕЗОПАСНОСТЬ: из тела берём ТОЛЬКО providerTransactionId (ключ поиска). Сумма,
- * тариф, срок и владелец берутся из серверной PENDING-строки внутри
- * applyCompletedPayment — телу вебхука доверять нельзя (иначе любой POST с
+ * БЕЗОПАСНОСТЬ: из тела берём providerTransactionId (ключ поиска) и подписанные
+ * claims (amount/currency/status — parseClaims) ДЛЯ СВЕРКИ с pending-строкой.
+ * Источник выдачи — только серверная PENDING-строка внутри applyCompletedPayment;
+ * tier/userId/periodMonths из тела не читаются никогда (иначе любой POST с
  * tier='ultra' выдал бы доступ бесплатно).
  *
  * Идемпотентность гарантирует applyCompletedPayment (UNIQUE на provider+tx):
@@ -33,6 +35,29 @@ function parseTransactionId(raw: unknown): string | null {
   if (typeof raw !== "object" || raw === null) return null;
   const id = (raw as Record<string, unknown>).providerTransactionId;
   return typeof id === "string" && id !== "" ? id : null;
+}
+
+/**
+ * Подписанные поля тела для сверки с pending-строкой (reconcileClaims):
+ * amount (минорные единицы, integer) / currency / status. Провайдер-агностично;
+ * tier/userId/periodMonths из тела НЕ читаются НИКОГДА — источник выдачи только
+ * серверная pending-строка. Поле неверного типа отбрасывается (undefined) — в
+ * real-режиме это missing_field → fail closed, мусор не проходит молча.
+ */
+function parseClaims(raw: unknown): WebhookClaims {
+  if (typeof raw !== "object" || raw === null) return {};
+  const o = raw as Record<string, unknown>;
+  const claims: WebhookClaims = {};
+  if (typeof o.amount === "number" && Number.isInteger(o.amount)) {
+    claims.amount = o.amount;
+  }
+  if (typeof o.currency === "string" && o.currency !== "") {
+    claims.currency = o.currency;
+  }
+  if (typeof o.status === "string" && o.status !== "") {
+    claims.status = o.status;
+  }
+  return claims;
 }
 
 export async function POST(
@@ -64,11 +89,16 @@ export async function POST(
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 
-  const outcome = await applyCompletedPayment(provider, providerTransactionId);
+  const outcome = await applyCompletedPayment(
+    provider,
+    providerTransactionId,
+    parseClaims(json),
+  );
 
-  // applied/duplicate -> 200 (успешный идемпотентный ack). not_found/invalid/
-  // expired -> 400 (запрос неприменим, ретрай не поможет). error -> 500
-  // (временная ошибка — провайдер ретраит, применение само идемпотентно).
+  // applied/duplicate/ignored -> 200 (успешный идемпотентный ack; ignored =
+  // не-completed событие принято без выдачи). not_found/invalid/expired -> 400
+  // (запрос неприменим, ретрай не поможет). error -> 500 (временная ошибка —
+  // провайдер ретраит, применение само идемпотентно).
   if (outcome === "error") {
     return NextResponse.json({ ok: false }, { status: 500 });
   }

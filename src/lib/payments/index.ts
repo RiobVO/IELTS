@@ -6,9 +6,12 @@
  *
  * ДОВЕРИЕ: тело вебхука НЕ авторитетно. Единственный доверенный источник суммы,
  * тарифа, срока и владельца — это PENDING-строка, созданная сервером в
- * initiatePayment (цена из findPlan, userId из сессии). Вебхук приносит ТОЛЬКО
- * ключ (provider, providerTransactionId); по нему мы находим строку и выдаём
- * доступ строго из неё. Иначе любой POST с tier='ultra' выдал бы доступ бесплатно.
+ * initiatePayment (цена из findPlan, userId из сессии). Вебхук приносит ключ
+ * (provider, providerTransactionId) + подписанные claims (amount/currency/status);
+ * по ключу мы находим строку, claims в real-режиме СВЕРЯЮТСЯ с ней
+ * (reconcileClaims — «не доверять» ≠ «игнорировать»: игнор суммы = недоплата
+ * выдала бы доступ), а сама выдача идёт строго из строки. Иначе любой POST с
+ * tier='ultra' выдал бы доступ бесплатно.
  *
  * Идемпотентность завязана на UNIQUE(provider, provider_transaction_id): повтор
  * вебхука (провайдеры шлют ретраи) НИКОГДА не применяет платёж дважды. Захват +
@@ -28,7 +31,9 @@ import {
   validateEntitlement,
   stacksOnExistingPeriod,
   paymentFailureReason,
+  reconcileClaims,
   type PaymentOutcome,
+  type WebhookClaims,
 } from "./plans";
 import { hmacHexValid } from "./webhook-signature";
 
@@ -110,19 +115,29 @@ export async function verifyWebhook(
 
 /**
  * Применить завершённый платёж по ключу (provider, providerTransactionId).
- * Идемпотентно, единый-выстрел, best-effort. Тело вебхука сюда НЕ передаётся —
- * все значения берутся из доверенной PENDING-строки.
+ * Идемпотентно, единый-выстрел, best-effort. Доступ выдаётся строго из доверенной
+ * PENDING-строки; `claims` — подписанные поля тела (amount/currency/status),
+ * которые в real-режиме ОБЯЗАНЫ сойтись с ней (reconcileClaims): «не доверять
+ * телу» ≠ «игнорировать тело» — иначе недоплата выдала бы доступ. В stub-режиме
+ * (нет мерчант-ключа; в production недостижимо — verifyWebhook fail-closed)
+ * сверка пропускается: минимальная стаб-форма этих полей не несёт.
  *
  *   not_found — нет инициированного платежа с таким id (отклоняем, доступ не выдан).
- *   invalid   — (tier, срок, сумма) не соответствуют каталогу findPlan -> помечаем 'failed'.
+ *   invalid   — (tier, срок, сумма) не соответствуют каталогу findPlan ИЛИ
+ *               подтверждённые провайдером amount/currency разошлись с заказом
+ *               -> помечаем 'failed'.
  *   expired   — pending протух (expires_at в прошлом) -> помечаем 'failed', доступ не выдан.
  *   duplicate — платёж уже был применён ранее (идемпотентный ack).
+ *   ignored   — событие со status ≠ completed: принято (200), без мутации и без
+ *               выдачи — charge ещё может завершиться, терминалить рано.
  *   applied   — доступ выдан.
- *   error     — внутренняя ошибка (вебхук ответит так, чтобы провайдер ретраил).
+ *   error     — внутренняя ошибка ИЛИ незамапленное обязательное поле claims в
+ *               real-режиме (вебхук ответит 500, чтобы провайдер ретраил).
  */
 export async function applyCompletedPayment(
   provider: PaymentProviderKey,
   providerTransactionId: string,
+  claims: WebhookClaims = {},
 ): Promise<PaymentOutcome> {
   // Захваченная выдача для пост-коммит телеметрии (§11). Заполняется ТОЛЬКО на
   // успешном applied внутри транзакции, читается после её коммита.
@@ -143,6 +158,7 @@ export async function applyCompletedPayment(
           tier: payment.tier,
           periodMonths: payment.periodMonths,
           amount: payment.amount,
+          currency: payment.currency,
           status: payment.status,
           expiresAt: payment.expiresAt,
         })
@@ -162,6 +178,47 @@ export async function applyCompletedPayment(
       // Идемпотентный ack, иначе ретрай вебхука повторно гнал бы failed-строку
       // через expired/invalid ветки и дублировал payment_failed.
       if (row.status !== "pending") return "duplicate";
+
+      // Сверка подписанных полей провайдера с заказом (волна 0a). ТОЛЬКО в
+      // real-режиме: гейт тем же paymentSecret, что и verifyWebhook — stub-режим
+      // (нет ключа) принимает минимальную форму без claims, а в production
+      // отсутствие ключа уже отвергнуто fail-closed проверкой подписи.
+      if (paymentSecret(provider) !== null) {
+        const verdict = reconcileClaims(
+          { amount: row.amount, currency: row.currency },
+          claims,
+        );
+        if (!verdict.ok) {
+          if (verdict.reason === "missing_field") {
+            // Адаптер провайдера (0b) не замапил обязательное поле — fail closed
+            // БЕЗ мутации: 500 → провайдер ретраит, баг адаптера громкий (логом),
+            // а не молчаливой выдачей доступа. logError идёт отдельным коннектом
+            // (не в этой tx) — мутаций тут нет, коммитить/откатывать нечего.
+            await logError({
+              source: "server",
+              message: `applyCompletedPayment: missing signed claim field for "${provider}" — adapter must map amount/currency/status (fail closed)`,
+              context: { op: "applyCompletedPayment", provider, providerTransactionId },
+            });
+            return "error";
+          }
+          // Не-completed событие (pending/failed/cancelled у провайдера): charge
+          // ещё может завершиться — НЕ терминалим строку, просто не выдаём.
+          if (verdict.reason === "not_completed") return "ignored";
+          // amount/currency разошлись с заказом: недоплата/переплата/чужая валюта
+          // — терминальный отказ (single-fire, как invalid-ветка ниже).
+          await tx
+            .update(payment)
+            .set({ status: "failed", updatedAt: sql`now()` })
+            .where(
+              and(
+                eq(payment.provider, provider),
+                eq(payment.providerTransactionId, providerTransactionId),
+                ne(payment.status, "completed"),
+              ),
+            );
+          return "invalid";
+        }
+      }
 
       // Срок жизни pending: устаревший abandoned-чекаут больше не выдаёт доступ.
       // Проверка ПОСЛЕ duplicate — уже applied-платёж остаётся идемпотентным даже
@@ -202,11 +259,18 @@ export async function applyCompletedPayment(
       // ТОМ ЖЕ тарифе; при смене — старт от now() (иначе дешёвый апгрейд Ultra-поверх-
       // Premium или потеря оплаченного Ultra при Premium-поверх — #8). Читаем текущий
       // тариф профиля один раз и решаем базу интервала для обеих записей.
+      //
+      // FOR UPDATE обязателен (0a-db, прод-баг #5): без лока два конкурентных платежа
+      // одного юзера читают СТАРЫЙ tier, оба выбирают «reset от now()», и второй грант
+      // затирает первый — оплаченный период теряется. Лок сериализует stack-решение;
+      // порядок локов profile→payment зеркалит profile→content_item из startAttempt /
+      // apply-post-submit (единый инвариант против deadlock'ов).
       const [prof] = await tx
         .select({ tier: profile.tier })
         .from(profile)
         .where(eq(profile.id, row.userId))
-        .limit(1);
+        .limit(1)
+        .for("update");
       const stack = stacksOnExistingPeriod(prof?.tier ?? null, row.tier);
       const appliedUntilExpr = stack
         ? sql`greatest(now(), (select ${profile.premiumUntil} from ${profile} where ${profile.id} = ${row.userId})) + (${row.periodMonths} || ' months')::interval`
@@ -239,13 +303,25 @@ export async function applyCompletedPayment(
       // 4. Выдаём доступ строго из доверенной строки: tier и срок из неё. На том же
       //    тарифе premiumUntilExpr наращивает поверх будущего (stacking), при смене —
       //    стартует от now() (см. stacksOnExistingPeriod / #8).
-      await tx
+      const grantedRows = await tx
         .update(profile)
         .set({
           tier: row.tier,
           premiumUntil: premiumUntilExpr,
         })
-        .where(eq(profile.id, row.userId));
+        .where(eq(profile.id, row.userId))
+        .returning({ id: profile.id });
+      // Drizzle НЕ бросает на нулевом апдейте: без этой проверки платёж остался бы
+      // completed без выданного доступа — молча. Сегодня недостижимо (FK
+      // payment.user_id→profile + row-lock claimed-строки), но любая будущая правка
+      // WHERE-клаузы сделала бы дыру невидимой. Throw откатывает ВСЮ транзакцию
+      // (claim в т.ч. — payment остаётся pending) → outcome "error" → провайдер
+      // ретраит: состояние восстановимо, не потерянный платёж.
+      if (grantedRows.length === 0) {
+        throw new Error(
+          `applyCompletedPayment: profile ${row.userId} vanished during grant (${provider}/${providerTransactionId})`,
+        );
+      }
 
       granted = {
         userId: row.userId,
