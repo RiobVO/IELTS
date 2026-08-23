@@ -113,6 +113,16 @@ const RE_LOGO_IMG = /<img\b[^>]*class=["'][^"']*brand-logo[^"']*["'][^>]*>/gi;
 // чтобы обёртка div.header__logo не матчилась.
 const RE_LOGO_TEXT = /<(span|div)\b[^>]*class=["'](?:ielts-)?logo["'][^>]*>[\s\S]*?<\/\1>/i;
 
+// Inspera live-desktop-shell (диагностика 2026-07-21): шапка несёт ДВА вхождения
+// каждого маркера — img.ielts-logo-img (внешний cloudfront-src .../ielts.svg → CSP
+// iframe режет → битая иконка) и текст-фолбэк div.ielts-logo, оба на #startScreen и
+// в exam-header. RE_LOGO_IMG (brand-logo) картинку не матчит; RE_LOGO_TEXT не
+// глобальный → чинил бы только ПЕРВОЕ (скрытое startScreen) вхождение, видимая шапка
+// оставалась «IELTS». Отдельные ГЛОБАЛЬНЫЕ якоря, чтобы вычистить оба. Текст-якорь
+// сужен до <div> — span.ielts-logo (CDI, одиночный) остаётся за RE_LOGO_TEXT нетронут.
+const RE_INSPERA_LOGO_IMG = /<img\b[^>]*class=["'][^"']*ielts-logo-img[^"']*["'][^>]*>/gi;
+const RE_INSPERA_LOGO_TEXT = /<div\b[^>]*class=["']ielts-logo["'][^>]*>[\s\S]*?<\/div>/gi;
+
 /**
  * Заменяет чужой брендинг шапки раннера на bando + удаляет чужой telegram-канал.
  * Срез чужого ТРАФИКА (t.me-якоря/URL, CHANNEL-переменные share-карточки) идёт
@@ -148,6 +158,11 @@ export function skinRunnerBrand(html: string): string {
   if (hasText) {
     out = out.replace(RE_LOGO_IMG, ""); // картинку убираем, bando-знак ставим вместо текста
     out = out.replace(RE_LOGO_TEXT, BANDO_BRAND);
+    // Inspera-семейство: снять битые cloudfront-картинки (оба вхождения) и заменить
+    // оставшийся текст-фолбэк div.ielts-logo (RE_LOGO_TEXT снял лишь первый). No-op на
+    // прочих семействах (нет ielts-logo-img / div.ielts-logo).
+    out = out.replace(RE_INSPERA_LOGO_IMG, "");
+    out = out.replace(RE_INSPERA_LOGO_TEXT, BANDO_BRAND);
   } else {
     out = out.replace(RE_LOGO_IMG, BANDO_BRAND); // вордмарка нет — bando вместо картинки
   }
@@ -170,6 +185,19 @@ export function runnerBrandResidue(rawHtml: string): string[] {
     /class=["'][^"']*brand-logo["']/i.test(rawHtml) || RE_LOGO_TEXT.test(rawHtml);
   if (hadLogo && !skinned.includes("bando-brand")) {
     issues.push("source logo not replaced with bando (header markup unrecognized)");
+  }
+  // Выжившие после skin чужие logo-маркеры Inspera-семейства (класс ielts-logo /
+  // ielts-logo-img, cloudfront-src ielts.svg): распознанную вёрстку skin вычищает,
+  // НЕзнакомую вариацию — нет. Флагаем, чтобы новая разметка поднимала warning в
+  // админке/боте, а не молча тащила битую внешнюю иконку на прод (диагностика 2026-07-21).
+  if (/class=["'][^"']*ielts-logo-img[^"']*["']/i.test(skinned)) {
+    issues.push("foreign logo image (ielts-logo-img) survived skin");
+  }
+  if (/class=["']ielts-logo["']/i.test(skinned)) {
+    issues.push("foreign logo text (ielts-logo) survived skin");
+  }
+  if (/cloudfront\.net\/[^"']*ielts\.svg/i.test(skinned)) {
+    issues.push("foreign cloudfront logo src (ielts.svg) survived skin");
   }
   return issues;
 }
