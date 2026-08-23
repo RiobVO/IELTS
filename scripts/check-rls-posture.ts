@@ -9,11 +9,11 @@
  * прогонять против прод-БД. Вход — RLS_POSTURE_DATABASE_URL (без дефолта на
  * DATABASE_URL: цель задаётся явно, чтобы случайно не ударить по рантайм-строке).
  *
- * Прод отличается от локали Supabase default-priv грантами (готча проекта): для
- * drift-когорты (annotation/payment) гранты НЕ пинятся — барьер держат RLS +
- * отсутствие anon/write-политики; для hard-lock и REVOKE-ALL когорт REVOKE
- * обязан быть и в грантах (реальный инвариант). Различие помечено в контракте
- * полем prodGrant/knownProdGrantDrift.
+ * Прод отличался от локали Supabase default-priv грантами (готча проекта);
+ * после lockdown-миграций 0047/0048/0056/0057 дрейф снят везде, и контракт
+ * строгий без исключений: anon/PUBLIC — ноль грантов на каждой таблице,
+ * authenticated — empty либо ровно SELECT (+ контрактные колоночные UPDATE).
+ * Рецидив дрейфа на любой таблице = [FAIL].
  *
  * Вывод: [OK]/[FAIL] по каждой таблице + агрегат; exit 0 только если всё чисто.
  */
@@ -48,7 +48,6 @@ async function main(): Promise<void> {
       failures++;
       console.log(`[FAIL] ${c.table}: ${r.problems.join("; ")}`);
     }
-    for (const note of r.notes) console.log(`      note: ${c.table} — ${note}`);
   }
 
   if (failures === 0) {

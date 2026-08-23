@@ -33,21 +33,20 @@ export interface PolicyExpectation {
 }
 
 /**
- * Инвариант грантов, который скрипт обязан проверять НА ПРОДЕ (env-agnostic).
- * Прод отличается от локали: Supabase раздаёт новым таблицам широкие default-priv
- * гранты (готча проекта), которые локальный нативный PG не воспроизводит. Барьер
- * owner-read держат RLS + отсутствие anon-политики, а НЕ узость грантов — поэтому
- * для drift-когорты гранты на проде не пинятся (иначе флак на известной разнице).
+ * Инвариант authenticated-грантов, который скрипт обязан проверять НА ПРОДЕ
+ * (env-agnostic). Прод отличался от локали Supabase default-priv грантами (готча
+ * проекта), но после lockdown-миграций (0047/0048/0056/0057) дрейф снят ВЕЗДЕ,
+ * поэтому drift-исключений в контракте больше нет; anon и PUBLIC не
+ * параметризуются вовсе — у них безусловно НОЛЬ грантов на каждой таблице
+ * (universal-инвариант в checkPosture, рецидив дрейфа = красный).
  *
- *  - anon "empty"      — у anon обязан быть НОЛЬ грантов (REVOKE ALL, прод-проверено).
- *  - anon "any"        — гранты anon не пинятся (default-priv drift, held inert RLS'ом).
- *  - auth "empty"      — у authenticated ноль грантов (hard_lock).
- *  - auth "selectOnly" — только SELECT (+ колоночный read_at у notification).
- *  - auth "any"        — гранты не пинятся; барьер — отсутствие write-политики.
+ *  - "empty"      — у authenticated ноль грантов (hard_lock).
+ *  - "selectOnly" — РОВНО SELECT: наличие обязательно (без него ломаются
+ *    клиентские Supabase-чтения — ревью-находка «пустые гранты проходили»),
+ *    сверх него ничего (+ колоночный UPDATE только по authUpdateCols).
  */
 export interface ProdGrantInvariant {
-  anon: "empty" | "any";
-  auth: "empty" | "selectOnly" | "any";
+  auth: "empty" | "selectOnly";
 }
 
 export interface TableContract {
@@ -63,8 +62,6 @@ export interface TableContract {
   prodGrant: ProdGrantInvariant;
   /** Точный набор permissive-политик (пусто для hard_lock). */
   policies: PolicyExpectation[];
-  /** annotation/payment: Supabase default-priv drift, барьер — RLS + нет write-политики. */
-  knownProdGrantDrift: boolean;
 }
 
 // --- helpers для сокращения повторов ---------------------------------------
@@ -87,9 +84,8 @@ function ownerReadStrict(
     ownerColumn,
     pk: "id",
     localGrants: SELECT_ONLY,
-    prodGrant: { anon: "empty", auth: "selectOnly" },
+    prodGrant: { auth: "selectOnly" },
     policies: [{ name: policyName, cmd: "SELECT", qualKind: "owner" }],
-    knownProdGrantDrift: false,
   };
 }
 
@@ -101,9 +97,8 @@ function hardLock(table: string, pk = "id"): TableContract {
     ownerColumn: "",
     pk,
     localGrants: { anon: [], auth: [], authUpdateCols: [] },
-    prodGrant: { anon: "empty", auth: "empty" },
+    prodGrant: { auth: "empty" },
     policies: [],
-    knownProdGrantDrift: false,
   };
 }
 
@@ -119,13 +114,12 @@ export const RLS_CONTRACT: TableContract[] = [
     ownerColumn: "id",
     pk: "id",
     localGrants: SELECT_ONLY,
-    prodGrant: { anon: "empty", auth: "selectOnly" },
+    prodGrant: { auth: "selectOnly" },
     policies: [
       { name: "profile_select_own", cmd: "SELECT", qualKind: "owner" },
       { name: "profile_insert_own", cmd: "INSERT", qualKind: "owner" },
       { name: "profile_update_own", cmd: "UPDATE", qualKind: "owner" },
     ],
-    knownProdGrantDrift: false,
   },
   // attempt — как profile: write-lockdown 0010 + полный grant-lockdown 0056.
   {
@@ -134,37 +128,34 @@ export const RLS_CONTRACT: TableContract[] = [
     ownerColumn: "user_id",
     pk: "id",
     localGrants: SELECT_ONLY,
-    prodGrant: { anon: "empty", auth: "selectOnly" },
+    prodGrant: { auth: "selectOnly" },
     policies: [
       { name: "attempt_select_own", cmd: "SELECT", qualKind: "owner" },
       { name: "attempt_insert_own", cmd: "INSERT", qualKind: "owner" },
       { name: "attempt_update_own", cmd: "UPDATE", qualKind: "owner" },
     ],
-    knownProdGrantDrift: false,
   },
-  // annotation (0013) — только SELECT-грант, БЕЗ write-политики и БЕЗ REVOKE ALL.
-  // На проде default-priv drift возможен, барьер — нет write-политики → auth:any.
+  // annotation (0013) — SELECT-грант + select_own; прод-дрейф снят 0057 (ревью:
+  // «any»-режим был тавтологией, а RLS не покрывает TRUNCATE/REFERENCES/TRIGGER).
   {
     table: "annotation",
     category: "owner_read",
     ownerColumn: "user_id",
     pk: "id",
     localGrants: SELECT_ONLY,
-    prodGrant: { anon: "any", auth: "any" },
+    prodGrant: { auth: "selectOnly" },
     policies: [{ name: "annotation_select_own", cmd: "SELECT", qualKind: "owner" }],
-    knownProdGrantDrift: true,
   },
-  // payment (0006) — как annotation: GRANT SELECT без REVOKE ALL, нет write-политики.
-  // ОТМЕЧЕНО: payment не получил REVOKE-ALL хардинг, которым закрыли siblings (0047/0048).
+  // payment (0006) — как annotation: клиентский SELECT жив (/app/profile читает
+  // историю платежей supabase-клиентом), остальной дрейф снят 0057.
   {
     table: "payment",
     category: "owner_read",
     ownerColumn: "user_id",
     pk: "id",
     localGrants: SELECT_ONLY,
-    prodGrant: { anon: "any", auth: "any" },
+    prodGrant: { auth: "selectOnly" },
     policies: [{ name: "payment_select_own", cmd: "SELECT", qualKind: "owner" }],
-    knownProdGrantDrift: true,
   },
   // notification (0001 → 0046 → 0047): SELECT + колоночный UPDATE(read_at), 2 политики.
   {
@@ -173,12 +164,11 @@ export const RLS_CONTRACT: TableContract[] = [
     ownerColumn: "user_id",
     pk: "id",
     localGrants: { anon: [], auth: ["SELECT"], authUpdateCols: ["read_at"] },
-    prodGrant: { anon: "empty", auth: "selectOnly" },
+    prodGrant: { auth: "selectOnly" },
     policies: [
       { name: "notification_select_own", cmd: "SELECT", qualKind: "owner" },
       { name: "notification_update_own", cmd: "UPDATE", qualKind: "owner" },
     ],
-    knownProdGrantDrift: false,
   },
   // REVOKE-ALL owner-read когорта (прод-проверена 0048/собственными хардингами).
   ownerReadStrict("writing_submission", "writing_submission_select_own"),
@@ -196,9 +186,8 @@ export const RLS_CONTRACT: TableContract[] = [
     ownerColumn: "",
     pk: "id",
     localGrants: SELECT_ONLY,
-    prodGrant: { anon: "empty", auth: "selectOnly" },
+    prodGrant: { auth: "selectOnly" },
     policies: [{ name: "writing_feedback_select_own", cmd: "SELECT", qualKind: "join" }],
-    knownProdGrantDrift: false,
   },
   {
     table: "speaking_feedback",
@@ -206,9 +195,8 @@ export const RLS_CONTRACT: TableContract[] = [
     ownerColumn: "",
     pk: "id",
     localGrants: SELECT_ONLY,
-    prodGrant: { anon: "empty", auth: "selectOnly" },
+    prodGrant: { auth: "selectOnly" },
     policies: [{ name: "speaking_feedback_select_own", cmd: "SELECT", qualKind: "join" }],
-    knownProdGrantDrift: false,
   },
   // hard-lock (ядро security): REVOKE ALL, ноль политик — клиент недостижим ЛЮБОЙ операцией.
   hardLock("answer_key"),
@@ -255,17 +243,27 @@ export async function tableGrants(
   return rows.map((r) => r.privilege_type).sort();
 }
 
-/** Колонки, на которые у роли есть колоночный UPDATE (без табличного UPDATE-гранта). */
-export async function updateColumns(
+/**
+ * КОЛОНОЧНЫЕ-only привилегии роли — как строки "PRIV:col". column_privileges
+ * расширяет табличные гранты в строку на каждую колонку (проверено на локальной
+ * БД: табличный SELECT у notification даёт SELECT×все колонки), поэтому честный
+ * колоночный грант = privilege_type, которого НЕТ среди табличных грантов роли.
+ * Без вычитания ревью-находка «колоночный SELECT/INSERT невидим» не закрывалась
+ * бы: раньше смотрелся только UPDATE.
+ */
+export async function columnOnlyPrivileges(
   sql: Sql,
   table: string,
   grantee: string,
 ): Promise<string[]> {
-  const rows = await sql<{ column_name: string }[]>`
-    SELECT column_name FROM information_schema.column_privileges
-    WHERE table_schema = 'public' AND table_name = ${table}
-      AND grantee = ${grantee} AND privilege_type = 'UPDATE'`;
-  return rows.map((r) => r.column_name).sort();
+  const rows = await sql<{ privilege_type: string; column_name: string }[]>`
+    SELECT DISTINCT privilege_type, column_name
+    FROM information_schema.column_privileges
+    WHERE table_schema = 'public' AND table_name = ${table} AND grantee = ${grantee}
+      AND privilege_type NOT IN (
+        SELECT privilege_type FROM information_schema.role_table_grants
+        WHERE table_schema = 'public' AND table_name = ${table} AND grantee = ${grantee})`;
+  return rows.map((r) => `${r.privilege_type}:${r.column_name}`).sort();
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +277,6 @@ export interface PostureResult {
   table: string;
   ok: boolean;
   problems: string[];
-  notes: string[];
 }
 
 function ownerQualRe(ownerColumn: string): RegExp {
@@ -294,15 +291,12 @@ function eqSet(a: string[], b: string[]): boolean {
   return sa.length === sb.length && sa.every((v, i) => v === sb[i]);
 }
 
-const WRITE_GRANTS = ["INSERT", "UPDATE", "DELETE"];
-
 export async function checkPosture(
   sql: Sql,
   c: TableContract,
   mode: "local" | "prod",
 ): Promise<PostureResult> {
   const problems: string[] = [];
-  const notes: string[] = [];
 
   // 1. RLS включён (инвариант в обоих режимах).
   if (!(await relRowSecurity(sql, c.table))) {
@@ -360,57 +354,70 @@ export async function checkPosture(
           `${exp.name}: предикат "${expr ?? "null"}" не соответствует ownership (${exp.qualKind})`,
         );
       }
+      // Ревью-находка: substring-проверка пропустила бы "user_id = auth.uid() OR
+      // true". Полная AST-нормализация хрупка между версиями PG (прод vs локаль),
+      // поэтому дешёвый и достаточный guard: ни одна контрактная политика не
+      // ожидает дизъюнкции — любое OR в предикате = красный.
+      if (expr && /\bor\b/i.test(expr)) {
+        problems.push(`${exp.name}: предикат "${expr}" содержит OR — ослабление ownership`);
+      }
     }
   }
 
-  // 3. Гранты.
+  // 3. Гранты. UNIVERSAL-инварианты (оба режима): anon и PUBLIC — ноль табличных
+  // И ноль колоночных грантов на КАЖДОЙ таблице (после 0047/0048/0056/0057 дрейфа
+  // нет нигде; PUBLIC — ревью-находка «права через PUBLIC невидимы»). Membership-
+  // производные права осознанно не считаем: anon/authenticated в Supabase ни от
+  // кого не наследуют, а машинерия has_table_privilege хрупче пользы.
   const anonG = await tableGrants(sql, c.table, "anon");
   const authG = await tableGrants(sql, c.table, "authenticated");
-  const authCols = await updateColumns(sql, c.table, "authenticated");
+  const publicG = await tableGrants(sql, c.table, "PUBLIC");
+  const anonCols = await columnOnlyPrivileges(sql, c.table, "anon");
+  const authColPrivs = await columnOnlyPrivileges(sql, c.table, "authenticated");
+  const publicCols = await columnOnlyPrivileges(sql, c.table, "PUBLIC");
+
+  if (anonG.length > 0 || anonCols.length > 0) {
+    problems.push(
+      `anon обязан быть без грантов, есть [${anonG.join(",")}] cols[${anonCols.join(",")}]`,
+    );
+  }
+  if (publicG.length > 0 || publicCols.length > 0) {
+    problems.push(
+      `PUBLIC обязан быть без грантов, есть [${publicG.join(",")}] cols[${publicCols.join(",")}]`,
+    );
+  }
+
+  // authenticated: колоночные-only права строго = UPDATE по authUpdateCols
+  // (контрактный read_at у notification), в ОБОИХ режимах.
+  const expectedAuthCols = c.localGrants.authUpdateCols.map((col) => `UPDATE:${col}`).sort();
+  if (!eqSet(authColPrivs, expectedAuthCols)) {
+    problems.push(
+      `auth колоночные права=[${authColPrivs.join(",")}], ожидались [${expectedAuthCols.join(",")}]`,
+    );
+  }
 
   if (mode === "local") {
     // Строго: точные localGrants (нативный PG без Supabase default-priv drift).
-    if (!eqSet(anonG, c.localGrants.anon)) {
-      problems.push(`anon гранты=[${anonG.join(",")}], ожидались [${c.localGrants.anon.join(",")}]`);
-    }
     if (!eqSet(authG, c.localGrants.auth)) {
       problems.push(`auth гранты=[${authG.join(",")}], ожидались [${c.localGrants.auth.join(",")}]`);
     }
-    if (!eqSet(authCols, c.localGrants.authUpdateCols)) {
-      problems.push(
-        `auth UPDATE-колонки=[${authCols.join(",")}], ожидались [${c.localGrants.authUpdateCols.join(",")}]`,
-      );
-    }
   } else {
-    // Прод: ProdGrantInvariant — устойчиво к default-priv drift.
-    if (c.prodGrant.anon === "empty" && anonG.length > 0) {
-      problems.push(`anon обязан быть без грантов, есть [${anonG.join(",")}]`);
-    }
     switch (c.prodGrant.auth) {
       case "empty":
-        if (authG.length > 0 || authCols.length > 0) {
-          problems.push(`auth обязан быть без грантов, есть [${authG.join(",")}] cols[${authCols.join(",")}]`);
+        if (authG.length > 0) {
+          problems.push(`auth обязан быть без грантов, есть [${authG.join(",")}]`);
         }
         break;
       case "selectOnly": {
-        const extraTable = authG.filter((g) => g !== "SELECT");
-        const extraCols = authCols.filter((col) => !c.localGrants.authUpdateCols.includes(col));
-        if (extraTable.length > 0 || extraCols.length > 0) {
-          problems.push(
-            `auth шире SELECT-only: табличные лишние [${extraTable.join(",")}], колоночные лишние [${extraCols.join(",")}]`,
-          );
+        // Ревью-находка: «не шире SELECT» без «SELECT обязан быть» пропускал
+        // пустые гранты — при них молча ломаются клиентские Supabase-чтения.
+        if (!eqSet(authG, ["SELECT"])) {
+          problems.push(`auth обязан быть РОВНО [SELECT], есть [${authG.join(",")}]`);
         }
         break;
       }
-      case "any":
-        if (anonG.length > 0 || authG.length > WRITE_GRANTS.length) {
-          notes.push(
-            `drift-когорта: гранты не пинятся (anon=[${anonG.join(",")}], auth=[${authG.join(",")}]); барьер — RLS + нет write-политики`,
-          );
-        }
-        break;
     }
   }
 
-  return { table: c.table, ok: problems.length === 0, problems, notes };
+  return { table: c.table, ok: problems.length === 0, problems };
 }
