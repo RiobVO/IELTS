@@ -182,32 +182,61 @@ gitleaks запинен на commit SHA, db-backup
 Актуально УЖЕ (600 юзеров жмут submit), независимо от платежей.
 
 Конкурентность (2 клиента, реальные транзакции):
-- [ ] два одновременных старта при лимите 2 → проходят ровно 2, третий — отказ
-- [ ] два конкурентных старта ОДНОГО item → одна попытка, второй получает resume
-- [ ] два одновременных submit одной попытки → ровно один рейтинг/XP/badge/notification
-- [ ] конкурентный referral reward → начисляется один раз
-- [ ] падение внутри транзакции → откат всех связанных записей
-- [ ] порядок локов profile→content_item под нагрузкой → без deadlock
-- [ ] повторное применение webhook/event (пересечение с 0a — здесь на реальной БД)
+- [x] два одновременных старта при лимите 2 → проходят ровно 2, третий — отказ
+- [x] два конкурентных старта ОДНОГО item → одна попытка, второй получает resume
+      (+ вариант на границе капа limit−1: проигравший обязан получить resume, не
+      ложный cap-отказ — ловит recheck-под-локом)
+- [x] два одновременных submit одной попытки → ровно один рейтинг/XP/badge/notification
+      (через экстракцию `finalize-submit.ts` — см. итог)
+- [x] конкурентный referral reward → начисляется один раз
+- [x] падение внутри транзакции → откат всех связанных записей (инъекции триггерами:
+      applyPostSubmit, startAttempt-trial, finalizeSubmit-после-claim)
+- [x] порядок локов profile→content_item под нагрузкой → без deadlock
+- [x] повторное применение webhook/event — уже закрыт 0a-db (replay/out-of-order/
+      конкурентные webhook на реальном PG), не дублирован; дыр не найдено
 
 RLS / cross-user матрица (расширение verify.ts; прецедент — живая проверка notification):
-- [ ] параметризованная матрица ПО ОПЕРАЦИЯМ (SELECT/INSERT/UPDATE/DELETE), не общим
+- [x] параметризованная матрица ПО ОПЕРАЦИЯМ (SELECT/INSERT/UPDATE/DELETE), не общим
       «да/нет»: anon — всё нет; user A — своё по контракту / чужое нет; user B —
       симметрично; owner-path по контракту
-- [ ] таблицы: profile, attempt, annotation, notification, writing_*/speaking_*
-      (submissions+feedback), vocab_progress, saved_word, mistake_resolution,
-      mistake_review, payment, preorder
-- [ ] прод-постура поверх (default-priv grants Supabase локально не воспроизводятся —
-      известная гоча). `pg_policies` показывает политики, НЕ гранты — проверять вместе:
-      `pg_class.relrowsecurity` + `pg_policies` + `information_schema.role_table_grants`
-      + `information_schema.column_privileges` + живые anon/user-A/user-B запросы
+- [x] таблицы: profile, attempt, annotation, notification, writing_*/speaking_*
+      (submissions+feedback+debug), vocab_progress, saved_word, mistake_resolution,
+      mistake_review, payment, preorder + answer_key/attempt_review_snapshot (hard-lock)
+- [x] прод-постура поверх: `scripts/check-rls-posture.ts` (read-only, контракт
+      `test/db/rls-contract.ts` общий с матрицей) — relrowsecurity + pg_policies +
+      role_table_grants + column_privileges (колоночные-only права вычитанием
+      табличных, PUBLIC-гранты, обязательный SELECT у selectOnly, OR-guard
+      предикатов); живые anon/A/B-запросы — в локальной матрице
 
 Схема:
-- [ ] миграции с нуля + последовательное применение; constraints (FK/unique/check),
-      функции и триггеры
+- [x] миграции с нуля + последовательное применение (globalSetup: полный migrateUp
+      каждый прогон + сверка `_migrations` с `listMigrations()`); constraints
+      (FK/unique/check), функции и триггеры — `schema.db.test.ts`
 
 Acceptance: сьют на throwaway-БД, детерминированный, в CI и локально; 5-10 прогонов
 без флака (конкурентные тесты — по гоче).
+
+**Итог волны (2026-07-19, `3487a13..0b96658`).** Сьют test:db 14→102 тестов
+(+attempts 14, +rls 56, +schema 18), стабильно ×8 до ревью и ×5 после фиксов; CI
+подхватил автоматически (verify-job гоняет test:db ×3). Экстракция
+`src/lib/exam/finalize-submit.ts`: single-fire claim сабмита + applyPostSubmit
+вынесены из `submitAttempt` (за Supabase-auth db-тесту недоступны) поведением
+байт-в-байт — инвариант «ровно один рейтинг/XP/бейдж» тестируется на реальном коде.
+`after()` из next/server в db-тестах мокается очередью + `flushAfter()` (отложенные
+эффекты наблюдаемы), телеметрия — мок-fn с ассертом payload. **Прод-фиксы волны:
+миграции 0056/0057** — read-only постура-скрипт поймал Supabase default-priv дрейф
+на `profile`/`attempt` (anon держал ВСЕ привилегии, authenticated — DELETE+служебные;
+0010 ревокал только INSERT/UPDATE), затем Codex-ревью добило «drift-когорту»
+annotation/payment (RLS не покрывает TRUNCATE/REFERENCES/TRIGGER — дрейф не был
+инертен). Обе применены на прод, постура 19/19 чистая по строгому контракту без
+исключений. Codex-ревью диффа: 0 blocker, 5 major (все закрыты: deadlock-тест
+разворачивает cause-цепочку Drizzle и падает на любой неожиданной ошибке; контракт
+требует НАЛИЧИЯ SELECT и видит колоночные/PUBLIC-гранты; 0057; OR-guard предикатов;
+best-effort-семантика claim→progression зафиксирована инъекционным тестом как
+осознанный контракт — сбой прогрессии не теряет сабмит и виден в error_log,
+прод-семантика не менялась) + 7 minor (5 закрыто, 2 отклонено осознанно:
+owner-матрица UPDATE/DELETE — тавтология суперюзера; rendezvous-барьер — машинерия
+с собственным флак-риском, ограничение задокументировано в тесте).
 
 ## 7. Волна 2 — hosted Supabase контракты ⏱ вечер (завести) + по готовности
 
@@ -391,8 +420,8 @@ actions: 3/16. Непокрыто (полный список аудита):
 | Тестовая волна юнит-покрытия + 4 прод-фикса | ✅ закрыта | 2026-07-19 (`6a85762..72a2365`) |
 | 0a платёжные инварианты (0a-unit + 0a-db) + 3 прод-фикса (stack-race FOR UPDATE, reconcileClaims, grant-guard) | ✅ код закрыт; test-target Supabase — за владельцем | 2026-07-19 |
 | 1 CI-фундамент | ✅ закрыта | 2026-07-19 (`81acc4d..cdb8ca6`) |
-| 1.5 native-PG данные/гонки | ⬜ следующая | — |
-| 2 hosted Supabase контракты | ⬜ | — |
+| 1.5 native-PG данные/гонки + прод-фиксы 0056/0057 (grant-lockdown) | ✅ закрыта | 2026-07-19 (`3487a13..0b96658`) |
+| 2 hosted Supabase контракты | ⬜ следующая (ждёт test-target Supabase — за владельцем) | — |
 | 0b sandbox-окно | ⬜ ждёт ключей | — |
 | 3 браузер + устройства | ⬜ по триггерам | — |
 | 4 эксплуатация | ⬜ по триггерам | — |
