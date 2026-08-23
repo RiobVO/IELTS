@@ -243,14 +243,38 @@ owner-матрица UPDATE/DELETE — тавтология суперюзера
 Нативный PG НЕ доказывает: PostgREST-семантику, Supabase Auth/JWT, Storage policies,
 signed URLs, uploads, поведение реального supabase-js. Для этого:
 
-- [ ] второй Supabase Free проект (test-target, НЕ прод) — **OWNER-ГЕЙТ волны:
-      действие в Dashboard за владельцем (не сделано с 0a); все пункты ниже, кроме
-      hard guard, без него не стартуют**
-- [ ] прогон миграций в Supabase-окружении
-- [ ] PostgREST/Auth: RLS через реальные API двумя юзерами (IDOR-матрица §6 — через
-      HTTP-слой; контракт переиспользовать из `test/db/rls-contract.ts`, не дублировать)
-- [ ] Storage: policies бакетов speaking/source-html, upload/download, signed URLs,
-      service-role границы
+- [x] второй Supabase Free проект (test-target, НЕ прод) — **заведён 2026-07-20**:
+      `ielts-test`, ref `ajmeboekpxyjqtcowerj`, eu-central-1, Free. Креды в
+      `.env.test.local` (gitignored): legacy JWT anon/service_role + pooler-строки.
+      Free засыпает ~7 дней простоя → ручной resume перед прогоном
+- [x] прогон миграций в Supabase-окружении — **закрыт 2026-07-20**: обёртка
+      `scripts/lib/test-target-env.ts` (`loadTestTargetEnv`, fail-fast на прод-ref,
+      зеркалит контракт stateful-gate) + `scripts/migrate-test.ts` (только up/status,
+      деструктив недоступен) + npm `db:migrate:test`/`db:status:test`. Все 58 миграций
+      applied на hosted; `db:status:test` — pending (none)
+- [x] PostgREST/Auth: RLS через реальные API двумя юзерами — **закрыт 2026-07-20**:
+      `test/hosted/rls-http.ts` (`runIdorMatrix`) + `scripts/rls-http-test.ts` + npm
+      `test:hosted:rls`. Два юзера через service-role admin API, РЕАЛЬНЫЙ логин
+      (signInWithPassword → JWT), пробы через supabase-js/PostgREST. Ожидания из
+      общего `RLS_CONTRACT` (не дублируются). 19 таблиц PASS / 0 FAIL / 0 SKIP: 15
+      owner-scoped (positive control A/B + cross-user deny + anon deny + write-deny) +
+      4 hard-lock (owner-путь читает засев, anon+authenticated grant-deny). Инвариант:
+      positive control в каждой пробе → провал позитива = FAIL, не skip (0 строк
+      «из-за RLS» ≠ 0 «не засеяли»); SKIP тоже краснит exit (пропущенная таблица =
+      непроверенная изоляция, не «чисто»). Cleanup: deleteUser-каскад + явное
+      удаление `speaking_audio_event` (его FK `ON DELETE SET NULL`, не CASCADE) +
+      fixture-корни из аккумулятора (чистятся и при частичном падении посева);
+      прогон ×2 идентичен
+- [x] Storage: policies бакетов speaking/source-html — **закрыт 2026-07-20**:
+      `scripts/storage-contract-test.ts` + npm `test:hosted:storage`. Идемпотентно
+      создаёт private `speaking-audio` (owner-policy) + `source-html` (service-role-
+      only), на каждом: service-role upload → positive control (signed URL HTTP 200 +
+      тело совпадает) → anon download DENY → cleanup. **Authenticated-контракт**
+      (реальный JWT-юзер): owner-positive (качает свой объект) + cross-user-deny
+      (не качает чужой префикс на speaking-audio — IDOR на Storage) + default-deny
+      source-html (authenticated без policy тоже отказ — ловит лишнюю permissive
+      policy). Границы service-role: anon не создаёт бакет, не заливает в приватный.
+      Cleanup — best-effort (уникальные имена per-прогон против коллизий); прогон ×2
 - [x] hard guard E2E-окружения — **закрыт 2026-07-19 (точка входа волны)**:
       `statefulE2eBlockReason` (`e2e/stateful-gate.ts`) — строгий контракт:
       флаг + все четыре переменные (`SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_URL`/
@@ -265,8 +289,27 @@ signed URLs, uploads, поведение реального supabase-js. Для 
       полный decoy-bypass по всем четырём переменным
 - [ ] payment webhook integration — НЕ здесь: hosted Supabase не даёт публичный
       HTTPS-эндпойнт Next.js; реальный webhook-колбэк живёт в топологии 0b (Preview)
-- [ ] процедура прогона: health-check → resume если paused (вручную из Dashboard) →
-      миграции → сид тестовых данных → контракты
+- [x] процедура прогона (runbook, ручной — НЕ в CI, тест-проект засыпает):
+      1. **health/resume**: открыть Dashboard `ielts-test`; если paused (>7 дней) —
+         Restore, дождаться healthy;
+      2. **env**: `.env.test.local` заполнен (все 4 URL на тест-ref, gitignored);
+      3. **миграции**: `npm run db:migrate:test` → `npm run db:status:test` (pending none);
+      4. **постура**: `npm run test:hosted:posture` (19/19 чисто);
+      5. **IDOR**: `npm run test:hosted:rls` (19 PASS, 0 FAIL); сид + cleanup внутри;
+      6. **storage**: `npm run test:hosted:storage` (2 бакета + границы).
+      Все раннеры fail-fast'ят на прод-ref через `loadTestTargetEnv` — прод недостижим
+      (плюс требуют все 6 переменных ИМЕННО в `.env.test.local`, не унаследованными
+      из shell).
+
+**Codex-ревью волны (2026-07-20).** 0 blocker/Critical (обход guard на прод не
+найден). Закрыты: 2 High (SKIP давал зелёный exit → теперь краснит; Storage не
+проверял authenticated-доступ → добавлен реальный JWT-юзер owner/cross-user/
+default-deny), 3 Medium (сироты `speaking_audio_event` → явный cleanup; утечка
+fixture-корней при частичном посеве → аккумулятор наружу; ложный anon-deny при
+битом ключе → owner positive control доказывает валидность клиентского ключа),
+1 Low (наследование env из shell → валидация присутствия в файле). Осознанно
+оставлены: cleanup-ошибка не краснит итог (best-effort, уникальные имена);
+negative-проба трактует любую HTTP-ошибку как deny (митигировано positive control).
 
 ## 8. Волна 0b — sandbox-окно провайдера ⏱ ДЕДЛАЙН: между ключами и включением платежей
 
@@ -427,10 +470,10 @@ actions: 3/16. Непокрыто (полный список аудита):
 | Волна | Статус | Сессия |
 |---|---|---|
 | Тестовая волна юнит-покрытия + 4 прод-фикса | ✅ закрыта | 2026-07-19 (`6a85762..72a2365`) |
-| 0a платёжные инварианты (0a-unit + 0a-db) + 3 прод-фикса (stack-race FOR UPDATE, reconcileClaims, grant-guard) | ✅ код закрыт; test-target Supabase — за владельцем | 2026-07-19 |
+| 0a платёжные инварианты (0a-unit + 0a-db) + 3 прод-фикса (stack-race FOR UPDATE, reconcileClaims, grant-guard) | ✅ код закрыт; test-target заведён (2026-07-20) | 2026-07-19 |
 | 1 CI-фундамент | ✅ закрыта | 2026-07-19 (`81acc4d..cdb8ca6`) |
 | 1.5 native-PG данные/гонки + прод-фиксы 0056/0057 (grant-lockdown) | ✅ закрыта | 2026-07-19 (`3487a13..0b96658`) |
-| 2 hosted Supabase контракты | 🔶 hard guard закрыт (точка входа); остальное ждёт test-target Supabase — за владельцем | 2026-07-19 |
+| 2 hosted Supabase контракты | ✅ закрыта (test-target заведён, миграции+постура+IDOR через реальный PostgREST+Auth+Storage; payment webhook по дизайну в 0b) | 2026-07-20 |
 | 0b sandbox-окно | ⬜ ждёт ключей | — |
 | 3 браузер + устройства | ⬜ по триггерам | — |
 | 4 эксплуатация | ⬜ по триггерам | — |
