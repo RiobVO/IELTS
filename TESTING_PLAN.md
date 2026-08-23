@@ -374,8 +374,31 @@ Sandbox-прогон:
 
 Golden paths — три подволны, ядро НЕ ждёт мерчанта:
 - **3a (закрыта 2026-07-20):** login/session, reading autosave/reload/submit, full mock iframe, cap-граница;
-- **3b (по фичам):** writing, speaking, admin import, vocabulary;
+- **3b (закрыта 2026-07-20):** writing, speaking, admin publish-путь, vocabulary;
 - **3c (после 0b):** payment sandbox E2E.
+
+**Волна 3b (2026-07-20, поверх инфры 3a).** +4 спека (сьют 10→15 тестов), ×5 полных
+прогонов зелёные (14 passed + 1 quota-skip). Ключевые решения:
+- **W/S без LLM и без прода:** раннер включает фичи (`NEXT_PUBLIC_SITE_URL=
+  http://localhost:3000` — живой baseURL прогона, signup-редирект корректен) +
+  фейковые GEMINI/internal-секреты; undici-preload жёстко рубит любой запрос на
+  `/api/{writing,speaking}/evaluate` ДО DNS/сокета (интерцептор по пути, Codex-high) —
+  submission детерминированно остаётся pending; «завершённый эвал» инжектится
+  сид-хелперами (`injectCompleted{Writing,Speaking}Feedback` — транзакция +
+  guarded-update из transient-статусов, speaking ещё и `delete_requested_at IS NULL`),
+  result-UI ассертится на инжектированных band/фидбеке. Реальный Gemini и прод
+  недостижимы ПО КОДУ (строка `BLOCKED outbound evaluate call` в dev-логе — ожидаемая).
+- **speaking:** реальная запись fake-микрофоном (непрерывный WAV-тон 440Гц через
+  `--use-file-for-fake-audio-capture` — синтетический бип флакал на silence-гейте),
+  12с (MIN_SECONDS=10), реальный Storage upload/cleanup на тест-стенде, delete-флоу
+  реальный; отдельный ultra-юзер (preview-лимит premium недетерминирован для повторов).
+- **admin:** сид кладёт draft-клон atomized-фикстуры; спек — review → publish через
+  реальный /admin UI → тест виден в каталоге; негатив: не-admin редиректится (толерантный
+  паттерн `/app(\/|$|?)` — не-onboarded аккаунт уезжает вторым хопом на онбординг).
+- **vocab:** сид-дека 3 карты + due-строки + saved_word; полная review-сессия по UI
+  до «Session complete», «My words» с контекстом.
+- **троттл:** сьют делает ~13 логинов при лимите 10/10мин — `loginAs` чистит
+  `signup_throttle` перед каждым логином (прод-защита не предмет e2e, юниты её держат).
 
 **Инфра волны 3a (2026-07-20).** Stateful-сьют переведён с прод-БД на hosted тест-стенд:
 `npm run test:e2e:stateful` (`scripts/run-stateful-e2e.ts`) — env из `.env.test.local` через
@@ -425,10 +448,13 @@ Runbook прогона (ручной, НЕ в CI — по образцу §7):
 - [x] Basic cap на границе лимита (`e2e/cap.spec.ts`: limit−1 проходит в раннер,
       граница блокирует с видимым баннером; счётчик подводится сид-хелпером
       `preloadPracticeStarts`, cleanup в afterAll)
-- [ ] vocabulary review + saved words (3b)
-- [ ] writing: store → evaluation → polling → result (3b)
-- [ ] speaking: permission → upload → evaluation → delete (3b)
-- [ ] admin import → review → publish → каталог (3b)
+- [x] vocabulary review + saved words (`e2e/vocab.spec.ts`, 2026-07-20)
+- [x] writing: store → polling → result (`e2e/writing.spec.ts`; evaluation = DB-инжект,
+      реальный LLM вне E2E по дизайну — см. блок 3b выше)
+- [x] speaking: permission → запись → upload → polling → result → delete
+      (`e2e/speaking.spec.ts`; evaluation = DB-инжект, там же)
+- [x] admin review → publish → каталог (`e2e/admin-import.spec.ts`; сам импорт
+      CLI/Telegram — вне браузерного сьюта, сид кладёт draft напрямую)
 - [ ] payment sandbox (после 0b, 3c)
 
 Устройства — ручной release-гейт (короткий чек-лист + фиксация прохождения):
@@ -532,5 +558,6 @@ actions: 3/16. Непокрыто (полный список аудита):
 | 2 hosted Supabase контракты | ✅ закрыта (test-target заведён, миграции+постура+IDOR через реальный PostgREST+Auth+Storage; payment webhook по дизайну в 0b) | 2026-07-20 |
 | 0b sandbox-окно | ⬜ ждёт ключей | — |
 | 3a браузер: stateful-сьют на тест-стенде (раннер+сид+auth/reading/mock-iframe/cap, Codex-BLOCKER env-каскада закрыт, ×5 зелёные) | ✅ закрыта | 2026-07-20 |
-| 3b/3c браузер: по фичам / после 0b; устройства — ручной гейт | ⬜ по триггерам | — |
+| 3b браузер: vocab/admin-publish/writing/speaking (сьют 15 тестов, W/S без LLM — DB-инжект, ×5 зелёные) | ✅ закрыта | 2026-07-20 |
+| 3c payment E2E (после 0b); устройства — ручной гейт | ⬜ по триггерам | — |
 | 4 эксплуатация | ⬜ по триггерам | — |
