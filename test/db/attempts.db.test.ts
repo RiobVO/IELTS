@@ -20,20 +20,40 @@ import postgres from "postgres";
  * PostHog вычищены db-setup'ом). Где эффект важен — дополнительно проверяем
  * чистоту error_log, отделяя «не случилось» от «проглочено».
  */
-const { afterHooks } = vi.hoisted(() => ({
+const { afterHooks, captureServerMock } = vi.hoisted(() => ({
   afterHooks: [] as Array<() => unknown>,
+  captureServerMock: vi.fn(),
 }));
 vi.mock("next/server", () => ({
   after: (cb: () => unknown) => {
     afterHooks.push(cb);
   },
 }));
+// Телеметрию мокаем НАБЛЮДАЕМО (ревью-находка: с вычищенными PostHog-ключами
+// captureServer — no-op, и удаление/дублирование test_submit оставалось бы
+// зелёным). Мок-fn позволяет ассертить «ровно одно событие с точным payload».
+vi.mock("@/lib/analytics/server", () => ({ captureServer: captureServerMock }));
 /** Детерминированно прогоняет накопленные after()-колбэки (по одному, по порядку). */
 async function flushAfter(): Promise<void> {
   while (afterHooks.length) {
     const cb = afterHooks.shift()!;
     await cb();
   }
+}
+
+/**
+ * SQLSTATE ошибки с разворотом cause-цепочки: Drizzle оборачивает pg-ошибку в
+ * DrizzleQueryError, у которого `code` живёт в `cause` (ревью-находка: проверка
+ * только верхнего уровня пропустила бы реальный deadlock).
+ */
+function pgCode(e: unknown): string | null {
+  let cur: unknown = e;
+  while (cur && typeof cur === "object") {
+    const code = (cur as { code?: unknown }).code;
+    if (typeof code === "string") return code;
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return null;
 }
 
 // redirect() из next/navigation НЕ мокаем: он бросает NEXT_REDIRECT, и это ровно
@@ -202,6 +222,7 @@ function finalizeInput(
 
 beforeEach(async () => {
   afterHooks.length = 0; // очередь after() не течёт между тестами
+  captureServerMock.mockClear();
   // Полный чистый лист: TRUNCATE auth.users каскадом сносит profile → attempt/
   // referral/trial_claim/content_item/notification/user_badge/leaderboard/…;
   // badge (без FK к profile) и error_log чистим явно.
@@ -339,6 +360,32 @@ describe("Гонка старта ОДНОГО item → одна попытка 
       ),
     ).toBe(1);
   });
+
+  it("basic на границе капа (1 из 2 израсходован): гонка одного item → оба resume, ноль cap-отказов", async () => {
+    // Ревью-находка: при нулевом расходе капа удаление resume-recheck под локом
+    // маскируется ON CONFLICT'ом. Здесь граница limit−1: победитель вставкой
+    // добивает кап до 2/2, и проигравший лока БЕЗ recheck насчитал бы полный кап
+    // и получил ложный limit-redirect вместо resume той же попытки.
+    const userId = await seedUser();
+    const other = await seedContent();
+    await seedPracticeToday(userId, other, BASIC_PRACTICE_DAILY_LIMIT - 1);
+    const item = await seedContent();
+
+    const [a, b] = await Promise.all([
+      startAttempt(userId, item, "practice", false, null, "basic"),
+      startAttempt(userId, item, "practice", false, null, "basic"),
+    ]);
+
+    expect(a.attemptId).toBe(b.attemptId); // проигравший получил resume, НЕ cap-отказ
+    expect(
+      await countRows(
+        "attempt",
+        "user_id = $1 AND content_item_id = $2 AND status = 'in_progress'",
+        userId,
+        item,
+      ),
+    ).toBe(1);
+  });
 });
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -379,6 +426,17 @@ describe("Гонка submit одной попытки → ровно один э
     // Отложенные эффекты (badge-notification) — под flushAfter.
     await flushAfter();
     expect(await countRows("notification", "user_id = $1 AND type = 'badge_unlocked'", userId)).toBe(1);
+    // test_submit — РОВНО одно событие с точным payload (регистрируется только
+    // победителем claim'а; проигравший не доходит до after()-регистрации).
+    const testSubmits = captureServerMock.mock.calls.filter((c) => c[0] === "test_submit");
+    expect(testSubmits).toHaveLength(1);
+    expect(testSubmits[0]![1]).toBe(userId);
+    expect(testSubmits[0]![2]).toMatchObject({
+      content_item_id: item,
+      raw_score: 7,
+      total: 10,
+      mode: "mock",
+    });
     // Ни одного проглоченного сбоя — эффекты СЛУЧИЛИСЬ, а не «упали в error_log».
     expect(await countRows("error_log", "true")).toBe(0);
   });
@@ -467,6 +525,30 @@ describe("Откат транзакции при инъекции сбоя", () 
     expect(await countRows("error_log", "message = 'applyPostSubmit failed'")).toBe(1);
   });
 
+  it("finalizeSubmit: сбой прогрессии ПОСЛЕ claim → submitted сохранён, прогрессия скипнута, сбой в error_log", async () => {
+    // Ревью-находка, зафиксированная как КОНТРАКТ, а не баг: claim
+    // in_progress→submitted коммитится ДО транзакции applyPostSubmit — осознанный
+    // best-effort дизайн (apply-post-submit.ts: «сбой прогрессии не должен терять
+    // сабмит юзера»), существовавший и в инлайн-коде до экстракции. Реконсиляция
+    // недоначисленной прогрессии сознательно не реализована; гарантия — сбой НЕ
+    // теряется молча (error_log), а сабмит и разбор юзера переживают его.
+    const userId = await seedUser();
+    const item = await seedContent();
+    const attemptId = await seedInProgressAttempt(userId, item);
+    const before = await profileFacts(userId);
+
+    await sql.unsafe(INJECT_SQL.raiseOnProfileUpdate);
+    const out = await finalizeSubmit(finalizeInput(attemptId, userId, item));
+
+    expect(out.claimed).toBe(true); // finalizeSubmit не бросил, claim пережил сбой
+    expect(await countRows("attempt", "id = $1 AND status = 'submitted'", attemptId)).toBe(1);
+    expect(await countRows("attempt_review_snapshot", "attempt_id = $1", attemptId)).toBe(1);
+    // Прогрессия целиком откатилась: XP/rating/rated_count нетронуты.
+    expect(await profileFacts(userId)).toEqual(before);
+    // …и сбой наблюдаем — «деградировано», а не «потеряно молча».
+    expect(await countRows("error_log", "message = 'applyPostSubmit failed'")).toBe(1);
+  });
+
   it("startAttempt trial-путь: RAISE на INSERT attempt → ни trial_claim, ни attempt не появились", async () => {
     const userId = await seedUser();
     const item = await seedContent(true); // full_reading + premium → trial-лейн
@@ -492,6 +574,11 @@ describe("Откат транзакции при инъекции сбоя", () 
 /* §6: порядок локов profile→content_item под нагрузкой → без deadlock            */
 /* ────────────────────────────────────────────────────────────────────────── */
 describe("Лок-порядок profile→content_item под нагрузкой", () => {
+  // Известное ограничение (ревью, осознанно принято): Promise.all не гарантирует
+  // фактического перекрытия транзакций — на «удачном» расписании сломанная
+  // сериализация может пройти. Управляемый rendezvous-барьер (pg_sleep-триггеры)
+  // отвергнут как машинерия с собственным флак-риском; компенсация — 10 раундов
+  // × 4 конкурентных вызова за прогон и правило ×5-10 прогонов сьюта (гоча).
   it("10 раундов × 4 конкурентных (startAttempt+applyPostSubmit) → 0 deadlock, счётчики сходятся", async () => {
     const userId = await seedUser();
     const items = await Promise.all([seedContent(), seedContent(), seedContent()]);
@@ -526,12 +613,12 @@ describe("Лок-порядок profile→content_item под нагрузкой
       }
     }
 
-    // Ни одной ошибки deadlock_detected (40P01) — ни брошенной startAttempt'ом,
-    // ни проглоченной applyPostSubmit'ом (та пишет любой сбой в error_log).
-    const deadlockThrown = failures.filter(
-      (e) => (e as { code?: string }).code === "40P01",
-    );
-    expect(deadlockThrown).toHaveLength(0);
+    // Ни одной ошибки deadlock_detected (40P01) — код ищем с разворотом cause
+    // (Drizzle-обёртка), и НИКАКИХ прочих неожиданных ошибок: любая (deadlock,
+    // timeout, constraint) красит тест со своим текстом. Проглоченные
+    // applyPostSubmit'ом сбои ловим отдельно через error_log.
+    expect(failures.filter((e) => pgCode(e) === "40P01")).toHaveLength(0);
+    expect(failures.map((e) => String(e))).toEqual([]);
     expect(await countRows("error_log", "message = 'applyPostSubmit failed'")).toBe(0);
 
     // Счётчики сходятся: каждый applyPostSubmit был rated и сериализован под
