@@ -51,34 +51,85 @@ export class WorkerUnavailableError extends Error {
 }
 
 // Inline worker source (eval:true) — NO separate on-disk file, so Next/webpack bundling never
-// has to resolve or trace it. Runs the untrusted code in a global-free vm context on its own
-// thread and posts back a structured-cloneable result (data objects / number tables are plain
-// JSON — clone is a faithful deep copy). Any throw (vm timeout, ReferenceError from the empty
-// context, DataCloneError on non-data output) comes back as `{ ok:false }`; a heap bomb never
-// reaches postMessage — the worker is killed and the parent sees an 'error' event instead.
+// has to resolve or trace it. Two modes, both memory-/time-capped on their own thread and
+// posting back a structured-cloneable result (data objects / number tables are plain JSON):
+//   - 'data'  — evaluate a single data literal in a global-free context (extractData path).
+//   - 'table' — load the source scripts the way a browser loads classic <script> blocks and
+//               materialize a threshold function into a {raw: band} table (see buildTable).
+// Any throw (vm timeout, ReferenceError from the empty context, DataCloneError on non-data
+// output) comes back as `{ ok:false }`; a heap bomb never reaches postMessage — the worker is
+// killed and the parent sees an 'error' event instead.
 const WORKER_SRC = `
 const { parentPort, workerData } = require('node:worker_threads');
 const vm = require('node:vm');
 try {
-  const value = vm.runInNewContext(workerData.code, Object.create(null), { timeout: workerData.timeout });
+  const value = workerData.mode === 'table'
+    ? buildTable(vm, workerData)
+    : vm.runInNewContext(workerData.code, Object.create(null), { timeout: workerData.timeout });
   parentPort.postMessage({ ok: true, value });
 } catch (err) {
   parentPort.postMessage({ ok: false, error: String((err && err.message) || err) });
 }
+
+// Browser-faithful classic-script load of source <script> blocks, then materialize
+// workerData.name(r) over [min,max] into a {raw: band} table. Mirrors how a browser runs
+// classic scripts: one shared global, blocks compiled and executed independently, function
+// declarations (even under "use strict") bound on the global before the body runs.
+function buildTable(vm, wd) {
+  const { blocks, name, min, max, timeout } = wd;
+  // window/self alias the context global so a source that publishes the scale via
+  // 'window.band = ...' (not a bare declaration) is reachable, exactly as in a browser.
+  const sandbox = {};
+  sandbox.window = sandbox;
+  sandbox.self = sandbox;
+  vm.createContext(sandbox);
+  // Each block is an independent classic script: compiled + run on its own, so a SyntaxError
+  // (e.g. a <script type="application/json"> body that slipped through) or a runtime throw
+  // (document.* in a headless context) in one block never suppresses declarations from the
+  // others. A vm timeout, though, means the script hung — a browser's single thread would
+  // freeze and nothing after it would run, so no meaningful table exists: fail closed to null.
+  for (let i = 0; i < blocks.length; i++) {
+    try {
+      new vm.Script(blocks[i]).runInContext(sandbox, { timeout });
+    } catch (e) {
+      if (e && /timed out/i.test(String(e.message))) return null;
+    }
+  }
+  // Read the function as an own/global property of the context — capturing the REAL
+  // declaration, so a script that reassigns globalThis to fake the lookup cannot redirect us.
+  const fn = sandbox[name];
+  if (typeof fn !== 'function') return null;
+  // Build the table in THIS (worker) realm as a null-proto object. Reads land in a host object
+  // with no prototype, so numeric setters a block may have planted on the context's
+  // Object.prototype — or an overridden Object.create — cannot intercept or corrupt it. fn(r)
+  // runs INSIDE the context under the same timeout (a per-call CPU bomb stays bounded to ~1s,
+  // not the wall-clock backstop); the host sink accumulates only numeric results.
+  const table = Object.create(null);
+  sandbox.__fn = fn;
+  sandbox.__sink = function (r, v) { if (typeof v === 'number') table[r] = v; };
+  try {
+    new vm.Script('for (var r=' + min + '; r<=' + max + '; r++){ try { __sink(r, __fn(r)); } catch(e){} }')
+      .runInContext(sandbox, { timeout });
+  } catch (e) { /* CPU bomb / mass-throw — whatever landed in the table stands */ }
+  // Flatten to a plain object (worker realm, pristine Object.prototype) for structured clone.
+  const out = {};
+  for (const k in table) out[k] = table[k];
+  return out;
+}
 `;
 
 /**
- * Evaluate `code` in a memory- and time-capped worker isolate. Resolves with the value,
- * rejects on any failure (OOM / timeout / eval error / crash). The worker is always
- * terminated (no leak) — on success, on failure, and on the wall-clock backstop.
+ * Run one worker job (mode 'data' or 'table') in a memory- and time-capped isolate. Resolves
+ * with the value, rejects on any failure (OOM / timeout / eval error / crash). The worker is
+ * always terminated (no leak) — on success, on failure, and on the wall-clock backstop.
  */
-function runInWorker<T>(code: string, timeout: number): Promise<T> {
+function runInWorker<T>(workerData: Record<string, unknown>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let worker: Worker;
     try {
       worker = new Worker(WORKER_SRC, {
         eval: true,
-        workerData: { code, timeout },
+        workerData,
         resourceLimits: {
           maxOldGenerationSizeMb: WORKER_OLD_GEN_MB,
           maxYoungGenerationSizeMb: WORKER_YOUNG_GEN_MB,
@@ -133,6 +184,19 @@ function skipTrivia(src: string, i: number): number {
       i += 2; // проглотить закрывающие */
     } else return i;
   }
+}
+
+/**
+ * A browser runs a `<script>` as code only when its `type` is absent/empty, a JavaScript
+ * MIME, or `module`; anything else (`application/json`, `text/template`, …) is inert data.
+ * Callers filter their `<script>` blocks through this before `extractFunctionTable` so a
+ * non-JS block can't inject a SyntaxError — in the browser model it's a separate, ignored tag.
+ */
+const EXECUTABLE_JS_TYPE_RE = /^(?:text|application)\/(?:x-)?(?:java|ecma)script$/;
+export function isExecutableScriptType(type: string | null | undefined): boolean {
+  if (type == null) return true;
+  const t = type.trim().toLowerCase();
+  return t === "" || t === "module" || EXECUTABLE_JS_TYPE_RE.test(t);
 }
 
 /** Find `const NAME = { ... }` and return the balanced-brace literal text. */
@@ -197,7 +261,7 @@ export function evalDataObject<T = unknown>(literal: string): Promise<T> {
   if (literal.length > MAX_VM_INPUT) {
     throw new RangeError(`data literal too large (${literal.length} > ${MAX_VM_INPUT})`);
   }
-  return runInWorker<T>(`(${literal})`, VM_TIMEOUT_MS);
+  return runInWorker<T>({ mode: "data", code: `(${literal})`, timeout: VM_TIMEOUT_MS });
 }
 
 export async function extractData<T = unknown>(src: string, name: string): Promise<T | null> {
@@ -255,52 +319,56 @@ export function extractRangeBuilderTable(
   return Object.keys(out).length > 0 ? out : null;
 }
 
-/** Find `function NAME(...) { ... }` and return its full balanced-brace text. */
-function extractFunctionText(src: string, name: string): string | null {
-  const re = new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{`);
-  const m = re.exec(src);
-  if (!m) return null;
-  const start = m.index;
-  let i = m.index + m[0].length - 1; // at the opening "{"
-  let depth = 0;
-  let inStr: string | null = null;
-  let esc = false;
-  for (; i < src.length; i++) {
-    const c = src[i]!;
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === "\\") esc = true;
-      else if (c === inStr) inStr = null;
-      continue;
-    }
-    if (c === "'" || c === '"' || c === "`") inStr = c;
-    else if (c === "{") depth++;
-    else if (c === "}") {
-      depth--;
-      if (depth === 0) return src.slice(start, i + 1);
-    }
-  }
-  return null;
-}
-
 /**
  * Some files store the raw->band scale as a THRESHOLD FUNCTION (`band(r)` /
- * `getBand(s)`) instead of a data object. Extract the function and CALL it for
- * every integer in [min,max] inside an isolated, global-free vm (timeout) to
- * materialize the scale as a {raw: band} table. Deterministic — pure evaluation
- * of a self-contained numeric function, no LLM, no external access.
+ * `getBandFor40(s)`) instead of a data object. We used to text-slice the function
+ * body out with a hand-rolled lexer, but distinguishing a regex literal from
+ * division — and a block `}` from an object `}` — needs a grammar, not a lexer
+ * (three review rounds kept finding holes). So instead we LOAD the source scripts
+ * the way a browser loads classic `<script>` blocks and read the function back:
+ *
+ *  - `scriptBlocks` is the array of `<script>` bodies verbatim — NOT concatenated.
+ *    Each block is compiled and executed on its own `vm.Script` in ONE shared,
+ *    browser-like context (window/self alias the global). Independent compilation
+ *    isolates a block whose body is a SyntaxError (e.g. a `type="application/json"`
+ *    block) or throws at runtime (`document.*` in a headless context) — the other
+ *    blocks' declarations survive, exactly as separate `<script>` tags do. A block
+ *    that HANGS (vm timeout) is fatal (a browser thread would freeze), yielding null.
+ *  - Function declarations bind on the context global during GlobalDeclarationInstantiation
+ *    — BEFORE the body runs and REGARDLESS of `"use strict"` (Script mode, not eval
+ *    scope) — so the scale survives a block that throws right after declaring it. A
+ *    commented-out or regex-embedded "declaration" is never bound: no heuristic to fool.
+ *  - The function is read as an own/global property of the context (covers `function`,
+ *    `var`, and `window.name =`/`self.name =` forms) and CALLED for every integer in
+ *    [min,max] INSIDE the context (per-call timeout) to materialize the {raw: band}
+ *    table. Results are accumulated in a host-realm null-proto object, immune to a block
+ *    poisoning the context's Object.prototype or Object.create. A per-r try skips a
+ *    throwing r (a delegator to a helper that was never declared → empty table → null).
+ *
+ * Delegation (`getBandFor40` → `getBandFor13`) works natively: both declarations
+ * share the context, so no dependency list is needed. Deterministic, worker-isolated
+ * (timeout + heap cap), no LLM, no external access.
  */
 export async function extractFunctionTable(
-  src: string,
+  scriptBlocks: string[],
   name: string,
   min: number,
   max: number,
 ): Promise<Record<number, number> | null> {
-  const fnText = extractFunctionText(src, name);
-  if (fnText == null || fnText.length > MAX_VM_INPUT) return null;
-  const harness = `${fnText}\n(function(){const t={};for(let r=${min};r<=${max};r++){const v=${name}(r);if(typeof v==='number')t[r]=v;}return t;})()`;
+  // Cheap substring gate: the name isn't mentioned in any block → nothing to run, skip
+  // the worker spawn (matches the old "function not found → null" fast path).
+  if (!scriptBlocks.some((b) => b.includes(name))) return null;
+  // Size gate (#20): reject an oversized script set before paying for a worker spawn.
+  if (scriptBlocks.reduce((n, b) => n + b.length, 0) > MAX_VM_INPUT) return null;
   try {
-    const table = await runInWorker<Record<number, number>>(harness, VM_TIMEOUT_MS);
+    const table = await runInWorker<Record<number, number> | null>({
+      mode: "table",
+      blocks: scriptBlocks,
+      name,
+      min,
+      max,
+      timeout: VM_TIMEOUT_MS,
+    });
     return table && Object.keys(table).length > 0 ? table : null;
   } catch (err) {
     if (err instanceof WorkerUnavailableError) throw err;

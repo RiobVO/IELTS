@@ -2,11 +2,13 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseRunner, diagnoseEmptyRunnerParse } from "./parse-runner";
+import { sanitizeRunner, assertNoKeyLeak } from "./sanitize-runner";
 import { isUnresolvedQuestionTypeWarning } from "../question-types";
 
 const FIX = join(__dirname, "fixtures");
 const reading = readFileSync(join(FIX, "reading.html"), "utf8");
 const listening = readFileSync(join(FIX, "listening.html"), "utf8");
+const inspera = readFileSync(join(FIX, "reading-inspera.html"), "utf8");
 
 describe("parseRunner — reading", () => {
   let r: Awaited<ReturnType<typeof parseRunner>>;
@@ -36,6 +38,129 @@ describe("parseRunner — reading", () => {
     const q1 = r.parsed.questions.find((q) => q.number === 1)!;
     expect(q1.answer.explanation).toMatch(/mining/i);
     expect(q1.answer.evidence?.snippet).toMatch(/shipping and mining/i);
+  });
+});
+
+// Inspera Style (2026-07-21): band-таблица лежит в getBandFor13, а getBandFor40
+// лишь делегирует к ней (`return getBandFor13(s)`). Извлечение getBandFor40 в изоляции
+// падало ReferenceError (getBandFor13 вне vm) -> bandScale=null -> publish-гейт
+// full_missing_band_scale. Фолбэк на getBandFor13 в цепочке кандидатов чинит блокер.
+describe("parseRunner — band делегируется getBandFor40 -> getBandFor13", () => {
+  const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>
+var correctAnswers = {"1":"TRUE","40":"FALSE"};
+function getBandFor13(s){ if(s>=39) return 9; if(s>=10) return 4; return 0; }
+function getBandFor40(s){ return getBandFor13(s); }
+</script></body></html>`;
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(html);
+  });
+  it("bandScale материализуется 0..40 через фолбэк на getBandFor13", () => {
+    expect(r.parsed.bandScale).not.toBeNull();
+    expect(Object.keys(r.parsed.bandScale!)).toHaveLength(41);
+    expect(r.parsed.bandScale!["40"]).toBe(9);
+    expect(r.parsed.bandScale!["0"]).toBe(0);
+  });
+});
+
+// Дефект текстового гейта (ревью 2026-07-21): getBandFor40 упоминает getBandFor13 ЛИШЬ
+// в комментарии, тело — заглушка без вызова (return null). Рядом лежит самостоятельная
+// legacy getBandFor13 (13-шкала). Старый гейт видел подстроку getBandFor13 в теле-комменте
+// → ложный delegates=true → извлекал standalone 13-шкалу как 0..40 → full_reading. Семантика
+// (со-определение в vm) не ошибается: вызова нет → getBandFor40 даёт пустую таблицу → null.
+describe("parseRunner — упоминание getBandFor13 в комментарии getBandFor40 не делает full", () => {
+  const html = `<!doctype html><html><head><title>Comment Only</title></head><body>
+<script>
+var correctAnswers = {${Array.from({ length: 13 }, (_, i) => `"${i + 1}":"TRUE"`).join(",")}};
+function getBandFor13(s){ if(s>=13) return 9.0; if(s>=10) return 7.5; if(s>=6) return 5.5; return 0; }
+function getBandFor40(s){ /* would call getBandFor13(s) but disabled */ return null; }
+</script></body></html>`;
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(html);
+  });
+  it("bandScale null (getBandFor40 не вызывает getBandFor13)", () => {
+    expect(r.parsed.bandScale).toBeNull();
+  });
+  it("категория passage_1, не full_reading", () => {
+    expect(r.parsed.category).toBe("passage_1");
+    expect(r.parsed.durationSeconds).toBe(20 * 60);
+  });
+});
+
+// Дефект текстового гейта (ревью 2026-07-21): валидный МНОГОСТРОЧНЫЙ делегатор с вложенным
+// if{} до вызова. Старый non-greedy regex `{([\s\S]*?)}` обрывался на внутренней `}` →
+// getBandFor13 не виден в захваченном теле → ложный delegates=false → bandScale null.
+// Со-определение в vm-harness вызывает делегатор целиком (balanced braces) → шкала.
+describe("parseRunner — многострочный делегатор getBandFor40 -> getBandFor13", () => {
+  const html = `<!doctype html><html><head><title>Multiline</title></head><body>
+<script>
+var correctAnswers = {"1":"TRUE","40":"FALSE"};
+function getBandFor13(s){ if(s>=39) return 9; if(s>=10) return 4; return 0; }
+function getBandFor40(s){ if (s < 0) { return null; } return getBandFor13(s); }
+</script></body></html>`;
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(html);
+  });
+  it("шкала извлекается 0..40 несмотря на вложенный if{} до вызова", () => {
+    expect(r.parsed.bandScale).not.toBeNull();
+    expect(Object.keys(r.parsed.bandScale!)).toHaveLength(41);
+    expect(r.parsed.bandScale!["40"]).toBe(9);
+    expect(r.parsed.bandScale!["0"]).toBe(0);
+  });
+});
+
+// Регресс 2026-07-21: legacy одиночный Reading несёт САМОСТОЯТЕЛЬНУЮ getBandFor13
+// (13-вопросная шкала) БЕЗ делегирующего getBandFor40. Безусловный фолбэк на
+// getBandFor13 материализовал её как 0..40-таблицу (s>=13 → 9 для всех r∈13..40),
+// bandScale становился !=null → isFull → full_reading/60m вместо passage_1/20m.
+// Фолбэк законен только при доказанном делегировании (getBandFor40 → getBandFor13).
+describe("parseRunner — standalone getBandFor13 (legacy single passage) остаётся passage_1", () => {
+  const html = `<!doctype html><html><head><title>Legacy Single</title></head><body>
+<script>
+var correctAnswers = {${Array.from({ length: 13 }, (_, i) => `"${i + 1}":"TRUE"`).join(",")}};
+function getBandFor13(s){
+  if(s>=13) return 9.0; if(s>=10) return 7.5; if(s>=6) return 5.5; if(s>=3) return 4.0; return 0;
+}
+</script></body></html>`;
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(html);
+  });
+  it("standalone getBandFor13 без getBandFor40 не извлекается как 40-шкала", () => {
+    expect(r.parsed.bandScale).toBeNull();
+  });
+  it("категория/длительность одиночного пассажа, не full_reading", () => {
+    expect(r.parsed.category).toBe("passage_1");
+    expect(r.parsed.durationSeconds).toBe(20 * 60);
+  });
+});
+
+// HIGH-находка ревью (2026-07-21): comment-aware извлечение band-функций на уровне
+// parseRunner. getBandFor13 закомментирована ЦЕЛИКОМ (декларации в источнике фактически
+// нет), рядом реальный getBandFor40-каллер. Не-comment-aware extractFunctionText матчил
+// `function getBandFor13` внутри /* */ → материализовал как dep → getBandFor40 отрабатывал
+// → ложный bandScale → full_reading/60m. Маска-подход: закомментированная декларация не
+// матчится → dep undefined → getBandFor40 падает ReferenceError → null → passage_1/20m.
+describe("parseRunner — закомментированная getBandFor13 + реальный getBandFor40 остаётся passage_1", () => {
+  const html = `<!doctype html><html><head><title>Commented Dep</title></head><body>
+<script>
+var correctAnswers = {${Array.from({ length: 13 }, (_, i) => `"${i + 1}":"TRUE"`).join(",")}};
+/* function getBandFor13(s){ if(s>=39) return 9; return 4; } */
+function getBandFor40(s){ return getBandFor13(s); }
+</script></body></html>`;
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(html);
+  });
+  it("закомментированный dep не материализуется → bandScale null", () => {
+    expect(r.parsed.bandScale).toBeNull();
+  });
+  it("категория passage_1, не full_reading", () => {
+    expect(r.parsed.category).toBe("passage_1");
+    expect(r.parsed.durationSeconds).toBe(20 * 60);
   });
 });
 
@@ -388,5 +513,68 @@ describe("parseRunner — нечисловые/неположительные к
   it("валидные числовые ключи по-прежнему дают вопросы", async () => {
     const { parsed } = await parseRunner(`<script>const correctAnswers = {"1":"A","2":"B"};</script>`);
     expect(parsed.questions.map((q) => q.number)).toEqual([1, 2]);
+  });
+});
+
+// --- Inspera Style golden fixture (committed, 2026-07-21) ---
+// Полностью синтетический мини-тест канонического клиентского формата: 3 пассажа,
+// 16 вопросов непрерывной нумерации, 8 типов ×2. Интегральная проверка ВСЕГО файла
+// (runner-путь ключа/типов/band + анти-утечка sanitizeRunner) — в отличие от точечных
+// inline-фикстур выше и в parse-reading-full.test.ts, гоняющих отдельные фиксы.
+describe("parseRunner — Inspera golden fixture (весь файл)", () => {
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(inspera);
+  });
+  const q = (n: number) => r.parsed.questions.find((x) => x.number === n)!;
+
+  it("section reading, 16 вопросов непрерывной нумерации 1..16, у каждого непустой ключ", () => {
+    expect(r.parsed.section).toBe("reading");
+    expect(r.parsed.questions.map((x) => x.number)).toEqual(
+      Array.from({ length: 16 }, (_, i) => i + 1),
+    );
+    expect(r.parsed.questions.every((x) => x.answer.accept.length > 0)).toBe(true);
+  });
+
+  it("qtype каждого типа канонизирован (8 типов ×2)", () => {
+    expect(q(1).qtype).toBe("tfng");
+    expect(q(3).qtype).toBe("note_completion");
+    expect(q(5).qtype).toBe("matching_headings");
+    expect(q(7).qtype).toBe("matching_info");
+    expect(q(9).qtype).toBe("summary_completion");
+    expect(q(11).qtype).toBe("mcq_single");
+    expect(q(13).qtype).toBe("matching_sentence_endings");
+    expect(q(15).qtype).toBe("ynng");
+  });
+
+  it("ключ маршрутизирован: acceptableAnswers→text_accept, иначе correctAnswers→exact", () => {
+    expect(q(3).answer).toMatchObject({ mode: "text_accept", accept: ["lanterns", "lantern"] });
+    expect(q(1).answer).toMatchObject({ mode: "exact", accept: ["TRUE"] });
+    expect(q(7).answer).toMatchObject({ mode: "exact", accept: ["C"] });
+  });
+
+  it("band делегируется getBandFor40 -> getBandFor13, шкала непустая 0..40", () => {
+    expect(r.parsed.bandScale).not.toBeNull();
+    expect(Object.keys(r.parsed.bandScale!)).toHaveLength(41);
+    expect(r.parsed.bandScale!["40"]).toBe(9);
+    expect(r.parsed.bandScale!["0"]).toBe(0);
+    expect(r.parsed.category).toBe("full_reading");
+  });
+
+  it("explanation/evidence подхватываются из data-объектов", () => {
+    expect(q(1).answer.explanation).toMatch(/human effort/i);
+    expect(q(1).answer.evidence?.snippet).toMatch(/human effort/i);
+  });
+
+  // Анти-утечка (BRIEF §6.1): sanitizeRunner обязан вырезать .analysis-дивы (несут ответ
+  // в тексте, скрыты лишь CSS) и заглушить key-объекты — иначе ответ утёк бы в iframe.
+  it("sanitizeRunner вырезает .analysis-дивы и синтетические ответы фикстуры", () => {
+    const out = sanitizeRunner(inspera, { contentItemId: "golden-test", section: "reading" });
+    expect(out).not.toContain("data-analysis");
+    expect(out).not.toContain('class="analysis"');
+    for (const word of ["lanterns", "lantern", "copper", "harbour", "harbor", "ledger"]) {
+      expect(out.toLowerCase()).not.toContain(word);
+    }
+    expect(() => assertNoKeyLeak(out, r.parsed)).not.toThrow();
   });
 });

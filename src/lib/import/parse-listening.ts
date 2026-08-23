@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
-import { extractData, extractFunctionTable } from "./extract-js";
+import { extractData, extractFunctionTable, isExecutableScriptType } from "./extract-js";
 import type {
   ParsedAnswerKey,
   ParsedOption,
@@ -27,6 +27,12 @@ export async function parseListening(html: string): Promise<ParsedTest> {
     .toArray()
     .map((s) => $(s).html() ?? "")
     .join("\n");
+  // Исполняемые JS-блоки БЕЗ склейки для extractFunctionTable (каждый блок независим,
+  // как отдельный <script>); склеенный `script` остаётся входом extractData.
+  const scriptBlocks = $("script")
+    .toArray()
+    .filter((s) => isExecutableScriptType($(s).attr("type")))
+    .map((s) => $(s).html() ?? "");
   const keyRaw: Record<string, string | string[]> =
     (await extractData(script, "KEY")) ?? {};
   const correctRaw: Record<string, string | string[]> =
@@ -340,8 +346,8 @@ export async function parseListening(html: string): Promise<ParsedTest> {
   let bandScale: Record<string, number> | null = null;
   if (category === "full_listening") {
     const raw =
-      (await extractFunctionTable(script, "band", 0, 40)) ??
-      (await extractFunctionTable(script, "calculateIELTSScore", 0, 40));
+      (await extractFunctionTable(scriptBlocks, "band", 0, 40)) ??
+      (await extractFunctionTable(scriptBlocks, "calculateIELTSScore", 0, 40));
     if (!raw) warnings.push("band(r) function not found — no band scale.");
     bandScale = raw ? Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v])) : null;
   }
