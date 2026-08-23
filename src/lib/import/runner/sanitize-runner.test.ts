@@ -3,7 +3,9 @@ import * as cheerio from "cheerio";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseRunner } from "./parse-runner";
-import { sanitizeRunner, assertNoKeyLeak } from "./sanitize-runner";
+import { sanitizeRunner, assertNoKeyLeak, stripAnalysisLeak } from "./sanitize-runner";
+import { polyfillRunnerStorage } from "./runner-storage";
+import { skinRunnerGate, skinRunnerBrand } from "./skin-runner";
 
 const FIX = join(__dirname, "fixtures");
 const reading = readFileSync(join(FIX, "reading.html"), "utf8");
@@ -35,6 +37,18 @@ describe("sanitizeRunner — reading", () => {
   it("инжектит мост reading (override showResults)", () => {
     expect(out).toContain("ielts-submit");
     expect(out).toMatch(/showResults\s*=/);
+  });
+
+  // DOM-утечка: reading-раннер несёт per-question разборы `[data-analysis]` с ответом
+  // в тексте (напр. MCQ Q27 → «(<strong>B</strong>)»), скрытые лишь CSS. Санитайзер
+  // обязан вырезать их из DOM (assertNoKeyLeak сканирует только <script>).
+  it("вырезает reading `[data-analysis]` разборы из DOM (ответ не уезжает)", () => {
+    expect(out).not.toMatch(/class="analysis"/);
+    expect(out).not.toContain('beet sugar "has been massively'); // текст разбора Q27
+    // JS-селектор `.analysis[data-analysis]` в скрипте раннера — не элемент, остаётся
+    // (безвреден: querySelector вернёт null), но самих reveal-элементов в DOM нет.
+    const bodyDivs = out.match(/<div[^>]*\sdata-analysis=/g);
+    expect(bodyDivs).toBeNull();
   });
 });
 
@@ -225,6 +239,38 @@ const KEY = {"1":["cat"],"2":["dog"],"3":["sun"],"4":["sky"]};
   });
 });
 
+// Inspera Style источник (2026-07-21): 40 `.analysis`/`[data-analysis]` дивов несут
+// ПРАВИЛЬНЫЙ ОТВЕТ в тексте (`<strong>TRUE</strong>` и т.п.), скрыты только исходным
+// CSS `.analysis{display:none}` — assertNoKeyLeak их не видит (сканирует только
+// <script>, не DOM). Раннер обязан вырезать их из DOM руками.
+describe("sanitizeRunner — Inspera .analysis DOM leak", () => {
+  const html = `<!doctype html><html><head><title>R</title><style>.analysis{display:none}</style></head><body>
+<div class="tfng-question" id="question-1">
+  <label><input type="radio" name="q1" value="TRUE">TRUE</label>
+  <div class="analysis" data-analysis="1">Q1 — Paragraph 1 evidence. <strong>TRUE</strong>.</div>
+</div>
+<div data-analysis="2">Q2 evidence without the class. <strong>FALSE</strong>.</div>
+<script>var correctAnswers = {"1":"TRUE","2":"FALSE"};</script>
+</body></html>`;
+
+  const out = sanitizeRunner(html, { contentItemId: "cid-analysis", section: "reading" });
+
+  it("вырезает .analysis-блоки из DOM", () => {
+    expect(out).not.toMatch(/class="analysis"/);
+    expect(out).not.toMatch(/Paragraph 1 evidence/);
+  });
+
+  it("вырезает элементы с [data-analysis], даже без класса .analysis", () => {
+    expect(out).not.toMatch(/data-analysis/);
+    expect(out).not.toMatch(/Q2 evidence without the class/);
+  });
+
+  it("легитимная разметка вопроса не задета", () => {
+    expect(out).toContain('id="question-1"');
+    expect(out).toContain('value="TRUE"');
+  });
+});
+
 describe("sanitizeRunner — listening", () => {
   let r: Awaited<ReturnType<typeof parseRunner>>;
   beforeAll(async () => {
@@ -245,5 +291,63 @@ describe("sanitizeRunner — listening", () => {
   it("инжектит мост listening (override doSubmit.onclick)", () => {
     expect(out).toContain("ielts-submit");
     expect(out).toMatch(/getElementById\(['"]doSubmit['"]\)\.onclick/);
+  });
+
+  // Критическая граница сужения: голый `.analysis` (без data-analysis) — легитимный
+  // results-контейнер дашборда, его JS заполняет в рантайме (#typeBreakdown /
+  // #partBreakdown). Прежний широкий `.analysis`-снос вырезал бы его → пустой экран
+  // результатов у ВСЕХ listening-раннеров. Атрибут-критерий его сохраняет.
+  it("сохраняет listening results-контейнер (.analysis без data-analysis)", () => {
+    expect(out).toContain('id="typeBreakdown"');
+    expect(out).toContain('id="partBreakdown"');
+    expect(out).toMatch(/class="analysis"/);
+  });
+});
+
+// Read-time защита (route.ts над runner_html + exam-content над questions_html):
+// исторические ряды БД импортированы ДО ввода strip'а → несут `[data-analysis]` разборы;
+// переимпорт заблокирован (RegradeRequiredError при существующих попытках). Общая
+// strip-функция вырезает их на выдаче.
+describe("stripAnalysisLeak — read-time defense", () => {
+  // questions_html = ФРАГМЕНТ (не полный документ): cheerio.load без isDocument=false
+  // обернул бы его в <html><head><body> → порча atomized-рендера QuestionHtml.
+  it("на фрагменте questions_html вырезает reveal, НЕ добавляя html/body-обёртку", () => {
+    const frag =
+      '<div class="mcq-block" id="question-27">' +
+      '<p class="mcq-stem">What does the reviewer suggest?</p>' +
+      '<label><input type="radio" name="q27" value="B"><span>B</span></label>' +
+      '<div class="analysis" data-analysis="27">Q27 — hidden evidence. (<strong>B</strong>)</div>' +
+      "</div>";
+    const out = stripAnalysisLeak(frag);
+    expect(out).not.toMatch(/data-analysis/);
+    expect(out).not.toContain("hidden evidence");
+    expect(out).toContain('id="question-27"'); // сам вопрос цел
+    expect(out).not.toMatch(/<html|<body|<head/i); // обёртка НЕ добавлена
+  });
+
+  it("быстрый string-guard: фрагмент без маркера возвращается байт-в-байт", () => {
+    const frag = '<div class="mcq-block"><p>Q1</p><input name="q1"></div>';
+    expect(stripAnalysisLeak(frag)).toBe(frag);
+  });
+
+  // route.ts применяет strip ПОСЛЕ polyfill/skin — на cheerio-реэмиссии. Проверяем,
+  // что порядок безопасен: полный runner_html после трансформов + strip остаётся
+  // валидным документом (doctype/head целы, инжектнутый шим жив), а разбор вырезан.
+  it("read-time strip после polyfill+skin: reveal вырезан, документ и шим целы", () => {
+    const polyfilled = polyfillRunnerStorage(reading);
+    expect(polyfilled).not.toBeNull();
+    const skinned = skinRunnerBrand(skinRunnerGate(polyfilled!));
+    const safe = stripAnalysisLeak(skinned);
+    expect(safe).not.toMatch(/class="analysis"/);
+    expect(safe).not.toContain('beet sugar "has been massively'); // разбор Q27 вырезан
+    expect(safe.trimStart().toLowerCase().startsWith("<!doctype")).toBe(true);
+    expect(safe).toMatch(/<head[^>]*>/i);
+    expect(safe).toContain("getItem"); // polyfill-шим пережил cheerio-реэмиссию
+  });
+
+  // listening runner_html: голый .analysis-контейнер переживает read-time strip —
+  // маркера [data-analysis] нет → guard = байт-в-байт no-op.
+  it("listening runner_html: results-контейнер цел на read-time (guard no-op)", () => {
+    expect(stripAnalysisLeak(listening)).toBe(listening);
   });
 });

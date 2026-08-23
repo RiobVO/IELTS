@@ -65,8 +65,12 @@ export function captureQuestions(
   if (unmapped) return "";
 
   // чистим шум: маркеры номеров, флаги, активный контент, on*-атрибуты
+  // .analysis/[data-analysis] (Inspera Style источник, 2026-07-21): несёт ПРАВИЛЬНЫЙ
+  // ОТВЕТ в тексте (<strong>TRUE</strong> и т.п.), скрыт только исходным CSS
+  // (.analysis{display:none}), который verbatim-захват не переносит → текст
+  // отрисовался бы видимым на клиенте. Вырезаем элементы целиком.
   root
-    .find(".review-flag, .cdi-placeholder, .qnum, .dz-num, script, style, link, meta, iframe, object, embed, noscript, form, button")
+    .find(".review-flag, .cdi-placeholder, .qnum, .dz-num, .analysis, [data-analysis], script, style, link, meta, iframe, object, embed, noscript, form, button")
     .remove();
   root.find("*").each((_, el) => {
     if (!("attribs" in el)) return;

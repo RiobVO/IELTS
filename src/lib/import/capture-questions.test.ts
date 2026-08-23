@@ -21,6 +21,22 @@ describe("captureQuestions answer-key hygiene", () => {
     expect(out).toMatch(/Pick two/);
   });
 
+  // Inspera Style источник (2026-07-21): `.analysis`/`[data-analysis]` несёт
+  // ПРАВИЛЬНЫЙ ОТВЕТ в тексте (скрыт только исходным CSS `.analysis{display:none}`,
+  // который verbatim-захват не переносит) — обязан вырезаться целиком.
+  it("вырезает .analysis (Inspera-style answer-reveal блок)", () => {
+    const block =
+      `<div class="tfng-question" id="question-1">` +
+      `<label><input type="radio" name="q1" value="TRUE">TRUE</label>` +
+      `<label><input type="radio" name="q1" value="FALSE">FALSE</label>` +
+      `<div class="analysis" data-analysis="1">Q1 — evidence text. <strong>TRUE</strong>.</div>` +
+      `</div>`;
+    const out = captureQuestions([block]);
+    expect(out).not.toBe("");
+    expect(out).not.toMatch(/analysis/i);
+    expect(out).not.toMatch(/evidence text/i);
+  });
+
   it("не трогает безопасные data-атрибуты, нужные рендеру (data-mcq-group)", () => {
     const block =
       `<div class="mc-question" data-mcq-group="1-2">` +
