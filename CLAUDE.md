@@ -14,102 +14,29 @@ Next.js (App Router) + Drizzle + Supabase. IELTS-платформа. UI/тест
   `mode='practice'`, mock не тронут).
 - **[BACKLOG.md](./BACKLOG.md)** — продуктовый бэклог. История фаз — в git / BRIEF §9.
 - **[TESTING_PLAN.md](./TESTING_PLAN.md)** — трек зрелости тестирования по волнам (аудит
-  2026-07-19): волны 0a (платёжные инварианты + 3 прод-фикса, в т.ч. FOR UPDATE
-  stack-race), 1 (CI-детектор: 6 джобов, sha-пин post-deploy smoke, restore-smoke
-  бэкапа) и 1.5 (native-PG данные/гонки: test:db 14→102, экстракция
-  `finalize-submit.ts`, RLS-матрица + `scripts/check-rls-posture.ts`, прод-фиксы
-  0056/0057 grant-lockdown) закрыты 2026-07-19; следующая — 2 (hosted Supabase,
-  ждёт test-target за владельцем); статус-таблица в §14 файла. Правило прерывания:
-  merchant-ключи пришли → 0b.
+  2026-07-19). Закрыты 0a (платёжные инварианты + FOR UPDATE stack-race), 1 (CI-детектор,
+  6 джобов), 1.5 (native-PG гонки/RLS: `test:db`, `check-rls-posture`, фиксы 0056/0057)
+  и 2 (hosted Supabase контракты: миграции + IDOR через реальный PostgREST/Auth + Storage,
+  ручные `npm run test:hosted:*` против тест-проекта, 2026-07-20). Следующая 0b ждёт
+  merchant-ключей; 3/4 по триггерам. Статус — §14. Правило прерывания: ключи пришли → 0b.
 
-**Следующая работа — BRIEF §12 (Roadmap Next):** notifications-переработка +
-upgrade-разруливание закрыты 2026-07-08 (`ad6b475..72407ab`, §12.2 п.4: actionable-
-уведомления + `/app/notifications`, paymentsLive-гейт + waitlist, trial full-mock §4.8,
-миграции 0046/0047 применены). Пред-launch аудит + кастомный домен `bando.study`
-закрыты 2026-07-09 (§12.1 п.7) — прод-домен, старый `*.vercel.app` оставлен как
-fallback-алиас. **Контент-вайп 2026-07-10** (плановый, по решению владельца): R/L-каталог
-и весь прогресс обнулены под чистую перезаливку клиентом через импорт-пайплайн;
-аккаунты/vocab/W/S/saved_word целы (BRIEF §12.3 п.3).
+**Статус (2026-07-20).** Стелс-запуск (~600 из 2 ТГ-каналов) отработан; предзапусковые
+и пост-запусковые волны на проде. Крупные закрытые треки (детали — git / BRIEF §9,§12 /
+память): notifications+upgrade, домен `bando.study` (+`*.vercel.app` fallback), плановый
+контент-вайп R/L (аккаунты/vocab/W/S целы), Storage-гигиена + audio-cap, QTYPE hard-block,
+атрибуция `?src=`, mobile release-gate, Trajectory-график, план дня, каталог-счётчики,
+Listening part-уровень.
 
-**Предзапусковая волна закрыта 2026-07-11** (`8bc63e0..be747df`, стелс-запуск ~600 из
-2 ТГ-каналов клиента) — заливка контента уже шла параллельно, поэтому весь список ушёл
-в срочный режим:
-- **Storage-гигиена (BACKLOG OPS-1, закрыто):** `scripts/storage-orphans.ts` (dry-run/`--delete`,
-  минутный grace-период против гонки с runner-импортом) вычистил 758.5 MB
-  сирот (Storage 762→3.4 MB из 1024); `src/lib/import/audio-cap.ts` капает mp3 при импорте
-  15 MB (полный Listening на ≤64–96 kbps mono).
-- **QTYPE hard-block (BACKLOG W2-3b, закрыто):** publish блокируется на пустом ИЛИ
-  нераспознанном qtype (`isUnresolvedQuestionTypeWarning`); `docs/authoring-spec.md` —
-  требования к HTML для клиента.
-- **Digest-cron:** ложная тревога — крон жил piggyback'ом на `snapshot-ranks` by design;
-  теперь выделенный `/api/cron/weekly-digest` (`vercel.json`, `0 4 * * 1`).
-- **Pre-order/throttle/trial:** guest `/pricing` видит early-bird; `preorder`-событие несёт
-  `source_page`; `signup_throttle` чистится кроном `prune-signup-throttle` (`0 2 * * *`,
-  >48ч); trial-гейт (`src/lib/exam/access.ts`) больше не держит `pg_advisory_xact_lock` —
-  атомарный маркер `trial_claim` (`0054`, `ON CONFLICT`); `SIGNUP_THROTTLE_MAX` 10→100/час/IP
-  под CGNAT-волну (владелец подписал).
-- **Атрибуция каналов:** `?src=<slug>` → cookie `bando_src` → свойство/person-property
-  `source` на signup (`src/lib/analytics/source.ts`); реферальный `?ref=` не задет.
-- **Mobile release-gate:** пройден автоматикой (Playwright, `scripts/_mobile_gate.ts`
-  gitignored) + живым проходом владельца на реальном телефоне — 2 major-находки закрыты
-  (тулбар аннотаций теперь `!isTouch`-only с CSS-гейтом от первого кадра; широкая
-  `.matching-table` в mock-раннере скроллится сама, не утаскивая инструкции — фикс в
-  `skin-runner.ts` на read-time, чинит уже залитые тесты без реимпорта). **Гоча:** ни
-  Browser-панель, ни Playwright-эмуляция телефона не матчат `pointer:coarse`/`hover:none` —
-  touch-gated находки проверять реальным устройством или CDP `Emulation.setEmulatedMedia`.
+**Действующая монетизация (пивот 2026-07-17, BRIEF §4.8):** весь R/L бесплатен
+(`tier_required='basic'` везде); Basic-кап — 2 practice-старта/UTC-день + 2 mock-старта/
+UTC-нед (суммарно R+L), Premium/Ultra безлимит; W/S платные. Авторитетный кап
+транзакционный — `startAttempt` (`src/lib/exam/access.ts`) берёт `SELECT ... FOR UPDATE`
+на `profile` первым действием (порядок локов profile→content_item). Trial-механика
+(`trial_claim`) вестигиальна — каталог открыт, tier-гейт её не триггерит.
 
-Открыто по-прежнему: контент-процесс W2-3 (BACKLOG; процессный: ритм пополнения + витрина
-«новое»), merchant-ключи (внешний гейт платежей), два `?src=`-линка в посты каналов,
-Listening-прогон после заливки клиентом аудио. Порядок: план с acceptance → «делай» от
-пользователя → реализация. Открытые W2-пункты и гипотезы — BACKLOG.md.
-
-**Trajectory-волны 2026-07-15 закрыты** (`2effcd4..d258e32` + data-фикс без коммита):
-график Progress → Overview пересобран «точь-в-точь вариант 3» — сквозная Combined-полилиния
-прямыми сегментами через каждый мок, ось Y по данным, target вне окна = бейдж; точки =
-только mock-сдачи с band > 0 (BRIEF §4.4); у «Day 17» проставлен отсутствовавший
-`band_scale` (опубликован до F3-min гейта) + бэкфилл 8 попыток; выбор точки указателем —
-`src/lib/progress/hit-test.ts` (X+Y, регресс-тест); `curve.ts` удалён (кривых нет).
-Подтверждено двумя внешними ревью. История решений — память
-`progress-chart-craft-2026-07-15`. Следующая волна — инварианты геометрии (вынос geomFor
-в чистый модуль + сьют инвариантов + seeded-свип) — передана в отдельный чат; новые
-бэклог-пункты W2-9..11.
-
-**Волны 2026-07-16..17 закрыты** (на проде): план дня, счётчики каталога, Google
-Translate краш-класс, Listening free-tier, монетизация R/L пересобрана.
-- **План дня:** норма 2 practice/день + 2 full-mock/нед (`src/lib/progress/daily-plan.ts`
-  `computeDailyPlan`) — прогресс пунктов как счётчики N/M, не булевы флаги; `mocksThisWeek`
-  (`app/app/page.tsx`) — отдельная 8-дневная выборка + `isInCurrentTzWeek`-предикат, НЕ то же
-  окно последних 20 попыток, что `drillsToday`.
-- **Каталог `/app/practice`:** секционные R/L skill-карты несут «Done N of M · K left»
-  (`_PracticeCatalog.tsx`) — знаменатель = весь published-каталог секции, attempted = lifetime
-  `selectDistinct` по `attempt.contentItemId` (НЕ оконный `bestRawById`, тот заточен под
-  best-score дисплей и режется тем же submitted-окном); vocab-пункт плана дашборда несёт
-  сублейбл «N due today».
-- **Google Translate краш-класс закрыт:** внешние DOM-мутации (Google Translate и подобные
-  расширения) роняли React-реконсиляцию (`NotFoundError: removeChild`, `error_log`
-  source='client', повторялось неделями до диагностики) — authed shell `/app` держит
-  `translate="no"` + класс `notranslate` (`app/app/layout.tsx`), лендинг переводим как был.
-  Попутно: null-guard на агрегации `per_type_breakdown` в `/app/practice/page.tsx` (пропуск
-  строки без breakdown вместо падения).
-- **Listening — part-уровень (BRIEF §4.8/§5):** одночастный HTML → `part_N` (persist →
-  `basic`), ≥2 частей → `full_listening`; категория доезжает через
-  `src/lib/import/runner/atomize-merge.ts` (atom-приоритет ТОЛЬКО для listening — reading
-  осознанно остаётся runner-SoT); malformed `data-part` (пропущен/дублируется/невалиден) →
-  fail-safe `full_listening` + warning, вопросы никогда не теряются; `docs/authoring-spec.md`
-  дополнена требованиями для клиента.
-- **Монетизация пересобрана (owner decision 2026-07-17):** весь R/L контент —
-  `tier_required='basic'` (`persist.ts` пишет `basic` безусловно; дата-фикс на 7 строк
-  применён на проде, `full_reading`/`full_listening` больше не premium). Basic ограничен
-  2 practice-старта/UTC-день + 2 mock-старта/UTC-нед (суммарно R+L — та же норма, что план
-  дня выше), Premium/Ultra безлимит, W/S платные как были. Авторитетный кап —
-  транзакционный: `src/lib/exam/access.ts` `startAttempt` берёт `SELECT ... FOR UPDATE` на
-  `profile` первым действием транзакции (порядок локов profile→content_item, тот же
-  инвариант, что `apply-post-submit.ts`), затем resume-под-локом для проигравшего гонки на
-  ОДНОМ item, затем cap-COUNT; `enforceAccess` держит тот же порог только как soft
-  early-check. Миграция `0055` (индекс `attempt(user_id, mode, started_at)`) применена.
-  `PricingScreen.tsx` + `/pricing` metadata + `CatalogNotice.tsx` + BRIEF §4.8 переписаны
-  честно под новую модель. Trial-механика (§4.8, `trial_claim`) вестигиальна — код жив, но
-  при полностью открытом каталоге не триггерится (нет tier-гейта, который бы её вызвал).
+**Открыто:** контент-процесс W2-3 (BACKLOG — ритм пополнения + витрина «новое»),
+merchant-ключи (внешний гейт платежей → волна 0b), Listening-прогон после заливки аудио,
+два `?src=`-линка в посты каналов. Порядок работы: план с acceptance → «делай» → реализация.
 
 ## Commands
 
@@ -127,6 +54,12 @@ npm run db:migrate     # apply migrations (up) — targets DIRECT_URL (prod on S
 npm run db:status      # applied / pending
 npm run db:up:local / db:down:local   # local throwaway DB round-trips (VERIFY_DATABASE_URL)
 npm run import <file>  # parse a test HTML file and persist it (status=draft)
+
+# --- hosted-контракты волны 2 (ручные, НЕ в CI; таргет — ТЕСТ-проект Supabase) ---
+npm run db:migrate:test / db:status:test  # миграции на hosted тест-стенд (up/status only)
+npm run test:hosted:posture   # read-only RLS-постура тест-стенда (19/19)
+npm run test:hosted:rls       # IDOR-матрица через реальный PostgREST+Auth (2 юзера + anon)
+npm run test:hosted:storage   # приватные бакеты speaking-audio/source-html (owner/anon/service границы)
 ```
 
 **Definition of "closed" / verified:** `npx tsc --noEmit` always; `npm test` for logic;
@@ -203,6 +136,15 @@ the daily cap. Mock path must not change when adding practice features.
   against real Supabase (overwrites `auth.uid()`).
 - `npm run verify` (`scripts/verify.ts`) is **DESTRUCTIVE** (drops/recreates `public`). Runs against
   `VERIFY_DATABASE_URL` (local docker) and refuses a non-local host unless `VERIFY_ALLOW_REMOTE=1`.
+
+**Второй Supabase-проект = hosted тест-стенд (волна 2, НЕ прод).** Отдельный Free-проект
+`ielts-test` (ref `ajmeboekpxyjqtcowerj`) — пустая копия для `npm run test:hosted:*`; к нему
+не подключён никакой сайт. Креды в `.env.test.local` (gitignored, отдельно от прод-`.env.local`).
+Единая точка входа — `loadTestTargetEnv` (`scripts/lib/test-target-env.ts`): fail-fast, если хоть
+одна переменная несёт прод-ref (`oyecqbveatkolbqgfczq`) или не резолвится в единый не-прод ref;
+требует все 6 переменных ИМЕННО в файле (не из shell). Free-проект засыпает после ~7 дней
+простоя → ручной Restore из Dashboard перед прогоном (без keep-alive, TESTING_PLAN §13).
+Прод-БД и локальные гейты (`verify`/`test:db`) от него не зависят.
 
 ## Environment
 
