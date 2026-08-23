@@ -19,6 +19,7 @@
     "db:status:test": "tsx scripts/migrate-test.ts status",
     "test:hosted:posture": "tsx scripts/rls-posture-test.ts",
     "test:hosted:rls": "tsx scripts/rls-http-test.ts",
+    "test:hosted:storage:setup": "tsx scripts/setup-test-storage.ts",
     "test:hosted:storage": "tsx scripts/storage-contract-test.ts",
     "docker:db": "docker compose up -d db",
     "docker:db:down": "docker compose down -v",

@@ -4,14 +4,18 @@
  * локальным Postgres — см. setup-speaking-storage.ts). Таргет строго из
  * loadTestTargetEnv() (fail-fast на прод-ref), никогда .env.local.
  *
- * Контракт на бакет:
- *   1) идемпотентно создать бакет + owner-scoped storage.objects policy, если их нет
- *      (свежий тест-проект — ни того, ни другого);
- *   2) service-role UPLOAD тестового объекта;
- *   3) POSITIVE CONTROL — service-role signed URL реально отдаёт 200 + верное тело
+ * READ-ONLY verify-ГЕЙТ (первым): сверяет фактическое состояние Storage с каноном
+ * (scripts/lib/storage-provisioning.ts) — бакеты + owner-политика speaking-audio +
+ * отсутствие дрейфа на source-html. Тест НЕ чинит: если провижининг отсутствует
+ * или дрейфанул → FAIL + подсказка запустить setup, exit БЕЗ поведенческих проб.
+ * Иначе тест доказывал бы корректность политики, которую сам же и поставил.
+ *
+ * Контракт на бакет (поведенческие пробы, после зелёного verify):
+ *   1) service-role UPLOAD тестового объекта;
+ *   2) POSITIVE CONTROL — service-role signed URL реально отдаёт 200 + верное тело
  *      (без этого anon-deny ниже может быть ложным: объекта могло просто не быть);
- *   4) ANON download того же объекта — DENY (приватный бакет обязан отказать);
- *   5) cleanup объекта в finally (ошибка cleanup логируется, не роняет итог).
+ *   3) ANON download того же объекта — DENY (приватный бакет обязан отказать);
+ *   4) cleanup объекта в finally (ошибка cleanup логируется, не роняет итог).
  * Отдельно: anon НЕ может создать бакет (граница service-role).
  *
  * Authenticated-контракт (внешнее ревью, High #2 + Medium #3): service-role и anon —
@@ -36,50 +40,29 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { loadTestTargetEnv } from "./lib/test-target-env.ts";
+import { verifyStorageProvisioning } from "./lib/storage-provisioning.ts";
 
 const t = loadTestTargetEnv();
 
 interface BucketSpec {
   id: string;
-  /** SQL setup идемпотентного создания бакета + owner-policy (own диалект под каждый бакет). */
-  ensureSql: string[];
   /** speaking-audio держит allowed_mime_types — контракт-объект обязан ему соответствовать. */
   contentType: string;
+  /**
+   * РЕАЛИСТИЧНОЕ расширение ключа пробы (Codex P2 #1): bucket-agnostic policy по
+   * имени объекта (напр. `name LIKE '%.html'`) не содержит литерал bucket id и не
+   * ловится verify — но откроет реальные `.html`-объекты. Проба обязана бить по
+   * тому же расширению, что реальный контент, иначе anon-deny ложно-зелёный.
+   */
+  ext: string;
 }
 
-// Тот же bucket-insert + owner-scoped policy, что setup-speaking-storage.ts — переиспользован
-// текстом (файл не трогаем, чтобы не расширять его scope на новый таргет).
+// Провижининг (создание бакетов + owner-политика) больше НЕ здесь — он в каноне
+// (scripts/lib/storage-provisioning.ts), применяется отдельным setup-test-storage.ts.
+// Тут только поведенческие пробы против уже провижиненного стенда.
 const BUCKETS: BucketSpec[] = [
-  {
-    id: "speaking-audio",
-    contentType: "audio/webm",
-    ensureSql: [
-      `insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-       values ('speaking-audio', 'speaking-audio', false, 10485760,
-               array['audio/webm','audio/mp4'])
-       on conflict (id) do update
-         set public = false, file_size_limit = 10485760,
-             allowed_mime_types = array['audio/webm','audio/mp4'];`,
-      `drop policy if exists speaking_audio_owner_all on storage.objects;`,
-      `create policy speaking_audio_owner_all on storage.objects
-         for all to authenticated
-         using (bucket_id = 'speaking-audio'
-                and (storage.foldername(name))[1] = auth.uid()::text)
-         with check (bucket_id = 'speaking-audio'
-                and (storage.foldername(name))[1] = auth.uid()::text);`,
-    ],
-  },
-  {
-    id: "source-html",
-    contentType: "text/html; charset=utf-8",
-    // source-html не несёт owner-policy вовсе (src/lib/import/source-html-storage.ts —
-    // только service-role путь, RLS default-deny для anon/authenticated без policy).
-    ensureSql: [
-      `insert into storage.buckets (id, name, public)
-       values ('source-html', 'source-html', false)
-       on conflict (id) do update set public = false;`,
-    ],
-  },
+  { id: "speaking-audio", contentType: "audio/webm", ext: "webm" },
+  { id: "source-html", contentType: "text/html; charset=utf-8", ext: "html" },
 ];
 
 let failures = 0;
@@ -93,15 +76,22 @@ function fail(msg: string): void {
   console.log(`[FAIL] ${msg}`);
 }
 
-async function ensureBuckets(): Promise<void> {
+/**
+ * READ-ONLY verify-гейт. Сверяет Storage с каноном; при расхождении печатает КАЖДУЮ
+ * проблему как [FAIL] + подсказку setup и возвращает false — main обязан выйти БЕЗ
+ * поведенческих проб (self-heal здесь запрещён — иначе ложно-зелёный класс).
+ */
+async function verifyProvisioning(): Promise<boolean> {
   const sql = postgres(t.directUrl, { max: 1, prepare: false, onnotice: () => {} });
   try {
-    for (const b of BUCKETS) {
-      for (const stmt of b.ensureSql) {
-        await sql.unsafe(stmt);
-      }
-      ok(`бакет ${b.id} + policy обеспечены (идемпотентно)`);
+    const { ok: isOk, problems } = await verifyStorageProvisioning(sql);
+    if (isOk) {
+      ok("provisioning соответствует канону (бакеты + owner-политика speaking-audio)");
+      return true;
     }
+    for (const p of problems) fail(`provisioning: ${p}`);
+    console.log("подсказка: запусти `npm run test:hosted:storage:setup` и повтори.");
+    return false;
   } finally {
     await sql.end({ timeout: 5 });
   }
@@ -111,7 +101,7 @@ async function testBucketContract(bucket: BucketSpec): Promise<void> {
   const bucketId = bucket.id;
   const svc = createClient(t.supabaseUrl, t.serviceRoleKey);
   const anon = createClient(t.supabaseUrl, t.anonKey);
-  const key = `contract-test/${Date.now()}-${Math.random().toString(36).slice(2)}.bin`;
+  const key = `contract-test/${Date.now()}-${Math.random().toString(36).slice(2)}.${bucket.ext}`;
   const body = new Uint8Array([9, 8, 7, 6, 5]);
 
   try {
@@ -249,6 +239,21 @@ async function testAuthenticatedBoundaries(): Promise<void> {
       }
     }
 
+    // 2b) cross-user UPLOAD: U пытается ЗАЛИТЬ под чужим префиксом. Ловит класс,
+    // который каталожный verify не адресует — bucket-agnostic `insert with check(true)`
+    // policy (не содержит литерал bucket id). Owner with_check обязан отказать.
+    const foreignUploadKey = `${randomUUID()}/foreign-upload-${Date.now()}.webm`;
+    const upForeignByU = await authed.storage.from("speaking-audio").upload(foreignUploadKey, body, {
+      contentType: "audio/webm",
+    });
+    if (upForeignByU.data && !upForeignByU.error) {
+      fail("speaking-audio: authenticated-юзер ЗАЛИЛ объект под чужим префиксом — with_check owner-предиката пробит (лишняя insert-policy)");
+      // подчистить пробитый объект
+      await svc.storage.from("speaking-audio").remove([foreignUploadKey]);
+    } else {
+      ok("speaking-audio: authenticated-юзер НЕ может залить под чужим префиксом (cross-user upload deny, with_check держится)");
+    }
+
     // 3) source-html — policy вовсе нет (только service-role путь). authenticated
     // обязан получить default-deny так же, как anon — иначе случайно оставленная
     // permissive policy `TO authenticated` пройдёт незамеченной.
@@ -316,7 +321,13 @@ async function testServiceRoleBoundary(): Promise<void> {
 async function main(): Promise<void> {
   console.log(`target: тест-проект ${t.ref} (hosted Supabase), storage-контракт\n`);
 
-  await ensureBuckets();
+  // verify-гейт первым: без соответствия канону поведенческие пробы бессмысленны
+  // (и тест не должен «чинить» дрейф, маскируя сломанный провижининг).
+  if (!(await verifyProvisioning())) {
+    console.log(`\nexit 1 — провижининг не соответствует канону (${failures} проблем(а))`);
+    process.exit(1);
+  }
+
   for (const b of BUCKETS) {
     await testBucketContract(b);
   }
