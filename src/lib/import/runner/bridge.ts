@@ -8,7 +8,7 @@
 // NOT per-question. Every member q of the group reports the SAME full set of checked
 // letters (comma-joined) — grade.ts mcq_set compares the full set per member. Mirrors the
 // listening __multiFor pattern (covers both .mcq-block and .mc-question conventions).
-const READING_COLLECT = `
+export const READING_COLLECT = `
 function __readingMultiFor(q){
   var groups = document.querySelectorAll('[data-mcq-group]');
   for (var i = 0; i < groups.length; i++){
@@ -35,12 +35,21 @@ function __collect(){
   for (var q = 1; q <= 40; q++){
     var tok = document.querySelector('.dd-blank[data-q="'+q+'"] .drag-token');
     if (tok){ a[q] = tok.getAttribute('data-value') || ''; continue; }
+    // Inspera drag-drop: heading-токен (Matching Headings) и ending-токен (Sentence
+    // Endings) лежат в #drop-qN, ответ — в data-heading / data-ending (зеркалит getAnswer).
+    var head = document.querySelector('#drop-q'+q+' .heading-token');
+    if (head){ a[q] = head.getAttribute('data-heading') || ''; continue; }
+    var end = document.querySelector('#drop-q'+q+' .ending-token');
+    if (end){ a[q] = end.getAttribute('data-ending') || ''; continue; }
     var multi = __readingMultiFor(q);
     if (multi !== null){ a[q] = multi; continue; }
     var radio = document.querySelector('input[name="q'+q+'"]:checked');
     if (radio){ a[q] = radio.value; continue; }
-    var txt = document.querySelector('input.inspera-input-text[name="q'+q+'"]');
-    if (txt){ a[q] = txt.value.trim(); continue; }
+    // Text-fallback зеркалит getAnswer (голый input[name=qN]) — устойчивее к отсутствию
+    // класса .inspera-input-text. type-гейт исключает checkbox/radio: незаполненный radio
+    // (первый input группы) не должен перебить пустой a[q]='' на своё имя-значение.
+    var txt = document.querySelector('input[name="q'+q+'"]');
+    if (txt && txt.type !== 'checkbox' && txt.type !== 'radio'){ a[q] = txt.value.trim(); continue; }
     a[q] = '';
   }
   return a;
