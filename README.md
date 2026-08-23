@@ -90,6 +90,23 @@ lacks — roles `anon`/`authenticated`/`service_role`, the `auth` schema,
 `auth.users`, `auth.uid()` — via `scripts/bootstrap-supabase-local.sql`. That
 file is **local-only** and never part of the production migration set.
 
+## Tests
+
+```bash
+npm test                 # vitest — pure logic (grading, anti-cheat, parsers). No browser.
+npm run test:db          # transactional/RLS invariants on a throwaway native PG
+                         # (DESTRUCTIVE, local-only; run concurrency tests 5–10×)
+npm run test:e2e:stateful  # Playwright suite against the hosted test project
+```
+
+The `test:hosted:*` scripts (RLS posture, an IDOR matrix through real
+PostgREST+Auth, private Storage buckets) run against a **separate** Supabase test
+project, never production — `scripts/lib/test-target-env.ts` fail-fasts if any var
+carries the prod ref. They are manual, not part of CI. Wave-by-wave status and the
+runbooks live in [TESTING_PLAN.md](./TESTING_PLAN.md).
+
+`build` and `tsc` alone are not verification — exercise the changed behaviour.
+
 ## Content licensing
 
 Test HTML/audio belong to the **client**; this repo is the platform. Licensing of
