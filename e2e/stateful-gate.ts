@@ -29,13 +29,13 @@ const SUPABASE_DIRECT_HOST_RE = /^db\.([a-z0-9]{20})\.supabase\.co$/;
 const SUPABASE_POOLER_USER_RE = /^postgres\.([a-z0-9]{20})$/;
 const SUPABASE_POOLER_HOST_SUFFIX = ".pooler.supabase.com";
 
-// Playwright-процесс не подхватывает .env.local сам (это делает Next.js на
+// Playwright-процесс не подхватывает .env-файлы сам (это делает Next.js на
 // билде) — читаем вручную, тот же формат/приоритет, что admin.ts.
-function loadEnvLocalFile(): Record<string, string> {
+function loadEnvFile(fileName: string): Record<string, string> {
   const out: Record<string, string> = {};
   let raw: string;
   try {
-    raw = readFileSync(new URL("../.env.local", import.meta.url), "utf8");
+    raw = readFileSync(new URL(`../${fileName}`, import.meta.url), "utf8");
   } catch {
     return out;
   }
@@ -46,9 +46,48 @@ function loadEnvLocalFile(): Record<string, string> {
   return out;
 }
 
-/** .env.local смёрженный с process.env (process.env приоритетнее) — то, что реально видят global-setup и спеки. */
+/**
+ * Приводит ключи одного слоя к UPPERCASE (P1 #2 внешнего ревью): на Windows
+ * process.env регистронезависим, но `{ ...process.env }` копирует ключи как
+ * есть — `Database_Url` из process.env и `DATABASE_URL` из файла становятся
+ * двумя РАЗНЫМИ ключами объекта, и гейт может прочитать файловое (test)
+ * значение, пока Next.js реально возьмёт process.env (prod). Коллизия внутри
+ * одного слоя после нормализации разрешается детерминированно: last-wins по
+ * порядку перечисления ключей (Object.entries — insertion order).
+ */
+function normalizeEnvKeys(layer: E2eEnv): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(layer)) {
+    if (value === undefined) continue;
+    out[key.toUpperCase()] = value;
+  }
+  return out;
+}
+
+/**
+ * Чистая (без ФС) сборка итогового env из файловых слоёв + process.env.
+ * `files` обязаны прийти УЖЕ в порядке возрастания приоритета — последний
+ * элемент побеждает; `processEnv` всегда поверх всех файлов. Порядок обязан
+ * совпадать с тем, как `next dev` (NODE_ENV=development) реально резолвит
+ * .env-каскад, иначе гейт судит не по тому окружению, которое увидит
+ * приложение (P1 #1 внешнего ревью).
+ */
+export function resolveE2eEnv(files: Record<string, string>[], processEnv: E2eEnv): E2eEnv {
+  return Object.assign({}, ...files.map(normalizeEnvKeys), normalizeEnvKeys(processEnv));
+}
+
+/**
+ * Смёрженный env в приоритете `next dev` (NODE_ENV=development, высокий→низкий):
+ * .env.development.local > .env.local > .env.development > .env, а поверх
+ * всех файлов — process.env. Именно это реально видит запущенное Next.js
+ * приложение — гейт обязан судить по тем же значениям (P1 #1).
+ */
 export function loadE2eEnv(): E2eEnv {
-  return { ...loadEnvLocalFile(), ...process.env };
+  const envFile = loadEnvFile(".env");
+  const envDev = loadEnvFile(".env.development");
+  const envLocal = loadEnvFile(".env.local");
+  const envDevLocal = loadEnvFile(".env.development.local");
+  return resolveE2eEnv([envFile, envDev, envLocal, envDevLocal], process.env);
 }
 
 /**
