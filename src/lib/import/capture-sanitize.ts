@@ -18,6 +18,50 @@ const LEAK_NODES =
   "script, style, link, meta, iframe, object, embed, noscript, form, button";
 
 /**
+ * Reveal-маркеры ответа по CLASS-ТОКЕНАМ — источник может прятать ключ не только в
+ * санкционированном `[data-analysis]` (Inspera-канон), но и под чужим классом
+ * (`<div class="correct-answer">Correct answer: …</div>`). Сравнение СТРОГО по токенам
+ * класс-листа (split по whitespace, точное равенство), НЕ подстрокой: иначе легитимные
+ * `cstat answered`/`map-answers`/`answer-input` реального корпуса дали бы ложные срабатывания.
+ */
+const LEAK_CLASS_TOKENS = new Set([
+  "analysis",
+  "correct",
+  "correct-answer",
+  "answer-key",
+  "solution",
+  "reveal",
+]);
+
+/**
+ * Fail-closed детектор утечки ключа в захваченной панели: возвращает первый найденный
+ * подозрительный class-токен (или null). Санкционированный `[data-analysis]`-блок и его
+ * потомков пропускаем — их штатно вырезает `stripCapturedLeaks` (и read-time route.ts);
+ * любой ДРУГОЙ элемент с reveal-токеном = чужой/обфусцированный маркер → вызывающий
+ * возвращает пустую панель + warning, вся часть уходит в атомизированный фоллбэк.
+ * Тихое удаление (как у `stripCapturedLeaks`) здесь опасно: могло бы вырезать легитимный
+ * контент и скрыть проблему, а fail-closed безопасен по построению (атомизация не
+ * использует raw HTML). См. блокер B1.
+ */
+export function findLeakClassToken($: CheerioAPI, root: Cheerio<AnyNode>): string | null {
+  let token: string | null = null;
+  root.find("*").each((_, el) => {
+    if (token || !("attribs" in el)) return;
+    // Известная легитимная структура — санкционированный Inspera reveal (сам блок + дети).
+    if ($(el).closest("[data-analysis]").length > 0) return;
+    const cls = el.attribs["class"];
+    if (!cls) return;
+    for (const t of cls.split(/\s+/)) {
+      if (t && LEAK_CLASS_TOKENS.has(t)) {
+        token = t;
+        return;
+      }
+    }
+  });
+  return token;
+}
+
+/**
  * Единая leak-гигиена вопрос-панели: reading (`capture-questions`) и listening
  * (`capture-listening`) делят её, чтобы строгость анти-утечки ключа (BRIEF §6.1)
  * была ИДЕНТИЧНОЙ на обоих путях. Вырезает leak-узлы (`LEAK_NODES`) и вычищает

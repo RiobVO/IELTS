@@ -103,6 +103,10 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
           headingBank: extractHeadingBank($, qSection),
           endingBank: extractEndingBank($, qSection),
         },
+        (token) =>
+          warnings.push(
+            `Passage ${order}: suspected answer-reveal marker ".${token}" — verbatim panel disabled, atomized fallback.`,
+          ),
       ) || null;
     passages.push({ order, title: pTitle, bodyHtml, audioPath: null, questionsHtml });
   });

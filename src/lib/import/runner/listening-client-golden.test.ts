@@ -108,6 +108,11 @@ describe("listening-client golden fixture — parseTest (atom-путь)", () => 
     expect(captured).not.toMatch(/transcript/i);
     expect(captured).not.toMatch(/class="analysis"/i);
     expect(captured).not.toMatch(/data-analysis/i);
+    // Альтернативные reveal-маркеры под CLASS-токеном (B1): детектор уводит такую часть
+    // в атомизацию, поэтому в захвате ни одного из них быть не должно.
+    for (const marker of ["correct", "answer-key", "solution", "reveal"]) {
+      expect(captured).not.toMatch(new RegExp(`class="[^"]*\\b${marker}\\b`, "i"));
+    }
     // Общий паттерн answer-reveal атрибутов (data-correct="…"/data-answer="…"/…), а не
     // только конкретные имена выше — ловит любой источник с иным неймингом.
     expect(captured).not.toMatch(/[\w-]*(correct|answer|solution)[\w-]*\s*=\s*"/i);
