@@ -458,8 +458,59 @@ describe("parseRunner — listening qtype", () => {
     expect(qt(1)).toBe("table_completion");
     expect(qt(7)).toBe("note_completion");
     expect(qt(11)).toBe("mcq_single");
-    expect(qt(17)).toBe("matching_info");
+    // Q17 QTYPE — голое "Matching" (Part 2 duties/abilities): listening-контекст мапит
+    // его confident-ом в matching_features (Задача A), не low-confidence matching_info.
+    expect(qt(17)).toBe("matching_features");
     expect(new Set(r.parsed.questions.map((q) => q.qtype)).size).toBeGreaterThan(1);
+  });
+  it("голое QTYPE «Matching» не даёт low-confidence warning (Задача A)", () => {
+    expect(r.parsed.warnings.some((w) => /low-confidence/i.test(w) && /matching/i.test(w))).toBe(
+      false,
+    );
+  });
+});
+
+// Задача A: голое QTYPE "Matching" в listening — официальный тип (атом-парсер даёт
+// matching_features для тех же вопросов структурно), не должен шуметь low-confidence
+// warning'ом, в отличие от reading-ветки (там matching многозначен и остаётся неуверенным).
+describe("parseRunner — listening «Matching» QTYPE → matching_features без warning", () => {
+  const html = `<!doctype html><html><head><title>L</title></head><body><audio></audio>
+<script>
+var KEY = {"1":["A"],"2":["B"]};
+var QTYPE = {"1":"Matching","2":"Matching"};
+</script></body></html>`;
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(html);
+  });
+  it("qtype matching_features на обоих вопросах", () => {
+    const q1 = r.parsed.questions.find((q) => q.number === 1)!;
+    const q2 = r.parsed.questions.find((q) => q.number === 2)!;
+    expect(q1.qtype).toBe("matching_features");
+    expect(q2.qtype).toBe("matching_features");
+  });
+  it("0 low-confidence/unknown-type warning'ов", () => {
+    expect(r.parsed.warnings.some((w) => /low-confidence|unknown type/i.test(w))).toBe(false);
+  });
+});
+
+// Задача B: band-таблица в listening может называться calculateIELTSScore вместо band
+// (зеркалирует фолбэк-цепочку parse-listening.ts).
+describe("parseRunner — listening band-фолбэк band -> calculateIELTSScore", () => {
+  const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":["A"]`).join(",");
+  const html = `<!doctype html><html><head><title>L</title></head><body><audio></audio>
+<script>
+var KEY = {${entries}};
+function calculateIELTSScore(s){ if(s>=39) return 9; if(s>=10) return 4; return 0; }
+</script></body></html>`;
+  let r: Awaited<ReturnType<typeof parseRunner>>;
+  beforeAll(async () => {
+    r = await parseRunner(html);
+  });
+  it("bandScale извлекается из calculateIELTSScore, когда band() не объявлена", () => {
+    expect(r.parsed.bandScale).not.toBeNull();
+    expect(r.parsed.bandScale!["40"]).toBe(9);
+    expect(r.parsed.bandScale!["0"]).toBe(0);
   });
 });
 
