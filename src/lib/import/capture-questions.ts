@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
+import { stripCapturedLeaks } from "./capture-sanitize";
 import type { CaptureDnd, DropOption } from "./dnd-capture";
 
 /**
@@ -209,31 +210,9 @@ export function captureQuestions(
     $(el).removeAttr("draggable").removeAttr("tabindex").removeAttr("role");
   });
 
-  // чистим шум: маркеры номеров, флаги, активный контент, on*-атрибуты
-  // .analysis/[data-analysis] (Inspera Style источник, 2026-07-21): несёт ПРАВИЛЬНЫЙ
-  // ОТВЕТ в тексте (<strong>TRUE</strong> и т.п.), скрыт только исходным CSS
-  // (.analysis{display:none}), который verbatim-захват не переносит → текст
-  // отрисовался бы видимым на клиенте. Вырезаем элементы целиком.
-  root
-    .find(".review-flag, .cdi-placeholder, .qnum, .dz-num, .analysis, [data-analysis], script, style, link, meta, iframe, object, embed, noscript, form, button")
-    .remove();
-  root.find("*").each((_, el) => {
-    if (!("attribs" in el)) return;
-    for (const name of Object.keys(el.attribs)) {
-      // Анти-утечка ключа (BRIEF §6.1): захваченный HTML рендерится на клиенте
-      // (QuestionHtml реэмитит атрибуты). Источник несёт правильный ответ в
-      // data-correct/data-answer — вырезаем любой атрибут с correct/answer/solution
-      // в имени. Слоты (data-q/data-qtype/data-value) создаём мы сами, они чисты.
-      if (/^on/i.test(name) || name === "style" || /(correct|answer|solution)/i.test(name)) {
-        $(el).removeAttr(name);
-      } else if (
-        /^(href|src|xlink:href|formaction|action)$/i.test(name) &&
-        /^\s*(javascript|data|vbscript):/i.test(el.attribs[name] ?? "")
-      ) {
-        $(el).removeAttr(name);
-      }
-    }
-  });
+  // Общая leak-гигиена (шум номеров/флагов, .analysis-утечка ключа, активный контент,
+  // on*/style/answer-атрибуты) — идентична listening-захвату (см. capture-sanitize.ts).
+  stripCapturedLeaks($, root);
 
   // fail-closed: любая непроведённая drop-зона (heading-drop из блока без цели,
   // цель с плохим data-q, пропущенная ветка) не должна утечь в presence-only mock.
