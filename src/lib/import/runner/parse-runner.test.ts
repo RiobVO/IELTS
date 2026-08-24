@@ -376,6 +376,59 @@ var mcqGroups = {"20-21": {"qs":[20,21],"correct":["B","D"]}};</script></body></
   });
 });
 
+// Номер пассажа из шапки стартового экрана (2026-07-21): клиентский Inspera-генератор
+// шлёт одиночные пассажи с явным «Reading Passage N» в `#startScreen`/`.start-screen`
+// → категория должна быть passage_N, а не хардкод passage_1. Якорь — заголовок
+// стартового экрана, НЕ первое вхождение по файлу (иначе «Reading Passage 2 has five
+// sections» в тексте рубрики дало бы ложный детект).
+describe("parseRunner — номер пассажа из стартового экрана", () => {
+  const single = (heading: string, wrapper = 'id="startScreen"') =>
+    `<!doctype html><html><head><title>R</title></head><body>
+<div ${wrapper} class="start-screen"><div class="start-content">
+  <h1>${heading}</h1><h2>The plan to bring an asteroid to Earth</h2>
+</div></div>
+<script>var correctAnswers = {"14":"C","15":"i","16":"ii"};
+var questionTypes = {"14":"Multiple Choice","15":"Matching Headings","16":"Matching Headings"};</script>
+</body></html>`;
+
+  it('«Reading Passage 2» в h1 стартового экрана → passage_2 / 20m', async () => {
+    const { parsed } = await parseRunner(single("Reading Passage 2"));
+    expect(parsed.category).toBe("passage_2");
+    expect(parsed.durationSeconds).toBe(20 * 60);
+  });
+
+  it('короткий «Passage 3» и wrapper по классу .start-screen → passage_3', async () => {
+    const { parsed } = await parseRunner(single("Passage 3", 'data-x="1"'));
+    expect(parsed.category).toBe("passage_3");
+  });
+
+  it("нет стартового экрана → прежний дефолт passage_1 (без варнинга)", async () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<script>var correctAnswers = {"1":"TRUE","2":"FALSE"};var questionTypes = {"1":"TFNG","2":"TFNG"};</script></body></html>`;
+    const { parsed } = await parseRunner(html);
+    expect(parsed.category).toBe("passage_1");
+    expect(parsed.warnings.some((w) => /passage/i.test(w))).toBe(false);
+  });
+
+  it("«Reading Passage 2» только в ТЕКСТЕ рубрики (не в шапке) → НЕ детектится, passage_1", async () => {
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<div id="startScreen" class="start-screen"><h1>Silent Reading</h1></div>
+<div class="question-rubric"><p>Reading Passage 2 has five sections, A-E.</p></div>
+<script>var correctAnswers = {"1":"TRUE"};var questionTypes = {"1":"TFNG"};</script></body></html>`;
+    const { parsed } = await parseRunner(html);
+    expect(parsed.category).toBe("passage_1");
+  });
+
+  it("full-тест не переопределяется номером пассажа из шапки (остаётся full_reading)", async () => {
+    const entries = Array.from({ length: 40 }, (_, i) => `"${i + 1}":"TRUE"`).join(",");
+    const html = `<!doctype html><html><head><title>R</title></head><body>
+<div id="startScreen" class="start-screen"><h1>Reading Passage 2</h1></div>
+<script>const correctAnswers = {${entries}};</script></body></html>`;
+    const { parsed } = await parseRunner(html);
+    expect(parsed.category).toBe("full_reading");
+  });
+});
+
 describe("parseRunner — listening", () => {
   let r: Awaited<ReturnType<typeof parseRunner>>;
   beforeAll(async () => {
