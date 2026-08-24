@@ -212,6 +212,34 @@ describe("parseTest gap fixtures", () => {
   });
 });
 
+// Тихая порча (2026-07-21): completion-вход в НЕИЗВЕСТНОМ контейнере (ни один класс из
+// фиксированного списка не совпал) → clone.text() пустой → вопрос создаётся с prompt "".
+// Ни gap-гейт (номер 1 есть), ни empty_key (ключ есть), ни type-гейт (тип валиден) молчат.
+// Warning `Q1: empty prompt` — единственный сигнал.
+const FOREIGN_EMPTY_PROMPT_HTML = `<!doctype html><html><head><title>Reading - Foreign</title></head>
+<body>
+  <div class="sectionRubric">Reading Passage 1. You should spend about 20 minutes on the Questions.</div>
+  <div id="passageContent"><h1>Foreign</h1><p>Passage text.</p></div>
+  <div class="exotic-shell"><input type="text" name="q1"></div>
+  <script>
+    const correctAnswers = { "1": "answer" };
+    const acceptableAnswers = {};
+    const mcqGroups = {};
+    const questionTypes = { "1": "Note Completion" };
+  </script>
+</body></html>`;
+
+describe("parseTest — пустой prompt из чужой вёрстки даёт warning", () => {
+  it("вопрос создан, prompt пустой, тип валиден, но warning есть", async () => {
+    const t = await parseTest(FOREIGN_EMPTY_PROMPT_HTML);
+    const q1 = t.questions.find((q) => q.number === 1)!;
+    expect(q1).toBeDefined();
+    expect(q1.promptHtml.trim()).toBe("");
+    expect(q1.qtype).toBe("note_completion"); // тип НЕ unknown — type-гейт бы промолчал
+    expect(t.warnings).toContain("Q1: empty prompt");
+  });
+});
+
 const tuatara = sample("P3 Tuatara.html");
 describe.skipIf(!tuatara)("real sample — P3 Tuatara", () => {
   it("чисто разбирает 14 вопросов, каждый с ключом, без band-шкалы", async () => {

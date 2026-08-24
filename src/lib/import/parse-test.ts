@@ -282,6 +282,7 @@ export async function parseTest(html: string): Promise<ParsedTest> {
     }
     q.answer = routeAnswer(num, data, mcqByNum, warnings);
     q.evidenceRef = data.evidence[String(num)]?.para ?? null;
+    warnEmptyPrompt(num, q.promptHtml, q.qtype, warnings);
   }
 
   const questions = [...byNumber.values()].sort((a, b) => a.number - b.number);
@@ -366,6 +367,27 @@ function blank(
     evidenceRef: null,
     answer: { mode: "exact", accept: [], explanation: null, evidence: null },
   };
+}
+
+/**
+ * Тихая порча: вопрос доходит сюда с пустым/обрезанным prompt, если его собрали из
+ * незнакомой вёрстки — клон контейнера, не совпавшего ни с одним известным классом,
+ * даёт "" (а выделенный элемент stem может отсутствовать). Ни gap-гейт (номер есть),
+ * ни empty_key (ключ есть) этого не ловят, и вопрос уходит в прод без сигнала — только
+ * warning в общий поток. matching_headings синтезирует prompt ("Paragraph X") из буквы
+ * абзаца, а не из контейнера, поэтому исключён (его пустота — иной класс дефекта).
+ */
+const PROMPT_MIN_LEN = 4;
+function warnEmptyPrompt(
+  num: number,
+  promptHtml: string,
+  qtype: string,
+  warnings: string[],
+): void {
+  if (qtype === "matching_headings") return;
+  if (promptHtml.trim().length < PROMPT_MIN_LEN) {
+    warnings.push(`Q${num}: empty prompt`);
+  }
 }
 
 function grpKey(id: string | undefined): string | null {
