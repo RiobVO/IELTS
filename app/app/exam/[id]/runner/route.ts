@@ -3,17 +3,7 @@ import { db } from "@/db";
 import { attempt, contentItem, profile } from "@/db/schema";
 import { env } from "@/env";
 import { getUser, isAdminProfile } from "@/lib/auth";
-import { retargetBridgeOrigin } from "@/lib/import/runner/bridge";
-import { forceRunnerMode } from "@/lib/import/runner/force-mode";
-import { polyfillRunnerStorage } from "@/lib/import/runner/runner-storage";
-import { stripAnalysisLeak } from "@/lib/import/runner/sanitize-runner";
-import {
-  skinRunnerGate,
-  skinRunnerBrand,
-  skinRunnerAudioDefer,
-  skinRunnerAudioLabel,
-  injectProgressBridge,
-} from "@/lib/import/runner/skin-runner";
+import { renderRunnerDocument } from "@/lib/import/runner/render-runner";
 import { hasConsumedTrial } from "@/lib/exam/access";
 import { isFullCategory, trialAllows } from "@/lib/exam/trial";
 import { effectiveTier, meetsTier } from "@/lib/tiers";
@@ -104,31 +94,6 @@ export async function GET(
     if (!trialGranted) return new Response("Forbidden", { status: 403 });
   }
 
-  // Раннер исполняется в OPAQUE origin (iframe sandbox без allow-same-origin — P0-изоляция):
-  // нативный localStorage/sessionStorage там БРОСАЕТ, а reading зовёт его без guard на init →
-  // подменяем оба Web-Storage in-memory полифилом (runner-storage.ts). Анти-утечки между
-  // аккаунтами больше не нужно: opaque origin не делит персистентное хранилище. Нет <head> →
-  // fail-closed (иначе отдали бы раннер, падающий на первом localStorage). Контент в БД не трогаем.
-  const polyfilled = polyfillRunnerStorage(item.html);
-  if (!polyfilled) return new Response("Runner unavailable", { status: 500 });
-  // Legacy-ряды runner_html несут в bridge targetOrigin = window.location.origin (=== "null" в
-  // opaque origin → postMessage бросает, сабмит теряется). Точечно ретаргетим на "*".
-  const scoped = retargetBridgeOrigin(polyfilled);
-  // F2-минимал: периодический автосейв-мост (ielts-progress) сплайсится ВНУТРЬ bridge-IIFE
-  // ДО прочих skin*/forceRunnerMode ниже — они дописывают свои скрипты в другие места
-  // документа, но не трогают bridge-хвост, на который завязан якорь injectProgressBridge.
-  const withProgress = injectProgressBridge(scoped);
-  // bando re-skin на read-time: (1) аудио-гейт (listening) — светлый overlay вместо тёмного;
-  // (2) шапка — bando-знак вместо чужого логотипа «IELTS™» + снос чужого telegram-канала;
-  // (3) отложенный старт аудио-стрима до первого жеста — анти-egress на Storage
-  // (BACKLOG OPS-1: голое открытие страницы больше не тянет весь mp3);
-  // (4) текст гейта — «Preparing…»/«Audio ready» вместо «Downloading…»/«Download
-  // complete»: на тёплом CF edge-кэше буферизация мгновенная, а старый текст читался
-  // как полная перекачка файла заново при каждом открытии.
-  // No-op для незнакомых шаблонов.
-  const skinned = skinRunnerAudioLabel(
-    skinRunnerAudioDefer(skinRunnerBrand(skinRunnerGate(withProgress))),
-  );
   // Лимит mock из ?min= (iframe передаёт его сюда). Route доступен прямым GET →
   // defense-in-depth: та же валидация, что на exam-странице. searchParams.get даёт
   // null при отсутствии (у страницы — undefined) → явно ведём его в NaN → null,
@@ -138,21 +103,16 @@ export async function GET(
   const minutes = Number.isFinite(minRaw)
     ? Math.min(180, Math.max(5, minRaw))
     : null;
-  // P0: внутренний Practice/Mock раннера подчиняется attempt.mode (автовыбор
-  // карточки + скрытие mid-test переключателя; для нативного mode-card раннера — ещё
-  // и mock-лимит из minutes). Прямой GET без попытки (нет att) — отдаём как есть:
-  // экзам-страница всё равно создаёт attempt до iframe.
-  const html = att
-    ? forceRunnerMode(skinned, att.mode, att.mode === "mock" ? minutes : null)
-    : skinned;
-
-  // Read-time анти-утечка: исторический runner_html (импортирован ДО ввода strip'а)
-  // несёт Inspera `[data-analysis]` разборы с правильным ответом прямо в DOM (скрыты
-  // лишь исходным CSS). Переимпорт как лечение недоступен — RegradeRequiredError при
-  // существующих попытках. Вырезаем на выдаче. ПОСЛЕ всех трансформов: их regex-якоря
-  // работают по исходным байтам runner_html, а не по cheerio-реэмиссии. string-guard
-  // внутри = байт-в-байт no-op для рядов без маркера (listening / non-Inspera reading).
-  const safe = stripAnalysisLeak(html);
+  // Единый read-time рендер (полифил storage → ретаргет bridge → прогресс-мост → re-skin
+  // → форс режима попытки → анти-утечка → practice-only аудио-мост). Порядок и mock-выдача
+  // байт-в-байт прежние (покрыто render-runner.test.ts). Нет <head> для полифила →
+  // fail-closed 500, как раньше. Прямой GET без попытки (att отсутствует) → mode=null →
+  // forceRunnerMode пропускается, экзам-страница создаёт attempt до iframe.
+  const safe = renderRunnerDocument(item.html, {
+    mode: att?.mode ?? null,
+    mockMinutes: att?.mode === "mock" ? minutes : null,
+  });
+  if (!safe) return new Response("Runner unavailable", { status: 500 });
 
   return new Response(safe, {
     status: 200,

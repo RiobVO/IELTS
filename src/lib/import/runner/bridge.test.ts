@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
-import { READING_BRIDGE, LISTENING_BRIDGE, READING_COLLECT, retargetBridgeOrigin } from "./bridge";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import {
+  READING_BRIDGE,
+  LISTENING_BRIDGE,
+  READING_COLLECT,
+  PRACTICE_AUDIO_BRIDGE,
+  injectPracticeAudioBridge,
+  retargetBridgeOrigin,
+} from "./bridge";
 
 // Форма SEND, запечённая в runner_html, импортированные ДО P0-изоляции (legacy-ряды БД).
 const LEGACY_SEND =
@@ -246,5 +253,108 @@ describe("LISTENING_BRIDGE.__collect — DOM-уровень (gap / radio / dropz
         `<div class="map-dz" data-letter="C"><div class="place-chip" data-q="15"></div></div>`,
     );
     expect(a[15]).toBe("");
+  });
+});
+
+// Practice-only аудио-мост: инъекция строго аддитивна (инвариант «mock байт-в-байт» —
+// для mock мост вообще не вызывается, см. render-runner.test.ts).
+describe("injectPracticeAudioBridge — инъекция", () => {
+  const AUDIO_DOC = `<html><head></head><body><audio id="audio" src="x.mp3"></audio></body></html>`;
+
+  it("вставляет мост перед </html> при наличии <audio id=audio>", () => {
+    const out = injectPracticeAudioBridge(AUDIO_DOC);
+    expect(out).toContain("bando-practice-audio-bridge");
+    expect(out).toContain("ielts-audio-cmd");
+    expect(out.indexOf("bando-practice-audio-bridge")).toBeLessThan(out.lastIndexOf("</html>"));
+  });
+
+  it("аддитивно: удаление ровно вставленной строки восстанавливает исходный HTML", () => {
+    const out = injectPracticeAudioBridge(AUDIO_DOC);
+    expect(out.replace(PRACTICE_AUDIO_BRIDGE, "")).toBe(AUDIO_DOC);
+  });
+
+  it("no-op без <audio id=audio> (reading-раннер без плеера)", () => {
+    const noAudio = `<html><head></head><body><p>reading</p></body></html>`;
+    expect(injectPracticeAudioBridge(noAudio)).toBe(noAudio);
+  });
+
+  it("идемпотентно (повторная инъекция не удваивает мост)", () => {
+    const once = injectPracticeAudioBridge(AUDIO_DOC);
+    expect(injectPracticeAudioBridge(once)).toBe(once);
+  });
+
+  it("нет </html> → мост дописывается в хвост (аддитивно)", () => {
+    const frag = `<audio id="audio"></audio>`;
+    expect(injectPracticeAudioBridge(frag)).toBe(frag + PRACTICE_AUDIO_BRIDGE);
+  });
+});
+
+// DOM-уровень: исполняем IIFE моста в jsdom против мок-плеера и мок-parent'а. Проверяем,
+// что команды parent'а обрабатываются, а чужой отправитель игнорируется, и что состояние
+// (time/duration) уходит наверх. Мок-плеер вместо реального <audio> — jsdom не реализует
+// HTMLMediaElement (play/currentTime бросают/no-op'ят).
+describe("practice audio bridge — рантайм (jsdom)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("обрабатывает seek/rate от parent'а, игнорирует чужой источник, эмитит ielts-audio-state", () => {
+    const listeners: Record<string, Array<(e: unknown) => void>> = {};
+    const mockAudio = {
+      currentTime: 0,
+      duration: 120,
+      paused: true,
+      playbackRate: 1,
+      addEventListener(ev: string, fn: (e: unknown) => void) {
+        (listeners[ev] ||= []).push(fn);
+      },
+      play() {
+        mockAudio.paused = false;
+        return Promise.resolve();
+      },
+      pause() {
+        mockAudio.paused = true;
+      },
+    };
+    vi.spyOn(document, "getElementById").mockImplementation((id: string) =>
+      id === "audio" ? (mockAudio as unknown as HTMLElement) : null,
+    );
+    const postSpy = vi.spyOn(window, "postMessage").mockImplementation(() => {});
+
+    // Исполняем инжектируемый IIFE (снимаем <script>-обёртку — единый источник правды).
+    const js = PRACTICE_AUDIO_BRIDGE.replace(/^<script>/, "").replace(/<\/script>$/, "");
+    new Function(js)();
+
+    // Первичный post() на загрузке — состояние ушло наверх.
+    expect(postSpy).toHaveBeenCalled();
+    const first = postSpy.mock.calls[0][0] as { type: string; duration: number };
+    expect(first.type).toBe("ielts-audio-state");
+    expect(first.duration).toBe(120);
+
+    // Команда seek от parent'а (e.source === window.parent).
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: window.parent as Window,
+        data: { type: "ielts-audio-cmd", action: "seek", value: 42 },
+      }),
+    );
+    expect(mockAudio.currentTime).toBe(42);
+
+    // Команда rate.
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: window.parent as Window,
+        data: { type: "ielts-audio-cmd", action: "rate", value: 1.25 },
+      }),
+    );
+    expect(mockAudio.playbackRate).toBe(1.25);
+
+    // Чужой источник — игнорируется (не наш parent).
+    const foreign = { postMessage() {} } as unknown as Window;
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: foreign,
+        data: { type: "ielts-audio-cmd", action: "seek", value: 99 },
+      }),
+    );
+    expect(mockAudio.currentTime).toBe(42); // не изменилось
   });
 });

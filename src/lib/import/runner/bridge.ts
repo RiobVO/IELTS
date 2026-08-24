@@ -145,3 +145,73 @@ export function retargetBridgeOrigin(html: string): string {
     "$1, '*')",
   );
 }
+
+// Practice-only аудио-мост (listening ∧ mode='practice'): ставит внешние practice-
+// контролы (перемотка/Replay/скорость/play-pause) на нативный <audio id="audio"> раннера,
+// не трогая его собственный UI/гейт/таймер. Отдельный <script>-тег (как READING/LISTENING
+// BRIDGE): всё через глобали (getElementById/window.parent/addEventListener), IIFE ничего
+// не оставляет в window.
+//
+// Безопасность (не ослабляет sandbox/CSP): внутрь принимаются ТОЛЬКО сообщения parent'а
+// (`e.source === window.parent`) — зеркалит parent-сторону (ExamFrame принимает
+// `e.source === iframe.contentWindow`); наружу уходят лишь позиция/длительность/скорость
+// (никаких ключей/ответов). targetOrigin '*' безопасен по той же причине, что и в SEND:
+// opaque origin (`window.location.origin === "null"`), а стороны валидируют отправителя по
+// идентичности окна, не по origin. postMessage — не connect-src, `connect-src 'none'` цел.
+const PRACTICE_AUDIO_MARK = "bando-practice-audio-bridge";
+export const PRACTICE_AUDIO_BRIDGE = `<script>/* ${PRACTICE_AUDIO_MARK} */(function(){
+  var audio = document.getElementById('audio');
+  if(!audio) return;
+  function post(){
+    try{
+      parent.postMessage({
+        type: 'ielts-audio-state',
+        time: isFinite(audio.currentTime) ? audio.currentTime : 0,
+        duration: isFinite(audio.duration) ? audio.duration : 0,
+        playing: !audio.paused,
+        rate: audio.playbackRate || 1
+      }, '*');
+    }catch(e){}
+  }
+  ['timeupdate','loadedmetadata','durationchange','play','pause','ended','seeked','ratechange'].forEach(function(ev){
+    audio.addEventListener(ev, post);
+  });
+  // 'play' сначала прогоняет ШТАТНЫЙ старт раннера (клик по #playBtn раскрывает вопросы и
+  // заводит его таймер) — только если кнопка активна; иначе прямой audio.play() (форсит load).
+  function startIfNeeded(){
+    var btn = document.getElementById('playBtn');
+    var overlay = document.getElementById('playOverlay');
+    if(btn && overlay && !overlay.classList.contains('hidden') && !btn.disabled){ btn.click(); return true; }
+    return false;
+  }
+  window.addEventListener('message', function(e){
+    if(e.source !== window.parent) return;
+    var d = e.data || {};
+    if(d.type !== 'ielts-audio-cmd') return;
+    try{
+      var a = d.action;
+      if(a === 'play'){ if(!startIfNeeded()){ audio.play().catch(function(){}); } }
+      else if(a === 'pause'){ audio.pause(); }
+      else if(a === 'replay'){ startIfNeeded(); audio.currentTime = 0; audio.play().catch(function(){}); }
+      else if(a === 'seek' && typeof d.value === 'number' && isFinite(d.value)){ audio.currentTime = Math.max(0, d.value); }
+      else if(a === 'rate' && typeof d.value === 'number' && isFinite(d.value)){ audio.playbackRate = d.value; }
+    }catch(err){}
+    post();
+  });
+  post();
+})();</script>`;
+
+/**
+ * Инжектит practice-аудио-мост перед закрывающим </html> (fallback — дописать в хвост).
+ * Идемпотентно (маркер `bando-practice-audio-bridge`). No-op, если в документе нет
+ * <audio id="audio"> (reading-раннер без плеера) — тогда мостить нечего. Аддитивно: удаление
+ * ровно вставленной строки восстанавливает исходный HTML (инвариант «mock байт-в-байт»
+ * держится тем, что для mock этот инжект вообще не вызывается — см. renderRunnerDocument).
+ */
+export function injectPracticeAudioBridge(html: string): string {
+  if (html.includes(PRACTICE_AUDIO_MARK)) return html; // уже пропатчено
+  if (!/id=["']audio["']/.test(html)) return html; // нет плеера — нечего мостить
+  const idx = html.lastIndexOf("</html>");
+  if (idx === -1) return html + PRACTICE_AUDIO_BRIDGE; // нет </html> — в хвост
+  return html.slice(0, idx) + PRACTICE_AUDIO_BRIDGE + html.slice(idx);
+}
