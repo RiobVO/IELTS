@@ -28,14 +28,16 @@ export type QuestionType = (typeof QUESTION_TYPES)[number];
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
 
 // Срезает декорации, из-за которых голый тип не совпадает с EXACT-таблицей целиком:
-//  - ведущий секционный префикс: «Section 2 — Note Completion» → «Note Completion»
+//  - ведущий секционный префикс: «Section 2 — Note Completion» → «Note Completion»,
+//    а также listening-форма «Part 3 — Matching» → «Matching» (клиент нумерует части
+//    именно как Part, не Section);
 //  - хвостовой скобочный квалификатор: «Note Completion (ONE WORD ONLY)» → «Note Completion»
 // Работает по СЫРОЙ строке (до norm), т.к. norm уже съедает скобки/тире и границу теряет.
 // Применяется ТОЛЬКО как retry после промаха полного EXACT — семантичные суффиксы вроде
 // «(single)»/«(multiple)» матчатся полной формой раньше и до strip не доходят.
 const stripDecorations = (s: string) =>
   s
-    .replace(/^\s*section\s+\d+\s*[—–:-]?\s*/i, "")
+    .replace(/^\s*(section|part)\s+\d+\s*[—–:-]?\s*/i, "")
     .replace(/\s*\([^)]*\)\s*$/, "")
     .trim();
 

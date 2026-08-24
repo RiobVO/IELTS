@@ -110,6 +110,23 @@ describe("canonQuestionType", () => {
     });
   });
 
+  // Клиент нумерует части как «Part N», а не «Section N» — префикс должен срезаться так же.
+  it("префикс «Part N —» срезается наравне с «Section N —» (listening + reading)", () => {
+    expect(canonQuestionType("Part 3 — Matching", "listening")).toEqual({
+      type: "matching_features",
+      confident: true,
+    });
+    expect(canonQuestionType("Part 2 — Note Completion", "listening")).toEqual({
+      type: "note_completion",
+      confident: true,
+    });
+    // reading (section по умолчанию) — тот же strip для не-matching типов
+    expect(canonQuestionType("Part 4 — Table Completion")).toEqual({
+      type: "table_completion",
+      confident: true,
+    });
+  });
+
   it("ридинг: голое «Matching» остаётся low-confidence (section по умолчанию/явно reading)", () => {
     expect(canonQuestionType("Matching")).toEqual({ type: "matching_info", confident: false });
     expect(canonQuestionType("Matching", "reading")).toEqual({

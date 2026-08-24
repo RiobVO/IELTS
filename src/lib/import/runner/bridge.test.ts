@@ -227,4 +227,14 @@ describe("LISTENING_BRIDGE.__collect — DOM-уровень (gap / radio / dropz
     );
     expect(a[16]).toBe("");
   });
+
+  // Дубль чипа (банковский + размещённый на зоне): голый querySelector взял бы ПЕРВЫЙ
+  // (банковский, вне .map-dz) и вернул '' вместо буквы зоны. Мост сперва ищет РАЗМЕЩЁННЫЙ.
+  it(".place-chip[data-q] дубль (в банке И на зоне) → буква размещённого чипа, не ''", () => {
+    const a = collectListening(
+      `<div class="place-bank"><div class="place-chip" data-q="15"></div></div>` +
+        `<div class="map-dz" data-letter="F"><div class="place-chip" data-q="15"></div></div>`,
+    );
+    expect(a[15]).toBe("F");
+  });
 });
