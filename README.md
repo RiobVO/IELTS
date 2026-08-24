@@ -36,8 +36,18 @@ full annotated list.
 npm run dev        # Next.js dev server  -> http://localhost:3000
 ```
 
-Routes: `/` (landing) · `/auth` (email sign-in/up) · `/app` (dashboard, auth-gated) ·
-`/admin` (role=admin) · `/api/health`. Auth is Supabase (email now; Apple/Facebook
+Routes: `/` (landing) · `/auth` (email sign-in/up) · `/predictor` and `/s/<token>`
+(public: band predictor, shared result card) · `/app` (dashboard, auth-gated) ·
+`/app/practice` (skill catalog) · `/admin` (role=admin) · `/api/health`.
+
+Exams run through **two** runners, picked per item by `runner_html IS NOT NULL`:
+`/app/exam/[id]` serves the sanitized original in a sandboxed iframe (the mock
+path), `/app/reading/[id]` the atomized questions (the practice path, and any test
+without a runner). Both submit through the same server actions — see the
+architecture notes in [CLAUDE.md](./CLAUDE.md) before touching either. Writing and
+Speaking are env-gated and redirect to `/app/practice` unless fully configured.
+
+Auth is Supabase (email now; Apple/Facebook
 when OAuth keys exist — §10). Live sign-in needs a real Supabase project: set
 `SUPABASE_*` and `NEXT_PUBLIC_SUPABASE_*` in `.env.local`. A new auth user
 auto-gets a `profile` row via the `on_auth_user_created` trigger
