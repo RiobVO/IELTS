@@ -237,4 +237,14 @@ describe("LISTENING_BRIDGE.__collect — DOM-уровень (gap / radio / dropz
     );
     expect(a[15]).toBe("F");
   });
+
+  // ДВА размещённых чипа одного q (на разных зонах) — ответ неоднозначен: querySelector взял
+  // бы произвольный. Мост фейлит в '' (как «не размещён»), а не гадает.
+  it(".place-chip[data-q] два размещённых дубля (разные зоны) → '' (fail-closed)", () => {
+    const a = collectListening(
+      `<div class="map-dz" data-letter="F"><div class="place-chip" data-q="15"></div></div>` +
+        `<div class="map-dz" data-letter="C"><div class="place-chip" data-q="15"></div></div>`,
+    );
+    expect(a[15]).toBe("");
+  });
 });
