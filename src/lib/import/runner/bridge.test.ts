@@ -114,75 +114,117 @@ describe("READING_COLLECT.__collect — DOM-уровень (Inspera drag-drop + 
   });
 });
 
-// Listening: LISTENING_COLLECT не экспортирован отдельно (только обёрнутый в
-// LISTENING_BRIDGE вместе с SEND и submit-hook'ом) — извлекаем его исходник из
-// экспортированной константы по стабильной границе: __collect/__multiFor всегда
-// заканчиваются прямо перед склеенным SEND, который начинается с "function
-// __send(ans){" (bridge.ts). Так тест бьётся именно о реально исполняемый мостовой
-// код, а не о ручную копию логики.
+// Listening-мост: __collect/__multiFor листенинга — приватные функции внутри IIFE
+// LISTENING_BRIDGE (в отличие от READING_COLLECT они не экспортируются отдельно).
+// Извлекаем их исходник ИЗ уже экспортированной строки (единый источник правды — не
+// дублируем логику вручную), обрезая на границе с SEND (маркер стабилен: SEND всегда
+// начинается с "function __send"). Сниппеты смоделированы по разметке golden-фикстуры
+// (src/lib/import/runner/fixtures/listening-client.html).
 function collectListening(html: string): Record<number, string> {
   document.body.innerHTML = html;
-  const start = "<script>(function(){".length;
-  const end = LISTENING_BRIDGE.indexOf("function __send(ans){");
-  const collectSrc = LISTENING_BRIDGE.slice(start, end);
-  const fn = new Function("document", `${collectSrc}\n return __collect();`) as (
+  const start = LISTENING_BRIDGE.indexOf("(function(){") + "(function(){".length;
+  const end = LISTENING_BRIDGE.indexOf("function __send(");
+  const src = LISTENING_BRIDGE.slice(start, end);
+  const fn = new Function("document", `${src}\n return __collect();`) as (
     d: Document,
   ) => Record<number, string>;
   return fn(document);
 }
 
-// Комментарий bridge.ts (LISTENING_COLLECT): "gap → multi(checkbox) → radio →
-// dropzone" — ровно 4 механизма. Map labelling (.place-chip[data-q] внутри
-// .map-dz[data-letter], см. parse-listening.ts/capture-listening.ts и getUserAnswer
-// в самом клиентском файле) сюда НЕ входит: ни один из 4 селекторов __collect его не
-// матчит. Не чиним (продуктовый код) — фиксируем фактическое поведение тестом ниже.
-const LISTENING_MIXED_DOM = `
-  <input class="gap" data-q="1" value="  raindrops  ">
-  <input class="gap" data-q="2" value="">
-  <div class="mcq multi" data-qs="11,12">
-    <label><input type="checkbox" value="A" checked></label>
-    <label><input type="checkbox" value="B"></label>
-    <label><input type="checkbox" value="C" checked></label>
-  </div>
-  <label><input type="radio" name="q20" value="B" checked></label>
-  <label><input type="radio" name="q20" value="C"></label>
-  <label><input type="radio" name="q21" value="A"></label>
-  <div class="dropzone" data-q="27" data-value="C"></div>
-  <div class="dropzone" data-q="28"></div>
-  <div class="map-dz" data-letter="A"><div class="place-chip" data-q="15"></div></div>
-`;
-
-describe("LISTENING_BRIDGE.__collect — DOM-уровень (per-механизм)", () => {
-  const a = collectListening(LISTENING_MIXED_DOM);
-
-  it("gap: .gap[data-q] value, триммится", () => {
-    expect(a[1]).toBe("raindrops");
+describe("LISTENING_BRIDGE.__collect — DOM-уровень (gap / radio / dropzone / choose-TWO)", () => {
+  // Part 1 golden-фикстуры: input.gap[data-q] в табличной ячейке.
+  it(".gap[data-q] → триммленное значение инпута", () => {
+    const a = collectListening(`<input class="gap" data-q="1" value="  pizza  ">`);
+    expect(a[1]).toBe("pizza");
   });
 
-  it("multi: .mcq.multi[data-qs] чекбоксы — отсортированные буквы раздаются по позиции в группе", () => {
-    expect(a[11]).toBe("A"); // первый член группы → checked[0]
-    expect(a[12]).toBe("C"); // второй член группы → checked[1]
+  it(".gap[data-q] незаполненный → ''", () => {
+    const a = collectListening(`<input class="gap" data-q="1" value="">`);
+    expect(a[1]).toBe("");
   });
 
-  it("radio: input[name=qN]:checked", () => {
-    expect(a[20]).toBe("B");
+  // Одиночный radio-выбор через голый input[name=qN] (общий с reading-мостом путь;
+  // golden-фикстура его не несёт, но __collect его поддерживает так же, как reading).
+  it("одиночный radio :checked → value", () => {
+    const a = collectListening(
+      `<div class="mcq" data-q="2">
+        <label><input type="radio" name="q2" value="A"></label>
+        <label><input type="radio" name="q2" value="B" checked></label>
+      </div>`,
+    );
+    expect(a[2]).toBe("B");
   });
 
-  it("dropzone: .dropzone[data-q] data-value", () => {
+  it("radio без выбора → ''", () => {
+    const a = collectListening(
+      `<div class="mcq" data-q="2">
+        <label><input type="radio" name="q2" value="A"></label>
+        <label><input type="radio" name="q2" value="B"></label>
+      </div>`,
+    );
+    expect(a[2]).toBe("");
+  });
+
+  // Part 3 golden-фикстуры: .dropzone[data-q] с чипом — рантайм проставляет
+  // data-value = буква чипа при драге (dz.dataset.value = chip.dataset.letter).
+  it(".dropzone[data-q] с брошенным чипом → data-value", () => {
+    const a = collectListening(`<div class="dropzone" data-q="27" data-value="C"></div>`);
     expect(a[27]).toBe("C");
   });
 
-  it("незаполненные (пустой gap, radio без выбора, dropzone без data-value, номер без элемента) → ''", () => {
-    expect(a[2]).toBe("");
-    expect(a[21]).toBe("");
-    expect(a[28]).toBe("");
+  it(".dropzone[data-q] без чипа (нет data-value) → ''", () => {
+    const a = collectListening(`<div class="dropzone" data-q="27"></div>`);
+    expect(a[27]).toBe("");
+  });
+
+  // Part 2/3 golden-фикстуры: choose-TWO — чекбоксы БЕЗ name, сгруппированные
+  // .mcq.multi[data-qs="11,12"]; выбранные буквы СОРТИРУЮТСЯ и раздаются по позиции
+  // в data-qs (а не по порядку в DOM) — реальное поведение __multiFor.
+  it(".mcq.multi[data-qs] чекбоксы → отсортированные буквы раздаются по позиции в data-qs", () => {
+    const a = collectListening(
+      `<div class="mcq multi" data-qs="11,12">
+        <label><input type="checkbox" value="A"></label>
+        <label><input type="checkbox" value="B" checked></label>
+        <label><input type="checkbox" value="C"></label>
+        <label><input type="checkbox" value="D"></label>
+        <label><input type="checkbox" value="E" checked></label>
+      </div>`,
+    );
+    // checked = [B, E], уже отсортированы; qs.indexOf(11)=0→B, qs.indexOf(12)=1→E
+    expect(a[11]).toBe("B");
+    expect(a[12]).toBe("E");
+  });
+
+  it(".mcq.multi[data-qs] — незаполненная позиция группы → ''", () => {
+    const a = collectListening(
+      `<div class="mcq multi" data-qs="21,22">
+        <label><input type="checkbox" value="A" checked></label>
+        <label><input type="checkbox" value="B"></label>
+      </div>`,
+    );
+    expect(a[21]).toBe("A");
+    expect(a[22]).toBe(""); // второй позиции нечего отдать — checked всего один
+  });
+
+  it("незаполненные вопросы вне любого механизма → ''", () => {
+    const a = collectListening(`<input class="gap" data-q="1" value="x">`);
     expect(a[40]).toBe("");
   });
 
-  // Фактическое поведение (не дефект по умолчанию — см. doc-комментарий выше):
-  // .place-chip/.map-dz — единственный listening-механизм ответа, у которого нет
-  // ветки в __collect. Вопрос падает в общий '' fallback, как «номер без элемента».
-  it("map labelling (.place-chip/.map-dz) НЕ распознаётся ни одной веткой __collect — падает в '' fallback", () => {
-    expect(a[15]).toBe("");
+  // Part 2 golden-фикстуры: map/plan labelling — .place-chip[data-q], реально
+  // (drop-обработчик клиентского файла) реродительcя ВНУТРЬ .map-dz[data-letter]
+  // при успешном drop'е; ответ — буква зоны (зеркалит getUserAnswer источника).
+  it(".place-chip[data-q] размещён на .map-dz зоне → буква зоны", () => {
+    const a = collectListening(
+      `<div class="map-dz" data-letter="F"><div class="place-chip" data-q="15"></div></div>`,
+    );
+    expect(a[15]).toBe("F");
+  });
+
+  it(".place-chip[data-q] не размещён (вне .map-dz, ещё в банке) → ''", () => {
+    const a = collectListening(
+      `<div class="place-bank"><div class="place-chip" data-q="16"></div></div>`,
+    );
+    expect(a[16]).toBe("");
   });
 });
