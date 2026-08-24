@@ -56,34 +56,101 @@ export function captureQuestions(
   const slot = (n: number, type: string, value?: string) =>
     `<span class="q-slot" data-q="${n}" data-qtype="${type}"${value != null ? ` data-value="${esc(value)}"` : ""}></span>`;
 
-  // text gaps: заменяем целиком .blank-wrapper (чтобы убрать cdi-placeholder/флаг внутри), иначе сам input
+  const MAX_Q = 500; // потолок номера вопроса (реальный IELTS ≤ 40; запас на будущее)
+  // Number.isSafeInteger отсекает и NaN, и переполнение (400-значный номер → Infinity,
+  // мимо простого `n <= 0`).
+  const validQ = (n: number) => Number.isSafeInteger(n) && n > 0 && n <= MAX_Q;
+
+  // --- choose-TWO/THREE (Inspera .mcq-block[data-mcq-group]) ---
+  // Все чекбоксы блока делят один group_key; сервер грейдит КАЖДОГО члена группы полным
+  // набором букв (mcq_set), поэтому физические чекбоксы → checkbox-слоты, ключенные на
+  // ПЕРВЫЙ номер группы (ExamRunner toggle пишет итоговый набор во все члены). Номера
+  // членов берём из чипов .mcq-q-num-box, НЕ из парса "N-M": группа "8-12" с чипами
+  // 8..12 иначе потеряла бы 9-11. Для ОСТАЛЬНЫХ членов — синтетический group-anchor
+  // (его видят slotNumbersIn → аффордансы и coverage-гейт questionsHtmlCoversAll).
+  // groupNums — ОТДЕЛЬНЫЙ от одиночных вопросов set: radio/checkbox-опции обычного
+  // вопроса легитимно делят один номер, общий seen-set сломал бы их. Fail-closed:
+  // любой дефект блока → "" на весь пассаж (частичный захват не должен пройти coverage).
+  const groupNums = new Set<number>();
+  let groupBad = false;
+  root.find(".mcq-block[data-mcq-group]").each((_, el) => {
+    if (groupBad) return;
+    const $block = $(el);
+    // вложенная группа внутри группы — структура неоднозначна
+    if ($block.find("[data-mcq-group]").length > 0) { groupBad = true; return; }
+    // Опции — только чекбоксы внутри .mcq-row (зеркало атомайзера parse-test.ts:189-201:
+    // optionsIn читает .mcq-row). Чекбокс в блоке ВНЕ .mcq-row расходится с атомайзером
+    // → fail-closed (иначе verbatim показал бы опцию, которой нет в атомизированном ключе).
+    const boxes = $block.find(".mcq-row input[type='checkbox']").toArray();
+    if (boxes.length === 0) { groupBad = true; return; }
+    if ($block.find("input[type='checkbox']").length !== boxes.length) { groupBad = true; return; }
+    // номера-члены — из чипов; ≥2 уникальных валидных
+    const memberNums = [
+      ...new Set(
+        $block
+          .find(".mcq-q-num-box")
+          .toArray()
+          .map((c) => Number.parseInt($(c).text().trim(), 10))
+          .filter(validQ),
+      ),
+    ];
+    if (memberNums.length < 2) { groupBad = true; return; }
+    // каждый чекбокс — опция группы (без своего data-q / name=qN) с непустым уникальным value
+    const seenVal = new Set<string>();
+    for (const box of boxes) {
+      const $box = $(box);
+      const ownQ = $box.attr("data-q");
+      const nm = $box.attr("name") ?? "";
+      if ((ownQ && /^\d+$/.test(ownQ)) || /^q\d+$/i.test(nm)) { groupBad = true; return; }
+      const v = ($box.attr("value") ?? "").trim();
+      if (!v || seenVal.has(v)) { groupBad = true; return; }
+      seenVal.add(v);
+    }
+    // пересечение номеров этой группы с уже увиденными группами
+    for (const n of memberNums) {
+      if (groupNums.has(n)) { groupBad = true; return; }
+    }
+    const first = Math.min(...memberNums);
+    for (const n of memberNums) groupNums.add(n);
+    for (const box of boxes) {
+      $(box).replaceWith(slot(first, "checkbox", $(box).attr("value") ?? ""));
+    }
+    // якоря остальных членов — ВНУТРИ того же top-level .question (sibling .mcq-block),
+    // иначе slotNumbersIn/coverage их не увидят.
+    const anchors = memberNums
+      .filter((n) => n !== first)
+      .sort((a, b) => a - b)
+      .map((n) => `<span class="q-slot" data-q="${n}" data-qtype="group-anchor"></span>`)
+      .join("");
+    if (anchors) $block.after(anchors);
+  });
+  if (groupBad) return "";
+
+  // text gaps: заменяем целиком .blank-wrapper (чтобы убрать cdi-placeholder/флаг внутри), иначе сам input.
+  // groupNums.has(n) → номер уже занят choose-TWO группой: пересечение = битый источник, fail-closed.
   root.find("input[type='text'], textarea, input:not([type])").each((_, el) => {
     const n = num(el);
-    if (n == null) { unmapped = true; return; }
+    if (n == null || groupNums.has(n)) { unmapped = true; return; }
     const wrap = $(el).closest(".blank-wrapper");
     (wrap.length ? wrap : $(el)).replaceWith(slot(n, "text"));
   });
   root.find("input[type='radio']").each((_, el) => {
     const n = num(el);
-    if (n == null) { unmapped = true; return; }
+    if (n == null || groupNums.has(n)) { unmapped = true; return; }
     $(el).replaceWith(slot(n, "radio", $(el).attr("value") ?? ""));
   });
   root.find("input[type='checkbox']").each((_, el) => {
     const n = num(el);
-    if (n == null) { unmapped = true; return; }
+    if (n == null || groupNums.has(n)) { unmapped = true; return; }
     $(el).replaceWith(slot(n, "checkbox", $(el).attr("value") ?? ""));
   });
   if (unmapped) return "";
 
   // --- drag-and-drop: Sentence Endings (в блоке) + Matching Headings (синтез) ---
   // Fail-closed чеклист (любой провал → "" на весь пассаж): каждая цель имеет строго
-  // положительный safe-integer data-q в разумном диапазоне; заменена ровно одним
-  // слотом; банк непуст и каждый токен несёт непустое канон-значение; номера не
-  // дублируются между собой.
-  const MAX_Q = 500; // потолок номера вопроса (реальный IELTS ≤ 40; запас на будущее)
-  // Number.isSafeInteger отсекает и NaN, и переполнение (400-значный data-q → Infinity,
-  // мимо простого `n <= 0`).
-  const validQ = (n: number) => Number.isSafeInteger(n) && n > 0 && n <= MAX_Q;
+  // положительный safe-integer data-q в разумном диапазоне (validQ, объявлен выше);
+  // заменена ровно одним слотом; банк непуст и каждый токен несёт непустое канон-
+  // значение; номера не дублируются между собой.
   const seenDnd = new Set<number>();
   const dropSlot = (n: number, options: DropOption[]) => {
     const span = $("<span></span>");

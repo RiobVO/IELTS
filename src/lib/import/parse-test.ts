@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import { captureQuestions } from "./capture-questions";
+import { questionsHtmlCoversAll } from "../exam/question-html-coverage";
 import {
   extractEndingBank,
   extractHeadingBank,
@@ -297,6 +298,18 @@ export async function parseTest(html: string): Promise<ParsedTest> {
   }
 
   const questions = [...byNumber.values()].sort((a, b) => a.number - b.number);
+
+  // Fail-closed на under-capture: атомайзер парсит `.mcq-block`/`.tfng-question` и т.п.
+  // независимо от `.question`-обёртки, а captureQuestions видит только `.question`-блоки.
+  // Вопрос вне обёртки → verbatim-панель покрыла бы НЕ все номера. Practice спасает
+  // coverage-гейт (page.tsx), но mock /app/reading живёт на presence-only и отрендерил
+  // бы панель без этих вопросов. Полный фоллбэк на атомизацию, если покрыты не все.
+  if (
+    passages[0].questionsHtml &&
+    !questionsHtmlCoversAll(passages[0].questionsHtml, questions.map((q) => q.number))
+  ) {
+    passages[0].questionsHtml = null;
+  }
 
   // sanity vs the answer key
   const keyCount = new Set([

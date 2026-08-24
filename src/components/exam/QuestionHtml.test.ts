@@ -32,6 +32,29 @@ function mount(html: string, onAnswer: (n: number, v: string) => void) {
   return container;
 }
 
+function mountWith(
+  html: string,
+  extra: Partial<Parameters<typeof QuestionHtml>[0]>,
+) {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  act(() => {
+    root.render(
+      createElement(QuestionHtml, {
+        html,
+        answers: {},
+        onAnswer: () => {},
+        onToggle: () => {},
+        fallback: createElement("div", null, "FALLBACK"),
+        ...extra,
+      }),
+    );
+  });
+  mounted = { container, root };
+  return container;
+}
+
 afterEach(() => {
   if (mounted) {
     const { root, container } = mounted;
@@ -91,5 +114,41 @@ describe("QuestionHtml — drop-слот", () => {
     expect(container.querySelector(".q-drop-broken")).toBeTruthy();
     // панель отрисовала verbatim (не свалилась в fallback)
     expect(container.textContent).not.toContain("FALLBACK");
+  });
+});
+
+// choose-TWO group-anchor: второй+ член группы несёт невидимый маркер (физические
+// чекбоксы под первым номером). Маркер нужен только чтобы аффордансы и coverage увидели
+// его номер — он не интерактивен и не занимает места.
+describe("QuestionHtml — choose-TWO group-anchor", () => {
+  const groupHtml =
+    `<div class="question"><div class="mcq-block">` +
+    `<span class="q-slot" data-q="23" data-qtype="checkbox" data-value="A"></span>` +
+    `<span class="q-slot" data-q="23" data-qtype="checkbox" data-value="B"></span>` +
+    `<span class="q-slot" data-q="24" data-qtype="group-anchor"></span>` +
+    `</div></div>`;
+
+  it("group-anchor невидим и не интерактивен (только 2 чекбокса группы)", () => {
+    const container = mount(groupHtml, vi.fn());
+    // ровно 2 интерактивных чекбокса (по буквам), anchor не даёт третьего контрола
+    expect(container.querySelectorAll('[role="checkbox"]')).toHaveLength(2);
+    expect(container.querySelectorAll("button")).toHaveLength(2);
+    // маркер отрисован, но скрыт (display:none) и aria-hidden
+    const anchor = container.querySelector('span[aria-hidden="true"]');
+    expect(anchor).toBeTruthy();
+    expect((anchor as HTMLElement).style.display).toBe("none");
+  });
+
+  it("аффордансы монтируются для ОБОИХ членов группы (23 через чекбоксы, 24 через anchor)", () => {
+    const seen: number[] = [];
+    const container = mountWith(groupHtml, {
+      renderAffordances: (n: number) => {
+        seen.push(n);
+        return createElement("div", { className: "aff", key: n }, `AFF-${n}`);
+      },
+    });
+    expect(seen).toEqual([23, 24]);
+    expect(container.textContent).toContain("AFF-23");
+    expect(container.textContent).toContain("AFF-24");
   });
 });

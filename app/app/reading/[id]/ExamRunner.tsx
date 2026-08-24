@@ -17,7 +17,7 @@ import { reportClientError } from "@/lib/monitoring/report-client-error";
 import { isNextRedirectError } from "@/lib/exam/is-redirect-error";
 import { isAnswered } from "@/lib/exam/is-answered";
 import { parseConfidenceMap, type ConfidenceLevel } from "@/lib/practice/confidence-calibration";
-import { bridgeLettersFor, groupMembers, toggleGroupLetter } from "@/lib/exam/listening-multi";
+import { bridgeLettersFor, groupMembers, readingGroupToggle, toggleGroupLetter } from "@/lib/exam/listening-multi";
 
 interface Question {
   id: string;
@@ -473,9 +473,17 @@ export default function ExamRunner({
     [readerActive, readerPrefs.size, readerPrefs.leading, readerPrefs.theme],
   );
 
+  // Поколение проверки на вопрос: смена ответа (dropVerdict) инвалидирует in-flight
+  // checkAnswer — поздний резолв со старым набором не должен записать устаревший вердикт
+  // (тот же приём ген-гвардов, что playAttemptRef/saveGenRef). Особенно важно для
+  // choose-TWO групп: тоггл члена сбрасывает вердикты ВСЕХ членов, а их checkAnswer'ы
+  // могут быть в полёте (кнопка Check дизейблится по busy, но чекбоксы — нет). Заодно
+  // закрывает ту же гонку на одиночном атомизированном пути.
+  const checkGenRef = useRef<Record<number, number>>({});
   // Изменение ответа делает прежний вердикт устаревшим — снимаем его (раскрытый ключ
   // не трогаем: правильный ответ от смены ввода не меняется). Стабильна (deps пусты).
   const dropVerdict = useCallback((n: number) => {
+    checkGenRef.current[n] = (checkGenRef.current[n] ?? 0) + 1;
     setChecked((c) => {
       const k = String(n);
       if (!(k in c)) return c; // в mock/непроверенном — no-op, лишнего рендера нет
@@ -513,10 +521,14 @@ export default function ExamRunner({
   const runCheck = useCallback(
     (n: number, v: string | string[]) => {
       const serverValue = toServerValue(n, v);
+      const gen = checkGenRef.current[n] ?? 0;
       setCheckBusy((b) => ({ ...b, [n]: true }));
       void checkAnswer(attemptId, n, serverValue)
         .then((res) => {
           if (!res) return;
+          // Ответ изменился за время запроса (dropVerdict бампнул поколение) →
+          // вердикт устарел, не пишем его и не копим wrongTry.
+          if ((checkGenRef.current[n] ?? 0) !== gen) return;
           setChecked((c) => ({ ...c, [n]: res.correct }));
           // P14: неверный чек копит попытку; на 2-й открывается reveal-ссылка.
           if (!res.correct) setWrongTries((w) => ({ ...w, [n]: (w[n] ?? 0) + 1 }));
@@ -587,6 +599,23 @@ export default function ExamRunner({
         const nextSet = toggleGroupLetter(answersRef.current, members, letter);
         const out = { ...answersRef.current };
         for (const m of members) out[String(m)] = nextSet;
+        answersRef.current = out;
+        setAnswers(out);
+        for (const m of members) dropVerdict(m);
+        return;
+      }
+      // Reading choose-TWO/THREE (group_key, НЕ listening): сервер грейдит КАЖДОГО члена
+      // ПОЛНЫМ набором букв (mcq_set), поэтому группа — один логический контрол, но
+      // раздача НЕ позиционная (в отличие от listening submit-раздачи). Базовый набор —
+      // union ВСЕХ членов; после toggle пишем итог во ВСЕ члены; вердикты всех сбрасываем.
+      // Все чекбоксы группы в verbatim ключены на первый номер, но ветка устойчива к любому.
+      if (!listeningSection && q?.qtype === "mcq_multi" && q.group_key != null) {
+        const members = groupMembers(questions, q.group_key);
+        // База — union ВСЕХ членов (не только кликнутого): дивергентный resume не теряет
+        // букву соседа первым кликом (см. readingGroupToggle).
+        const next = readingGroupToggle(answersRef.current, members, letter);
+        const out = { ...answersRef.current };
+        for (const m of members) out[String(m)] = next;
         answersRef.current = out;
         setAnswers(out);
         for (const m of members) dropVerdict(m);

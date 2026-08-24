@@ -24,30 +24,31 @@ const SINGLE_HTML = `<!doctype html><html><head><title>Reading - Sample</title><
     <a href="javascript:alert(1)">bad link</a>
   </div>
 
-  <div class="tfng-question" id="question-1">
-    <p class="tfng-statement-text">Statement one is true.</p>
-    <label><input type="radio" name="q1" value="TRUE">True</label>
-    <label><input type="radio" name="q1" value="FALSE">False</label>
-    <label><input type="radio" name="q1" value="NOT GIVEN">Not Given</label>
-  </div>
-  <div class="tfng-question" id="question-2">
-    <p class="tfng-statement-text">Statement two.</p>
-    <label><input type="radio" name="q2" value="TRUE">True</label>
-    <label><input type="radio" name="q2" value="FALSE">False</label>
+  <div class="question">
+    <div class="tfng-question" id="question-1">
+      <p class="tfng-statement-text">Statement one is true.</p>
+      <label><input type="radio" name="q1" value="TRUE">True</label>
+      <label><input type="radio" name="q1" value="FALSE">False</label>
+      <label><input type="radio" name="q1" value="NOT GIVEN">Not Given</label>
+    </div>
+    <div class="tfng-question" id="question-2">
+      <p class="tfng-statement-text">Statement two.</p>
+      <label><input type="radio" name="q2" value="TRUE">True</label>
+      <label><input type="radio" name="q2" value="FALSE">False</label>
+    </div>
   </div>
 
   <div id="question-3" class="question">
     <p>The animal needs a <input type="text" name="q3"> to survive.</p>
   </div>
 
-  <div class="question" id="question-4">
+  <div class="question" id="question-group-4-5">
     <div class="question-rubric"><p>Choose TWO letters.</p></div>
-    <div class="mcq-block" data-mcq-group="4-5">
-      <span class="mcq-q-num-box">4</span>
-      <span class="mcq-q-num-box">5</span>
-      <div class="mcq-row"><input type="checkbox" value="A"><span>Alpha</span></div>
-      <div class="mcq-row"><input type="checkbox" value="B"><span>Beta</span></div>
-      <div class="mcq-row"><input type="checkbox" value="C"><span>Gamma</span></div>
+    <div class="mcq-block" data-mcq-group="4-5" data-correct="A,C">
+      <div class="mcq-q-labels"><span class="mcq-q-num-box">4</span><span class="mcq-q-num-box">5</span></div>
+      <div class="mcq-row"><input type="checkbox" name="mcq-4-5" value="A"><span>Alpha</span></div>
+      <div class="mcq-row"><input type="checkbox" name="mcq-4-5" value="B"><span>Beta</span></div>
+      <div class="mcq-row"><input type="checkbox" name="mcq-4-5" value="C"><span>Gamma</span></div>
     </div>
   </div>
 
@@ -101,6 +102,19 @@ describe("parseTest — single passage", () => {
       expect.arrayContaining(["tfng", "note_completion", "mcq_multi"]),
     );
     expect(t.warnings).toHaveLength(0);
+  });
+
+  it("verbatim-захват покрывает ВСЕ вопросы, включая ОБА члена choose-TWO группы", () => {
+    const nums = t.questions.map((x) => x.number);
+    expect(nums).toEqual([1, 2, 3, 4, 5]);
+    const qh = t.passages[0].questionsHtml ?? "";
+    // Q5 раньше не имел слота (ancestor-фоллбэк кеил оба чекбокса на 4) → coverage падал.
+    expect(questionsHtmlCoversAll(qh, nums)).toBe(true);
+    // группа: один checkbox-слот на первый номер + group-anchor на второй.
+    expect(qh).toContain('data-qtype="group-anchor"');
+    expect(qh).toContain('data-q="5"');
+    // data-correct блока вычищен гигиеной (анти-утечка ключа).
+    expect(qh).not.toMatch(/data-correct/i);
   });
 });
 
@@ -238,6 +252,44 @@ describe("parseTest — пустой prompt из чужой вёрстки да�
     expect(q1.promptHtml.trim()).toBe("");
     expect(q1.qtype).toBe("note_completion"); // тип НЕ unknown — type-гейт бы промолчал
     expect(t.warnings).toContain("Q1: empty prompt");
+  });
+});
+
+// Fail-closed на under-capture (Codex-блокер): вопрос, который атомайзер парсит, но
+// captureQuestions пропускает (вне `.question`-обёртки), не должен дать частичный
+// questions_html — mock /app/reading на presence-only отрендерил бы панель без него.
+const UNDERCAPTURE_HTML = `<!doctype html><html><head><title>Reading - Undercapture</title></head>
+<body>
+  <div class="sectionRubric">Reading Passage 1. You should spend about 20 minutes on the Questions.</div>
+  <div id="passageContent"><h1>Undercapture</h1><p>Passage text.</p></div>
+
+  <div class="question" id="question-1">
+    <p>The gas is <input type="text" name="q1"> in the air.</p>
+  </div>
+
+  <!-- группа Q2-3 НЕ обёрнута в .question → captureQuestions её не видит, атомайзер видит -->
+  <div class="mcq-block" data-mcq-group="2-3" data-correct="A,B">
+    <div class="mcq-q-labels"><span class="mcq-q-num-box">2</span><span class="mcq-q-num-box">3</span></div>
+    <div class="mcq-options">
+      <label class="mcq-row"><input type="checkbox" name="mcq-2-3" value="A"><span>A</span></label>
+      <label class="mcq-row"><input type="checkbox" name="mcq-2-3" value="B"><span>B</span></label>
+      <label class="mcq-row"><input type="checkbox" name="mcq-2-3" value="C"><span>C</span></label>
+    </div>
+  </div>
+
+  <script>
+    const correctAnswers = { "1": "Oxygen" };
+    const mcqGroups = { "2-3": { qs: [2, 3], correct: ["A", "B"] } };
+    const questionTypes = { "1": "Note Completion" };
+  </script>
+</body></html>`;
+
+describe("parseTest — under-capture (вопрос вне .question) → questions_html null", () => {
+  it("атомайзер парсит Q2-3, но захват их не покрыл → полный фоллбэк (questionsHtml=null)", async () => {
+    const t = await parseTest(UNDERCAPTURE_HTML);
+    expect(t.questions.map((q) => q.number)).toEqual([1, 2, 3]);
+    // captureQuestions видел бы только Q1 (в .question) → покрытие неполное → null.
+    expect(t.passages[0].questionsHtml).toBeNull();
   });
 });
 
