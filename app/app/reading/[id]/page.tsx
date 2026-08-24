@@ -15,6 +15,7 @@ import {
   startAttempt,
 } from "@/lib/exam/access";
 import { categoryLabel, LISTENING_CATEGORIES } from "@/lib/labels";
+import { questionsHtmlCoversAll } from "@/lib/exam/question-html-coverage";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import { normalizePassageHtml } from "@/lib/reading/normalize-passage";
@@ -109,13 +110,6 @@ export default async function ReadingTestPage({
   }));
   const questionsData = content.questions;
 
-  // Verbatim question-panel HTML (real-IELTS render). Используем, только если ВСЕ
-  // пассажи его несут (иначе — фоллбэк на атомизированный список). Listening и
-  // старые/непокрытые тесты → null → текущий рендер.
-  const qHtmlParts = content.passages.map((p) => p.questions_html);
-  const questionsHtml =
-    qHtmlParts.length > 0 && qHtmlParts.every(Boolean) ? qHtmlParts.join("\n") : null;
-
   // Access gate (§4.8): tier entitlement + Basic caps (2 practice starts/day +
   // 2 mock starts/week, owner decision 2026-07-17), enforced
   // server-side from the profile + content_item already read above (no extra
@@ -154,6 +148,26 @@ export default async function ReadingTestPage({
     resume = converted.length > 0 ? { ...existing, mode: "practice" } : null;
   }
   const mode = adminPreview ? "practice" : (existing?.mode ?? modeParam);
+
+  // Verbatim question-panel HTML (real-IELTS render). Presence-гейт: используем, только
+  // если ВСЕ пассажи его несут (иначе — фоллбэк на атомизированный список). Listening и
+  // старые/непокрытые тесты → null → текущий рендер. Practice дополнительно требует
+  // per-passage coverage: слоты `.q-slot[data-q]` (capture-questions.ts) внутри
+  // questions_html КАЖДОГО пассажа обязаны покрывать ВСЕ номера вопросов ЭТОГО пассажа
+  // (иначе часть аффордансов/полей молча потерялась бы) — mock-раннер (ExamFrame)
+  // работает по другому пути и такого риска не несёт, presence остаётся прежним гейтом.
+  const qHtmlParts = content.passages.map((p) => p.questions_html);
+  const verbatimHtmlPresent = qHtmlParts.length > 0 && qHtmlParts.every(Boolean);
+  const verbatimHtmlCovers =
+    mode !== "practice" ||
+    content.passages.every((p) =>
+      questionsHtmlCoversAll(
+        p.questions_html ?? "",
+        questionsData.filter((q) => q.passage_id === p.id).map((q) => q.number),
+      ),
+    );
+  const questionsHtml =
+    verbatimHtmlPresent && verbatimHtmlCovers ? qHtmlParts.join("\n") : null;
   // Basic caps (2 practice/день + 2 mock/неделю, owner decision 2026-07-17) —
   // только на создание НОВОГО attempt; резюм существующей попытки (mode=null
   // ниже) не расходует слот и не должен блокироваться (tier-гейт применяется
@@ -301,10 +315,14 @@ export default async function ReadingTestPage({
         title={test.title}
         category={test.category}
         initialAnnotations={annotations as never}
-        // Practice — учебная поверхность: всегда атомизированный рендер, иначе verbatim
-        // questions_html спрятал бы P6/P7 (check/reveal) и P1-подсказки, которые живут
-        // в QuestionBlock. Fidelity-verbatim остаётся mock/легаси-пути.
-        questionsHtml={attemptMode === "practice" ? null : questionsHtml}
+        // Verbatim question-panel (real-IELTS render) для ОБОИХ режимов. Practice-
+        // аффордансы (check/reveal/подсказки) теперь монтируются ВНУТРЬ verbatim-DOM
+        // (ExamRunner.renderAffordances → PracticeAffordances), поэтому больше не
+        // требуется force-null: fidelity и учебная петля сосуществуют. Тесты без
+        // questions_html (DnD/грязные/старые) по-прежнему падают на атомизированный
+        // список (presence-гейт выше); practice дополнительно требует per-passage
+        // slot-coverage (verbatimHtmlCovers) — mock остаётся presence-only.
+        questionsHtml={questionsHtml}
         // P15 — deep-link авто-скролл к вопросу, только practice (в mock проп не
         // передаём: mock ходит iframe-раннером, атомизации тут нет).
         focus={attemptMode === "practice" ? focusNumber : undefined}

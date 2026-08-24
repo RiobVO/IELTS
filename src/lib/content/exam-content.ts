@@ -16,6 +16,9 @@ export const contentTag = (id: string) => `content-${id}`;
 
 /** Пассаж в форме, которую рендерит exam-страница (snake_case, как anon-клиент). */
 export interface CachedPassage {
+  // Coverage-гейт practice-verbatim (page.tsx) сверяет questions_html этого пассажа с
+  // номерами вопросов, у которых question.passage_id === этот id.
+  id: string;
   title: string | null;
   body_html: string;
   order: number;
@@ -96,6 +99,7 @@ async function loadExamContent(
   const [passages, questions] = await Promise.all([
     db
       .select({
+        id: passage.id,
         title: passage.title,
         body_html: passage.bodyHtml,
         order: passage.order,
