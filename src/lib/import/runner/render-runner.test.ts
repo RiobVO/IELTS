@@ -22,6 +22,12 @@ const GOLDEN = readFileSync(
   fileURLToPath(new URL("./fixtures/listening-client.html", import.meta.url)),
   "utf8",
 );
+// Reading-канон (без <audio id=audio>) — проверяет гейт инъекции: даже в practice
+// аудио-мост не появляется, если плеера нет.
+const READING = readFileSync(
+  fileURLToPath(new URL("./fixtures/reading-inspera.html", import.meta.url)),
+  "utf8",
+);
 
 // Пре-forceRunnerMode часть пайплайна (mode-независимая) — точная копия render-runner.ts.
 function skinnedBase(html: string): string {
@@ -55,6 +61,18 @@ describe("renderRunnerDocument — mock байт-в-байт", () => {
     expect(after).toBe(before);
     expect(after).not.toContain("bando-practice-audio-bridge");
   });
+
+  it("reading-фикстура mock === прежний инлайн-пайплайн (byte-identical)", () => {
+    const skinned = skinnedBase(READING);
+    const before = stripAnalysisLeak(forceRunnerMode(skinned, "mock", 60));
+    const after = renderRunnerDocument(READING, { mode: "mock", mockMinutes: 60 });
+    expect(after).toBe(before);
+  });
+
+  it("нет <head> → null (polyfill не прошёл, fail-closed)", () => {
+    const noHead = `<html><body><audio id="audio"></audio></body></html>`;
+    expect(renderRunnerDocument(noHead, { mode: "practice", mockMinutes: null })).toBeNull();
+  });
 });
 
 describe("renderRunnerDocument — practice", () => {
@@ -67,5 +85,13 @@ describe("renderRunnerDocument — practice", () => {
     // Мост — единственная добавка: снятие ровно его строки восстанавливает базовый рендер.
     expect(after!.replace(PRACTICE_AUDIO_BRIDGE, "")).toBe(practiceBase);
     expect(after).toContain("ielts-audio-cmd");
+  });
+
+  it("reading practice: нет <audio id=audio> → аудио-мост НЕ инжектится (гейт injectPracticeAudioBridge)", () => {
+    const skinned = skinnedBase(READING);
+    const practiceBase = stripAnalysisLeak(forceRunnerMode(skinned, "practice", null));
+    const after = renderRunnerDocument(READING, { mode: "practice", mockMinutes: null });
+    expect(after).toBe(practiceBase); // мост-гейт: без плеера инъекция — no-op
+    expect(after).not.toContain("bando-practice-audio-bridge");
   });
 });
