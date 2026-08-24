@@ -168,3 +168,89 @@ describe("forceRunnerMode — native mode-card runners (family B)", () => {
     expect(out).not.toContain('id="bando-start-hide"');
   });
 });
+
+// Семейство C (Inspera) — канонический формат клиента: режимов внутри нет, штатный
+// startTimer() считает вверх. Контракт: mock с валидным лимитом получает обратный
+// отсчёт и авто-сдачу, всё остальное — байт-в-байт.
+describe("forceRunnerMode — семейство C (Inspera)", () => {
+  const INSPERA =
+    "<html><head></head><body>" +
+    '<span id="testTimer">00:00</span>' +
+    '<button id="startTestBtn">Start</button>' +
+    "<script>function startTimer(){}function disableAll(){}function showResults(){}</script>" +
+    "</body></html>";
+
+  it("mock + лимит: инжектит обратный отсчёт от лимита", () => {
+    const out = forceRunnerMode(INSPERA, "mock", 20);
+    expect(out).toContain('id="bando-mock-countdown"');
+    expect(out).toContain("var left=1200"); // 20 минут в секундах
+    expect(out).toContain("window.startTimer=function()");
+    expect(out).toContain("window.showResults()"); // сдача нативным путём (мост его ловит)
+  });
+
+  it("practice: байт-в-байт (в iframe practice-reading не живёт)", () => {
+    expect(forceRunnerMode(INSPERA, "practice", 20)).toBe(INSPERA);
+  });
+
+  it("mock без лимита: байт-в-байт (секундомер шаблона как был)", () => {
+    expect(forceRunnerMode(INSPERA, "mock")).toBe(INSPERA);
+    expect(forceRunnerMode(INSPERA, "mock", null)).toBe(INSPERA);
+  });
+
+  it("невалидный лимит (0 / дробный / выше потолка): байт-в-байт", () => {
+    expect(forceRunnerMode(INSPERA, "mock", 0)).toBe(INSPERA);
+    expect(forceRunnerMode(INSPERA, "mock", 20.5)).toBe(INSPERA);
+    expect(forceRunnerMode(INSPERA, "mock", 481)).toBe(INSPERA);
+  });
+
+  it("идемпотентно: повторный вызов не дублирует отсчёт", () => {
+    const once = forceRunnerMode(INSPERA, "mock", 20);
+    expect(forceRunnerMode(once, "mock", 20)).toBe(once);
+  });
+
+  it("нет </body>: байт-в-байт (нет безопасной точки после скрипта шаблона)", () => {
+    const html =
+      '<html><head></head><body><button id="startTestBtn">S</button>' +
+      "<script>function startTimer(){}</script>";
+    expect(forceRunnerMode(html, "mock", 20)).toBe(html);
+  });
+
+  it("одной кнопки без startTimer мало — незнакомый шаблон, no-op", () => {
+    const html =
+      '<html><head></head><body><button id="startTestBtn">S</button></body></html>';
+    expect(forceRunnerMode(html, "mock", 20)).toBe(html);
+  });
+
+  it("приоритет A: pendingMode-читатель рядом с кнопкой Inspera → A, не отсчёт", () => {
+    const hybrid =
+      "<html><head></head><body>" +
+      '<button id="startTestBtn">S</button>' +
+      "<script>function startTimer(){}sessionStorage.getItem('pendingMode')</script>" +
+      "</body></html>";
+    const out = forceRunnerMode(hybrid, "mock", 20);
+    expect(out).toContain("bando-mode-autostart");
+    expect(out).not.toContain("bando-mock-countdown");
+  });
+
+  it("приоритет B: mode-card рядом с кнопкой Inspera → B, не отсчёт", () => {
+    const hybrid =
+      "<html><head></head><body>" +
+      '<button id="startTestBtn">S</button>' +
+      '<button class="mode-card-btn">m</button>' +
+      "<script>function beginTest(m){}function startTimer(){}</script>" +
+      "</body></html>";
+    const out = forceRunnerMode(hybrid, "mock", 20);
+    expect(out).toContain("bando-mode-begintest");
+    expect(out).not.toContain("bando-mock-countdown");
+  });
+
+  it("listening-раннер (нет #startTestBtn) не затрагивается", () => {
+    // Время listening задаёт длительность записи — подменять его таймер нельзя.
+    const listening =
+      "<html><head></head><body>" +
+      '<span id="testTimer">30:00</span><audio src="x.mp3"></audio>' +
+      "<script>function startTimer(){}</script>" +
+      "</body></html>";
+    expect(forceRunnerMode(listening, "mock", 30)).toBe(listening);
+  });
+});
