@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { findLeakClassToken, stripCapturedLeaks } from "./capture-sanitize";
+import { findLeakMarkerToken, stripCapturedLeaks } from "./capture-sanitize";
 import type { DropOption } from "./dnd-capture";
 
 /**
@@ -217,10 +217,10 @@ export function captureListeningPart(
   // Карту-картинку и любой аудио/видео-плеер части убираем до гигиены.
   root.find(".map-stage, audio, video").remove();
 
-  // Fail-closed на reveal-маркер ответа под чужим классом (вне `[data-analysis]`, B1):
+  // Fail-closed на reveal-маркер ответа под чужим class/id (вне `[data-analysis]`, B1):
   // тихий стрип мог бы убить легитимный контент и скрыть утечку — уводим часть в
   // атомизацию и сигналим ревью-экрану через onLeak.
-  const leak = findLeakClassToken($, root);
+  const leak = findLeakMarkerToken($, root);
   if (leak) {
     onLeak?.(leak);
     return "";

@@ -407,6 +407,24 @@ describe("captureQuestions — reveal-marker fail-closed (B1)", () => {
     expect(leaks).toEqual(["correct-answer"]);
   });
 
+  // Нормализация (регистр + разделители) и id-вектор.
+  it.each([
+    ["class", "Correct-Answer"],
+    ["class", "correctAnswer"],
+    ["class", "correct_answer"],
+    ["id", "correct-answer"],
+  ])("reveal-маркер под %s='%s' → fail-closed + onLeak(исходный токен)", (attr, val) => {
+    const leaks: string[] = [];
+    const block =
+      `<div class="question" id="question-1">` +
+      `<input type="text" name="q1">` +
+      `<div ${attr}="${val}">Correct answer: PIZZA</div>` +
+      `</div>`;
+    const out = captureQuestions([block], undefined, (t) => leaks.push(t));
+    expect(out).toBe("");
+    expect(leaks).toEqual([val]);
+  });
+
   it("санкционированный [data-analysis] НЕ триггерит (штатный стрип, панель непуста)", () => {
     const leaks: string[] = [];
     const block =
@@ -420,12 +438,13 @@ describe("captureQuestions — reveal-marker fail-closed (B1)", () => {
     expect(out).not.toMatch(/analysis/i);
   });
 
-  it("легитимные классы (cstat answered / map-answers / answer-input) НЕ триггерят", () => {
+  it("легитимные class/id (cstat answered / map-answers / answer-input) НЕ триггерят", () => {
     const leaks: string[] = [];
     const block =
       `<div class="question" id="question-1">` +
       `<div class="cstat answered">x</div><div class="map-answers">g</div>` +
       `<span class="answer-input">y</span>` +
+      `<div id="map-answers"></div><div id="answered"></div><div id="answer-input"></div>` +
       `<input type="text" name="q1">` +
       `</div>`;
     const out = captureQuestions([block], undefined, (t) => leaks.push(t));
