@@ -113,3 +113,76 @@ describe("READING_COLLECT.__collect — DOM-уровень (Inspera drag-drop + 
     expect(a[17]).toContain(",");
   });
 });
+
+// Listening: LISTENING_COLLECT не экспортирован отдельно (только обёрнутый в
+// LISTENING_BRIDGE вместе с SEND и submit-hook'ом) — извлекаем его исходник из
+// экспортированной константы по стабильной границе: __collect/__multiFor всегда
+// заканчиваются прямо перед склеенным SEND, который начинается с "function
+// __send(ans){" (bridge.ts). Так тест бьётся именно о реально исполняемый мостовой
+// код, а не о ручную копию логики.
+function collectListening(html: string): Record<number, string> {
+  document.body.innerHTML = html;
+  const start = "<script>(function(){".length;
+  const end = LISTENING_BRIDGE.indexOf("function __send(ans){");
+  const collectSrc = LISTENING_BRIDGE.slice(start, end);
+  const fn = new Function("document", `${collectSrc}\n return __collect();`) as (
+    d: Document,
+  ) => Record<number, string>;
+  return fn(document);
+}
+
+// Комментарий bridge.ts (LISTENING_COLLECT): "gap → multi(checkbox) → radio →
+// dropzone" — ровно 4 механизма. Map labelling (.place-chip[data-q] внутри
+// .map-dz[data-letter], см. parse-listening.ts/capture-listening.ts и getUserAnswer
+// в самом клиентском файле) сюда НЕ входит: ни один из 4 селекторов __collect его не
+// матчит. Не чиним (продуктовый код) — фиксируем фактическое поведение тестом ниже.
+const LISTENING_MIXED_DOM = `
+  <input class="gap" data-q="1" value="  raindrops  ">
+  <input class="gap" data-q="2" value="">
+  <div class="mcq multi" data-qs="11,12">
+    <label><input type="checkbox" value="A" checked></label>
+    <label><input type="checkbox" value="B"></label>
+    <label><input type="checkbox" value="C" checked></label>
+  </div>
+  <label><input type="radio" name="q20" value="B" checked></label>
+  <label><input type="radio" name="q20" value="C"></label>
+  <label><input type="radio" name="q21" value="A"></label>
+  <div class="dropzone" data-q="27" data-value="C"></div>
+  <div class="dropzone" data-q="28"></div>
+  <div class="map-dz" data-letter="A"><div class="place-chip" data-q="15"></div></div>
+`;
+
+describe("LISTENING_BRIDGE.__collect — DOM-уровень (per-механизм)", () => {
+  const a = collectListening(LISTENING_MIXED_DOM);
+
+  it("gap: .gap[data-q] value, триммится", () => {
+    expect(a[1]).toBe("raindrops");
+  });
+
+  it("multi: .mcq.multi[data-qs] чекбоксы — отсортированные буквы раздаются по позиции в группе", () => {
+    expect(a[11]).toBe("A"); // первый член группы → checked[0]
+    expect(a[12]).toBe("C"); // второй член группы → checked[1]
+  });
+
+  it("radio: input[name=qN]:checked", () => {
+    expect(a[20]).toBe("B");
+  });
+
+  it("dropzone: .dropzone[data-q] data-value", () => {
+    expect(a[27]).toBe("C");
+  });
+
+  it("незаполненные (пустой gap, radio без выбора, dropzone без data-value, номер без элемента) → ''", () => {
+    expect(a[2]).toBe("");
+    expect(a[21]).toBe("");
+    expect(a[28]).toBe("");
+    expect(a[40]).toBe("");
+  });
+
+  // Фактическое поведение (не дефект по умолчанию — см. doc-комментарий выше):
+  // .place-chip/.map-dz — единственный listening-механизм ответа, у которого нет
+  // ветки в __collect. Вопрос падает в общий '' fallback, как «номер без элемента».
+  it("map labelling (.place-chip/.map-dz) НЕ распознаётся ни одной веткой __collect — падает в '' fallback", () => {
+    expect(a[15]).toBe("");
+  });
+});
