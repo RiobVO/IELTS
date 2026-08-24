@@ -1,6 +1,11 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import { captureQuestions } from "./capture-questions";
+import {
+  extractEndingBank,
+  extractHeadingBank,
+  extractHeadingTargets,
+} from "./dnd-capture";
 import { extractData } from "./extract-js";
 import { parseFullReading } from "./parse-reading-full";
 import { parseListening } from "./parse-listening";
@@ -89,7 +94,13 @@ export async function parseTest(html: string): Promise<ParsedTest> {
   const bodyHtml = ($("#passageContent").html() ?? "").trim();
   if (!bodyHtml) warnings.push("Passage body (#passageContent) not found.");
   // Verbatim-HTML вопрос-панели (как реальный IELTS); "" → фоллбэк на атомизацию.
-  const questionsHtml = captureQuestions($(".question").toArray().map((b) => $.html(b))) || null;
+  // DnD: heading-цели лежат в теле пассажа (#passageContent), банки — в блоках вопросов.
+  const questionsHtml =
+    captureQuestions($(".question").toArray().map((b) => $.html(b)), {
+      headingTargets: extractHeadingTargets($, $("#passageContent")),
+      headingBank: extractHeadingBank($),
+      endingBank: extractEndingBank($),
+    }) || null;
   const passages = [
     { order: 1, title: h1 || null, bodyHtml, audioPath: null, questionsHtml },
   ];

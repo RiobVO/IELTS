@@ -19,6 +19,7 @@ import { questionsHtmlCoversAll } from "@/lib/exam/question-html-coverage";
 import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
 import { isUuid } from "@/lib/uuid";
 import { normalizePassageHtml } from "@/lib/reading/normalize-passage";
+import { neutralizeHeadingDrops } from "@/lib/reading/neutralize-heading-drops";
 import ExamRunner from "./ExamRunner";
 
 export const dynamic = "force-dynamic";
@@ -168,6 +169,13 @@ export default async function ReadingTestPage({
     );
   const questionsHtml =
     verbatimHtmlPresent && verbatimHtmlCovers ? qHtmlParts.join("\n") : null;
+  // Practice-verbatim: heading-вопросы рендерятся select'ами в панели → пассажные
+  // `.heading-drop` делаем пассивными номерными метками (не интерактивной целью).
+  // Только practice ∧ verbatim активен; mock и фоллбэк — пассаж как есть.
+  const runnerPassages =
+    questionsHtml && mode === "practice"
+      ? passages.map((p) => ({ ...p, body_html: neutralizeHeadingDrops(p.body_html) }))
+      : passages;
   // Basic caps (2 practice/день + 2 mock/неделю, owner decision 2026-07-17) —
   // только на создание НОВОГО attempt; резюм существующей попытки (mode=null
   // ниже) не расходует слот и не должен блокироваться (tier-гейт применяется
@@ -307,7 +315,7 @@ export default async function ReadingTestPage({
         mode={attemptMode}
         mockMinutes={mockMinutes}
         initialAnswers={savedAnswers}
-        passages={(passages ?? []) as never}
+        passages={(runnerPassages ?? []) as never}
         questions={(questionsData ?? []) as Question[]}
         durationSeconds={test.duration_seconds}
         audioSrc={audioSrc}

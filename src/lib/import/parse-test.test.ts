@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseTest } from "./parse-test";
 import { isUnresolvedQuestionTypeWarning, UNKNOWN_TYPE_FALLBACK } from "./question-types";
+import { questionsHtmlCoversAll } from "../exam/question-html-coverage";
 
 const sample = (name: string): string | null => {
   const p = fileURLToPath(new URL(`../../../samples/${name}`, import.meta.url));
@@ -286,5 +287,76 @@ describe("isListening routing regression — reading остаётся reading", 
     const t = await parseTest(html);
     expect(t.section).toBe("reading");
     expect(t.category).toBe("passage_2");
+  });
+});
+
+// Inspera DnD (single-passage): Matching Headings (цели в теле пассажа) + Sentence
+// Endings (цели в блоке вопросов). Повторяет разметку «Passage 2 Population» /
+// «Passage 3 Animals» без choose-TWO чекбоксов — verbatim-захват обязан покрыть
+// ВСЕ вопросы (drop-слоты), иначе practice-verbatim гейт бы отвалился.
+const SINGLE_DND_HTML = `<!doctype html><html><head><title>Reading - DnD</title></head>
+<body>
+  <div class="sectionRubric">Reading Passage 1. You should spend about 20 minutes on the Questions.</div>
+  <div id="passageContent">
+    <h1>DnD Passage</h1>
+    <div class="paragraph-block">
+      <div class="heading-drop-line" id="heading-line-A"><div class="heading-drop" id="drop-q1" data-q="1" role="button" tabindex="0"><span class="placeholder">1</span></div></div>
+      <p id="para-A"><strong>A</strong> Paragraph A body text here.</p>
+    </div>
+    <div class="paragraph-block">
+      <div class="heading-drop-line" id="heading-line-B"><div class="heading-drop" id="drop-q2" data-q="2" role="button" tabindex="0"><span class="placeholder">2</span></div></div>
+      <p id="para-B"><strong>B</strong> Paragraph B body text here.</p>
+    </div>
+  </div>
+
+  <div class="question" id="question-group-1-2">
+    <div class="question-rubric"><h3>Questions 1-2</h3><p>Choose the correct heading for each paragraph.</p></div>
+    <div class="heading-bank" id="heading-bank">
+      <h4 class="heading-bank-title">List of Headings</h4>
+      <div class="heading-slot" data-heading="i"><div class="heading-token" draggable="true" data-heading="i"><span>i</span> First heading</div></div>
+      <div class="heading-slot" data-heading="ii"><div class="heading-token" draggable="true" data-heading="ii"><span>ii</span> Second heading</div></div>
+      <div class="heading-slot" data-heading="iii"><div class="heading-token" draggable="true" data-heading="iii"><span>iii</span> Third heading</div></div>
+    </div>
+  </div>
+
+  <div class="question" id="question-group-3-4">
+    <div class="question-rubric"><h3>Questions 3-4</h3><p>Complete each sentence with the correct ending.</p></div>
+    <div class="ending-line" id="question-3"><span class="q-num-box">3</span><span class="ending-stmt">The first stem</span><div class="ending-drop" id="drop-q3" data-q="3"><span class="placeholder">A-F</span></div></div>
+    <div class="ending-line" id="question-4"><span class="q-num-box">4</span><span class="ending-stmt">The second stem</span><div class="ending-drop" id="drop-q4" data-q="4"><span class="placeholder">A-F</span></div></div>
+    <div class="ending-bank" id="ending-bank">
+      <h4 class="ending-bank-title">List of Endings</h4>
+      <div class="ending-slot" data-ending="A"><div class="ending-token" draggable="true" data-ending="A"><b>A</b> ending one.</div></div>
+      <div class="ending-slot" data-ending="B"><div class="ending-token" draggable="true" data-ending="B"><b>B</b> ending two.</div></div>
+    </div>
+  </div>
+
+  <script>
+    const correctAnswers = { "1": "i", "2": "ii", "3": "A", "4": "B" };
+    const questionTypes = { "1": "Matching Headings", "2": "Matching Headings", "3": "Sentence Endings", "4": "Sentence Endings" };
+  </script>
+</body></html>`;
+
+describe("parseTest — Inspera DnD single-passage (headings + endings)", () => {
+  let t: Awaited<ReturnType<typeof parseTest>>;
+  beforeAll(async () => {
+    t = await parseTest(SINGLE_DND_HTML);
+  });
+
+  it("verbatim-захват покрывает ВСЕ вопросы (headings-синтез + ending drop-слоты)", () => {
+    const nums = t.questions.map((q) => q.number);
+    expect(nums).toEqual([1, 2, 3, 4]);
+    const qh = t.passages[0].questionsHtml ?? "";
+    expect(questionsHtmlCoversAll(qh, nums)).toBe(true);
+    expect(qh).toContain("heading-match-lines");
+    expect(qh).toContain("Paragraph A");
+    expect(qh).toContain("Paragraph B");
+    expect((qh.match(/data-qtype="drop"/g) ?? []).length).toBe(4);
+  });
+
+  it("захват без утечки и без интерактивности банка", () => {
+    const qh = t.passages[0].questionsHtml ?? "";
+    expect(qh).not.toMatch(/analysis/i);
+    expect(qh).not.toMatch(/draggable/i);
+    expect(qh).not.toContain("ending-drop"); // цели заменены слотами
   });
 });
