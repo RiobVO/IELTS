@@ -511,9 +511,13 @@ actions: 3/16. Непокрыто (полный список аудита):
 - [ ] vocabulary / saved words actions
 - [ ] admin actions
 - [ ] 5 из 8 cron jobs
-- [ ] real import fixtures: 4 skipped-теста реальных образцов (parse-test:216,
-      parse-reading-full:328, parse-listening:282) → обезличенные minimized
-      golden-фикстуры в репо; триггер — ритмичный контент-поток от клиента
+- [~] real import fixtures: ЧАСТИЧНО закрыто 2026-07-21 — committed синтетическая
+      golden-фикстура канона «Inspera Style» (`runner/fixtures/reading-inspera.html`,
+      16Q × 8 типов, делегирующая band-цепочка, `.analysis`-блоки) + интегральные
+      describe в parse-runner/parse-reading-full (гоняются всегда, в т.ч. CI).
+      4 skipped-теста реальных образцов остаются (parse-test:216 Tuatara/Banff —
+      другие формы, parse-reading-full:328 full-template, parse-listening:282);
+      триггер прежний — ритмичный контент-поток от клиента
 - [ ] компонентный слой: 152 TSX / 0 `.test.tsx`; точечно и только стабильные мелкие
       компоненты (крупные: ExamRunner ~2449 строк, _PracticeCatalog ~1189,
       ReviewSession ~860, ResultCoach ~881 — покрываются через §9, НЕ jsdom);
@@ -541,6 +545,9 @@ actions: 3/16. Непокрыто (полный список аудита):
 
 - НЕ вводим PR-flow/церемонию для соло — сам себе разрешать merge бессмысленно.
 - НЕ строим jsdom-тесты на ExamRunner/iframe — тестирование моков браузера, не продукта.
+  (Уточнение 2026-07-21: jsdom появился в devDeps ТОЧЕЧНО для DOM-теста инжектируемого
+  `bridge.__collect` (`bridge.test.ts`) — это чистый браузерный скрипт-коллектор, не
+  React-компонент; анти-цель на компонентный jsdom остаётся в силе.)
 - НЕ считаем Playwright-эмуляцию доказательством touch-поведения.
 - НЕ фальсифицируем Supabase тестами, которые проверяют только PostgreSQL (границы
   честно помечены: PostgREST/Auth/Storage → волна 2).
@@ -561,3 +568,4 @@ actions: 3/16. Непокрыто (полный список аудита):
 | 3b браузер: vocab/admin-publish/writing/speaking (сьют 15 тестов, W/S без LLM — DB-инжект, ×5 зелёные) | ✅ закрыта | 2026-07-20 |
 | 3c payment E2E (после 0b); устройства — ручной гейт | ⬜ по триггерам | — |
 | 4 эксплуатация | ⬜ по триггерам | — |
+| Парсинг-трек «Inspera» вне волновой сетки: сьют 1575→1662 (import 485+), golden-фикстура канона, jsdom DOM-тест bridge, ad-hoc live e2e на проде (import→publish→Playwright mock 40/40→уборка); CI-инцидент: `npm audit` гейт покраснел на транзитивной brace-expansion (high) от jsdom → закрыт non-breaking `npm audit fix` (`a213274`); оставшиеся moderate (drizzle-kit/next) ниже гейта | ✅ закрыт | 2026-07-21 (`7781435..a213274`) |
