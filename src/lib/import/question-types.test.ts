@@ -14,12 +14,14 @@ describe("canonQuestionType", () => {
     ["True / False / Not Given", "tfng"],
     ["Yes / No / Not Given", "ynng"],
     ["Multiple Choice", "mcq_single"],
+    ["MCQ", "mcq_single"], // голая аббревиатура из источников
     ["Multiple Choice (single)", "mcq_single"],
     ["Multiple Choice (multiple)", "mcq_multi"],
     ["Matching Headings", "matching_headings"],
     ["Matching Information", "matching_info"],
     ["Matching Features", "matching_features"],
     ["Matching Sentence Endings", "matching_sentence_endings"],
+    ["Sentence Endings", "matching_sentence_endings"], // голая форма без «Matching»
     ["Sentence Completion", "sentence_completion"],
     ["Summary Completion", "summary_completion"],
     ["Note Completion", "note_completion"],
@@ -56,25 +58,30 @@ describe("canonQuestionType", () => {
     expect(canonQuestionType("123 !!!")).toEqual({ type: null, confident: false });
   });
 
-  it("нечёткое совпадение по подстроке возвращается, но с confident=false (флаг на ревью)", () => {
-    // точный ярлык — уверенно; тот же тип в окружении слов — нечётко
-    expect(canonQuestionType("Note Completion")).toEqual({
+  it("декорации (секц-префикс / скобочный квалификатор) срезаются → confident, а истинно нечёткое остаётся low-confidence", () => {
+    // Ведущий «Section N —» и хвостовой «(…)» срезаются перед EXACT-retry — тот же
+    // уверенный тип, а не шум на ревью-экране (прямая цель фикса: убрать ложный low-confidence).
+    expect(canonQuestionType("Note Completion")).toEqual({ type: "note_completion", confident: true });
+    expect(canonQuestionType("Section 2 — Note Completion")).toEqual({
       type: "note_completion",
       confident: true,
     });
-    expect(canonQuestionType("Section 2 — Note Completion")).toEqual({
+    expect(canonQuestionType("Note Completion (ONE WORD ONLY)")).toEqual({
       type: "note_completion",
-      confident: false,
+      confident: true,
     });
+    // Голое «matching» осознанно неоднозначно (решение владельца отложено) → остаётся
+    // low-confidence через CONTAINS-фолбэк, декорации тут ни при чём.
+    expect(canonQuestionType("Some Matching")).toEqual({ type: "matching_info", confident: false });
   });
 
-  it("EXACT приоритетнее CONTAINS: точная метка уверенна, обёртка — substring", () => {
-    // Точная метка попадает в таблицу EXACT первой → confident:true; та же метка
-    // внутри обёртки («Section 2 — …») промахивается мимо EXACT и ловится только
-    // substring-фолбэком → confident:false. Доказывает порядок EXACT перед CONTAINS.
+  it("EXACT приоритетнее CONTAINS: точная метка уверенна, обёртка без EXACT — substring", () => {
+    // «Note Completion» попадает в EXACT → confident:true; «Some Matching» промахивается
+    // мимо EXACT (и после strip тоже) и ловится только substring-фолбэком «matching» →
+    // confident:false. Доказывает порядок EXACT перед CONTAINS.
     expect(canonQuestionType("Note Completion").confident).toBe(true);
-    expect(canonQuestionType("Section 2 — Note Completion")).toEqual({
-      type: "note_completion",
+    expect(canonQuestionType("Some Matching")).toEqual({
+      type: "matching_info",
       confident: false,
     });
   });
