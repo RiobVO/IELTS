@@ -1,7 +1,14 @@
 // Юнит-тесты чистых предикатов бейджей (BRIEF §4.7). Относительный импорт — alias не нужен.
 // isMet/badgeProgress детерминированы и работают над plain UserStats/Criteria — БД не трогаем.
 import { describe, it, expect } from "vitest";
-import { isMet, badgeProgress, type Criteria, type UserStats } from "./badge-criteria";
+import {
+  isMet,
+  badgeProgress,
+  aggregateAttemptStats,
+  type Criteria,
+  type UserStats,
+  type AttemptStatRow,
+} from "./badge-criteria";
 
 // Базовый «нулевой» стат: каждый тест переопределяет только нужные поля через { ...base }.
 const base: UserStats = {
@@ -297,5 +304,103 @@ describe("badgeProgress", () => {
     const r = badgeProgress(bogus, base);
     expect(r.pct).toBe(0);
     expect(r.hint).toBe("");
+  });
+});
+
+// Хелпер строки попытки: дата задаётся числом (мс), поля breakdown — по нужде.
+function att(
+  contentItemId: string,
+  submittedMs: number | null,
+  rawScore: number | null,
+  perTypeBreakdown: AttemptStatRow["perTypeBreakdown"] = null,
+): AttemptStatRow {
+  return {
+    contentItemId,
+    rawScore,
+    perTypeBreakdown,
+    submittedAt: submittedMs == null ? null : new Date(submittedMs),
+  };
+}
+
+describe("aggregateAttemptStats (анти-фарм пересдач)", () => {
+  it("КРАСНЫЙ: две сдачи одного теста (30/40, затем 40/40) — perfect НЕ выдаётся, volume=1", () => {
+    const rows = [
+      att("t1", 1000, 30, { tfng: { correct: 20, total: 20 }, mcq: { correct: 10, total: 20 } }),
+      att("t1", 2000, 40, { tfng: { correct: 20, total: 20 }, mcq: { correct: 20, total: 20 } }),
+    ];
+    const r = aggregateAttemptStats(rows);
+    expect(r.volume).toBe(1); // тест засчитан один раз
+    expect(r.hasPerfect).toBe(false); // первая попытка 30/40, а не 40/40
+    // accuracy тоже по первой: tfng 20/20, mcq 10/20 — вторая не суммируется
+    expect(r.perQtype.get("mcq")).toEqual({ correct: 10, total: 20 });
+  });
+
+  it("порядок строк не важен: поздняя пересдача первой в массиве не перебивает раннюю первую попытку", () => {
+    const rows = [
+      att("t1", 2000, 40, { mcq: { correct: 20, total: 20 } }), // пересдача идёт первой
+      att("t1", 1000, 30, { mcq: { correct: 10, total: 20 } }), // но раньше по времени
+    ];
+    const r = aggregateAttemptStats(rows);
+    expect(r.volume).toBe(1);
+    expect(r.hasPerfect).toBe(false);
+    expect(r.perQtype.get("mcq")).toEqual({ correct: 10, total: 20 });
+  });
+
+  it("volume считает разные тесты, но не пересдачи (2 теста × 2 попытки → volume=2)", () => {
+    const rows = [
+      att("t1", 1000, 30, { mcq: { correct: 15, total: 20 } }),
+      att("t1", 5000, 40, { mcq: { correct: 20, total: 20 } }),
+      att("t2", 2000, 20, { tfng: { correct: 10, total: 20 } }),
+      att("t2", 6000, 40, { tfng: { correct: 20, total: 20 } }),
+    ];
+    const r = aggregateAttemptStats(rows);
+    expect(r.volume).toBe(2);
+  });
+
+  it("perfect по первой попытке РАЗНОГО теста всё ещё выдаётся (не ломаем законный кейс)", () => {
+    const rows = [
+      att("t1", 1000, 30, { mcq: { correct: 30, total: 40 } }), // не perfect
+      att("t2", 2000, 40, { mcq: { correct: 40, total: 40 } }), // perfect на первой сдаче
+    ];
+    const r = aggregateAttemptStats(rows);
+    expect(r.hasPerfect).toBe(true);
+    expect(r.volume).toBe(2);
+  });
+
+  it("accuracy суммирует qtype по первым попыткам разных тестов", () => {
+    const rows = [
+      att("t1", 1000, 30, { tfng: { correct: 8, total: 10 } }),
+      att("t1", 9000, 40, { tfng: { correct: 10, total: 10 } }), // пересдача игнор
+      att("t2", 2000, 30, { tfng: { correct: 7, total: 10 } }),
+    ];
+    const r = aggregateAttemptStats(rows);
+    // 8/10 (t1 первая) + 7/10 (t2 первая) = 15/20, пересдача t1 не входит
+    expect(r.perQtype.get("tfng")).toEqual({ correct: 15, total: 20 });
+  });
+
+  it("пустой breakdown/нулевой total не считается perfect (вырожденная попытка)", () => {
+    const rows = [att("t1", 1000, 0, {}), att("t2", 2000, 0, null)];
+    const r = aggregateAttemptStats(rows);
+    expect(r.hasPerfect).toBe(false);
+    expect(r.volume).toBe(2);
+    expect(r.perQtype.size).toBe(0);
+  });
+
+  it("null submittedAt проигрывает датированной попытке (NULLS LAST — берётся датированная первая)", () => {
+    const rows = [
+      att("t1", null, 40, { mcq: { correct: 40, total: 40 } }), // без даты
+      att("t1", 1000, 30, { mcq: { correct: 30, total: 40 } }), // датированная — первая
+    ];
+    const r = aggregateAttemptStats(rows);
+    expect(r.volume).toBe(1);
+    expect(r.hasPerfect).toBe(false); // датированная 30/40 выигрывает как первая
+    expect(r.perQtype.get("mcq")).toEqual({ correct: 30, total: 40 });
+  });
+
+  it("пустой вход → нулевые статы", () => {
+    const r = aggregateAttemptStats([]);
+    expect(r.volume).toBe(0);
+    expect(r.hasPerfect).toBe(false);
+    expect(r.perQtype.size).toBe(0);
   });
 });

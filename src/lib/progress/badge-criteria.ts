@@ -41,6 +41,76 @@ export interface UserStats {
   closedByQtype: Map<string, number>;
 }
 
+/** Shape of an attempt's stored `per_type_breakdown` jsonb. */
+export type PerTypeBreakdown = Record<string, { correct: number; total: number }>;
+
+/** Минимальные поля попытки для volume/perfect/accuracy-статов. */
+export interface AttemptStatRow {
+  contentItemId: string;
+  rawScore: number | null;
+  perTypeBreakdown: PerTypeBreakdown | null;
+  /** Серверное время сдачи; null трактуется как «самое позднее» (проигрывает
+   *  любой датированной попытке) — зеркалит `asc(submittedAt)` NULLS LAST в SQL. */
+  submittedAt: Date | null;
+}
+
+/**
+ * volume/hasPerfect/perQtype ТОЛЬКО по абсолютно первой сданной попытке каждого
+ * теста. Анти-фарм (§4.6): дедуп по (contentItemId → самая ранняя submittedAt)
+ * зеркалит `recomputeLeaderboard` (DISTINCT ON (user, test) earliest submitted),
+ * поэтому пересдача теста с выученными на /result ответами больше не накручивает
+ * perfect (ложные 100%), volume (счётчик тестов) и accuracy (per-qtype суммы).
+ *
+ * Дедуп MODE-AGNOSTIC — берётся первая сданная попытка любого режима, ровно как
+ * в `firstAttempts` лидерборда (фильтр там только `status='submitted'`, без mode).
+ * Это сознательно расходится с рейтингом/all_time (`shouldRateAttempt` — mock-only):
+ * бейджи меряют объём и точность УЧЁБЫ (practice+mock), а не соревновательный Elo,
+ * и должны читать тот же набор попыток, что weekly/monthly-доска. Floor-guard
+ * (too-fast) здесь НЕ применяется — это отдельный анти-фарм лидерборда, вне задачи
+ * дедупа пересдач.
+ */
+export function aggregateAttemptStats(rows: AttemptStatRow[]): {
+  volume: number;
+  hasPerfect: boolean;
+  perQtype: Map<string, QtypeAgg>;
+} {
+  const ts = (d: Date | null) => (d ? d.getTime() : Infinity);
+  // Первая (минимальная submittedAt) попытка на каждый contentItem.
+  const firstByTest = new Map<string, AttemptStatRow>();
+  for (const r of rows) {
+    const prev = firstByTest.get(r.contentItemId);
+    if (!prev || ts(r.submittedAt) < ts(prev.submittedAt)) {
+      firstByTest.set(r.contentItemId, r);
+    }
+  }
+
+  let hasPerfect = false;
+  const perQtype = new Map<string, QtypeAgg>();
+  for (const a of firstByTest.values()) {
+    const breakdown = a.perTypeBreakdown ?? {};
+
+    // Attempt total = сумма total по всем qtype его breakdown.
+    let attemptTotal = 0;
+    for (const v of Object.values(breakdown)) attemptTotal += Number(v?.total) || 0;
+
+    // 100%: rawScore равен числу вопросов попытки (>0, чтобы вырожденная пустая
+    // попытка не считалась «perfect»).
+    if (attemptTotal > 0 && a.rawScore != null && Number(a.rawScore) === attemptTotal) {
+      hasPerfect = true;
+    }
+
+    // Per-qtype суммы по первым попыткам.
+    for (const [qtype, v] of Object.entries(breakdown)) {
+      const agg = perQtype.get(qtype) ?? { correct: 0, total: 0 };
+      agg.correct += Number(v?.correct) || 0;
+      agg.total += Number(v?.total) || 0;
+      perQtype.set(qtype, agg);
+    }
+  }
+
+  return { volume: firstByTest.size, hasPerfect, perQtype };
+}
+
 /** Best (highest) per-qtype closed count, or 0 when nothing is closed yet. */
 function bestClosedByQtype(closedByQtype: Map<string, number>): number {
   let best = 0;
