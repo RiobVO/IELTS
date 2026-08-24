@@ -19,12 +19,15 @@ const MAX_OUTPUT_TOKENS = 8192;
 // прод-error_log 2026-07-22): без ретрая единичный спайк = failed на весь тест.
 const RETRY_DELAYS_MS = [2_000, 6_000];
 
-// Транзиент детектим по фактическому формату ошибки SDK (message = JSON-тело
-// {"error":{"code":503,"status":"UNAVAILABLE",...}}) плюс сетевой fetch failed.
+// Транзиент детектим в первую очередь по числовому ApiError.status установленного
+// @google/genai (408/429/5xx), затем — фоллбэком по message (фактический прод-формат:
+// JSON-тело {"error":{"code":503,"status":"UNAVAILABLE",...}}) плюс сетевой fetch failed.
 // Parse/schema-сбои сюда не попадают — они детерминированы, повтор жёг бы вызовы.
 function isTransientError(e: unknown): boolean {
+  const status = (e as { status?: unknown } | null)?.status;
+  if (typeof status === "number") return status === 408 || status === 429 || status >= 500;
   const msg = e instanceof Error ? e.message : String(e);
-  return /"code"\s*:\s*(429|5\d\d)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|fetch failed/.test(msg);
+  return /"code"\s*:\s*(408|429|5\d\d)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|fetch failed/.test(msg);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -158,23 +161,28 @@ export async function generateL1ForPassage(input: L1PassageInput): Promise<L1Exp
   const { apiKey, model } = cfg;
 
   const ai = new GoogleGenAI({ apiKey });
-  return withTransientRetry(async () => {
-    const res = await ai.models.generateContent({
+  // Ретраится ТОЛЬКО сетевой вызов. Парсинг — снаружи: SyntaxError от JSON.parse несёт
+  // кусок входа в message (Node 20+), и не-JSON ответ модели со словом «UNAVAILABLE»
+  // внутри ретрая ложно классифицировался бы как транзиент (Codex 2026-07-22).
+  const res = await withTransientRetry(() =>
+    ai.models.generateContent({
       model,
       contents: [{ text: buildL1Prompt(input) }],
       config: {
         responseMimeType: "application/json",
         responseSchema: l1ResponseSchema,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
-        // Прод-фикс 2026-07-22: у gemini-2.5-* thinking включён по умолчанию и его
-        // токены СЧИТАЮТСЯ в maxOutputTokens — JSON обрезался («Unterminated string
-        // at position 580») и тест уходил в failed. Объяснения по готовому ключу
-        // thinking не требуют; L1_GEN_MODEL — flash-семейство, где 0 валиден.
+        // Прод-фикс 2026-07-22: у thinking-моделей gemini-2.5-* thinking включён по
+        // умолчанию и его токены СЧИТАЮТСЯ в maxOutputTokens — JSON обрезался
+        // («Unterminated string at position 580») и тест уходил в failed. Объяснения
+        // по готовому ключу thinking не требуют; L1_GEN_MODEL — flash-семейство, где
+        // thinkingBudget:0 валиден (pro его не принимает — смена модели на pro
+        // уронит генерацию с 400 INVALID_ARGUMENT, видно в error_log).
         thinkingConfig: { thinkingBudget: 0 },
       },
-    });
-    const raw = res.text ?? "";
-    const { items } = L1ResponseSchema.parse(JSON.parse(raw)); // throws → caller handles
-    return items;
-  });
+    }),
+  );
+  const raw = res.text ?? "";
+  const { items } = L1ResponseSchema.parse(JSON.parse(raw)); // throws → caller handles
+  return items;
 }
