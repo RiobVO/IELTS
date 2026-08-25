@@ -1,7 +1,17 @@
 # IELTS Platform
 
 Premium IELTS prep — Reading & Listening core. See **[BRIEF.md](./BRIEF.md)** for
-the full product/engineering spec (single source of truth).
+the full product/engineering spec (single source of truth; where the code and the
+brief disagree, the brief wins).
+
+| Doc | What lives there |
+| --- | --- |
+| [BRIEF.md](./BRIEF.md) | Spec, stack, data model §5, security §6.1, roadmap §9 |
+| [SCHEMA_NOTES.md](./SCHEMA_NOTES.md) | Per-table provenance + RLS posture |
+| [PRACTICE_PLAN.md](./PRACTICE_PLAN.md) | The rich practice-mode track |
+| [TESTING_PLAN.md](./TESTING_PLAN.md) | Testing maturity waves and runbooks |
+| [BACKLOG.md](./BACKLOG.md) | Product backlog |
+| [CLAUDE.md](./CLAUDE.md) | Working notes: architecture, gotchas, conventions |
 
 > **Live in production.** Reading & Listening (both runners), auth, the import
 > pipeline, Vocabulary and the env-gated Writing/Speaking labs all ship. Phase
