@@ -682,3 +682,43 @@ describe("parseRunner — Inspera golden fixture (весь файл)", () => {
     expect(() => assertNoKeyLeak(out, r.parsed)).not.toThrow();
   });
 });
+
+// CDI-сборки (2026-07-26, «Volume 8 Test 6») объявляют шкалу просто как getBand(s) —
+// getBandFor40 в файле нет вовсе, поэтому bandScale выходила null и publish-гейт рубил
+// полный тест на full_missing_band_scale.
+describe("parseRunner — band из getBand (источник без getBandFor40)", () => {
+  const mk = (fn: string) =>
+    `<!doctype html><html><head><title>R</title></head><body><script>
+var correctAnswers = {"1":"TRUE","40":"FALSE"};
+${fn}
+</script></body></html>`;
+
+  it("принимает getBand как /40-шкалу", async () => {
+    const r = await parseRunner(
+      mk(`function getBand(s){ if(s>=39) return 9; if(s>=30) return 7; if(s>=15) return 5; return 2; }`),
+    );
+    expect(r.parsed.bandScale).not.toBeNull();
+    expect(Object.keys(r.parsed.bandScale!)).toHaveLength(41);
+    expect(r.parsed.bandScale!["40"]).toBe(9);
+    expect(r.parsed.bandScale!["13"]).toBe(2);
+  });
+
+  it("НЕ принимает одноимённую 13-шкалу (band 9 уже на 13 верных)", async () => {
+    // Иначе одиночный пассаж уехал бы в full_reading и давал band 9 за треть теста.
+    const r = await parseRunner(
+      mk(`function getBand(s){ if(s>=13) return 9; if(s>=10) return 7; return 3; }`),
+    );
+    expect(r.parsed.bandScale).toBeNull();
+  });
+
+  it("getBandFor40 остаётся приоритетным, когда объявлены обе", async () => {
+    const r = await parseRunner(
+      mk(
+        `function getBand(s){ return 1; }\n` +
+          `function getBandFor40(s){ if(s>=39) return 9; return 4; }`,
+      ),
+    );
+    expect(r.parsed.bandScale!["40"]).toBe(9);
+    expect(r.parsed.bandScale!["0"]).toBe(4);
+  });
+});

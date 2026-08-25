@@ -45,6 +45,28 @@ function detectSection(html: string): "listening" | "reading" {
 }
 
 /**
+ * Таблица band полного теста. Имя функции у источников разное: Inspera-канон объявляет
+ * `getBandFor40` (делегирует внутрь), а CDI-сборки — просто `getBand(s)` (2026-07-26:
+ * `Volume 8 Test 6` из-за этого не публиковался — гейт требует шкалу у full-теста).
+ *
+ * `getBand` принимается ТОЛЬКО если это действительно /40-шкала. Одноимённая legacy-
+ * функция одиночного пассажа даёт 9.0 уже на 13 правильных, и повысить её до /40 значит
+ * выдать студенту band 9 за треть теста. Дискриминатор — различает ли шкала результаты
+ * выше 13: у /40 band(13) заметно ниже band(40), у /13 они равны (плато).
+ */
+async function extractBandScale(blocks: string[]): Promise<Record<number, number> | null> {
+  const named = await extractFunctionTable(blocks, "getBandFor40", 0, 40);
+  if (named) return named;
+
+  const generic = await extractFunctionTable(blocks, "getBand", 0, 40);
+  if (!generic) return null;
+  const at = (n: number) => Number(generic[n]);
+  const top = at(40);
+  if (!Number.isFinite(top) || !Number.isFinite(at(13))) return null;
+  return at(13) < top ? generic : null;
+}
+
+/**
  * Номер одиночного пассажа из шапки стартового экрана. Клиентский Inspera-генератор
  * кладёт «Reading Passage N» в заголовок `#startScreen`/`.start-screen` (реальный пример:
  * `<div id="startScreen" class="start-screen">…<h1>Reading Passage 2</h1>`). Якорь —
@@ -145,7 +167,7 @@ async function parseReadingRunner(html: string): Promise<RunnerParseResult> {
   // /40-таблица (getBandFor40 не объявлена → globalThis.getBandFor40 undefined → null), иначе
   // одиночный пассаж уехал бы в full_reading/60m (регресс 2026-07-21). Упоминание в
   // комментарии/regex ничего не materializes — V8 не связывает несуществующую декларацию.
-  const bandScale = await extractFunctionTable(scriptBlocks(html), "getBandFor40", 0, 40);
+  const bandScale = await extractBandScale(scriptBlocks(html));
 
   // Union: an mcq-multi member may live only in mcqGroups, not in correctAnswers.
   // Фильтр положительных целых (P4): нечисловые ключи "q1" (bespoke-диалект) иначе дают
