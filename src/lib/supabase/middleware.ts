@@ -6,6 +6,12 @@ import {
   SOURCE_COOKIE_NAME,
   SOURCE_QUERY_PARAM,
 } from "@/lib/analytics/source";
+import {
+  REF_COOKIE_MAX_AGE_SECONDS,
+  REF_COOKIE_NAME,
+  REF_QUERY_PARAM,
+  sanitizeRefCode,
+} from "@/lib/referral/link";
 
 /**
  * Source-атрибуция (P5): если в query есть `?src=<slug>` и он валиден — кладём
@@ -20,6 +26,25 @@ function applySourceCookie(request: NextRequest, response: NextResponse): void {
   if (!source) return;
   response.cookies.set(SOURCE_COOKIE_NAME, source, {
     maxAge: SOURCE_COOKIE_MAX_AGE_SECONDS,
+    path: "/",
+    sameSite: "lax",
+    httpOnly: true,
+  });
+}
+
+/**
+ * Реф-ссылка (G1-5): `?ref=<code>` на ЛЮБОЙ странице кладём в first-party cookie,
+ * потому что делятся ссылкой на лендинг/share-карточку, а форма регистрации живёт
+ * на `/auth` — без этого код терялся на первом же переходе и приглашение не
+ * засчитывалось никому. Last-touch (перезаписываем), httpOnly — читает только
+ * сервер (`/auth` подставляет его в hidden-поле и в OAuth redirectTo).
+ * Невалидный/отсутствующий ref cookie не трогает: уже сохранённый код доживает до TTL.
+ */
+function applyRefCookie(request: NextRequest, response: NextResponse): void {
+  const code = sanitizeRefCode(request.nextUrl.searchParams.get(REF_QUERY_PARAM));
+  if (!code) return;
+  response.cookies.set(REF_COOKIE_NAME, code, {
+    maxAge: REF_COOKIE_MAX_AGE_SECONDS,
     path: "/",
     sameSite: "lax",
     httpOnly: true,
@@ -81,9 +106,11 @@ export async function updateSession(request: NextRequest) {
     // Метку канала сохраняем и на этом пути — иначе `?src=` на защищённом URL для
     // разлогиненного гостя терялась бы при редиректе на /auth.
     applySourceCookie(request, redirectResponse);
+    applyRefCookie(request, redirectResponse);
     return redirectResponse;
   }
 
   applySourceCookie(request, response);
+  applyRefCookie(request, response);
   return response;
 }
