@@ -67,8 +67,13 @@ export interface DailyPlan {
   allDone: boolean;
 }
 
-/** Режим по дням до экзамена: null/просрочено → generic, дальше по возрастающей срочности. */
-function intensityFor(daysUntilExam: number | null): DailyPlanIntensity {
+/**
+ * Режим по дням до экзамена: null/просрочено → generic, дальше по возрастающей
+ * срочности. Экспортируется ради exam-plan.ts (недельный ритм на дистанцию): обе
+ * карточки дашборда обязаны считать «финальную неделю» одинаково — своя копия
+ * порогов в соседнем модуле разъехалась бы при первой же правке.
+ */
+export function intensityFor(daysUntilExam: number | null): DailyPlanIntensity {
   if (daysUntilExam == null || daysUntilExam < 0) return "generic";
   if (daysUntilExam > 28) return "base";
   if (daysUntilExam >= 8) return "ramp";
