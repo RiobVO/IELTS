@@ -414,8 +414,7 @@ const Q_CSS = `
 .q-verbatim .qa-row>td{padding:0 0 10px;border:0;background:transparent}
 .q-verbatim .qa-row .qa-item{margin:0}
 .q-verbatim .qa-num{margin-bottom:4px;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
-.q-verbatim .qa-item .exam-check,.q-verbatim .qa-item .exam-fmt-hint,.q-verbatim .qa-item .exam-strategy,.q-verbatim .qa-item .exam-wtl{padding-left:0}
-.q-verbatim .qa-item .exam-strategy-list{padding-left:22px}
+.q-verbatim .qa-item .exam-check,.q-verbatim .qa-item .exam-fmt-hint,.q-verbatim .qa-item .exam-wtl{padding-left:0}
 /* Широкие таблицы вопросов скроллятся сами вместо клиппинга всей панели —
    безусловно: одноколоночный (табовый) режим раннера живёт до 1024px
    (ExamRunner min-width:1024px), а этот фикс раньше был заперт в ≤430px и не

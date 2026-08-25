@@ -4,14 +4,14 @@ import { memo, useState } from "react";
 import { Icon } from "@/components/core/icons";
 import { countWords, parseChoiceCount, parseWordLimit } from "@/lib/exam/format-guard";
 import { isAnswered } from "@/lib/exam/is-answered";
-import { strategyHints } from "@/lib/exam/strategy-hints";
 import type { RevealResult } from "../../../app/app/reading/[id]/practice-actions";
 import type { ConfidenceLevel } from "@/lib/practice/confidence-calibration";
 
 /**
  * PracticeAffordances — учебные аффордансы practice-режима ОДНОГО вопроса:
- * подсказка формата (P1), стратегия по типу (P2b), «Where to look?» ДО reveal
- * (P2b-2) и Check/Reveal/уверенность (P6/P7/P10/P14). Раньше жили инлайном в
+ * подсказка формата (P1), «Where to look?» ДО reveal (P2b-2) и
+ * Check/Reveal/уверенность (P6/P7/P10/P14). Сворачиваемая «Strategy» по типу вопроса
+ * убрана по решению владельца 2026-07-26 — рвала поток чтения панели. Раньше жили инлайном в
  * QuestionBlock (ExamRunner); вынесены сюда, чтобы ОБА пути раннера рендерили один
  * и тот же набор без дублирования:
  *  - атомизированный список (QuestionBlock) — `showNumber={false}`, номер уже на
@@ -75,8 +75,6 @@ export const PracticeAffordances = memo(function PracticeAffordances({
     <>
       {/* P1 — мягкая проверка формата (лимит слов / число выборов). */}
       <FormatHint q={q} value={value} />
-      {/* P2b — сворачиваемая стратегия по типу вопроса (zero-key). */}
-      <StrategyHint qtype={q.qtype} />
       {/* P2b-2 — локатор ДО reveal: reading (onWhereToLook задан), вопрос locatable,
           ещё не раскрыт. После reveal кнопка «Show in passage» живёт внутри
           PracticeCheck (P2b-1) → гейтим !reveal, чтобы не дублировать. */}
@@ -291,33 +289,6 @@ function RuExplanation({ text }: { text: string }) {
     </div>
   );
 }
-
-/**
- * StrategyHint (P2b) — сворачиваемая стратегия по типу вопроса. Zero-key: контент
- * зависит ТОЛЬКО от qtype (strategyHints). Свёрнут по умолчанию; стиль — рядом с
- * FormatHint. Нет буллетов (неизвестный тип) → ничего не рендерим.
- */
-const StrategyHint = memo(function StrategyHint({ qtype }: { qtype: string }) {
-  const [open, setOpen] = useState(false);
-  const bullets = strategyHints(qtype);
-  if (bullets.length === 0) return null;
-  return (
-    <div className="exam-strategy">
-      <button type="button" className="exam-strategy-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <Icon name="lightbulb" size={15} strokeWidth={2.4} />
-        <span>Strategy</span>
-        <Icon name="chevron-down" size={15} strokeWidth={2.4} className="exam-strategy-chevron" data-open={open ? "" : undefined} />
-      </button>
-      {open && (
-        <ul className="exam-strategy-list">
-          {bullets.map((b, i) => (
-            <li key={i}>{b}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-});
 
 /**
  * WhereToLook (P2b-2) — практис-кнопка «Where to look?» ДО reveal (reading). Тянет
