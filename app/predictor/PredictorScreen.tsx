@@ -15,7 +15,6 @@ import { Logo } from "@/components/core/Logo";
 import { qtypeLabel } from "@/lib/labels";
 import { formatBandRange } from "@/lib/predictor/grade";
 import type { PublicQuestion } from "@/lib/predictor/bank";
-import type { PredictorSnapshot } from "@/lib/predictor/snapshot";
 import { submitPredictor, type PredictorTeaser } from "./actions";
 
 type Stage = "intro" | "test" | "result";
@@ -28,16 +27,12 @@ export default function PredictorScreen({
 }: {
   questions: PublicQuestion[];
   passages: Record<1 | 2, { title: string; body: string }>;
-  initialSnapshot: PredictorSnapshot | null;
+  initialSnapshot: PredictorTeaser | null;
   authed: boolean;
 }) {
   const [stage, setStage] = useState<Stage>(initialSnapshot ? "result" : "intro");
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [snapshot, setSnapshot] = useState<PredictorTeaser | null>(
-    initialSnapshot
-      ? { ...initialSnapshot, hasWeak: initialSnapshot.w !== null }
-      : null,
-  );
+  const [snapshot, setSnapshot] = useState<PredictorTeaser | null>(initialSnapshot);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -119,7 +114,7 @@ export default function PredictorScreen({
           </>
         )}
 
-        {stage === "result" && snapshot && <Result snapshot={snapshot} authed={authed} />}
+        {stage === "result" && snapshot && <Result snapshot={snapshot} />}
       </main>
     </div>
   );
@@ -186,8 +181,14 @@ function QuestionBlock({
   );
 }
 
-function Result({ snapshot, authed }: { snapshot: PredictorTeaser; authed: boolean }) {
+function Result({ snapshot }: { snapshot: PredictorTeaser }) {
   const range = formatBandRange(snapshot.l, snapshot.h);
+  // Ветку выбираем по САМИМ данным, а не по пропу `authed`: если сессия истекла между
+  // рендером и отправкой, проп остаётся true, а сервер уже отвечает как гостю — и
+  // authed-ветка рисовала бы «every type clean» поверх найденной слабости
+  // (повторное ревью, §5). `w` есть → разбор; тип найден, но скрыт → приглашение;
+  // иначе честная похвала.
+  const view = snapshot.w ? "unlocked" : snapshot.hasWeak ? "locked" : "clean";
   return (
     <section style={{ textAlign: "center" }}>
       <div style={S.eyebrow}>Your indicative range</div>
@@ -200,7 +201,7 @@ function Result({ snapshot, authed }: { snapshot: PredictorTeaser; authed: boole
         gives you the real number — that&apos;s free too.
       </p>
 
-      {authed ? (
+      {view === "unlocked" ? (
         <div style={S.unlocked}>
           {snapshot.w ? (
             <>

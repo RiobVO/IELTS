@@ -33,6 +33,16 @@ function fail(message: string, extra?: Record<string, string>): never {
 // аккаунт, не отличимо от обычной перегрузки.
 const AUTH_THROTTLE_MESSAGE = "Too many attempts. Try again later.";
 
+/**
+ * Сохранить пункт назначения в redirect'е ошибки формы (повторное ревью, §4).
+ * Без этого юзер, пришедший из воронки (`/predictor` с готовым разбором в cookie) и
+ * ошибшийся паролем/капчей, терял `next` на повторе и уезжал в дефолтный `/app`.
+ * Дефолтный `/app` не пишем — URL остаётся прежним для обычного входа.
+ */
+function keepNext(next: string): Record<string, string> {
+  return next === "/app" ? {} : { next };
+}
+
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
@@ -42,7 +52,7 @@ export async function signIn(formData: FormData) {
   // Порог щедрый (10/10мин) — не задевает живого юзера, перебирающего забытый
   // пароль; отсекает только автоматизированный brute-force с одного IP.
   if (await checkAuthThrottle("login")) {
-    fail(AUTH_THROTTLE_MESSAGE, { mode: "login", email });
+    fail(AUTH_THROTTLE_MESSAGE, { mode: "login", email, ...keepNext(next) });
   }
 
   const supabase = await createClient();
@@ -55,7 +65,7 @@ export async function signIn(formData: FormData) {
     if (isEmailNotConfirmed(error.message)) {
       redirect(`/auth/check-email?email=${encodeURIComponent(email)}`);
     }
-    fail(error.message, { mode: "login", email });
+    fail(error.message, { mode: "login", email, ...keepNext(next) });
   }
 
   revalidatePath("/", "layout");
@@ -85,7 +95,7 @@ export async function signUp(formData: FormData) {
   // Cloudflare-injected hidden field.
   const captcha = String(formData.get("cf-turnstile-response") ?? "") || null;
   if (!(await verifyTurnstile(captcha))) {
-    fail("Could not verify you're human. Please try again.", { mode: "signup", email });
+    fail("Could not verify you're human. Please try again.", { mode: "signup", email, ...keepNext(next) });
   }
 
   // Signup velocity-cap (§11 anti-abuse): ограничиваем регистрации с одного IP в
@@ -103,7 +113,7 @@ export async function signUp(formData: FormData) {
       and(eq(signupThrottle.ipHash, ipHash), gte(signupThrottle.createdAt, since)),
     );
   if (exceedsSignupRate(recent?.n ?? 0)) {
-    fail("Too many sign-ups from your network. Please try again later.", { mode: "signup", email });
+    fail("Too many sign-ups from your network. Please try again later.", { mode: "signup", email, ...keepNext(next) });
   }
   await db.insert(signupThrottle).values({ ipHash });
 
@@ -130,7 +140,7 @@ export async function signUp(formData: FormData) {
       ...(ref ? { data: { ref_code: ref } } : {}),
     },
   });
-  if (error) fail(error.message, { mode: "signup", email });
+  if (error) fail(error.message, { mode: "signup", email, ...keepNext(next) });
 
   // Регистрация — авторитетное серверное событие воронки (§11), РОВНО раз на нового
   // пользователя. При включённом email-подтверждении Supabase на повторную
