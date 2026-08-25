@@ -5,8 +5,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // hold on EVERY publish path — this helper is the single chokepoint both callers share.
 const { select, update } = vi.hoisted(() => ({ select: vi.fn(), update: vi.fn() }));
 const revalidateTag = vi.hoisted(() => vi.fn());
+const probeAudioDuration = vi.hoisted(() => vi.fn());
 vi.mock("@/db", () => ({ db: { select: (...a: unknown[]) => select(...a), update: (...a: unknown[]) => update(...a) } }));
 vi.mock("next/cache", () => ({ revalidateTag }));
+// Длительность дорожки — сетевой Range-запрос; в юнит-тестах гейта подменяем.
+vi.mock("@/lib/import/audio-duration", () => ({
+  probeAudioDuration: (...a: unknown[]) => probeAudioDuration(...a),
+}));
 import { publishReviewedContentItem } from "./publish";
 
 // select #1 (content): from().where().limit(); select #2 (integrity left-join
@@ -24,6 +29,7 @@ beforeEach(() => {
   select.mockReset();
   update.mockReset();
   revalidateTag.mockReset();
+  probeAudioDuration.mockReset();
 });
 
 describe("publishReviewedContentItem", () => {
@@ -284,6 +290,80 @@ describe("publishReviewedContentItem", () => {
     const res = await publishReviewedContentItem("id1");
     expect(res).toEqual({ ok: true, title: "L" });
     expect(update).toHaveBeenCalledOnce();
+  });
+
+  // (е) 2026-07-26: наличия дорожки мало — клиент присылает аудио частями (P1–P4), и на
+  // прод уехали 4 теста с 6–16 минутами звука вместо 30 (части 2–4 непроходимы).
+  const listeningWithTrack = (track: string, durationSeconds: number | null = 1800) => {
+    select
+      .mockReturnValueOnce(
+        contentChain([
+          { reviewedAt: new Date(), title: "L", section: "listening", category: "full_listening", bandScale: { "40": 9 }, durationSeconds },
+        ]),
+      )
+      .mockReturnValueOnce(integrityChain(Array.from({ length: 40 }, (_, i) => q(1 + i, ["A"]))))
+      .mockReturnValueOnce(passagesChain([{ audioPath: track }]));
+  };
+
+  it("refuses a listening test whose audio covers only one part", async () => {
+    listeningWithTrack("https://cdn/l.mp3");
+    probeAudioDuration.mockResolvedValue({ seconds: 368, source: "mp4" }); // 6:08 при 30-минутном тесте
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({
+      ok: false,
+      reason: "listening_audio_too_short",
+      detail: "аудио 6:08 при тесте на 30:00 — похоже, залита только часть записи",
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("публикует, когда дорожка покрывает тест целиком", async () => {
+    listeningWithTrack("https://cdn/l.mp3");
+    probeAudioDuration.mockResolvedValue({ seconds: 1796, source: "xing" }); // 29:56
+    update.mockReturnValue(updateChain());
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({ ok: true, title: "L" });
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  it("пропускает запись чуть короче заявленной длительности (порог 80%, не равенство)", async () => {
+    listeningWithTrack("https://cdn/l.mp3");
+    probeAudioDuration.mockResolvedValue({ seconds: 1500, source: "cbr" }); // 25:00 из 30:00
+    update.mockReturnValue(updateChain());
+    expect(await publishReviewedContentItem("id1")).toEqual({ ok: true, title: "L" });
+  });
+
+  it("непроверяемая дорожка — fail-closed (это ровно тот случай, что гейт ловит)", async () => {
+    listeningWithTrack("https://cdn/l.mp3");
+    probeAudioDuration.mockResolvedValue(null);
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toEqual({
+      ok: false,
+      reason: "listening_audio_unverified",
+      detail: "не удалось прочитать длительность файла",
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("сетевая ошибка probe не роняет публикацию, а даёт внятный отказ", async () => {
+    listeningWithTrack("https://cdn/l.mp3");
+    probeAudioDuration.mockRejectedValue(new Error("network"));
+    const res = await publishReviewedContentItem("id1");
+    expect(res).toMatchObject({ ok: false, reason: "listening_audio_unverified" });
+  });
+
+  it("легаси-путь без http(s) не проверяется длительностью (probe не вызывается)", async () => {
+    listeningWithTrack("audio/l.mp3");
+    update.mockReturnValue(updateChain());
+    expect(await publishReviewedContentItem("id1")).toEqual({ ok: true, title: "L" });
+    expect(probeAudioDuration).not.toHaveBeenCalled();
+  });
+
+  it("без duration_seconds сверять не с чем — гейт не применяется", async () => {
+    listeningWithTrack("https://cdn/l.mp3", null);
+    update.mockReturnValue(updateChain());
+    expect(await publishReviewedContentItem("id1")).toEqual({ ok: true, title: "L" });
+    expect(probeAudioDuration).not.toHaveBeenCalled();
   });
 
   // F3-min (2026-07-12): full-тест (category full_reading/full_listening) без band-шкалы

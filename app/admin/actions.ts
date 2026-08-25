@@ -122,6 +122,17 @@ export async function setStatus(formData: FormData) {
       if (res.reason === "missing_listening_audio") {
         fail(withDetail("Can't publish: this listening test has no audio yet — attach the mp3 first."));
       }
+      if (res.reason === "listening_audio_too_short") {
+        fail(
+          withDetail(
+            "Can't publish: the audio is shorter than the test — looks like only one part was uploaded. " +
+              "Attach a single file covering all parts.",
+          ),
+        );
+      }
+      if (res.reason === "listening_audio_unverified") {
+        fail(withDetail("Can't publish: couldn't read the audio duration — re-upload the file."));
+      }
       if (res.reason === "full_missing_band_scale") {
         fail(withDetail("Can't publish: a full test needs a band scale table (getBandFor40) — fix the import first."));
       }
