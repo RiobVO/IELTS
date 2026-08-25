@@ -11,13 +11,11 @@ import { publicSiteUrl } from "@/env";
 import { captureServer } from "@/lib/analytics/server";
 import { sanitizeSource, SOURCE_COOKIE_NAME } from "@/lib/analytics/source";
 import {
-  AUTH_THROTTLE_LIMITS,
-  type AuthThrottleScope,
-  exceedsAuthThrottle,
   exceedsSignupRate,
   isHoneypotTripped,
   SIGNUP_THROTTLE_WINDOW_SECONDS,
 } from "@/lib/anti-cheat";
+import { checkIpThrottle as checkAuthThrottle } from "@/lib/anti-bot/ip-throttle";
 import { verifyTurnstile } from "@/lib/anti-bot/turnstile";
 import { isEmailNotConfirmed } from "@/lib/auth/email-confirm";
 import { logError } from "@/lib/monitoring/log-error";
@@ -34,51 +32,6 @@ function fail(message: string, extra?: Record<string, string>): never {
 // Нейтральное сообщение о троттле (§11 anti-abuse): не раскрывает, существует ли
 // аккаунт, не отличимо от обычной перегрузки.
 const AUTH_THROTTLE_MESSAGE = "Too many attempts. Try again later.";
-
-/**
- * IP/email-throttle для login/reset (§11 anti-abuse), переиспользующий signup-механизм:
- * та же таблица signup_throttle и тот же паттерн (COUNT в скользящем окне → insert
- * только если ещё не превышен), но без новой миграции под колонку scope — вместо
- * неё scope едет префиксом в самом хешируемом ключе (sha256(`${scope}:${identifier}`)),
- * поэтому счётчики login/reset/resetEmail/signup не пересекаются несмотря на общую
- * таблицу. `identifier` по умолчанию — IP звонящего; reset password дополнительно
- * зовёт с per-email identifier (см. requestPasswordReset) — общий IP за NAT (офис/
- * университет) не должен душить per-email лимит и наоборот. true → лимит исчерпан,
- * вызывающий отклоняет попытку.
- */
-async function checkAuthThrottle(scope: AuthThrottleScope, identifier?: string): Promise<boolean> {
-  const { windowSeconds } = AUTH_THROTTLE_LIMITS[scope];
-  let key = identifier;
-  if (!key) {
-    const h = await headers();
-    key = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  }
-  const ipHash = createHash("sha256").update(`${scope}:${key}`).digest("hex");
-  const since = new Date(Date.now() - windowSeconds * 1000);
-  // COUNT и INSERT атомарны под advisory-xact-lock (тот же паттерн, что trial-лейн
-  // в src/lib/exam/access.ts ~274), но здесь лок — TRY, не блокирующий: под burst'ом
-  // попыток на один и тот же ключ конкурирующие вызовы не встают в очередь ожидания
-  // (waiter держит server-connection пула PgBouncer в transaction-режиме — burst
-  // может выесть пул). Если лок занят — значит для этого же ключа прямо сейчас уже
-  // идёт другой COUNT→INSERT; не читаем устаревший count, а сразу считаем попытку
-  // throttled (fail closed — безопасно, просто отклоняем тем же нейтральным
-  // сообщением). Лок снимается на commit/rollback, не течёт через pgbouncer;
-  // ключ — ipHash (уже несёт префикс scope), не raw identifier.
-  return db.transaction(async (tx) => {
-    const [lockRow] = await tx.execute(
-      sql`select pg_try_advisory_xact_lock(hashtext(${ipHash})) as locked`,
-    );
-    const locked = Boolean((lockRow as { locked: boolean }).locked);
-    if (!locked) return true;
-    const [recent] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(signupThrottle)
-      .where(and(eq(signupThrottle.ipHash, ipHash), gte(signupThrottle.createdAt, since)));
-    const exceeded = exceedsAuthThrottle(scope, recent?.n ?? 0);
-    if (!exceeded) await tx.insert(signupThrottle).values({ ipHash });
-    return exceeded;
-  });
-}
 
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "");
