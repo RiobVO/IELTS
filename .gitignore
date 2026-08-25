@@ -78,3 +78,9 @@ npm-debug.log*
 # vitest-артефакты CI (json-отчёт floor-скрипта + coverage)
 /vitest-report.json
 /coverage/
+
+# Исходные HTML-тесты клиента (лицензионный материал) — рабочая папка импорта,
+# в репозиторий не попадают ни при каком `add -A`. Канон формата живёт в
+# src/lib/import/runner/fixtures/, туда и смотрят парсеры.
+"/HTML READING/"
+"/HTML LISTENING/"
