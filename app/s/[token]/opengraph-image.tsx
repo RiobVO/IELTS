@@ -13,6 +13,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImageResponse } from "next/og";
+import { publicSiteUrl } from "@/env";
 import { logError } from "@/lib/monitoring/log-error";
 import { shareScoreCaption, shareScoreLabel } from "@/lib/result/share-card";
 import { loadShareCard } from "./page";
@@ -44,8 +45,15 @@ async function loadFont(): Promise<ArrayBuffer | null> {
   }
 }
 
-export default async function ShareOgImage({ params }: { params: { token: string } }) {
-  const [card, fontData] = await Promise.all([loadShareCard(params.token), loadFont()]);
+export default async function ShareOgImage({
+  params,
+}: {
+  // Next 15 постепенно переводит route-параметры в промисы; `await` корректен для
+  // обеих форм, поэтому роут не сломается при переходе.
+  params: { token: string } | Promise<{ token: string }>;
+}) {
+  const { token } = await params;
+  const [card, fontData] = await Promise.all([loadShareCard(token), loadFont()]);
   const fonts = fontData
     ? [{ name: "Plus Jakarta Sans", data: fontData, weight: 800 as const, style: "normal" as const }]
     : undefined;
@@ -54,14 +62,14 @@ export default async function ShareOgImage({ params }: { params: { token: string
   // Невалидный/отозванный токен: отдаём нейтральную брендовую плашку, а не 404 —
   // «битая картинка» в чате выглядит как сломанный продукт.
   if (!card) {
-    return new ImageResponse(
+    return renderCard(
       (
         <div style={{ ...S.canvas, fontFamily }}>
           <div style={S.title}>bando</div>
           <div style={S.sub}>IELTS Reading &amp; Listening</div>
         </div>
       ),
-      { ...size, ...(fonts ? { fonts } : {}) },
+      fonts,
     );
   }
 
@@ -69,7 +77,7 @@ export default async function ShareOgImage({ params }: { params: { token: string
   const caption = shareScoreCaption(card.band);
   const skill = card.section === "listening" ? "Listening" : "Reading";
 
-  return new ImageResponse(
+  return renderCard(
     (
       <div style={{ ...S.canvas, fontFamily }}>
         <div style={S.head}>
@@ -96,8 +104,33 @@ export default async function ShareOgImage({ params }: { params: { token: string
         <div style={S.foot}>bando.study · find the type costing you points</div>
       </div>
     ),
-    { ...size, ...(fonts ? { fonts } : {}) },
+    fonts,
   );
+}
+
+type OgFonts = { name: string; data: ArrayBuffer; weight: 800; style: "normal" }[] | undefined;
+
+/**
+ * Рендер с последней страховкой. Satori — единственное место маршрута, способное
+ * упасть на данных (нестандартный глиф, отсутствующий шрифт), а упавшая og-картинка
+ * в чате выглядит как сломанный продукт. При сбое уводим на статичную брендовую
+ * картинку сайта: превью будет обобщённым, но ссылка останется живой.
+ */
+async function renderCard(element: React.ReactElement, fonts: OgFonts): Promise<Response> {
+  try {
+    return new ImageResponse(element, { ...size, ...(fonts ? { fonts } : {}) });
+  } catch (e) {
+    await logError({
+      source: "server",
+      message: `share og render failed: ${e instanceof Error ? e.message : String(e)}`,
+      stack: e instanceof Error ? e.stack : null,
+      context: { op: "shareOgRender", hasFont: !!fonts },
+    });
+    const site = publicSiteUrl();
+    return site
+      ? Response.redirect(`${site}/opengraph-image`, 302)
+      : new Response(null, { status: 204 });
+  }
 }
 
 // Satori понимает подмножество CSS: у каждого контейнера с детьми обязан быть
