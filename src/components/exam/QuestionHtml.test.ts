@@ -171,3 +171,102 @@ describe("QuestionHtml — listening q-slot типы", () => {
     expect(container.textContent).not.toContain("FALLBACK");
   });
 });
+
+// Размещение practice-аффордансов (2026-07-26). До фикса они монтировались только
+// пачкой ПОСЛЕ top-level блока: у канона клиента группа из шести вопросов — один блок,
+// поэтому шесть карточек «QUESTION N» сваливались в конец, оторванные от вопросов.
+// Теперь аффорданс живёт внутри контейнера своего вопроса, а кластер остаётся лишь для
+// вёрстки, куда блок не вставить (таблицы/списки).
+describe("QuestionHtml — размещение аффордансов", () => {
+  const aff = (seen: number[]) => (n: number) => {
+    seen.push(n);
+    return createElement("div", { className: "aff", key: n }, `AFF-${n}`);
+  };
+
+  // Канон клиента: группа-обёртка + по контейнеру `#question-N` на каждый вопрос.
+  const insperaGroup =
+    `<div class="question" id="question-group-1-3">` +
+    `<div class="question-rubric">Questions 1-3</div>` +
+    `<div class="question-content">` +
+    `<div class="tfng-question" id="question-1"><p>Statement one</p>` +
+    `<span class="q-slot" data-q="1" data-qtype="radio" data-value="TRUE"></span>` +
+    `<span class="q-slot" data-q="1" data-qtype="radio" data-value="FALSE"></span></div>` +
+    `<div class="tfng-question" id="question-2"><p>Statement two</p>` +
+    `<span class="q-slot" data-q="2" data-qtype="radio" data-value="TRUE"></span></div>` +
+    `<div class="tfng-question" id="question-3"><p>Statement three</p>` +
+    `<span class="q-slot" data-q="3" data-qtype="radio" data-value="TRUE"></span></div>` +
+    `</div></div>`;
+
+  it("аффорданс лежит ВНУТРИ контейнера своего вопроса, а не кучей в конце", () => {
+    const seen: number[] = [];
+    const container = mountWith(insperaGroup, { renderAffordances: aff(seen) });
+
+    for (const n of [1, 2, 3]) {
+      const box = container.querySelector(`#question-${n}`);
+      expect(box?.textContent).toContain(`AFF-${n}`);
+      // и ровно один — соседние вопросы свой аффорданс не притащили
+      expect(box?.querySelectorAll(".aff")).toHaveLength(1);
+    }
+    expect(container.querySelector(".qa-cluster")).toBeNull();
+    expect(seen.sort()).toEqual([1, 2, 3]);
+  });
+
+  it("порядок в DOM: каждый аффорданс идёт за своим вопросом, а не после всей группы", () => {
+    const container = mountWith(insperaGroup, { renderAffordances: aff([]) });
+    const order = Array.from(container.querySelectorAll("[id^='question-'], .aff")).map((el) =>
+      el.classList.contains("aff") ? el.textContent : el.id,
+    );
+    expect(order).toEqual([
+      "question-group-1-3",
+      "question-1", "AFF-1",
+      "question-2", "AFF-2",
+      "question-3", "AFF-3",
+    ]);
+  });
+
+  it("аффорданс садится на САМЫЙ ВЕРХНИЙ контейнер вопроса, не на вложенный вариант ответа", () => {
+    const nested =
+      `<div class="question"><div class="tfng-question" id="question-1">` +
+      `<label class="opt"><span class="q-slot" data-q="1" data-qtype="radio" data-value="TRUE"></span>TRUE</label>` +
+      `<label class="opt"><span class="q-slot" data-q="1" data-qtype="radio" data-value="FALSE"></span>FALSE</label>` +
+      `</div></div>`;
+    const container = mountWith(nested, { renderAffordances: aff([]) });
+    expect(container.querySelectorAll(".aff")).toHaveLength(1);
+    expect(container.querySelector("label.opt .aff")).toBeNull();
+  });
+
+  // Вставлять <div> внутрь <tr>/<ul> нельзя — такие вопросы остаются в общем кластере.
+  it("вопросы в таблице по-прежнему собираются в кластер после блока", () => {
+    const table =
+      `<div class="question"><table><tbody>` +
+      `<tr><td>14</td><td><span class="q-slot" data-q="14" data-qtype="radio" data-value="A"></span></td></tr>` +
+      `<tr><td>15</td><td><span class="q-slot" data-q="15" data-qtype="radio" data-value="A"></span></td></tr>` +
+      `</tbody></table></div>`;
+    const container = mountWith(table, { renderAffordances: aff([]) });
+    const cluster = container.querySelector(".qa-cluster");
+    expect(cluster).toBeTruthy();
+    expect(cluster?.textContent).toContain("AFF-14");
+    expect(cluster?.textContent).toContain("AFF-15");
+    expect(container.querySelector("tr .aff")).toBeNull();
+  });
+
+  it("смешанный блок: свой контейнер — инлайн, ячейка таблицы — в кластер (без дублей)", () => {
+    const mixed =
+      `<div class="question">` +
+      `<div class="tfng-question" id="question-1"><span class="q-slot" data-q="1" data-qtype="radio" data-value="TRUE"></span></div>` +
+      `<table><tbody><tr><td><span class="q-slot" data-q="2" data-qtype="radio" data-value="A"></span></td></tr></tbody></table>` +
+      `</div>`;
+    const container = mountWith(mixed, { renderAffordances: aff([]) });
+    expect(container.querySelector("#question-1 .aff")?.textContent).toBe("AFF-1");
+    const cluster = container.querySelector(".qa-cluster");
+    expect(cluster?.textContent).toBe("AFF-2"); // только вопрос из таблицы
+    expect(container.querySelectorAll(".aff")).toHaveLength(2); // ни одного дубля
+  });
+
+  it("mock (без renderAffordances): разметка без аффордансов и без пустых узлов", () => {
+    const container = mount(insperaGroup, vi.fn());
+    expect(container.querySelectorAll(".aff")).toHaveLength(0);
+    expect(container.querySelector(".qa-cluster")).toBeNull();
+    expect(container.querySelector("#question-1")).toBeTruthy(); // вёрстка цела
+  });
+});
