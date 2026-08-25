@@ -164,11 +164,17 @@ function slotNumbersIn(el: Element): number[] {
  * после блока, как было раньше (типичный случай — matching-таблица A–I).
  */
 const NO_INLINE_ANCHOR = new Set([
-  "table", "thead", "tbody", "tfoot", "tr", "colgroup", "col", "ul", "ol", "dl", "select",
+  "table", "thead", "tbody", "tfoot", "colgroup", "col", "ul", "ol", "dl", "select",
   // Ячейка технически принимает блок, но в matching-таблице она шириной в одну букву —
-  // карточка аффорданса разорвала бы сетку. Такие вопросы уходят в кластер под таблицей.
+  // карточка аффорданса разорвала бы сетку. Строка (`tr`) обрабатывается отдельно ниже:
+  // под неё вставляется собственная строка во всю ширину.
   "td", "th",
 ]);
+
+/** Число ячеек строки — colSpan для служебной строки с аффордансом под ней. */
+function rowCellCount(tr: Element): number {
+  return Array.from(tr.children).filter((c) => /^(td|th)$/i.test(c.tagName)).length || 1;
+}
 
 /** Единственный номер вопроса внутри элемента, иначе null (0 или несколько слотов). */
 function soleQuestionNumber(el: Element): number | null {
@@ -210,6 +216,24 @@ function convert(
   if (sole == null) return createElement(tag, props, children);
 
   anchored.add(sole);
+
+  // Строка matching-таблицы: внутрь `tr` блок не положить, поэтому аффорданс идёт
+  // СЛЕДУЮЩЕЙ строкой во всю ширину — визуально это всё равно «под своим вопросом»,
+  // в отличие от прежней кучи карточек под всей таблицей. Fragment внутри tbody даёт
+  // ровно две строки подряд.
+  if (tag === "tr") {
+    return (
+      <Fragment key={key}>
+        {createElement(tag, { ...props, key: undefined }, children)}
+        <tr className="qa-row">
+          <td colSpan={rowCellCount(el)}>
+            <AffordanceAnchor q={sole} />
+          </td>
+        </tr>
+      </Fragment>
+    );
+  }
+
   return createElement(tag, props, [
     ...children,
     <AffordanceAnchor key={`${key}.aff`} q={sole} />,
@@ -385,6 +409,10 @@ const Q_CSS = `
    расстояние задаёт gap, поэтому там его снимаем. */
 .q-verbatim .qa-item{margin:10px 0 4px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-inset)}
 .q-verbatim .qa-cluster .qa-item{margin:0}
+/* Служебная строка под вопросом matching-таблицы: рамок/фона самой таблицы не наследует,
+   карточка внутри отвечает за вид. */
+.q-verbatim .qa-row>td{padding:0 0 10px;border:0;background:transparent}
+.q-verbatim .qa-row .qa-item{margin:0}
 .q-verbatim .qa-num{margin-bottom:4px;font-family:var(--font-ui);font-size:var(--text-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
 .q-verbatim .qa-item .exam-check,.q-verbatim .qa-item .exam-fmt-hint,.q-verbatim .qa-item .exam-strategy,.q-verbatim .qa-item .exam-wtl{padding-left:0}
 .q-verbatim .qa-item .exam-strategy-list{padding-left:22px}
