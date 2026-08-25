@@ -256,6 +256,11 @@ export const contentItem = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // Момент ПЕРВОЙ публикации (migration 0059) — источник свежести для бейджа New
+    // и витрины «новое на этой неделе». Отличается от created_at (время импорта):
+    // черновик может пролежать до ревью неделями. Повторная публикация дату НЕ
+    // сдвигает (coalesce в publishTest) — переимпорт того же теста не «новинка».
+    publishedAt: timestamp("published_at", { withTimezone: true }),
   },
   (t) => [
     index("content_item_section_category_idx").on(t.section, t.category),

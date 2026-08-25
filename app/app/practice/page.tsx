@@ -13,6 +13,7 @@ import { writingFeatureEnabled, speakingFeatureEnabled } from "@/env";
 import { qtypeLabel, categoryLabel, QTYPE_LABELS, CATEGORY_LABELS, READING_CATEGORIES, LISTENING_CATEGORIES } from "@/lib/labels";
 import { aggregateWeakness, type PerTypeBreakdown, type WeaknessRow } from "@/lib/practice/weakness";
 import { computeSectionProgress } from "@/lib/practice/section-progress";
+import { isFresh, selectNewThisWeek } from "@/lib/practice/new-tests";
 import { Icon } from "@/components/core/icons";
 import { Badge } from "@/components/core/Badge";
 import { AppShell } from "../_AppShell";
@@ -255,11 +256,11 @@ export default async function PracticePage({
   const answeredById = new Map<string, number>();
   for (const ip of inProgress) answeredById.set(ip.content_item_id, countAnswers(ip.answers));
 
-  // Бейдж «New» (F15) — свежесть считаем здесь, вне unstable_cache-обёртки
-  // getPublishedTests (created_at там только сырое поле, кэш тегирован content_item
-  // и живёт до publish/revalidate — «now» внутри него протухал бы).
-  const NEW_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-  const newCutoff = Date.now() - NEW_WINDOW_MS;
+  // Бейдж «New» (F15) и витрина «новое на этой неделе» (G1-2) — свежесть считаем
+  // здесь, вне unstable_cache-обёртки getPublishedTests (published_at там только
+  // сырое поле, кэш тегирован content_item и живёт до publish/revalidate — «now»
+  // внутри него протухал бы). Мерило — дата ПУБЛИКАЦИИ (0059), не импорта.
+  const now = Date.now();
 
   const tests: PracticeTest[] = all.map(({ t, section }) => {
     const gated = !meetsTier(userTier, t.tier_required);
@@ -288,10 +289,15 @@ export default async function PracticePage({
       progress: answered != null && t.question_count > 0 ? `Resume · ${answered} / ${t.question_count}` : null,
       done: bestRaw != null && t.question_count > 0 ? `Done · ${bestRaw} / ${t.question_count}` : null,
       isWeakType: t.question_types.some((qt) => weakTypeSet.has(qt)),
-      // created_at — ISO-строка (сериализована в getPublishedTests под кэш), не Date.
-      isNew: Date.parse(t.created_at) > newCutoff,
+      // published_at — ISO-строка (сериализована в getPublishedTests под кэш), не Date.
+      isNew: isFresh(t.published_at, now),
+      publishedAt: t.published_at,
     };
   });
+
+  // Витрина «новое на этой неделе» (G1-2): свежие тесты новейшими вперёд. Пусто →
+  // PracticeCatalog не рендерит блок вообще (пустая коробка хуже её отсутствия).
+  const newThisWeek = selectNewThisWeek(tests, now);
 
   // Section progress ("Done N of M · K left" на skill-картах) — знаменатель ВЕСЬ
   // published-каталог секции (тот же набор, что даёт карте «N tests»), без
@@ -354,6 +360,7 @@ export default async function PracticePage({
     <AppShell active="practice">
       <PracticeCatalog
         tests={tests}
+        newThisWeek={newThisWeek}
         filterCategories={filterCategories}
         filterTypes={filterTypes}
         drillWeakest={drillWeakest}
