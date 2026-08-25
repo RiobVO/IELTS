@@ -674,7 +674,7 @@ export default function Home() {
             <div className="sst"><div className="n" id="sheetQ">40</div><div className="l">questions under real exam timing</div></div>
             <div className="sst"><div className="n"><span className="acc">1</span>st</div><div className="l">full mock free — watch the sheet get stamped</div></div>
           </div>
-          <p className="stnote rv">Built on real exam-format Reading &amp; Listening papers. Graded on the server, so the band you see is a band you can trust.</p>
+          <p className="stnote rv">Built on real exam-format Reading &amp; Listening papers, sat in the same Inspera-style interface as the computer-delivered exam. Graded on the server, so the band you see is a band you can trust.</p>
         </div>
       </section>
 
@@ -771,8 +771,8 @@ export default function Home() {
                 <span className="mdots"><i className="on"></i><i className="on"></i><i></i><i></i><i className="fl"></i></span>
               </span>
               <div>
-                <h3>Real exam mode</h3>
-                <p>Computer-delivered IELTS: timer, navigator, mark-for-review, highlight and notes. Reading on calm paper; single-pass Listening, exactly like exam day.</p>
+                <h3>The real exam screen</h3>
+                <p>Not a redesign of the exam — the <b>Inspera-style</b> interface itself: same layout, timer, navigator, mark-for-review, drag-and-drop, highlight and notes. Single-pass Listening, exactly like test day. Nobody else in the region hands you this.</p>
                 <span className="farr">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                 </span>
@@ -826,6 +826,80 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Траектория (G1-4): обещание «увидишь путь до своей цели». Превью —
+          СТАТИЧЕСКИЙ inline-SVG (никакого живого графика на лендинге): точки моков
+          лежат НА линии, пунктир — цель, пилюля — прогноз. */}
+      <section className="pad" id="trajectory" style={{ paddingTop: 0 }}>
+        <div className="wrap">
+          <div className="traj rv">
+            <div className="traj-copy">
+              <span className="ek">Your trajectory</span>
+              <h2>Not just today&apos;s band. <em>The line to your target.</em></h2>
+              <p>
+                Every mock lands on your curve. bando reads the slope and tells you where you&apos;ll be
+                on exam day — and what has to change if that answer isn&apos;t 7.0.
+              </p>
+              <ul className="traj-pts">
+                <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Every mock plotted against your target</li>
+                <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>A projected band, not a pep talk</li>
+                <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Says «too early to call» when it is</li>
+              </ul>
+              <a href="/auth" className="btn btn-v btn-lg">
+                Start your trajectory
+                <svg className="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </a>
+            </div>
+
+            <figure className="traj-fig">
+              <figcaption className="traj-cap">
+                <span className="traj-cap-k">Projected band</span>
+                <span className="traj-cap-v">7.0</span>
+              </figcaption>
+              {/* Ось Y: band 5.0 (y=196) → 7.5 (y=26). Точки моков — 5.5 / 6.0 / 6.0 / 6.5 / 6.5 */}
+              <svg viewBox="0 0 460 240" role="img" aria-label="Five mock scores rising from band 5.5 to 6.5, with a projection reaching the 7.0 target">
+                <defs>
+                  <linearGradient id="trajFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8170EA" stopOpacity="0.22" />
+                    <stop offset="100%" stopColor="#8170EA" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {/* сетка полос band */}
+                <g stroke="rgba(25,21,41,.075)" strokeWidth="1">
+                  <line x1="40" y1="26" x2="440" y2="26" />
+                  <line x1="40" y1="94" x2="440" y2="94" />
+                  <line x1="40" y1="162" x2="440" y2="162" />
+                  <line x1="40" y1="196" x2="440" y2="196" />
+                </g>
+                <g fontSize="11" fill="#6B6880">
+                  <text x="8" y="30">7.5</text>
+                  <text x="8" y="98">6.5</text>
+                  <text x="8" y="166">5.5</text>
+                  <text x="8" y="200">5.0</text>
+                </g>
+                {/* цель 7.0 */}
+                <line x1="40" y1="60" x2="440" y2="60" stroke="#1FBE86" strokeWidth="1.5" strokeDasharray="6 6" />
+                <text x="386" y="52" fontSize="11" fontWeight="700" fill="#0F7A50">TARGET 7.0</text>
+                {/* заливка под кривой */}
+                <path d="M70 162 L162 128 L254 128 L346 94 L400 94 L400 214 L70 214 Z" fill="url(#trajFill)" />
+                {/* сама кривая: точки лежат НА линии */}
+                <polyline points="70,162 162,128 254,128 346,94 400,94" fill="none" stroke="#8170EA" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                {/* прогноз до цели — пунктиром */}
+                <polyline points="400,94 440,60" fill="none" stroke="#8170EA" strokeWidth="3" strokeDasharray="5 7" strokeLinecap="round" opacity="0.55" />
+                <g fill="#fff" stroke="#8170EA" strokeWidth="3">
+                  <circle cx="70" cy="162" r="5.5" />
+                  <circle cx="162" cy="128" r="5.5" />
+                  <circle cx="254" cy="128" r="5.5" />
+                  <circle cx="346" cy="94" r="5.5" />
+                </g>
+                {/* последний мок — залитая точка + подпись */}
+                <circle cx="400" cy="94" r="7" fill="#6A52DE" />
+                <text x="360" y="122" fontSize="12" fontWeight="700" fill="#191529">6.5 now</text>
+              </svg>
+            </figure>
+          </div>
+        </div>
+      </section>
+
       <section className="pad" style={{ paddingTop: 0 }}>
         <div className="wrap">
           <div className="close">
@@ -834,7 +908,7 @@ export default function Home() {
             {/* соцдоказательство без числа тестов в каталоге — каталог сейчас перезаливается с нуля */}
             <ul className="close-pts">
               <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>No card</li>
-              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Real exam-format papers · new tests added weekly</li>
+              <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Real exam-format papers in the real Inspera-style screen</li>
               <li><svg className="ci ico" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Server-graded band</li>
             </ul>
             <a href="/auth" className="btn btn-v btn-lg">

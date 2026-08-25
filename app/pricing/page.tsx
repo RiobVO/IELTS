@@ -8,7 +8,7 @@ import PricingScreen from "../app/upgrade/PricingScreen";
 export const metadata: Metadata = {
   title: "Pricing | bando",
   description:
-    "Start free with capped daily practice and weekly mock tests. Upgrade to Premium for unlimited Reading & Listening plus AI Writing feedback.",
+    "Sit IELTS Reading & Listening in the real Inspera-style exam interface. Start free with capped daily practice and weekly mock tests; upgrade to Premium for unlimited Reading & Listening plus AI Writing feedback.",
 };
 
 const headLink: React.CSSProperties = {

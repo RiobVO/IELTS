@@ -85,7 +85,7 @@ const FAQ = [
   { q: "Is this a subscription?", a: "No — each plan is a one-time purchase for the period you pick, with no auto-renew. There's nothing to cancel: your access runs until the end of the paid period, then you're back on the free plan unless you buy again." },
   { q: "What's the difference between free and paid?", a: "Reading & Listening — including full 40-question mock tests with an official band score, the per-type breakdown, and full answer explanations — are free on Basic, capped at 2 practice starts a day and 2 mock starts a week, no card needed. Every friend you invite who finishes a test raises that weekly mock cap by 1 for both of you (up to +3). Upgrading removes the caps entirely and adds AI Writing feedback (AI Speaking too on Ultra)." },
   { q: "Premium vs Ultra?", a: "Premium removes the Basic practice/mock caps and adds AI Writing feedback (5 checks a day). Ultra adds AI Speaking feedback for Part 2 and raises Writing to 20 checks a day — everything in Premium included." },
-  { q: "Are the tests like the real IELTS?", a: "Yes — real Cambridge material in a runner that mirrors the computer-delivered exam: same interface, timer, drag-and-drop." },
+  { q: "Are the tests like the real IELTS?", a: "You sit them in the exam interface itself — the Inspera-style screen used for computer-delivered IELTS, rendered as-is rather than redesigned: same layout, timer, navigator, mark-for-review, drag-and-drop, highlight and notes. The papers are real exam-format Reading & Listening." },
   { q: "How accurate is the band?", a: "Reading & Listening use the official Cambridge band scale. Writing is scored by AI on the 4 official criteria as a coaching estimate to guide practice — not an official score. AI Speaking on Ultra works the same way." },
   { q: "What payment methods work?", a: "Local cards and payment providers — the exact options appear at checkout once paid plans launch." },
   { q: "Can I switch plans?", a: "Yes. Buy the same tier again and the extra time stacks onto what's left. Switch to a different tier and a fresh period starts from your payment — time isn't prorated." },
@@ -183,7 +183,7 @@ export default function PricingScreen({
 
       {/* Trust line */}
       <div style={S.trust}>
-        {["No auto-renew", "Local cards & payment providers", "Reading & Listening practice free"].map((t) => (
+        {["No auto-renew", "Real Inspera-style exam interface", "Reading & Listening practice free"].map((t) => (
           <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
             <Icon name="circle-check" size={15} style={{ color: "var(--success-text)" }} /> {t}
           </span>
