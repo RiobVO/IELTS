@@ -114,7 +114,7 @@ export default function PredictorScreen({
           </>
         )}
 
-        {stage === "result" && snapshot && <Result snapshot={snapshot} />}
+        {stage === "result" && snapshot && <Result snapshot={snapshot} authed={authed} />}
       </main>
     </div>
   );
@@ -181,14 +181,15 @@ function QuestionBlock({
   );
 }
 
-function Result({ snapshot }: { snapshot: PredictorTeaser }) {
+function Result({ snapshot, authed }: { snapshot: PredictorTeaser; authed: boolean }) {
   const range = formatBandRange(snapshot.l, snapshot.h);
-  // Ветку выбираем по САМИМ данным, а не по пропу `authed`: если сессия истекла между
-  // рендером и отправкой, проп остаётся true, а сервер уже отвечает как гостю — и
-  // authed-ветка рисовала бы «every type clean» поверх найденной слабости
-  // (повторное ревью, §5). `w` есть → разбор; тип найден, но скрыт → приглашение;
-  // иначе честная похвала.
-  const view = snapshot.w ? "unlocked" : snapshot.hasWeak ? "locked" : "clean";
+  // Три честных состояния. Гейтнутые ДАННЫЕ решает только `snapshot` (истёкшая
+  // сессия оставляет проп `authed` устаревшим, и ветвление по нему рисовало бы
+  // «every type clean» поверх найденной слабости — повторное ревью, §5). Проп нужен
+  // лишь чтобы выбрать CTA для чистой пробы: зарегистрированному предлагаем мок, а
+  // не регистрацию (третий раунд: `clean` у залогиненного проваливался в
+  // signup-блок). Ошибка в пропе меняет максимум призыв к действию, не данные.
+  const view = snapshot.w ? "unlocked" : authed && !snapshot.hasWeak ? "clean" : "locked";
   return (
     <section style={{ textAlign: "center" }}>
       <div style={S.eyebrow}>Your indicative range</div>
@@ -201,7 +202,7 @@ function Result({ snapshot }: { snapshot: PredictorTeaser }) {
         gives you the real number — that&apos;s free too.
       </p>
 
-      {view === "unlocked" ? (
+      {view === "unlocked" || view === "clean" ? (
         <div style={S.unlocked}>
           {snapshot.w ? (
             <>

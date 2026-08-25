@@ -1,21 +1,19 @@
-// Разбор cookie-снимка пробы (G1-6). Граница доверия: значение приходит из
-// браузера и идёт прямиком в рендер — «свой формат» тут не значит «валидный».
+// Cookie-снимок пробы (G1-6). Граница доверия: значение приходит из браузера и идёт
+// в грейдер и в рендер — «свой формат» тут не значит «валидный». Отдельно фиксируем
+// главный инвариант: в cookie уходят ОТВЕТЫ, а не посчитанный слабый тип.
 import { describe, it, expect } from "vitest";
-import { parsePredictorCookie, toTeaser } from "./snapshot";
+import {
+  parsePredictorCookie,
+  serializePredictorCookie,
+  toTeaser,
+} from "./snapshot";
 
 describe("parsePredictorCookie", () => {
-  it("валидный снимок разбирается", () => {
-    expect(parsePredictorCookie('{"c":7,"t":10,"w":"tfng","l":6,"h":6.5}')).toEqual({
-      c: 7,
-      t: 10,
-      w: "tfng",
-      l: 6,
-      h: 6.5,
+  it("валидные ответы разбираются", () => {
+    expect(parsePredictorCookie('{"1":"TRUE","4":"eighteen"}')).toEqual({
+      "1": "TRUE",
+      "4": "eighteen",
     });
-  });
-
-  it("идеальная проба без слабого типа", () => {
-    expect(parsePredictorCookie('{"c":10,"t":10,"w":null,"l":7.5,"h":8.5}')?.w).toBeNull();
   });
 
   it("отсутствующая/битая cookie → null, а не исключение", () => {
@@ -24,19 +22,33 @@ describe("parsePredictorCookie", () => {
     expect(parsePredictorCookie("{not json")).toBeNull();
     expect(parsePredictorCookie("[]")).toBeNull();
     expect(parsePredictorCookie("null")).toBeNull();
+    expect(parsePredictorCookie("{}")).toBeNull();
   });
 
-  it("невозможные числа отвергаются целиком", () => {
-    expect(parsePredictorCookie('{"c":11,"t":10,"w":null,"l":6,"h":6.5}')).toBeNull(); // верных больше, чем всего
-    expect(parsePredictorCookie('{"c":-1,"t":10,"w":null,"l":6,"h":6.5}')).toBeNull();
-    expect(parsePredictorCookie('{"c":5,"t":0,"w":null,"l":6,"h":6.5}')).toBeNull();
-    expect(parsePredictorCookie('{"c":5,"t":10,"w":null,"l":6,"h":5}')).toBeNull(); // верх ниже низа
-    expect(parsePredictorCookie('{"c":5,"t":10,"w":null,"l":6,"h":42}')).toBeNull(); // band вне шкалы
-    expect(parsePredictorCookie('{"c":"7","t":"ten","w":null,"l":6,"h":6.5}')).toBeNull();
+  it("ключи не-номера и не-строковые значения отбрасываются", () => {
+    expect(parsePredictorCookie('{"1":"TRUE","w":"tfng","2":42,"__proto__":"x"}')).toEqual({
+      "1": "TRUE",
+    });
   });
 
-  it("пустой слабый тип нормализуется в null (а не в пустую подпись)", () => {
-    expect(parsePredictorCookie('{"c":5,"t":10,"w":"","l":5.5,"h":6}')?.w).toBeNull();
+  it("длинные значения обрезаются, лишние пары отсекаются (cookie-бомба)", () => {
+    const long = parsePredictorCookie(JSON.stringify({ "1": "x".repeat(500) }));
+    expect(long!["1"]!.length).toBeLessThanOrEqual(80);
+
+    const many: Record<string, string> = {};
+    for (let i = 1; i <= 60; i++) many[String(i)] = "TRUE";
+    expect(Object.keys(parsePredictorCookie(JSON.stringify(many))!).length).toBeLessThanOrEqual(20);
+  });
+
+  it("сериализация и разбор — обратимая пара", () => {
+    const answers = { "1": "TRUE", "10": "doubled" };
+    expect(parsePredictorCookie(serializePredictorCookie(answers))).toEqual(answers);
+  });
+
+  it("в cookie не попадает ничего, кроме ответов (слабый тип там больше не живёт)", () => {
+    const raw = serializePredictorCookie({ "1": "TRUE", "2": "FALSE" });
+    expect(raw).not.toContain("tfng");
+    expect(raw).not.toMatch(/"w"/);
   });
 });
 
