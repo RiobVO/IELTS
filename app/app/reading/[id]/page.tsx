@@ -200,9 +200,6 @@ export default async function ReadingTestPage({
     id,
     existing ? null : modeParam,
     isDraftPreview, // adminDraftBypass — только когда isAdmin уже подтверждён выше
-    // Реферальный бонус к недельному mock-капу (G1-1) — из уже прочитанного профиля;
-    // авторитетное значение перечитывается под row-lock внутри startAttempt.
-    (profile as { referral_cap_bonus?: number } | null)?.referral_cap_bonus ?? 0,
   );
 
   // Серверная истина «это listening-тест» для грейдинг-семантики choose-TWO в

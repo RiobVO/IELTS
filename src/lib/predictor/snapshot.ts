@@ -47,3 +47,30 @@ export function parsePredictorCookie(raw: string | null | undefined): PredictorS
   const w = typeof o.w === "string" && o.w !== "" ? o.w : null;
   return { c, t, w, l, h };
 }
+
+/** Что из снимка позволено отдать браузеру. `w` — только залогиненному. */
+export interface PredictorTeaserView {
+  c: number;
+  t: number;
+  l: number;
+  h: number;
+  w: string | null;
+  hasWeak: boolean;
+}
+
+/**
+ * Проекция снимка под ответ клиенту (Codex-ревью G1-6, P2). Гейт воронки обещает
+ * название слабого типа ТОЛЬКО после регистрации — значит гостю его нельзя класть
+ * и в сетевой ответ, иначе обещание обходится одним взглядом в DevTools. Гостю
+ * остаётся факт «слабый тип найден», нужный честному копирайту.
+ */
+export function toTeaser(snapshot: PredictorSnapshot, authed: boolean): PredictorTeaserView {
+  return {
+    c: snapshot.c,
+    t: snapshot.t,
+    l: snapshot.l,
+    h: snapshot.h,
+    w: authed ? snapshot.w : null,
+    hasWeak: snapshot.w !== null,
+  };
+}

@@ -1,7 +1,7 @@
 // Разбор cookie-снимка пробы (G1-6). Граница доверия: значение приходит из
 // браузера и идёт прямиком в рендер — «свой формат» тут не значит «валидный».
 import { describe, it, expect } from "vitest";
-import { parsePredictorCookie } from "./snapshot";
+import { parsePredictorCookie, toTeaser } from "./snapshot";
 
 describe("parsePredictorCookie", () => {
   it("валидный снимок разбирается", () => {
@@ -37,5 +37,33 @@ describe("parsePredictorCookie", () => {
 
   it("пустой слабый тип нормализуется в null (а не в пустую подпись)", () => {
     expect(parsePredictorCookie('{"c":5,"t":10,"w":"","l":5.5,"h":6}')?.w).toBeNull();
+  });
+});
+
+describe("toTeaser", () => {
+  const snap = { c: 6, t: 10, w: "matching_headings", l: 5.5, h: 6 };
+
+  it("гостю НЕ отдаёт название слабого типа, только факт находки", () => {
+    const view = toTeaser(snap, false);
+    expect(view.w).toBeNull();
+    expect(view.hasWeak).toBe(true);
+    expect(JSON.stringify(view)).not.toContain("matching_headings");
+  });
+
+  it("залогиненному отдаёт тип целиком", () => {
+    expect(toTeaser(snap, true).w).toBe("matching_headings");
+  });
+
+  it("идеальная проба: слабого типа нет ни у кого", () => {
+    const clean = { ...snap, w: null };
+    expect(toTeaser(clean, true).hasWeak).toBe(false);
+    expect(toTeaser(clean, false).hasWeak).toBe(false);
+  });
+
+  it("счёт и границы диапазона видны обоим — это не гейтится", () => {
+    for (const authed of [true, false]) {
+      const v = toTeaser(snap, authed);
+      expect([v.c, v.t, v.l, v.h]).toEqual([6, 10, 5.5, 6]);
+    }
   });
 });

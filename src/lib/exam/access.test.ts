@@ -45,6 +45,11 @@ vi.mock("next/server", () => ({
 }));
 
 import { dayStartUtc, enforceAccess, loadAccessData, startAttempt, weekStartUtc } from "./access";
+import {
+  BASIC_MOCK_WEEKLY_LIMIT,
+  BASIC_PRACTICE_DAILY_LIMIT,
+  REFERRAL_MOCK_BONUS_MAX,
+} from "@/lib/tiers";
 
 // (a) profile/count-запросы: .from().where() -> Promise<rows>.
 const whereChain = (rows: unknown[]) => ({ from: () => ({ where: () => Promise.resolve(rows) }) });
@@ -80,7 +85,7 @@ afterEach(async () => {
 describe("enforceAccess", () => {
   it("published-тест + достаточный tier -> доступ, без redirect и без запросов к БД", async () => {
     await expect(
-      enforceAccess("u1", "premium", "premium", "full_reading", "item1", "mock", false, 0),
+      enforceAccess("u1", "premium", "premium", "full_reading", "item1", "mock", false),
     ).resolves.toBeUndefined();
     expect(redirectFn).not.toHaveBeenCalled();
     expect(select).not.toHaveBeenCalled();
@@ -89,7 +94,7 @@ describe("enforceAccess", () => {
   it("tier ниже required, не-trial (одиночный пассаж) -> redirect на /app/upgrade", async () => {
     // passage_1 не входит в FULL_CATEGORIES -> trial-лейн неприменим, БД не читаем.
     await expect(
-      enforceAccess("u1", "basic", "premium", "passage_1", "item1", null, false, 0),
+      enforceAccess("u1", "basic", "premium", "passage_1", "item1", null, false),
     ).rejects.toThrow("REDIRECT:/app/upgrade");
     expect(redirectFn).toHaveBeenCalledWith("/app/upgrade");
     expect(select).not.toHaveBeenCalled();
@@ -97,11 +102,11 @@ describe("enforceAccess", () => {
 
   // Owner decision 2026-07-17: R/L контент бесплатен для всех тиров — 25/день mock-
   // only кап заменён на 2 practice/день + 2 mock/неделю, суммарно по R+L.
-  it("Basic mock weekly-cap исчерпан -> redirect на /app/practice?limit=mock", async () => {
+  it("Basic mock weekly-cap исчерпан за пределом бонуса -> redirect на /app/practice?limit=mock", async () => {
     // meetsTier(basic,basic) истинно -> ветка (a) пропущена целиком, читаем только кап.
-    select.mockReturnValueOnce(whereChain([{ n: 2 }]));
+    select.mockReturnValueOnce(whereChain([{ n: 5 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false, 0),
+      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=mock");
     expect(redirectFn).toHaveBeenCalledWith("/app/practice?limit=mock");
     // Зеркало practice-ассерта ниже (см. access.ts:217) — weekly-отказ тоже обязан
@@ -112,7 +117,7 @@ describe("enforceAccess", () => {
   it("Basic practice daily-cap исчерпан -> redirect на /app/practice?limit=practice", async () => {
     select.mockReturnValueOnce(whereChain([{ n: 2 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false, 0),
+      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=practice");
     expect(redirectFn).toHaveBeenCalledWith("/app/practice?limit=practice");
     // Отказ по капу обязан оставлять телеметрический след — иначе он невидим (§11).
@@ -122,52 +127,49 @@ describe("enforceAccess", () => {
   it("Basic practice: 1-й и 2-й старт проходят (n=0, n=1 < лимита 2), 3-й режется (n=2)", async () => {
     select.mockReturnValueOnce(whereChain([{ n: 0 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false, 0),
+      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
     ).resolves.toBeUndefined();
 
     select.mockReturnValueOnce(whereChain([{ n: 1 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false, 0),
+      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
     ).resolves.toBeUndefined();
 
     select.mockReturnValueOnce(whereChain([{ n: 2 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false, 0),
+      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=practice");
   });
 
-  it("Basic mock: 1-й и 2-й старт за неделю проходят, 3-й режется", async () => {
-    select.mockReturnValueOnce(whereChain([{ n: 0 }]));
-    await expect(
-      enforceAccess("u1", "basic", "basic", "full_listening", "item1", "mock", false, 0),
-    ).resolves.toBeUndefined();
+  it("Basic mock: старты в пределах максимального лимита проходят, за ним — режутся", async () => {
+    for (const n of [0, 1, 4]) {
+      select.mockReturnValueOnce(whereChain([{ n }]));
+      await expect(
+        enforceAccess("u1", "basic", "basic", "full_listening", "item1", "mock", false),
+      ).resolves.toBeUndefined();
+    }
 
-    select.mockReturnValueOnce(whereChain([{ n: 1 }]));
+    select.mockReturnValueOnce(whereChain([{ n: 5 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_listening", "item1", "mock", false, 0),
-    ).resolves.toBeUndefined();
-
-    select.mockReturnValueOnce(whereChain([{ n: 2 }]));
-    await expect(
-      enforceAccess("u1", "basic", "basic", "full_listening", "item1", "mock", false, 0),
+      enforceAccess("u1", "basic", "basic", "full_listening", "item1", "mock", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=mock");
   });
 
   it("Premium/Ultra не капается ни на practice, ни на mock — ветка (b) вообще не читает БД", async () => {
     await expect(
-      enforceAccess("u1", "premium", "basic", "part_1", "item1", "practice", false, 0),
+      enforceAccess("u1", "premium", "basic", "part_1", "item1", "practice", false),
     ).resolves.toBeUndefined();
     expect(select).not.toHaveBeenCalled();
 
     await expect(
-      enforceAccess("u1", "ultra", "basic", "full_listening", "item1", "mock", false, 0),
+      enforceAccess("u1", "ultra", "basic", "full_listening", "item1", "mock", false),
     ).resolves.toBeUndefined();
     expect(select).not.toHaveBeenCalled();
   });
 
   it("резюм существующей попытки (mode=null) не расходует кап — ветка (b) не читает БД, даже для Basic", async () => {
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_reading", "item1", null, false, 0),
+      enforceAccess("u1", "basic", "basic", "full_reading", "item1", null, false),
     ).resolves.toBeUndefined();
     expect(select).not.toHaveBeenCalled();
     expect(redirectFn).not.toHaveBeenCalled();
@@ -178,7 +180,7 @@ describe("enforceAccess", () => {
       .mockReturnValueOnce(trialChain([])) // hasConsumedTrial -> ничего не найдено -> не израсходован
       .mockReturnValueOnce(whereChain([{ n: 0 }])); // недельный mock-кап далеко не исчерпан
     await expect(
-      enforceAccess("u1", "basic", "premium", "full_reading", "item1", "mock", false, 0),
+      enforceAccess("u1", "basic", "premium", "full_reading", "item1", "mock", false),
     ).resolves.toBeUndefined();
     expect(redirectFn).not.toHaveBeenCalled();
   });
@@ -190,32 +192,43 @@ describe("enforceAccess", () => {
     // hasConsumedTrial находит расход (попытка на другом/сданном full-тесте) -> deny.
     select.mockReturnValueOnce(trialChain([{ id: "a1" }]));
     await expect(
-      enforceAccess("u1", "basic", "premium", "full_reading", "item1", "mock", false, 0),
+      enforceAccess("u1", "basic", "premium", "full_reading", "item1", "mock", false),
     ).rejects.toThrow("REDIRECT:/app/upgrade");
     expect(redirectFn).toHaveBeenCalledWith("/app/upgrade");
     // Дневной кап после deny не читается — redirect бросает до ветки (b).
     expect(select).toHaveBeenCalledTimes(1);
   });
 
-  // G1-1: реферальный бонус поднимает ИМЕННО недельный mock-кап. Soft-чек обязан
-  // считать по тому же поднятому лимиту — иначе приглашавший ловил бы ложный отказ
-  // ещё до транзакции, где авторитетная проверка его бы пропустила.
-  it("mock-кап с реферальным бонусом +1: n=2 проходит, n=3 режется", async () => {
-    select.mockReturnValueOnce(whereChain([{ n: 2 }]));
+  // G1-1 + Codex-ревью P1: soft-чек НЕ знает фактического бонуса юзера (снапшот
+  // профиля мог отстать от только что закоммиченной награды) и судит по максимально
+  // возможному лимиту. Он обязан пропускать всё, что теоретически укладывается в
+  // база+потолок, и отсекать лишь заведомо обречённое — решение принимает
+  // транзакционная проверка в startAttempt.
+  it("mock: ранний чек не отказывает, пока расход укладывается в база+потолок бонуса", async () => {
+    select.mockReturnValueOnce(whereChain([{ n: BASIC_MOCK_WEEKLY_LIMIT }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false, 1),
+      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false),
     ).resolves.toBeUndefined();
 
-    select.mockReturnValueOnce(whereChain([{ n: 3 }]));
+    select.mockReturnValueOnce(whereChain([{ n: BASIC_MOCK_WEEKLY_LIMIT + REFERRAL_MOCK_BONUS_MAX - 1 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false, 1),
+      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false),
+    ).resolves.toBeUndefined();
+  });
+
+  it("mock: за пределом ЛЮБОГО бонуса ранний чек всё ещё отсекает", async () => {
+    select.mockReturnValueOnce(
+      whereChain([{ n: BASIC_MOCK_WEEKLY_LIMIT + REFERRAL_MOCK_BONUS_MAX }]),
+    );
+    await expect(
+      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=mock");
   });
 
-  it("реферальный бонус НЕ поднимает дневной practice-кап", async () => {
-    select.mockReturnValueOnce(whereChain([{ n: 2 }]));
+  it("practice-кап потолком бонуса НЕ поднимается", async () => {
+    select.mockReturnValueOnce(whereChain([{ n: BASIC_PRACTICE_DAILY_LIMIT }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false, 3),
+      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=practice");
   });
 
@@ -223,7 +236,7 @@ describe("enforceAccess", () => {
     // Тир заведомо недостаточен (basic < ultra) и кап заведомо исчерпан был бы —
     // bypass обязан отсечь ОБЕ проверки до первого select.
     await expect(
-      enforceAccess("u1", "basic", "ultra", "full_reading", "item1", "mock", true, 0),
+      enforceAccess("u1", "basic", "ultra", "full_reading", "item1", "mock", true),
     ).resolves.toBeUndefined();
     expect(redirectFn).not.toHaveBeenCalled();
     expect(select).not.toHaveBeenCalled();
@@ -231,12 +244,7 @@ describe("enforceAccess", () => {
 });
 
 describe("loadAccessData", () => {
-  const profileRow = (role: string) => ({
-    tier: "basic",
-    premiumUntil: null,
-    role,
-    referralCapBonus: 2, // G1-1: едет тем же чтением profile, что тир
-  });
+  const profileRow = (role: string) => ({ tier: "basic", premiumUntil: null, role });
   const itemRow = (status: string) => ({
     tierRequired: "basic",
     category: "passage_1",
@@ -267,15 +275,6 @@ describe("loadAccessData", () => {
       .mockReturnValueOnce(whereChain([itemRow("published")]));
     const res = await loadAccessData("u1", "item1");
     expect(res?.adminDraftBypass).toBe(false);
-  });
-
-  it("отдаёт реферальный бонус из profile (G1-1) — submit-гейт не делает второй запрос", async () => {
-    select
-      .mockReturnValueOnce(whereChain([profileRow("student")]))
-      .mockReturnValueOnce(whereChain([itemRow("published")]));
-    const res = await loadAccessData("u1", "item1");
-    expect(res?.referralCapBonus).toBe(2);
-    expect(select).toHaveBeenCalledTimes(2); // profile + content_item, ничего сверх
   });
 });
 

@@ -110,10 +110,6 @@ export default async function ExamPage({
   const userTier = profile
     ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
     : "basic";
-  // Реферальный бонус к недельному mock-капу (G1-1) — из уже прочитанного профиля,
-  // без отдельного запроса; авторитетно перечитывается под локом в startAttempt.
-  const referralCapBonus =
-    (profile as { referral_cap_bonus?: number } | null)?.referral_cap_bonus ?? 0;
   // F4: admin-preview форсирует practice БЕЗУСЛОВНО — и для новой попытки, и для
   // резюма. Резюмируемая mock-попытка конвертится в practice ПРЯМО В БД: submit
   // читает attempt.mode из БД (shouldRateAttempt рейтингует mock), поэтому
@@ -154,7 +150,6 @@ export default async function ExamPage({
     id,
     existing ? null : modeParam,
     isDraftPreview, // adminDraftBypass — только когда isAdmin уже подтверждён выше
-    referralCapBonus,
   );
 
   // Practice → атомизированный раннер (стратегия A), если тесту есть на чём жить:
