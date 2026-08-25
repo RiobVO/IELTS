@@ -8,7 +8,7 @@ import { attempt as attemptTable, contentItem } from "@/db/schema";
 import { FULL_CATEGORIES, isFullCategory, trialConsumedBy, type TrialAttemptRow } from "@/lib/exam/trial";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { getPublishedTests } from "@/lib/content/published";
-import { effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
+import { effectiveTier, meetsTier, mockWeeklyLimit, type Tier } from "@/lib/tiers";
 import { writingFeatureEnabled, speakingFeatureEnabled } from "@/env";
 import { qtypeLabel, categoryLabel, QTYPE_LABELS, CATEGORY_LABELS, READING_CATEGORIES, LISTENING_CATEGORIES } from "@/lib/labels";
 import { aggregateWeakness, type PerTypeBreakdown, type WeaknessRow } from "@/lib/practice/weakness";
@@ -370,6 +370,9 @@ export default async function PracticePage({
         speakingEnabled={speakingFeatureEnabled()}
         initialFilter={initialFilter}
         notice={notice}
+        mockLimit={mockWeeklyLimit(
+          (profile as { referral_cap_bonus?: number } | null)?.referral_cap_bonus ?? 0,
+        )}
         telegramChannelUrl={telegramChannelUrl}
       />
       {/* Weak spots (OwnC) — над ссылкой mistakes: чипы слабейших типов, тап ведёт

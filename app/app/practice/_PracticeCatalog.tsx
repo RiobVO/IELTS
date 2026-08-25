@@ -142,6 +142,7 @@ export function PracticeCatalog({
   speakingEnabled = false,
   initialFilter,
   notice,
+  mockLimit,
   telegramChannelUrl,
 }: {
   tests: PracticeTest[];
@@ -172,6 +173,9 @@ export function PracticeCatalog({
   /** Почему отбросило в практику: Basic practice/day или mock/week кап, либо throttle
    *  сабмита. null = без баннера. */
   notice?: "limit-practice" | "limit-mock" | "throttled" | null;
+  /** Эффективный недельный mock-кап (база + реферальный бонус, G1-1) — для честного
+   *  текста баннера. Считает сервер той же формулой, что и гейт. */
+  mockLimit: number;
   /** Student Telegram channel (TELEGRAM_CHANNEL_URL) — CTA on the empty-catalog
    *  funnel. null when unset => that CTA is simply not rendered. */
   telegramChannelUrl: string | null;
@@ -296,7 +300,7 @@ export function PracticeCatalog({
       <style>{CSS}</style>
 
       {/* Почему отбросило сюда: дневной лимит / throttle (URL-driven, ?limit/?throttled) */}
-      {notice && <CatalogNotice kind={notice} dismissHref="/app/practice" />}
+      {notice && <CatalogNotice kind={notice} dismissHref="/app/practice" mockLimit={mockLimit} />}
 
       {/* Header + hero. Левая колонка — контекст (что это + твоя цель); правая —
           «твой следующий ход»: доминирующий hero-CTA + вторичный drill-чип. */}

@@ -20,7 +20,7 @@ import { db } from "@/db";
 import { attempt, contentItem, profile, trialClaim } from "@/db/schema";
 import { captureServer } from "@/lib/analytics/server";
 import { isAdminProfile } from "@/lib/auth";
-import { BASIC_PRACTICE_DAILY_LIMIT, BASIC_MOCK_WEEKLY_LIMIT, effectiveTier, meetsTier, type Tier } from "@/lib/tiers";
+import { BASIC_PRACTICE_DAILY_LIMIT, effectiveTier, meetsTier, mockWeeklyLimit, type Tier } from "@/lib/tiers";
 import { FULL_CATEGORIES, isFullCategory, trialAllows } from "./trial";
 
 /** Режим попытки (P0): серверная сущность, выбирается ДО создания attempt. */
@@ -71,6 +71,9 @@ export async function loadAccessData(
   tierRequired: Tier;
   category: string;
   bandScale: Record<string, number> | null;
+  /** Реферальный бонус к недельному mock-капу (0058, G1-1) — едет тем же чтением
+   *  profile, что и тир, чтобы submit-гейт не делал второй round-trip. */
+  referralCapBonus: number;
   /** true только когда юзер — admin И тест ещё не опубликован (F4). Сигнал для
    *  enforceAccess: QA-прогон черновика вне монетизации (тир/дневной кап
    *  неприменимы к тесту, который ещё не продаётся). Никогда true для студента
@@ -79,7 +82,12 @@ export async function loadAccessData(
 } | null> {
   const [[prof], [item]] = await Promise.all([
     db
-      .select({ tier: profile.tier, premiumUntil: profile.premiumUntil, role: profile.role })
+      .select({
+        tier: profile.tier,
+        premiumUntil: profile.premiumUntil,
+        role: profile.role,
+        referralCapBonus: profile.referralCapBonus,
+      })
       .from(profile)
       .where(eq(profile.id, userId)),
     db
@@ -103,6 +111,7 @@ export async function loadAccessData(
     tierRequired: item.tierRequired,
     category: item.category,
     bandScale: (item.bandScale as Record<string, number> | null) ?? null,
+    referralCapBonus: prof.referralCapBonus ?? 0,
     adminDraftBypass: admin && item.status !== "published",
   };
 }
@@ -139,7 +148,15 @@ export async function enforceAccess(
    * торгуют, бессмысленно — пропускаем тир И оба капа целиком. Никогда true
    * для студента или опубликованного теста, поэтому обычный путь не меняется.
    */
-  adminDraftBypass = false,
+  adminDraftBypass: boolean,
+  /**
+   * Реферальный бонус к недельному mock-капу (0058, G1-1). ОБЯЗАТЕЛЬНЫЙ параметр,
+   * без дефолта: дефолт `0` тихо занижал бы лимит у юзера с приглашёнными друзьями,
+   * и он получал бы ЛОЖНЫЙ отказ на честном старте — ровно та ошибка, которую
+   * забытый аргумент обязан ловить компилятором (тот же довод, что у userTier в
+   * startAttempt). Caller берёт значение из уже прочитанного profile.
+   */
+  referralCapBonus: number,
 ): Promise<void> {
   if (adminDraftBypass) return;
 
@@ -212,7 +229,10 @@ export async function enforceAccess(
             lt(attempt.startedAt, weekEnd),
           ),
         );
-      if ((usage?.n ?? 0) >= BASIC_MOCK_WEEKLY_LIMIT) {
+      // Кап с реферальным бонусом (G1-1): база + приглашённые друзья, потолок в
+      // mockWeeklyLimit. Бонус приходит от caller'а из уже прочитанного profile —
+      // авторитетное значение всё равно перечитывается под row-lock в startAttempt.
+      if ((usage?.n ?? 0) >= mockWeeklyLimit(referralCapBonus)) {
         // cap_hit — зеркало practice-ветки выше (см. комментарий там).
         after(() => captureServer("cap_hit", userId, { mode: "mock", scope: "weekly", check: "soft" }));
         redirect("/app/practice?limit=mock");
@@ -414,7 +434,16 @@ export async function startAttempt(
     // transaction that can lock both tables is what actually prevents a
     // deadlock — two transactions racing in OPPOSITE lock orders is the classic
     // deadlock shape, not a risk either transaction alone would show.
-    await tx.select({ id: profile.id }).from(profile).where(eq(profile.id, userId)).limit(1).for("update");
+    // Реферальный бонус к mock-капу (0058, G1-1) читается ЭТИМ ЖЕ locked-select'ом:
+    // значение приезжает из строки, которую транзакция только что залочила, поэтому
+    // оно не может разъехаться с конкурентным начислением награды (maybeRewardReferral
+    // обновляет ту же строку и ждёт этот лок), и стоит ноль лишних round-trip'ов.
+    const [lockedProfile] = await tx
+      .select({ id: profile.id, referralCapBonus: profile.referralCapBonus })
+      .from(profile)
+      .where(eq(profile.id, userId))
+      .limit(1)
+      .for("update");
 
     // Re-check under the lock (Codex review 2026-07-17, minor #3): every start
     // for THIS user — any item — is now serialized behind the profile lock
@@ -492,7 +521,10 @@ export async function startAttempt(
     // so it's safe under transaction-mode pooling the same way trial_claim's
     // ON CONFLICT already is.
     if (needsCapCheck) {
-      const limit = modeIfNew === "practice" ? BASIC_PRACTICE_DAILY_LIMIT : BASIC_MOCK_WEEKLY_LIMIT;
+      const limit =
+        modeIfNew === "practice"
+          ? BASIC_PRACTICE_DAILY_LIMIT
+          : mockWeeklyLimit(lockedProfile?.referralCapBonus ?? 0);
       const now = new Date();
       const windowStart = modeIfNew === "practice" ? dayStartUtc(now) : weekStartUtc(now);
       const windowDays = modeIfNew === "practice" ? 1 : 7;

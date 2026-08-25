@@ -1,7 +1,15 @@
 // Юнит-тесты гейтинга тарифов (BRIEF §4.8). effectiveTier зависит от времени →
 // фейк-таймеры (без реальных часов, иначе кейсы «будущее/прошлое» недетерминированы).
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { effectiveTier, meetsTier, hasFullReview, REVIEW_OPEN } from "./tiers";
+import {
+  effectiveTier,
+  meetsTier,
+  hasFullReview,
+  mockWeeklyLimit,
+  BASIC_MOCK_WEEKLY_LIMIT,
+  REFERRAL_MOCK_BONUS_MAX,
+  REVIEW_OPEN,
+} from "./tiers";
 
 describe("effectiveTier", () => {
   // Фиксированные даты строятся из ISO-строк (не зависят от реальных часов),
@@ -88,5 +96,33 @@ describe("hasFullReview", () => {
     // фиксируют сам гейт независимо от текущего значения REVIEW_OPEN.
     expect(hasFullReview("basic", false)).toBe(false);
     expect(hasFullReview("premium", false)).toBe(true);
+  });
+});
+
+/**
+ * Реферальный бонус к недельному mock-капу (G1-1). Формулу делят авторитетный гейт
+ * (startAttempt под row-lock), soft-чек и весь UI-копирайт — расхождение здесь
+ * означало бы либо ложный отказ приглашавшему, либо враньё в интерфейсе.
+ */
+describe("mockWeeklyLimit", () => {
+  it("без приглашённых — ровно базовый кап", () => {
+    expect(mockWeeklyLimit(0)).toBe(BASIC_MOCK_WEEKLY_LIMIT);
+  });
+
+  it("каждый активированный друг добавляет ровно +1", () => {
+    expect(mockWeeklyLimit(1)).toBe(BASIC_MOCK_WEEKLY_LIMIT + 1);
+    expect(mockWeeklyLimit(2)).toBe(BASIC_MOCK_WEEKLY_LIMIT + 2);
+  });
+
+  it("потолок держит: бонус выше REFERRAL_MOCK_BONUS_MAX не растит кап дальше", () => {
+    const ceiling = BASIC_MOCK_WEEKLY_LIMIT + REFERRAL_MOCK_BONUS_MAX;
+    expect(mockWeeklyLimit(REFERRAL_MOCK_BONUS_MAX)).toBe(ceiling);
+    expect(mockWeeklyLimit(REFERRAL_MOCK_BONUS_MAX + 50)).toBe(ceiling);
+  });
+
+  it("мусорный вход не может опустить кап ниже базы", () => {
+    expect(mockWeeklyLimit(-5)).toBe(BASIC_MOCK_WEEKLY_LIMIT);
+    expect(mockWeeklyLimit(Number.NaN)).toBe(BASIC_MOCK_WEEKLY_LIMIT);
+    expect(mockWeeklyLimit(1.9)).toBe(BASIC_MOCK_WEEKLY_LIMIT + 1); // дробь усекается
   });
 });

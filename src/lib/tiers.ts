@@ -21,6 +21,27 @@ export const BASIC_PRACTICE_DAILY_LIMIT = 2;
 export const BASIC_MOCK_WEEKLY_LIMIT = 2;
 
 /**
+ * Реферальная награда = подъём капа (growth-волна 1, G1-1): каждый приглашённый,
+ * дошедший до rated-первой попытки, даёт +1 mock-старт/неделю ОБЕИМ сторонам пары
+ * (прежняя награда — только XP — в продукт не двигала). Потолок нужен, чтобы пачка
+ * приглашений не выдавала де-факто безлимит и не съедала повод уйти в Premium.
+ * Дневной practice-кап награда не трогает: узкое горлышко — именно 2 mock/неделю.
+ */
+export const REFERRAL_MOCK_BONUS_MAX = 3;
+
+/**
+ * Эффективный недельный кап mock-стартов Basic: база + реферальный бонус,
+ * клампнутый в [0, REFERRAL_MOCK_BONUS_MAX]. ОДНА формула на всех потребителей —
+ * авторитетный гейт под row-lock (startAttempt), soft-чек (enforceAccess) и
+ * UI-копирайт (CatalogNotice/pricing), иначе они разъедутся. Мусорный вход
+ * (NaN/отрицательное из битой строки) не может ни поднять, ни опустить базу.
+ */
+export function mockWeeklyLimit(referralCapBonus: number): number {
+  const bonus = Number.isFinite(referralCapBonus) ? Math.trunc(referralCapBonus) : 0;
+  return BASIC_MOCK_WEEKLY_LIMIT + Math.min(Math.max(bonus, 0), REFERRAL_MOCK_BONUS_MAX);
+}
+
+/**
  * Basic-tier daily cap on NEW vocab cards introduced per day (SRS anti-cram, Vocab
  * plan). Premium/Ultra are unlimited. Only NEW cards (no progress row yet) count —
  * reviews of already-seen cards are never capped. Enforced server-side (owner-path

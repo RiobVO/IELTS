@@ -62,8 +62,13 @@ import { startAttempt } from "@/lib/exam/access";
 import { finalizeSubmit } from "@/lib/exam/finalize-submit";
 import { isNextRedirectError } from "@/lib/exam/is-redirect-error";
 import { applyPostSubmit } from "@/lib/progress/apply-post-submit";
-import { maybeRewardReferral } from "@/lib/progress/referral";
-import { BASIC_MOCK_WEEKLY_LIMIT, BASIC_PRACTICE_DAILY_LIMIT } from "@/lib/tiers";
+import { maybeRewardReferral, REFERRAL_REWARD } from "@/lib/progress/referral";
+import {
+  BASIC_MOCK_WEEKLY_LIMIT,
+  BASIC_PRACTICE_DAILY_LIMIT,
+  REFERRAL_MOCK_BONUS_MAX,
+  mockWeeklyLimit,
+} from "@/lib/tiers";
 import { db } from "@/db";
 
 // Свой raw-клиент для сида/инспекции — ОТДЕЛЬНО от app-пула @/db под тестом (тот
@@ -136,10 +141,32 @@ async function profileFacts(userId: string): Promise<{
   xp: number;
   rating: number;
   ratedCount: number;
+  /** Реферальный бонус к недельному mock-капу (0058, G1-1). */
+  referralCapBonus: number;
 }> {
-  const [row] = await sql<{ xp: number; rating: number; rated_count: number }[]>`
-    SELECT xp, rating, rated_count FROM profile WHERE id = ${userId}`;
-  return { xp: row!.xp, rating: row!.rating, ratedCount: row!.rated_count };
+  const [row] = await sql<
+    { xp: number; rating: number; rated_count: number; referral_cap_bonus: number }[]
+  >`SELECT xp, rating, rated_count, referral_cap_bonus FROM profile WHERE id = ${userId}`;
+  return {
+    xp: row!.xp,
+    rating: row!.rating,
+    ratedCount: row!.rated_count,
+    referralCapBonus: row!.referral_cap_bonus,
+  };
+}
+
+/** Проставить реферальный бонус напрямую (эмуляция уже начисленных наград). */
+async function setCapBonus(userId: string, bonus: number): Promise<void> {
+  await sql`UPDATE profile SET referral_cap_bonus = ${bonus} WHERE id = ${userId}`;
+}
+
+/** mock-попытки «на этой неделе» для набивания недельного капа. */
+async function seedMockThisWeek(userId: string, contentItemId: string, n: number): Promise<void> {
+  for (let i = 0; i < n; i++) {
+    await sql`
+      INSERT INTO attempt (user_id, content_item_id, mode, status, started_at)
+      VALUES (${userId}, ${contentItemId}, 'mock', 'submitted', now())`;
+  }
 }
 
 async function countRows(table: string, where: string, ...params: unknown[]): Promise<number> {
@@ -303,6 +330,56 @@ describe("Basic-кап на старты (транзакционный, под r
     expect(await countRows("attempt", "user_id = $1 AND content_item_id = $2", userId, fresh)).toBe(0);
   });
 
+  // ── Реферальный бонус к недельному mock-капу (G1-1) ──────────────────────
+  it("бонус +1 поднимает недельный mock-кап: старт №3 проходит, №4 отбивается", async () => {
+    const userId = await seedUser();
+    await setCapBonus(userId, 1); // один активированный друг
+    const spent = await seedContent();
+    await seedMockThisWeek(userId, spent, BASIC_MOCK_WEEKLY_LIMIT); // база израсходована
+
+    // Третий старт (база 2 + бонус 1) обязан пройти — прежний код отбил бы его.
+    const fresh = await seedContent();
+    const ok = await startAttempt(userId, fresh, "mock", false, null, "basic");
+    expect(ok.attemptId).toBeTruthy();
+
+    // Четвёртый — уже за поднятым лимитом.
+    const beyond = await seedContent();
+    const err = await startAttempt(userId, beyond, "mock", false, null, "basic").catch((e) => e);
+    expect(isNextRedirectError(err)).toBe(true);
+    expect((err as { digest: string }).digest).toContain("limit=mock");
+    expect(await countRows("attempt", "user_id = $1 AND mode = 'mock'", userId)).toBe(
+      mockWeeklyLimit(1),
+    );
+  });
+
+  it("бонус НЕ протекает в дневной practice-кап (награда только про mock)", async () => {
+    const userId = await seedUser();
+    await setCapBonus(userId, REFERRAL_MOCK_BONUS_MAX);
+    const spent = await seedContent();
+    await seedPracticeToday(userId, spent, BASIC_PRACTICE_DAILY_LIMIT);
+
+    const fresh = await seedContent();
+    const err = await startAttempt(userId, fresh, "practice", false, null, "basic").catch((e) => e);
+    expect(isNextRedirectError(err)).toBe(true);
+    expect((err as { digest: string }).digest).toContain("limit=practice");
+  });
+
+  it("гонка на границе поднятого капа: 4 одновременных mock при бонусе +1 → ровно 3 строки", async () => {
+    // Авторитетная проверка читает бонус ИЗ ЗАЛОЧЕННОЙ строки profile; если бы она
+    // брала базовую константу, победителей было бы 2, а если бы бонус читался вне
+    // лока — гонка могла бы пробить лимит.
+    const userId = await seedUser();
+    await setCapBonus(userId, 1);
+    const items = await Promise.all([seedContent(), seedContent(), seedContent(), seedContent()]);
+
+    const results = await Promise.allSettled(
+      items.map((id) => startAttempt(userId, id, "mock", false, null, "basic")),
+    );
+
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(mockWeeklyLimit(1)); // 3
+    expect(await countRows("attempt", "user_id = $1", userId)).toBe(mockWeeklyLimit(1));
+  });
+
   it("premium лимитом НЕ гейтится: 4 одновременных старта → 4 attempt, 0 отказов", async () => {
     const userId = await seedUser();
     const items = await Promise.all([seedContent(), seedContent(), seedContent(), seedContent()]);
@@ -457,9 +534,13 @@ describe("Конкурентный referral reward", () => {
     const [ref] = await sql<{ status: string; reward: string | null }[]>`
       SELECT status, reward FROM referral WHERE invitee_id = ${invitee}`;
     expect(ref!.status).toBe("rewarded");
-    expect(ref!.reward).toBe("xp:inviter=100,invitee=50");
+    expect(ref!.reward).toBe(REFERRAL_REWARD);
     expect((await profileFacts(inviter)).xp).toBe(100);
     expect((await profileFacts(invitee)).xp).toBe(50);
+    // G1-1: кап поднят РОВНО на +1 каждому, несмотря на 8 параллельных вызовов —
+    // единственный источник истины тут тот же single-fire claim, что и у XP.
+    expect((await profileFacts(inviter)).referralCapBonus).toBe(1);
+    expect((await profileFacts(invitee)).referralCapBonus).toBe(1);
     // Уведомления пишутся синхронно (не under after): ровно два, по одному на юзера.
     expect(await countRows("notification", "kind = 'referral'")).toBe(2);
     expect(await countRows("notification", "user_id = $1 AND kind = 'referral'", inviter)).toBe(1);
@@ -483,6 +564,23 @@ describe("Конкурентный referral reward", () => {
       SELECT status FROM referral WHERE invitee_id = ${invitee}`;
     expect(ref!.status).toBe("rewarded");
     expect((await profileFacts(inviter)).xp).toBe(100);
+    expect((await profileFacts(inviter)).referralCapBonus).toBe(1);
+  });
+
+  it("бонус не перепрыгивает потолок: N+2 награждённых пары → ровно REFERRAL_MOCK_BONUS_MAX", async () => {
+    // Потолок живёт в SQL (LEAST внутри UPDATE), а не в JS-чтении: иначе
+    // конкурентные награды по разным парам могли бы его обойти.
+    const inviter = await seedUser();
+    const invitees = await Promise.all(
+      Array.from({ length: REFERRAL_MOCK_BONUS_MAX + 2 }, () => seedUser()),
+    );
+    for (const invitee of invitees) await seedReferral(inviter, invitee);
+
+    await Promise.all(invitees.map((invitee) => maybeRewardReferral(invitee, true)));
+
+    expect((await profileFacts(inviter)).referralCapBonus).toBe(REFERRAL_MOCK_BONUS_MAX);
+    // XP при этом продолжает капать за каждого — потолок только у кап-бонуса.
+    expect((await profileFacts(inviter)).xp).toBe(100 * (REFERRAL_MOCK_BONUS_MAX + 2));
   });
 });
 

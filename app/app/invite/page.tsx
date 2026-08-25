@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { publicSiteUrl } from "@/env";
 import { getProfile, requireUser } from "@/lib/auth";
+import { effectiveTier, mockWeeklyLimit, REFERRAL_MOCK_BONUS_MAX, type Tier } from "@/lib/tiers";
 import { createClient } from "@/lib/supabase/server";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { AppShell } from "../_AppShell";
@@ -42,6 +43,16 @@ export default async function InvitePage() {
   const invited = rows.length;
   const activated = rows.filter((r) => r.status === "rewarded").length;
 
+  // Что реально даёт награда прямо сейчас (G1-1): у Basic — поднятый недельный кап
+  // mock-стартов, у платных тиров кап не применяется вовсе, и обещать им «+1» было
+  // бы враньём. Считаем ту же формулу, что и гейт (mockWeeklyLimit).
+  const tier = profile
+    ? effectiveTier(profile as { tier: Tier; premium_until: string | Date | null })
+    : "basic";
+  const bonus = (profile as { referral_cap_bonus?: number } | null)?.referral_cap_bonus ?? 0;
+  const mockLimitLabel =
+    tier === "basic" ? `${mockWeeklyLimit(bonus)}/week` : "unlimited";
+
   return (
     <AppShell active="profile">
       <style>{`.inv-wrap{padding:22px 16px 40px}.inv-card{padding:20px}@media(min-width:560px){.inv-wrap{padding:30px 28px 48px}.inv-card{padding:28px}}.mob-back{display:none}@media(max-width:430px){.mob-back{display:block;margin-bottom:10px}}`}</style>
@@ -51,7 +62,7 @@ export default async function InvitePage() {
           <Button variant="ghost" size="sm" icon="arrow-left" href="/app">Home</Button>
         </div>
         <h1 style={S.h1}>Invite a friend</h1>
-        <p style={S.lead}>Once a friend finishes their first test, you both earn XP.</p>
+        <p style={S.lead}>Once a friend finishes their first test, you both get an extra mock test every week — for good.</p>
 
         <div className="inv-card" style={S.invite}>
           <div aria-hidden="true" style={S.glow} />
@@ -61,11 +72,11 @@ export default async function InvitePage() {
               <span style={S.title}>Your invite link</span>
             </div>
             <p style={S.text}>
-              Every friend who finishes their first test earns you <b style={{ color: "var(--surface-premium-ink)" }}>+100 XP</b>, and gives them <b style={{ color: "var(--surface-premium-ink)" }}>+50 XP</b> to start.
+              Every friend who finishes their first test raises your weekly mock limit by <b style={{ color: "var(--surface-premium-ink)" }}>+1</b> — theirs too — up to <b style={{ color: "var(--surface-premium-ink)" }}>+{REFERRAL_MOCK_BONUS_MAX}</b>. You also earn +100 XP, they get +50 XP to start.
             </p>
             <InviteLink url={url} />
             <div style={S.stats}>
-              Invited: {invited} · Activated: {activated}
+              Invited: {invited} · Activated: {activated} · Mock starts: {mockLimitLabel}
             </div>
           </div>
         </div>
