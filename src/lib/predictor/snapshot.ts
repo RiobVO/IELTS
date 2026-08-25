@@ -60,6 +60,9 @@ export function parsePredictorCookie(raw: string | null | undefined): PredictorA
     return null;
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  // Валидный объект = проба БЫЛА, даже если ответов в ней ноль. Раньше пустой набор
+  // трактовался как «пробы нет», и юзер, отправивший форму без ответов, терял свой
+  // (пусть и нулевой) результат на перезагрузке.
   const answers: PredictorAnswers = {};
   let n = 0;
   for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
@@ -69,7 +72,7 @@ export function parsePredictorCookie(raw: string | null | undefined): PredictorA
     answers[key] = value.slice(0, MAX_ANSWER_LEN);
     n++;
   }
-  return n > 0 ? answers : null;
+  return answers;
 }
 
 /** Сериализация ответов в cookie (та же форма, что читает parse). */

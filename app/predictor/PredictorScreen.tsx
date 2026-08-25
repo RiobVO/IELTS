@@ -107,7 +107,14 @@ export default function PredictorScreen({
               <span style={S.progressText}>
                 {answered} of {questions.length} answered
               </span>
-              <Button size="lg" onClick={submit} disabled={pending} trailingIcon="arrow-right">
+              {/* Пустая отправка не несёт смысла ни юзеру (нулевой результат), ни
+                  системе (расход IP-троттла) — требуем хотя бы один ответ. */}
+              <Button
+                size="lg"
+                onClick={submit}
+                disabled={pending || answered === 0}
+                trailingIcon="arrow-right"
+              >
                 {pending ? "Scoring…" : "See my band range"}
               </Button>
             </div>
