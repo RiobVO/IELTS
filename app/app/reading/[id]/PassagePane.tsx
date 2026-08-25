@@ -435,7 +435,7 @@ export const PassagePane = memo(function PassagePane({
   const surface = effTheme === "sepia" ? "color-mix(in oklab, var(--gold-500) 13%, var(--paper-light))" : "var(--reading-surface)";
 
   return (
-    <div ref={paneRef} className={className} style={{ ...S.pane, background: surface }}>
+    <div ref={paneRef} className={`pp-pane ${className ?? ""}`} style={{ ...S.pane, background: surface }}>
       <style>{PASSAGE_CSS}</style>
 
       {/* reading progress */}
@@ -563,6 +563,9 @@ export const PassagePane = memo(function PassagePane({
 });
 
 const PASSAGE_CSS = `
+/* Containing block для абсолютных слоёв подсветки/заметок. Переопределяется на sticky
+   в practice-раскладке (ExamRunner, [data-flow="page"]) — потому и не инлайн. */
+.pp-pane{position:relative}
 .bando-reading.editorial{font-family:var(--font-reading);color:var(--reading-text);line-height:var(--pp-lh,1.75);font-size:var(--pp-font,18px)}
 .bando-reading.editorial p{margin:0 0 1.15em;position:relative}
 .bando-reading.editorial em{font-style:italic}
@@ -647,7 +650,9 @@ const PASSAGE_CSS = `
 `;
 
 const S = {
-  pane: { minWidth: 0, flexDirection: "column", borderRight: "1px solid var(--border)", position: "relative" } as React.CSSProperties,
+  // position живёт в CSS (.pp-pane), не инлайном: practice-раскладка делает панель
+  // sticky медиа-правилом, а инлайн-стиль медиа-запрос не переиграет.
+  pane: { minWidth: 0, flexDirection: "column", borderRight: "1px solid var(--border)" } as React.CSSProperties,
   progressTop: { height: 3, background: "color-mix(in oklab, var(--reading-rule) 70%, transparent)", flex: "none" } as React.CSSProperties,
   masthead: { maxWidth: 900, margin: "0 auto", textAlign: "center" } as React.CSSProperties,
   overline: { fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--brand)", fontWeight: 700 } as React.CSSProperties,

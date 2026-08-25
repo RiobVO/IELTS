@@ -1466,7 +1466,9 @@ export default function ExamRunner({
 
             {/* Questions pane (навигатор вынесен в нижнюю полосу) */}
             <div className="exam-pane exam-pane-q" style={S.qPane}>
-              <div ref={qScrollRef} className="exam-qscroll" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+              {/* flex/overflow — в .exam-qscroll (CSS): practice-раскладка снимает
+                  внутренний скролл медиа-правилом, инлайн его не переиграл бы. */}
+              <div ref={qScrollRef} className="exam-qscroll" style={{ minHeight: 0 }}>
               {questionsHtml ? (
                 <QuestionHtml
                   html={questionsHtml}
@@ -2304,7 +2306,7 @@ const READING_CSS = `
 /* Тело ответа/подсказок вопроса: отступ 39px (qNum 28 + gap 11) выравнивает контент
    под промпт на десктопе; на телефоне он съедал ~11% ширины → зануляем ниже (≤640). */
 .exam-q-body{padding-left:39px}
-.exam-qscroll{padding:12px 20px 28px}
+.exam-qscroll{flex:1;overflow-y:auto;padding:12px 20px 28px}
 .exam-split[data-pane="passage"] .exam-pane-q{display:none}
 .exam-split[data-pane="questions"] .exam-pane-p{display:none}
 /* Правый кластер шапки: wrap-контейнер с двумя nowrap-детьми → максимум 2 ряда на
@@ -2374,7 +2376,7 @@ const READING_CSS = `
 }
 /* Внутренние скроллы снимаем на любой ширине: на телефоне панели переключаются табами,
    и вложенный скролл там мешает так же. */
-.exam-cambridge[data-flow="page"] .exam-qscroll{overflow:visible}
+.exam-cambridge[data-flow="page"] .exam-qscroll{flex:none;overflow-y:visible}
 
 /* Тап-таргеты ≥44px — на факте touch-ввода, не только на узких телефонах:
    иначе планшеты/landscape-телефоны (431-1023px) остаются с мелкими целями. */
