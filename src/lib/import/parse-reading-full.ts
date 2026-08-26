@@ -365,6 +365,39 @@ export async function parseFullReading(html: string): Promise<ParsedTest> {
     }
   });
 
+  // MCQ "choose TWO": чекбокс-группа, номера — ДИАПАЗОНОМ в id охватывающего блока
+  // («<div class="question" id="question-25-26">»). Ни .mcq-block, ни data-mcq-group
+  // здесь нет, поэтому оба обработчика выше эту форму не видели, и номера пропадали
+  // из атомизации — а строгий гейт mergeAtomization из-за двух потерянных вопросов
+  // отменял practice-вид всего теста (Volume 6 Test 3 на проде, 2026-08-07).
+  //
+  // Тип и ключ НЕ проставляем: в источнике эта группа описана по-вопросно
+  // (correctAnswers 25:'B', 26:'E', questionTypes «Multiple Choice»), и общий проход
+  // ниже разложит их правильно. Здесь — только презентация: формулировка и варианты.
+  $(".mcq-checkbox-group").each((_, el) => {
+    const $el = $(el);
+    const $block = $el.closest(".question");
+    const nums = expandNumberRange($block.attr("id") ?? $el.find("input[name]").first().attr("name") ?? "");
+    if (nums.length === 0) return;
+
+    // Последний абзац рубрики — сам вопрос; предыдущие несут инструкцию («Write the
+    // correct letters in boxes…»), которая вопросом не является.
+    const prompt = $block.find(".question-rubric p").last().text().replace(/\s+/g, " ").trim();
+    const options: ParsedOption[] = $el
+      .find('input[type="checkbox"]')
+      .toArray()
+      .map((c) => {
+        const value = $(c).attr("value") ?? "";
+        const label = $(c).closest("label").text().replace(/\s+/g, " ").trim();
+        return { value, label: label || value };
+      });
+
+    for (const num of nums) {
+      if (byNumber.has(num)) continue;
+      byNumber.set(num, blank(num, partOf(el), prompt, options));
+    }
+  });
+
   // MCQ "choose TWO" (checkbox group, data-correct holds the letter set)
   $(".mc-question[data-mcq-group]").each((_, el) => {
     const $el = $(el);
@@ -519,6 +552,24 @@ function warnEmptyPrompt(
 
 function isMultiChoiceSetLabel(label: string): boolean {
   return /multiple\s+choice/i.test(label) && /(two|three|answers)/i.test(label);
+}
+
+/**
+ * Номера вопросов из токена вида «question-25-26» / «mcq-25-26»: границы диапазона
+ * РАЗВОРАЧИВАЮТСЯ (25, 26). Обычное `replace(/\D+/g,"")` склеило бы их в 2526 —
+ * ровно из-за этого чекбокс-группа с диапазоном в id теряла оба вопроса.
+ * Одиночный номер («question-7») возвращается как есть; мусор — пустым списком.
+ */
+function expandNumberRange(token: string): number[] {
+  const parts = token.match(/\d+/g)?.map((n) => Number.parseInt(n, 10)) ?? [];
+  if (parts.length === 0) return [];
+  const from = Math.min(...parts);
+  const to = Math.max(...parts);
+  // Санитарный потолок: диапазон длиннее теста — это не нумерация, а случайные цифры.
+  if (to - from > 40) return [];
+  const out: number[] = [];
+  for (let n = from; n <= to; n++) out.push(n);
+  return out;
 }
 
 function blank(
