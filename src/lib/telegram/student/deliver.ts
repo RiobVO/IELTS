@@ -24,6 +24,20 @@ export function practiceUrl(): string | null {
   return origin ? `${origin}/app/practice?src=tg_bot` : null;
 }
 
+/** Максимум символов на кнопке: длинные подписи Telegram обрезает сам, но по своим
+ *  правилам и без многоточия — лучше решить это самим и предсказуемо. */
+const MAX_BUTTON_LABEL = 60;
+
+/**
+ * Подпись кнопки. Когда значение и текст различаются (matching_headings: «iii» и
+ * сам заголовок), показываем оба — иначе человек видит список одинаковых римских
+ * цифр или, наоборот, текст без метки, которую ждёт экзамен.
+ */
+export function buttonLabel(value: string, label: string): string {
+  const full = value === label ? label : `${value} — ${label}`;
+  return full.length <= MAX_BUTTON_LABEL ? full : `${full.slice(0, MAX_BUTTON_LABEL - 1)}…`;
+}
+
 export async function deliverQuestion(
   token: string,
   chatId: number,
@@ -45,7 +59,7 @@ export async function deliverQuestion(
       chatId,
       text,
       q.options.map((opt, i) => ({
-        text: opt,
+        text: buttonLabel(opt.value, opt.label),
         data: buildDailyQuestionCallback({
           contentItemId: q.contentItemId,
           questionNumber: q.questionNumber,

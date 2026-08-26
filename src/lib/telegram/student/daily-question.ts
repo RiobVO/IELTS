@@ -23,6 +23,12 @@ import { stripHtml } from "@/lib/result/debrief";
  * закрывает повтор по-прежнему /app/practice/mistakes.
  */
 
+/** Вариант ответа: `label` человеку на кнопку, `value` — то, что грейдится. */
+export interface DailyQuestionOption {
+  label: string;
+  value: string;
+}
+
 export interface DailyQuestion {
   contentItemId: string;
   questionNumber: number;
@@ -30,14 +36,35 @@ export interface DailyQuestion {
   /** Текст вопроса без разметки — Telegram не рендерит наш HTML. */
   prompt: string;
   /** Варианты для кнопок; null — вопрос со свободным вводом. */
-  options: string[] | null;
+  options: DailyQuestionOption[] | null;
   testTitle: string;
 }
 
-/** Варианты вопроса из jsonb-поля: только массив строк, всё прочее — «нет вариантов». */
-function parseOptions(raw: unknown): string[] | null {
+/**
+ * Варианты из jsonb-поля `question.options`. Формат исторически ДВОЯКИЙ: импорт
+ * пишет объекты `{label, value}` (matching_headings хранит «i» отдельно от текста
+ * заголовка), а часть источников — простые строки. Живая проверка на проде поймала
+ * именно это: разбор, знавший только строки, молча отдавал null, и вопрос с выбором
+ * превращался в «угадай, что напечатать» (для matching_headings — угадай римскую
+ * цифру). Поэтому принимаем обе формы, а несовпадающее считаем «нет вариантов».
+ */
+export function parseOptions(raw: unknown): DailyQuestionOption[] | null {
   if (!Array.isArray(raw)) return null;
-  const opts = raw.filter((o): o is string => typeof o === "string" && o.trim() !== "");
+  const opts: DailyQuestionOption[] = [];
+  for (const o of raw) {
+    if (typeof o === "string") {
+      if (o.trim() !== "") opts.push({ label: o, value: o });
+      continue;
+    }
+    if (o && typeof o === "object") {
+      const rec = o as Record<string, unknown>;
+      const value = typeof rec.value === "string" ? rec.value : null;
+      const label = typeof rec.label === "string" ? rec.label : null;
+      // value — то, что сверяется с ключом; без него вариант бесполезен, даже
+      // если подпись есть. При отсутствии подписи показываем само значение.
+      if (value && value.trim() !== "") opts.push({ label: label?.trim() || value, value });
+    }
+  }
   return opts.length > 0 ? opts : null;
 }
 
