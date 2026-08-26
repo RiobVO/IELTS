@@ -51,6 +51,12 @@ export async function deliverQuestion(
     hasOptions: q.options != null,
   });
 
+  // Ожидание ставим ДЛЯ ЛЮБОГО вопроса, не только для свободного ввода: оно же
+  // служит признаком «на этот вопрос ещё не отвечали». Первое нажатие забирает его
+  // атомарно, поэтому повторные тапы по тем же кнопкам вердикта уже не дают.
+  // До отправки, а не после: callback от быстрого пальца приходит через миллисекунды.
+  await setPendingQuestion(userId, q.contentItemId, q.questionNumber);
+
   if (q.options) {
     // По кнопке на вариант; значение ответа берётся на сервере по индексу, поэтому
     // в callback_data едут только идентификаторы (лимит Telegram — 64 байта).
@@ -69,7 +75,6 @@ export async function deliverQuestion(
     );
   }
 
-  // Свободный ввод: запоминаем, чего ждём, — следующий текст станет ответом.
-  await setPendingQuestion(userId, q.contentItemId, q.questionNumber);
+  // Свободный ввод: ожидание уже поставлено выше — следующий текст станет ответом.
   return sendStudentMessage(token, chatId, text);
 }

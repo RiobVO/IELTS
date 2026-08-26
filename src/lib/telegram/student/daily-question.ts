@@ -172,6 +172,28 @@ export async function pickDailyQuestion(userId: string): Promise<DailyPick> {
   return { question: null, dueTotal: candidates.length };
 }
 
+/**
+ * Варианты конкретного вопроса — для разбора нажатия на кнопку. Значение ответа
+ * восстанавливается на сервере по индексу: в 64 байта callback_data текст ответа
+ * не влезает, да и доверять содержимому кнопки, пришедшему от клиента, незачем.
+ *
+ * Права здесь не проверяются намеренно: право нажать даёт ЗАЯВКА на ответ
+ * (takePendingQuestion), а её бот ставит только на вопрос, выбранный из
+ * собственных ошибок этого человека. Повторно угадывать «его ли это вопрос» по
+ * текущей верхушке очереди было бы хуже: очередь меняется между показом и нажатием.
+ */
+export async function loadQuestionOptions(
+  contentItemId: string,
+  questionNumber: number,
+): Promise<DailyQuestionOption[] | null> {
+  const [row] = await db
+    .select({ options: question.options })
+    .from(question)
+    .where(and(eq(question.contentItemId, contentItemId), eq(question.number, questionNumber)))
+    .limit(1);
+  return row ? parseOptions(row.options) : null;
+}
+
 export interface DailyVerdict {
   correct: boolean;
   /** Верный ответ — показываем ПОСЛЕ ответа: это ошибка самого юзера, он её уже

@@ -150,6 +150,53 @@ describe("takePendingQuestion — заявка на ответ", () => {
     expect(await readPending(userId)).toEqual({ content: null, number: null, askedAt: null });
   });
 
+  it("нажатие на тот же вопрос забирает его", async () => {
+    const userId = await seedUser();
+    const contentItemId = await seedContentItem();
+    await seedLink(userId);
+    await setPendingQuestion(userId, contentItemId, 5);
+
+    expect(await takePendingQuestion(userId, { contentItemId, questionNumber: 5 })).toEqual({
+      contentItemId,
+      questionNumber: 5,
+    });
+  });
+
+  /**
+   * Вчерашний вопрос остаётся в переписке с живыми кнопками. Тап по нему НЕ должен
+   * списывать право ответить на сегодняшний — иначе одно любопытное нажатие по
+   * истории молча съедает актуальный вопрос.
+   */
+  it("нажатие на ЧУЖОЙ вопрос не трогает текущее ожидание", async () => {
+    const userId = await seedUser();
+    const today = await seedContentItem();
+    const yesterday = await seedContentItem();
+    await seedLink(userId);
+    await setPendingQuestion(userId, today, 9);
+
+    const stale = await takePendingQuestion(userId, {
+      contentItemId: yesterday,
+      questionNumber: 3,
+    });
+    expect(stale).toBeNull();
+
+    // Сегодняшний вопрос по-прежнему ждёт ответа.
+    expect(await takePendingQuestion(userId, { contentItemId: today, questionNumber: 9 })).toEqual({
+      contentItemId: today,
+      questionNumber: 9,
+    });
+  });
+
+  it("тот же тест, но другой номер вопроса — тоже не наш клейм", async () => {
+    const userId = await seedUser();
+    const contentItemId = await seedContentItem();
+    await seedLink(userId);
+    await setPendingQuestion(userId, contentItemId, 9);
+
+    expect(await takePendingQuestion(userId, { contentItemId, questionNumber: 8 })).toBeNull();
+    expect(await readPending(userId)).toMatchObject({ number: 9 });
+  });
+
   /**
    * Клеймы РАЗНЫХ юзеров не должны сериализоваться друг о друга: лок берётся по
    * своей строке, иначе вечерняя рассылка на 300 чатов встала бы в очередь.
