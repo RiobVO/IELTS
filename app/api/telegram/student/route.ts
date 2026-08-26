@@ -221,6 +221,10 @@ async function handleCallback(
   if (messageId != null) await clearInlineKeyboard(token, chatId, messageId);
 
   if (!value) {
+    // Вариант не восстановился (вопрос переимпортировали между показом и нажатием).
+    // Заявка уже погашена — возвращаем её, иначе человек теряет и вердикт, и право
+    // ответить: клавиатуры уже нет, но ответ текстом сработает.
+    await setPendingQuestion(userId, cb.contentItemId, cb.questionNumber);
     // Молчание тут выглядит как «бот проглотил ответ»: человек нажал, кнопки
     // исчезли, вердикта нет. Пишем причину и говорим об этом вслух.
     await logError({
