@@ -69,6 +69,13 @@ async function replyVerdict(
 ): Promise<void> {
   const verdict = await checkDailyAnswer(contentItemId, questionNumber, value);
   if (!verdict) {
+    // Ключа для вопроса нет (тест переимпортировали/удалили) — тоже говорим вслух.
+    await logError({
+      source: "server",
+      message: "student bot: no answer key for the answered question",
+      userId,
+      context: { op: "replyVerdict", contentItemId, questionNumber },
+    });
     await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
     return;
   }
@@ -177,7 +184,26 @@ async function handleCallback(
   const value = q?.options?.[cb.optionIndex]?.value;
   await answerStudentCallback(token, callbackId);
   if (messageId != null) await clearInlineKeyboard(token, chatId, messageId);
-  if (!value) return;
+  if (!value) {
+    // Молчание тут выглядит как «бот проглотил ответ» (ровно так это и выглядело на
+    // живом прогоне): человек нажал, кнопки исчезли, вердикта нет. Пишем причину и
+    // говорим об этом вслух, а не оставляем его в неведении.
+    await logError({
+      source: "server",
+      message: "student bot: callback without a resolvable option",
+      userId,
+      context: {
+        op: "handleCallback",
+        contentItemId: cb.contentItemId,
+        questionNumber: cb.questionNumber,
+        optionIndex: cb.optionIndex,
+        questionFound: q != null,
+        optionsCount: q?.options?.length ?? null,
+      },
+    });
+    await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
+    return;
+  }
 
   await replyVerdict(token, chatId, userId, cb.contentItemId, cb.questionNumber, value);
 }
