@@ -60,6 +60,19 @@ export function nothingDueMessage(practiceUrl: string | null): string {
   return `Nothing due for review right now — your mistakes are all caught up.${tail}`;
 }
 
+/**
+ * Повторять есть что, но не здесь: у этих заданий условие лежит в пассаже или в
+ * таблице, которых в чате нет. Честно зовём на сайт — это лучше и молчания, и
+ * задачи без условия.
+ */
+export function mistakesOnSiteMessage(count: number, mistakesUrl: string | null): string {
+  const head =
+    count === 1
+      ? "1 mistake is due for review — it needs the passage in front of you."
+      : `${count} mistakes are due for review — they need the passage in front of you.`;
+  return mistakesUrl ? `${head}\n\n${mistakesUrl}` : head;
+}
+
 /** Приглашение к вопросу дня. Номер и тест — контекст, чтобы вопрос не висел в пустоте. */
 export function questionMessage(q: {
   prompt: string;

@@ -109,12 +109,20 @@ async function handleMessage(token: string, chatId: number, text: string): Promi
     return;
   }
   if (command === "question") {
-    const q = await pickDailyQuestion(userId);
-    if (!q) {
-      await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
+    const pick = await pickDailyQuestion(userId);
+    if (pick.question) {
+      await deliverQuestion(token, chatId, userId, pick.question);
       return;
     }
-    await deliverQuestion(token, chatId, userId, q);
+    // Решаемого в чате нет. Но, может, есть задания, которым нужен пассаж, — тогда
+    // честнее позвать на сайт, чем сказать «всё чисто».
+    await sendStudentMessage(
+      token,
+      chatId,
+      pick.dueTotal > 0
+        ? msg.mistakesOnSiteMessage(pick.dueTotal, mistakesUrl())
+        : msg.nothingDueMessage(practiceUrl()),
+    );
     return;
   }
 
@@ -163,8 +171,14 @@ async function pickDailyQuestionFor(
   contentItemId: string,
   questionNumber: number,
 ): Promise<DailyQuestion | null> {
-  const q = await pickDailyQuestion(userId);
-  if (q && q.contentItemId === contentItemId && q.questionNumber === questionNumber) return q;
+  const { question } = await pickDailyQuestion(userId);
+  if (
+    question &&
+    question.contentItemId === contentItemId &&
+    question.questionNumber === questionNumber
+  ) {
+    return question;
+  }
   return null;
 }
 

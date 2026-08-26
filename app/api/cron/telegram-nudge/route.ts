@@ -9,8 +9,8 @@ import { logError } from "@/lib/monitoring/log-error";
 import { isStreakAtRisk, utcDateStr } from "@/lib/notifications/schedule";
 import { sendStudentMessage } from "@/lib/telegram/student/client";
 import { pickDailyQuestion } from "@/lib/telegram/student/daily-question";
-import { deliverQuestion, practiceUrl } from "@/lib/telegram/student/deliver";
-import { streakMessage } from "@/lib/telegram/student/messages";
+import { deliverQuestion, mistakesUrl, practiceUrl } from "@/lib/telegram/student/deliver";
+import { mistakesOnSiteMessage, streakMessage } from "@/lib/telegram/student/messages";
 import { listNudgeTargets, markNudged, unlinkByChat } from "@/lib/telegram/student/store";
 import type { NudgeKind } from "@/lib/analytics/events";
 
@@ -49,19 +49,29 @@ export async function POST(request: Request): Promise<NextResponse> {
     const targets = await listNudgeTargets(today, RUN_CAP);
     let questions = 0;
     let streaks = 0;
+    let onSite = 0;
     let silent = 0;
     let unlinked = 0;
     const sentEvents: Array<{ distinctId: string; properties: { channel: "telegram"; kind: NudgeKind } }> = [];
 
     for (const t of targets) {
       try {
-        const q = await pickDailyQuestion(t.userId);
+        const pick = await pickDailyQuestion(t.userId);
         let result: Awaited<ReturnType<typeof sendStudentMessage>> = "ok";
         let kind: NudgeKind | null = null;
 
-        if (q) {
-          result = await deliverQuestion(cfg.token, t.chatId, t.userId, q);
+        if (pick.question) {
+          result = await deliverQuestion(cfg.token, t.chatId, t.userId, pick.question);
           kind = "daily_question";
+        } else if (pick.dueTotal > 0) {
+          // Повторять есть что, но эти задания без пассажа не решаются — зовём на
+          // сайт, а не присылаем задачу без условия.
+          result = await sendStudentMessage(
+            cfg.token,
+            t.chatId,
+            mistakesOnSiteMessage(pick.dueTotal, mistakesUrl()),
+          );
+          kind = "mistakes_on_site";
         } else {
           // Повторять нечего — пингуем только тех, у кого сегодня рвётся стрик.
           const [p] = await db
@@ -94,6 +104,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         await markNudged(t.userId, today);
         if (result === "ok" && kind) {
           if (kind === "daily_question") questions += 1;
+          else if (kind === "mistakes_on_site") onSite += 1;
           else streaks += 1;
           sentEvents.push({ distinctId: t.userId, properties: { channel: "telegram", kind } });
         }
@@ -111,7 +122,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     await captureServerBatch("nudge_sent", sentEvents);
 
     return NextResponse.json(
-      { ok: true, targets: targets.length, questions, streaks, silent, unlinked },
+      { ok: true, targets: targets.length, questions, streaks, onSite, silent, unlinked },
       { status: 200 },
     );
   } catch (e) {

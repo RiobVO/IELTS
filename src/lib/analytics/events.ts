@@ -35,7 +35,9 @@ export type NudgeKind =
   | "streak"
   | "weekly_digest"
   | "reactivation"
-  | "daily_question";
+  | "daily_question"
+  /** Повторить есть что, но задание требует пассажа — зовём на сайт. */
+  | "mistakes_on_site";
 
 /** Свойства каждого события (ключ объекта = имя события в PostHog). */
 export type EventProperties = {

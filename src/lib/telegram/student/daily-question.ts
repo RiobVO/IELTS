@@ -5,6 +5,7 @@ import { answerKey, contentItem, question } from "@/db/schema";
 import { gradeOne, type AnswerMode } from "@/lib/grading/grade";
 import { getOpenMistakes } from "@/lib/practice/mistakes";
 import { stripHtml } from "@/lib/result/debrief";
+import { isChatAnswerable } from "./chat-answerable";
 
 /**
  * «Вопрос дня» студенческого бота (G2-1).
@@ -80,30 +81,45 @@ export function parseOptions(raw: unknown): DailyQuestionOption[] | null {
 }
 
 /**
- * Сколько просроченных ошибок вообще рассматриваем за один заход. Бот задаёт ОДИН
- * вопрос, весь остальной список ему не нужен; потолок держит запрос за вопросами
- * коротким, когда очередь длинная.
+ * Сколько просроченных ошибок рассматриваем за один заход. Тот же потолок, что
+ * показывает экран разбора, — чтобы число в сообщении «N ошибок ждут» совпадало
+ * с тем, что человек увидит, перейдя по ссылке.
  */
-const CANDIDATE_LIMIT = 20;
+const CANDIDATE_LIMIT = 50;
+
+/** Итог выбора: что спросить и сколько ошибок ждёт повторения всего. */
+export interface DailyPick {
+  /** Вопрос, который имеет смысл задать в чате; null — таких сейчас нет. */
+  question: DailyQuestion | null;
+  /**
+   * Сколько ошибок просрочено ВСЕГО, включая нерешаемые в переписке. Нужно, чтобы
+   * у бота остался честный повод написать: «есть что повторить, но это на сайте»
+   * лучше и молчания, и задачи без условия.
+   */
+  dueTotal: number;
+}
 
 const candidateKey = (contentItemId: string, questionNumber: number): string =>
   `${contentItemId}:${questionNumber}`;
 
 /**
- * Самая просроченная неотработанная ошибка юзера — или null, если повторять нечего.
+ * Самая просроченная ошибка юзера, которую есть смысл спрашивать в чате.
  *
  * getOpenMistakes уже делает всю содержательную часть: сводит сданные попытки с их
  * review-снимком, перегрейживает тем же gradeOne, вычитает «Mark learned»-резолюции,
  * дедупит по свежайшей попытке и сортирует due-первыми. Здесь остаётся выбрать из
  * его кандидатов первого, к которому есть что показать: тест должен быть
- * опубликован (ссылка «разобрать» из снятого вела бы в никуда), а у вопроса —
- * непустая формулировка (в каталоге есть импорты, где prompt пуст, и такой вопрос
- * пришёл бы в чат пустым сообщением).
+ * опубликован (ссылка «разобрать» из снятого вела бы в никуда), а сам вопрос —
+ * решаться в переписке (см. isChatAnswerable: «Paragraph A» без пассажа не задача,
+ * а издевательство).
+ *
+ * Отдаёт заодно общее число просроченных ошибок: когда решаемых в чате нет, но
+ * повторять есть что, бот зовёт на сайт вместо молчания.
  */
-export async function pickDailyQuestion(userId: string): Promise<DailyQuestion | null> {
+export async function pickDailyQuestion(userId: string): Promise<DailyPick> {
   const open = await getOpenMistakes(userId, { limit: CANDIDATE_LIMIT });
   const candidates = open.filter((m) => m.isDue);
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) return { question: null, dueTotal: 0 };
 
   // Один запрос на всех кандидатов, а не по запросу на каждого: их до двадцати, и
   // цикл с await внутри превратил бы вечернюю рассылку в лестницу round-trip'ов.
@@ -140,17 +156,20 @@ export async function pickDailyQuestion(userId: string): Promise<DailyQuestion |
     const row = byKey.get(candidateKey(m.contentItemId, m.questionNumber));
     if (!row) continue;
     const prompt = stripHtml(row.promptHtml).trim();
-    if (prompt === "") continue;
+    if (!isChatAnswerable(row.qtype, prompt)) continue;
     return {
-      contentItemId: row.contentItemId,
-      questionNumber: row.questionNumber,
-      qtype: row.qtype,
-      prompt,
-      options: parseOptions(row.options),
-      testTitle: row.testTitle,
+      question: {
+        contentItemId: row.contentItemId,
+        questionNumber: row.questionNumber,
+        qtype: row.qtype,
+        prompt,
+        options: parseOptions(row.options),
+        testTitle: row.testTitle,
+      },
+      dueTotal: candidates.length,
     };
   }
-  return null;
+  return { question: null, dueTotal: candidates.length };
 }
 
 export interface DailyVerdict {
