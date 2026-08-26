@@ -6,7 +6,7 @@ import { cronSecret, studentBotConfig } from "@/env";
 import { captureServerBatch } from "@/lib/analytics/server";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { logError } from "@/lib/monitoring/log-error";
-import { utcDateStr } from "@/lib/notifications/schedule";
+import { isStreakAtRisk, utcDateStr } from "@/lib/notifications/schedule";
 import { sendStudentMessage } from "@/lib/telegram/student/client";
 import { pickDailyQuestion } from "@/lib/telegram/student/daily-question";
 import { deliverQuestion, practiceUrl } from "@/lib/telegram/student/deliver";
@@ -70,8 +70,8 @@ export async function POST(request: Request): Promise<NextResponse> {
             .where(eq(profile.id, t.userId))
             .limit(1);
           const streak = p?.streak ?? 0;
-          const active = p?.lastActivity != null && String(p.lastActivity) === today;
-          if (streak > 0 && !active) {
+          const lastDay = p?.lastActivity != null ? String(p.lastActivity) : null;
+          if (isStreakAtRisk(streak, lastDay, today)) {
             result = await sendStudentMessage(cfg.token, t.chatId, streakMessage(streak, practiceUrl()));
             kind = "streak";
           } else {
