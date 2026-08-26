@@ -1,4 +1,5 @@
 import "server-only";
+import { logError } from "@/lib/monitoring/log-error";
 import { callBotApi } from "@/lib/telegram/client";
 
 /**
@@ -58,7 +59,15 @@ export async function sendStudentMessage(
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (isBlocked(message)) return "blocked";
-    console.error("student bot sendMessage failed", message);
+    // Недоставленное сообщение читается человеком как «бот съел мой ответ», и до
+    // сих пор причина оседала только в console.error — то есть нигде, куда можно
+    // посмотреть после факта. Пишем в error_log: без этого «в чат ничего не пришло»
+    // неотличимо от «код не дошёл до отправки» (диагностика 2026-08-07).
+    await logError({
+      source: "server",
+      message: `student bot sendMessage failed: ${message}`,
+      context: { op: "sendStudentMessage", hasButtons: (buttons?.length ?? 0) > 0 },
+    });
     return "failed";
   }
 }
