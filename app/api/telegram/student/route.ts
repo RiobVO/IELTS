@@ -79,7 +79,7 @@ async function replyVerdict(
     await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
     return;
   }
-  await sendStudentMessage(
+  const delivery = await sendStudentMessage(
     token,
     chatId,
     msg.verdictMessage({
@@ -88,6 +88,14 @@ async function replyVerdict(
       reviewUrl: mistakesUrl(),
     }),
   );
+  // ВРЕМЕННО: фиксируем исход доставки вердикта — «ok» здесь при пустом чате означает,
+  // что проблема вне нашего кода. Снять после диагностики.
+  await logError({
+    source: "server",
+    message: `student bot trace: verdict delivery ${delivery}`,
+    userId,
+    context: { op: "replyVerdict", correct: verdict.correct, questionNumber },
+  });
   await captureServer("nudge_open", userId, { channel: "telegram", kind: "daily_question" });
 }
 
@@ -204,6 +212,15 @@ async function handleCallback(
     await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
     return;
   }
+
+  // ВРЕМЕННАЯ трассировка живого нажатия: симуляции проходят весь путь, а в реальном
+  // чате вердикт не появляется — разницу видно только с прода. Снять после диагностики.
+  await logError({
+    source: "server",
+    message: "student bot trace: about to send verdict",
+    userId,
+    context: { op: "handleCallback", value, questionNumber: cb.questionNumber },
+  });
 
   await replyVerdict(token, chatId, userId, cb.contentItemId, cb.questionNumber, value);
 }
