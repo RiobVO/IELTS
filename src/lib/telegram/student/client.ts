@@ -58,17 +58,20 @@ export async function sendStudentMessage(
     return "ok";
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    if (isBlocked(message)) return "blocked";
-    // Недоставленное сообщение читается человеком как «бот съел мой ответ», и до
-    // сих пор причина оседала только в console.error — то есть нигде, куда можно
-    // посмотреть после факта. Пишем в error_log: без этого «в чат ничего не пришло»
-    // неотличимо от «код не дошёл до отправки» (диагностика 2026-08-07).
+    const outcome: DeliveryResult = isBlocked(message) ? "blocked" : "failed";
+    // Недоставленное сообщение читается человеком как «бот съел мой ответ», а
+    // причина оседала только в console.error — то есть нигде, куда можно посмотреть
+    // после факта. Логируем ОБА неуспешных исхода, включая `blocked`: «chat not
+    // found» на ответ человеку, который только что нам написал, — это не отписка,
+    // а признак того, что токен отвечает не за тот аккаунт бота, и молчать об этом
+    // нельзя (диагностика 2026-08-07). Для рассылки это по строке на получателя
+    // один раз: следующим шагом крон снимает связку.
     await logError({
       source: "server",
-      message: `student bot sendMessage failed: ${message}`,
+      message: `student bot sendMessage ${outcome}: ${message}`,
       context: { op: "sendStudentMessage", hasButtons: (buttons?.length ?? 0) > 0 },
     });
-    return "failed";
+    return outcome;
   }
 }
 
