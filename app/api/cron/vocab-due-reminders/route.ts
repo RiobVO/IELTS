@@ -9,6 +9,7 @@ import { cronSecret } from "@/env";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { logError } from "@/lib/monitoring/log-error";
 import { createNotifications, type NewNotification } from "@/lib/notifications/create";
+import { runReactivation } from "@/lib/email/reactivation";
 import {
   utcDateStr,
   prevUtcDateStr,
@@ -209,6 +210,22 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     }
 
+    // Реактивация уснувших (G2-4) — тот же ежедневный слот, тот же best-effort
+    // контракт: свой сбой логирует и не роняет ни соседние блоки, ни ответ крона.
+    let reactivated = 0;
+    try {
+      const r = await runReactivation();
+      reactivated = r.notified;
+    } catch (e) {
+      await logError({
+        source: "server",
+        message: `reactivation cron failed: ${e instanceof Error ? e.message : String(e)}`,
+        stack: e instanceof Error ? e.stack : null,
+        url: request.url,
+        context: { route: "/api/cron/vocab-due-reminders", block: "reactivation" },
+      });
+    }
+
     let purged = 0;
     try {
       purged = await purgeOldRead();
@@ -222,7 +239,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     }
 
-    return NextResponse.json({ ok: true, created, streak, purged }, { status: 200 });
+    return NextResponse.json({ ok: true, created, streak, reactivated, purged }, { status: 200 });
   } catch (e) {
     await logError({
       source: "server",
