@@ -4,7 +4,7 @@ import { sendStudentMessage, type DeliveryResult } from "./client";
 import { buildDailyQuestionCallback } from "./commands";
 import type { DailyQuestion } from "./daily-question";
 import { questionMessage } from "./messages";
-import { setPendingQuestion } from "./store";
+import { clearPendingQuestion, setPendingQuestion } from "./store";
 
 /**
  * Доставка «вопроса дня» — общая для вебхука (команда /question) и ежедневной
@@ -57,24 +57,27 @@ export async function deliverQuestion(
   // До отправки, а не после: callback от быстрого пальца приходит через миллисекунды.
   await setPendingQuestion(userId, q.contentItemId, q.questionNumber);
 
-  if (q.options) {
-    // По кнопке на вариант; значение ответа берётся на сервере по индексу, поэтому
-    // в callback_data едут только идентификаторы (лимит Telegram — 64 байта).
-    return sendStudentMessage(
-      token,
-      chatId,
-      text,
-      q.options.map((opt, i) => ({
-        text: buttonLabel(opt.value, opt.label),
-        data: buildDailyQuestionCallback({
-          contentItemId: q.contentItemId,
-          questionNumber: q.questionNumber,
-          optionIndex: i,
-        }),
-      })),
-    );
-  }
+  const result = q.options
+    ? // По кнопке на вариант; значение ответа берётся на сервере по индексу, поэтому
+      // в callback_data едут только идентификаторы (лимит Telegram — 64 байта).
+      await sendStudentMessage(
+        token,
+        chatId,
+        text,
+        q.options.map((opt, i) => ({
+          text: buttonLabel(opt.value, opt.label),
+          data: buildDailyQuestionCallback({
+            contentItemId: q.contentItemId,
+            questionNumber: q.questionNumber,
+            optionIndex: i,
+          }),
+        })),
+      )
+    : // Свободный ввод: ожидание уже поставлено выше — следующий текст станет ответом.
+      await sendStudentMessage(token, chatId, text);
 
-  // Свободный ввод: ожидание уже поставлено выше — следующий текст станет ответом.
-  return sendStudentMessage(token, chatId, text);
+  // Вопрос не доставлен — снимаем ожидание. Иначе первая же реплика человека была
+  // бы засчитана ответом на вопрос, которого он не видел (ревью 2026-08-07).
+  if (result !== "ok") await clearPendingQuestion(userId);
+  return result;
 }

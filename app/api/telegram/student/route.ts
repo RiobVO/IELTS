@@ -20,6 +20,7 @@ import * as msg from "@/lib/telegram/student/messages";
 import {
   findUserByChat,
   redeemLinkCode,
+  setPendingQuestion,
   takePendingQuestion,
   unlinkByChat,
 } from "@/lib/telegram/student/store";
@@ -39,16 +40,34 @@ import {
  */
 export const dynamic = "force-dynamic";
 
+interface TgChat {
+  id: number;
+  /** private | group | supergroup | channel — Telegram присылает всегда. */
+  type?: string;
+}
+
 interface TgUpdate {
   message?: {
-    chat: { id: number };
+    chat: TgChat;
     text?: string;
   };
   callback_query?: {
     id: string;
     data?: string;
-    message?: { chat: { id: number }; message_id?: number };
+    message?: { chat: TgChat; message_id?: number };
   };
+}
+
+/**
+ * Бот работает ТОЛЬКО в личке. Связка хранит один chat_id и по нему выдаёт данные
+ * аккаунта — а `/start <code>`, выполненный в группе, привязал бы к аккаунту
+ * ГРУППОВОЙ чат, после чего вопрос и вердикт с правильным ответом видели бы все
+ * участники, и любой из них мог бы дальше дёргать бота от имени владельца.
+ * Telegram допускает deep-link с payload в группах, поэтому проверяем тип явно
+ * (ревью 2026-08-07).
+ */
+function isPrivateChat(chat: TgChat | undefined): boolean {
+  return chat?.type === "private";
 }
 
 const ok = () => NextResponse.json({ ok: true });
@@ -79,7 +98,7 @@ async function replyVerdict(
     await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
     return;
   }
-  await sendStudentMessage(
+  const delivered = await sendStudentMessage(
     token,
     chatId,
     msg.verdictMessage({
@@ -88,6 +107,19 @@ async function replyVerdict(
       reviewUrl: mistakesUrl(),
     }),
   );
+  if (delivered !== "ok") {
+    // Заявка на ответ уже погашена, а вердикт не долетел — человек остался и без
+    // ответа, и без права ответить ещё раз. Возвращаем ожидание: ключ он не увидел,
+    // так что перебором это не становится (ревью 2026-08-07).
+    await setPendingQuestion(userId, contentItemId, questionNumber);
+    await logError({
+      source: "server",
+      message: `student bot: verdict not delivered (${delivered}) — question re-armed`,
+      userId,
+      context: { op: "replyVerdict", contentItemId, questionNumber },
+    });
+    return;
+  }
   await captureServer("nudge_open", userId, { channel: "telegram", kind: "daily_question" });
 }
 
@@ -232,8 +264,10 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   try {
     if (update.message?.text && update.message.chat?.id) {
+      if (!isPrivateChat(update.message.chat)) return ok();
       await handleMessage(cfg.token, update.message.chat.id, update.message.text);
     } else if (update.callback_query?.message?.chat?.id) {
+      if (!isPrivateChat(update.callback_query.message.chat)) return ok();
       await handleCallback(
         cfg.token,
         update.callback_query.id,

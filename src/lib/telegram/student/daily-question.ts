@@ -103,6 +103,26 @@ const candidateKey = (contentItemId: string, questionNumber: number): string =>
   `${contentItemId}:${questionNumber}`;
 
 /**
+ * Сдвиг очереди по UTC-дню.
+ *
+ * Ответ в чате намеренно НЕ двигает SM-2 (повтор закрывается на сайте), а порядок
+ * кандидатов детерминирован — значит без сдвига самая просроченная ошибка приходила
+ * бы человеку каждый вечер, одна и та же, пока он не разберёт её руками. Волна
+ * называется «удержание»; ежедневный дубль работает ровно наоборот (ревью 2026-08-07).
+ *
+ * Сдвиг именно по дню, а не случайный: в течение суток `/question` и вечерняя
+ * рассылка обязаны говорить об одном вопросе, иначе рассылка «съедала» бы вопрос,
+ * который человек уже открыл сам. Все кандидаты и так просрочены, так что порядок
+ * внутри них не несёт смысла, которым мы бы жертвовали.
+ */
+export function rotateByDay<T>(items: T[], now: Date): T[] {
+  if (items.length <= 1) return items;
+  const dayIndex = Math.floor(now.getTime() / 86_400_000);
+  const start = ((dayIndex % items.length) + items.length) % items.length;
+  return [...items.slice(start), ...items.slice(0, start)];
+}
+
+/**
  * Самая просроченная ошибка юзера, которую есть смысл спрашивать в чате.
  *
  * getOpenMistakes уже делает всю содержательную часть: сводит сданные попытки с их
@@ -116,10 +136,15 @@ const candidateKey = (contentItemId: string, questionNumber: number): string =>
  * Отдаёт заодно общее число просроченных ошибок: когда решаемых в чате нет, но
  * повторять есть что, бот зовёт на сайт вместо молчания.
  */
-export async function pickDailyQuestion(userId: string): Promise<DailyPick> {
+export async function pickDailyQuestion(
+  userId: string,
+  now: Date = new Date(),
+): Promise<DailyPick> {
   const open = await getOpenMistakes(userId, { limit: CANDIDATE_LIMIT });
-  const candidates = open.filter((m) => m.isDue);
-  if (candidates.length === 0) return { question: null, dueTotal: 0 };
+  const due = open.filter((m) => m.isDue);
+  if (due.length === 0) return { question: null, dueTotal: 0 };
+  // Сдвиг по дню — иначе одна и та же ошибка приходила бы каждый вечер (rotateByDay).
+  const candidates = rotateByDay(due, now);
 
   // Один запрос на всех кандидатов, а не по запросу на каждого: их до двадцати, и
   // цикл с await внутри превратил бы вечернюю рассылку в лестницу round-trip'ов.
