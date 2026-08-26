@@ -166,6 +166,29 @@ export function telegramConfig(): {
 }
 
 /**
+ * Опциональная конфигурация СТУДЕНЧЕСКОГО Telegram-бота (G2-1) — напоминания и
+ * «вопрос дня». Отдельный бот и отдельный секрет вебхука: у админского канала
+ * импорта другая граница безопасности (whitelist id), и общий токен означал бы, что
+ * любой студент пишет тому же боту, который публикует контент. Без
+ * TELEGRAM_STUDENT_BOT_TOKEN фича выключена целиком — вебхук отвечает no-op,
+ * ежедневная рассылка не шлёт ничего, кнопка привязки в профиле не показывается.
+ * `botUsername` нужен только для deep-link'а t.me/<bot>?start=<code>.
+ */
+export function studentBotConfig(): {
+  token: string;
+  botUsername: string | null;
+  webhookSecret: string | null;
+} | null {
+  const token = process.env.TELEGRAM_STUDENT_BOT_TOKEN;
+  if (!token || token.trim() === "") return null;
+  return {
+    token: token.trim(),
+    botUsername: process.env.TELEGRAM_STUDENT_BOT_USERNAME?.trim().replace(/^@/, "") || null,
+    webhookSecret: process.env.TELEGRAM_STUDENT_WEBHOOK_SECRET?.trim() || null,
+  };
+}
+
+/**
  * Опциональная конфигурация Cloudflare Turnstile (анти-бот на signup, §11). Как и
  * остальные seam-и — НЕ обязательна для старта: без пары ключей капча отключена
  * (fail-open, signup работает без неё). Активируется только когда заданы ОБА:

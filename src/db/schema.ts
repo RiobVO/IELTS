@@ -8,6 +8,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   date,
   index,
@@ -1220,4 +1221,41 @@ export const trialClaim = pgTable(
   // FK-индекс content_item_id: cascade-delete теста без seq-scan (user_id покрыт
   // PK слева) — паттерн mistake_resolution/saved_word.
   (t) => [index("trial_claim_content_item_id_idx").on(t.contentItemId)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* telegram_link (0061) — связка аккаунта с чатом СТУДЕНЧЕСКОГО бота (G2-1).    */
+/* Отдельный бот от импортного (тот стоит на whitelist'е admin-id, потому что   */
+/* пишет контент owner-path); этот открыт всем, поэтому chat_id ничего не значит */
+/* до обмена одноразового кода, который выдаёт залогиненный юзер в профиле.     */
+/* Код лежит ХЕШЕМ с TTL — из строки нельзя достать приглашение в чужой чат.    */
+/* Постура owner-стейта (mistake_review/saved_word): RLS on, гранты клиенту     */
+/* сняты, SELECT своих строк — записи только server action + webhook.           */
+/* -------------------------------------------------------------------------- */
+export const telegramLink = pgTable(
+  "telegram_link",
+  {
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => profile.id, { onDelete: "cascade" }),
+    // NULL — код выдан, обмен ещё не состоялся. bigint: chat_id давно вне int4.
+    chatId: bigint("chat_id", { mode: "number" }).unique(),
+    // sha256(код) в hex; гаснет (NULL) сразу после успешного обмена.
+    codeHash: text("code_hash"),
+    codeExpiresAt: timestamp("code_expires_at", { withTimezone: true }),
+    linkedAt: timestamp("linked_at", { withTimezone: true }),
+    // Ожидаемый ответ на «вопрос дня» со свободным вводом.
+    pendingContentItemId: uuid("pending_content_item_id").references(() => contentItem.id, {
+      onDelete: "set null",
+    }),
+    pendingQuestionNumber: integer("pending_question_number"),
+    pendingAskedAt: timestamp("pending_asked_at", { withTimezone: true }),
+    // UTC-день последней отправки — идемпотентность ежедневной рассылки.
+    lastNudgeOn: date("last_nudge_on"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("telegram_link_nudge_idx").on(t.lastNudgeOn),
+    index("telegram_link_pending_content_idx").on(t.pendingContentItemId),
+  ],
 );

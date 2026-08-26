@@ -7,14 +7,17 @@ import { telegramConfig, publicSiteUrl } from "@/env";
 
 const API = "https://api.telegram.org";
 
-/** Вызов метода Bot API. Бросает при сетевой/логической ошибке Telegram. */
-async function callApi<T>(
+/**
+ * Вызов метода Bot API ЛЮБЫМ токеном. Бросает при сетевой/логической ошибке.
+ * Токен параметром, а не из env внутри: ботов теперь два — админский канал импорта
+ * и студенческий (G2-1), и путать их токены нельзя ни при каких обстоятельствах.
+ */
+export async function callBotApi<T>(
+  token: string,
   method: string,
   body: Record<string, unknown>,
 ): Promise<T> {
-  const cfg = telegramConfig();
-  if (!cfg) throw new Error("telegram: not configured");
-  const res = await fetch(`${API}/bot${cfg.token}/${method}`, {
+  const res = await fetch(`${API}/bot${token}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -28,6 +31,18 @@ async function callApi<T>(
     throw new Error(`telegram ${method} failed: ${json.description ?? res.status}`);
   }
   return json.result as T;
+}
+
+/** Токен админского бота импорта. Бросает, если он не сконфигурирован. */
+function adminToken(): string {
+  const cfg = telegramConfig();
+  if (!cfg) throw new Error("telegram: not configured");
+  return cfg.token;
+}
+
+/** Обёртки ниже — АДМИНСКИЙ канал импорта: токен берут из telegramConfig. */
+async function callApi<T>(method: string, body: Record<string, unknown>): Promise<T> {
+  return callBotApi<T>(adminToken(), method, body);
 }
 
 /**
