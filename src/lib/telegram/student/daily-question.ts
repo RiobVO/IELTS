@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { answerKey, contentItem, mistakeReview, question } from "@/db/schema";
 import { gradeOne, type AnswerMode } from "@/lib/grading/grade";
@@ -28,27 +28,6 @@ export interface DailyQuestionOption {
   label: string;
   value: string;
 }
-
-/**
- * Типы вопросов, которые ИМЕЮТ СМЫСЛ в чате — то есть формулировка самодостаточна.
- *
- * Живой прогон прислал «Paragraph A» с восемью заголовками на выбор: задание
- * «подбери заголовок» без текста параграфа нерешаемо в принципе, даже если человек
- * этот тест уже проходил. Все matching-типы адресуют кусок пассажа, которого в
- * сообщении нет и быть не может (пассаж — это страница текста, не реплика в чате).
- *
- * Остальные типы несут условие прямо в формулировке: утверждение для TRUE/FALSE,
- * вопрос с вариантами, предложение с пропуском. Их и спрашиваем; ошибки прочих
- * типов остаются на сайте, куда бот и зовёт — честнее, чем присылать нерешаемое.
- */
-const CHAT_ANSWERABLE_QTYPES = [
-  "tfng",
-  "ynng",
-  "mcq_single",
-  "mcq_multi",
-  "sentence_completion",
-  "short_answer",
-] as const;
 
 export interface DailyQuestion {
   contentItemId: string;
@@ -128,8 +107,6 @@ export async function pickDailyQuestion(userId: string): Promise<DailyQuestion |
         // Снятый с публикации тест в боте не спрашиваем: ссылка «разобрать» из него
         // привела бы в никуда.
         eq(contentItem.status, "published"),
-        // Только то, что вообще можно решить в переписке (см. CHAT_ANSWERABLE_QTYPES).
-        inArray(question.qtype, [...CHAT_ANSWERABLE_QTYPES]),
         notResolved,
       ),
     )
@@ -145,33 +122,6 @@ export async function pickDailyQuestion(userId: string): Promise<DailyQuestion |
     options: parseOptions(row.options),
     testTitle: row.testTitle,
   };
-}
-
-/**
- * Сколько ошибок ждёт повторения ВСЕГО — включая типы, нерешаемые в чате
- * (matching-задания без текста пассажа). Нужно, чтобы у бота остался честный повод
- * написать: «есть что повторить, но это на сайте» лучше и молчания, и присылки
- * задачи без условия.
- */
-export async function countDueMistakes(userId: string): Promise<number> {
-  const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(mistakeReview)
-    .innerJoin(contentItem, eq(contentItem.id, mistakeReview.contentItemId))
-    .where(
-      and(
-        eq(mistakeReview.userId, userId),
-        lte(mistakeReview.dueAt, sql`now()`),
-        eq(contentItem.status, "published"),
-        sql`not exists (
-          select 1 from mistake_resolution mr
-          where mr.user_id = ${mistakeReview.userId}
-            and mr.content_item_id = ${mistakeReview.contentItemId}
-            and mr.question_number = ${mistakeReview.questionNumber}
-        )`,
-      ),
-    );
-  return row?.n ?? 0;
 }
 
 export interface DailyVerdict {

@@ -60,18 +60,6 @@ export function nothingDueMessage(practiceUrl: string | null): string {
   return `Nothing due for review right now — your mistakes are all caught up.${tail}`;
 }
 
-/**
- * Повторить есть что, но не в чате: matching-задания адресуют кусок пассажа, и без
- * текста они нерешаемы. Честно зовём на сайт вместо задачи без условия.
- */
-export function mistakesOnSiteMessage(count: number, mistakesUrl: string | null): string {
-  const head =
-    count === 1
-      ? "1 mistake is due for review — it needs the passage in front of you."
-      : `${count} mistakes are due for review — they need the passage in front of you.`;
-  return mistakesUrl ? `${head}\n\n${mistakesUrl}` : head;
-}
-
 /** Приглашение к вопросу дня. Номер и тест — контекст, чтобы вопрос не висел в пустоте. */
 export function questionMessage(q: {
   prompt: string;

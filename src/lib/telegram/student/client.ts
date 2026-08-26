@@ -63,28 +63,6 @@ export async function sendStudentMessage(
   }
 }
 
-/**
- * Снимает кнопки с уже отвеченного вопроса. Без этого варианты остаются живыми и
- * правильный ответ вскрывается перебором — плюс чат наполняется вердиктами на один
- * и тот же вопрос (видно на живом прогоне 2026-08-06). Best-effort: если Telegram
- * откажет, повтор всё равно отсечёт серверная проверка «на этот вопрос уже ответили».
- */
-export async function clearInlineKeyboard(
-  token: string,
-  chatId: number,
-  messageId: number,
-): Promise<void> {
-  try {
-    await callBotApi(token, "editMessageReplyMarkup", {
-      chat_id: chatId,
-      message_id: messageId,
-      reply_markup: { inline_keyboard: [] },
-    });
-  } catch (e) {
-    console.error("student bot clearInlineKeyboard failed", e);
-  }
-}
-
 /** Гасит «часики» на нажатой кнопке. Best-effort — не бросает. */
 export async function answerStudentCallback(
   token: string,

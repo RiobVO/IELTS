@@ -3,15 +3,10 @@ import { studentBotConfig } from "@/env";
 import { captureServer } from "@/lib/analytics/server";
 import { logError } from "@/lib/monitoring/log-error";
 import { webhookSecretValid } from "@/lib/telegram/auth";
-import {
-  answerStudentCallback,
-  clearInlineKeyboard,
-  sendStudentMessage,
-} from "@/lib/telegram/student/client";
+import { answerStudentCallback, sendStudentMessage } from "@/lib/telegram/student/client";
 import { parseCommand, parseDailyQuestionCallback } from "@/lib/telegram/student/commands";
 import {
   checkDailyAnswer,
-  countDueMistakes,
   pickDailyQuestion,
   type DailyQuestion,
 } from "@/lib/telegram/student/daily-question";
@@ -48,7 +43,7 @@ interface TgUpdate {
   callback_query?: {
     id: string;
     data?: string;
-    message?: { chat: { id: number }; message_id?: number };
+    message?: { chat: { id: number } };
   };
 }
 
@@ -69,17 +64,10 @@ async function replyVerdict(
 ): Promise<void> {
   const verdict = await checkDailyAnswer(contentItemId, questionNumber, value);
   if (!verdict) {
-    // Ключа для вопроса нет (тест переимпортировали/удалили) — тоже говорим вслух.
-    await logError({
-      source: "server",
-      message: "student bot: no answer key for the answered question",
-      userId,
-      context: { op: "replyVerdict", contentItemId, questionNumber },
-    });
     await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
     return;
   }
-  const delivery = await sendStudentMessage(
+  await sendStudentMessage(
     token,
     chatId,
     msg.verdictMessage({
@@ -88,16 +76,6 @@ async function replyVerdict(
       reviewUrl: mistakesUrl(),
     }),
   );
-  // Недоставленный вердикт выглядит как «бот съел ответ» — это должно быть видно в
-  // логе, а не только в консоли Vercel.
-  if (delivery !== "ok") {
-    await logError({
-      source: "server",
-      message: `student bot: verdict not delivered (${delivery})`,
-      userId,
-      context: { op: "replyVerdict", questionNumber },
-    });
-  }
   await captureServer("nudge_open", userId, { channel: "telegram", kind: "daily_question" });
 }
 
@@ -132,17 +110,11 @@ async function handleMessage(token: string, chatId: number, text: string): Promi
   }
   if (command === "question") {
     const q = await pickDailyQuestion(userId);
-    if (q) {
-      await deliverQuestion(token, chatId, userId, q);
+    if (!q) {
+      await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
       return;
     }
-    // Решаемого в чате нет — но, может, есть matching-задания, которым нужен пассаж.
-    const due = await countDueMistakes(userId);
-    await sendStudentMessage(
-      token,
-      chatId,
-      due > 0 ? msg.mistakesOnSiteMessage(due, mistakesUrl()) : msg.nothingDueMessage(practiceUrl()),
-    );
+    await deliverQuestion(token, chatId, userId, q);
     return;
   }
 
@@ -159,61 +131,27 @@ async function handleCallback(
   token: string,
   callbackId: string,
   chatId: number,
-  messageId: number | null,
   data: string,
 ): Promise<void> {
+  await answerStudentCallback(token, callbackId);
+
   const userId = await findUserByChat(chatId);
   if (!userId) {
-    await answerStudentCallback(token, callbackId);
     await sendStudentMessage(token, chatId, msg.notLinkedMessage());
     return;
   }
 
   const cb = parseDailyQuestionCallback(data);
-  if (!cb) {
-    await answerStudentCallback(token, callbackId);
-    return; // не наша кнопка — молча игнорируем
-  }
-
-  // ПЕРВЫЙ ответ побеждает: takePendingQuestion снимает ожидание одним UPDATE ...
-  // RETURNING, поэтому повторные нажатия по тем же кнопкам (или гонка двух нажатий)
-  // вердикта уже не получают — иначе правильный ответ вскрывался бы перебором.
-  const pending = await takePendingQuestion(userId);
-  const isThisQuestion =
-    pending?.contentItemId === cb.contentItemId && pending?.questionNumber === cb.questionNumber;
-  if (!pending || !isThisQuestion) {
-    await answerStudentCallback(token, callbackId, "Already answered");
-    if (messageId != null) await clearInlineKeyboard(token, chatId, messageId);
-    return;
-  }
+  if (!cb) return; // не наша кнопка — молча игнорируем
 
   // Значение варианта восстанавливаем из САМОГО вопроса, а не из callback_data:
   // в 64 байта лимита текст ответа не влезает, да и доверять содержимому кнопки,
   // пришедшему от клиента, незачем — индекс проверяется по серверному списку.
   const q = await pickDailyQuestionFor(userId, cb.contentItemId, cb.questionNumber);
+  // Грейдится `value` варианта, а не его подпись: у matching_headings ключ — «iii»,
+  // а на кнопке стоит текст заголовка.
   const value = q?.options?.[cb.optionIndex]?.value;
-  await answerStudentCallback(token, callbackId);
-  if (messageId != null) await clearInlineKeyboard(token, chatId, messageId);
-  if (!value) {
-    // Молчание тут выглядит как «бот проглотил ответ» (ровно так это и выглядело на
-    // живом прогоне): человек нажал, кнопки исчезли, вердикта нет. Пишем причину и
-    // говорим об этом вслух, а не оставляем его в неведении.
-    await logError({
-      source: "server",
-      message: "student bot: callback without a resolvable option",
-      userId,
-      context: {
-        op: "handleCallback",
-        contentItemId: cb.contentItemId,
-        questionNumber: cb.questionNumber,
-        optionIndex: cb.optionIndex,
-        questionFound: q != null,
-        optionsCount: q?.options?.length ?? null,
-      },
-    });
-    await sendStudentMessage(token, chatId, msg.nothingDueMessage(practiceUrl()));
-    return;
-  }
+  if (!value) return;
 
   await replyVerdict(token, chatId, userId, cb.contentItemId, cb.questionNumber, value);
 }
@@ -258,7 +196,6 @@ export async function POST(request: Request): Promise<NextResponse> {
         cfg.token,
         update.callback_query.id,
         update.callback_query.message.chat.id,
-        update.callback_query.message.message_id ?? null,
         update.callback_query.data ?? "",
       );
     }
