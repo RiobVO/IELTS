@@ -33,7 +33,7 @@ Next.js (App Router) + Drizzle + Supabase. IELTS-платформа. UI/тест
 Trajectory-график, план дня, каталог-счётчики, Listening part-уровень.
 
 **Парсинг-трек (2026-07-21, `7781435..ac16a90`).** Клиент зафиксировал окончательный формат
-reading-HTML («Inspera Style», full 40Q и одиночные пассажи с нумерацией от minимального
+reading-HTML («Inspera Style», full 40Q и одиночные пассажи с нумерацией от минимального
 номера). Закрыто одним днём: полная совместимость парсеров (band-делегирование, standalone
 MCQ-атомизация, номер пассажа из start-screen, QTYPE-нормализация декорированных лейблов,
 empty-prompt варнинг); security — answer-reveal `.analysis`-блоки вычищаются import-time И
