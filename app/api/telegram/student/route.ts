@@ -3,7 +3,11 @@ import { studentBotConfig } from "@/env";
 import { captureServer } from "@/lib/analytics/server";
 import { logError } from "@/lib/monitoring/log-error";
 import { webhookSecretValid } from "@/lib/telegram/auth";
-import { answerStudentCallback, sendStudentMessage } from "@/lib/telegram/student/client";
+import {
+  answerStudentCallback,
+  clearInlineKeyboard,
+  sendStudentMessage,
+} from "@/lib/telegram/student/client";
 import { parseCommand, parseDailyQuestionCallback } from "@/lib/telegram/student/commands";
 import {
   checkDailyAnswer,
@@ -44,7 +48,7 @@ interface TgUpdate {
   callback_query?: {
     id: string;
     data?: string;
-    message?: { chat: { id: number } };
+    message?: { chat: { id: number }; message_id?: number };
   };
 }
 
@@ -138,26 +142,41 @@ async function handleCallback(
   token: string,
   callbackId: string,
   chatId: number,
+  messageId: number | null,
   data: string,
 ): Promise<void> {
-  await answerStudentCallback(token, callbackId);
-
   const userId = await findUserByChat(chatId);
   if (!userId) {
+    await answerStudentCallback(token, callbackId);
     await sendStudentMessage(token, chatId, msg.notLinkedMessage());
     return;
   }
 
   const cb = parseDailyQuestionCallback(data);
-  if (!cb) return; // не наша кнопка — молча игнорируем
+  if (!cb) {
+    await answerStudentCallback(token, callbackId);
+    return; // не наша кнопка — молча игнорируем
+  }
+
+  // ПЕРВЫЙ ответ побеждает: takePendingQuestion снимает ожидание одним UPDATE ...
+  // RETURNING, поэтому повторные нажатия по тем же кнопкам (или гонка двух нажатий)
+  // вердикта уже не получают — иначе правильный ответ вскрывался бы перебором.
+  const pending = await takePendingQuestion(userId);
+  const isThisQuestion =
+    pending?.contentItemId === cb.contentItemId && pending?.questionNumber === cb.questionNumber;
+  if (!pending || !isThisQuestion) {
+    await answerStudentCallback(token, callbackId, "Already answered");
+    if (messageId != null) await clearInlineKeyboard(token, chatId, messageId);
+    return;
+  }
 
   // Значение варианта восстанавливаем из САМОГО вопроса, а не из callback_data:
   // в 64 байта лимита текст ответа не влезает, да и доверять содержимому кнопки,
   // пришедшему от клиента, незачем — индекс проверяется по серверному списку.
   const q = await pickDailyQuestionFor(userId, cb.contentItemId, cb.questionNumber);
-  // Грейдится `value` варианта, а не его подпись: у matching_headings ключ — «iii»,
-  // а на кнопке стоит текст заголовка.
   const value = q?.options?.[cb.optionIndex]?.value;
+  await answerStudentCallback(token, callbackId);
+  if (messageId != null) await clearInlineKeyboard(token, chatId, messageId);
   if (!value) return;
 
   await replyVerdict(token, chatId, userId, cb.contentItemId, cb.questionNumber, value);
@@ -203,6 +222,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         cfg.token,
         update.callback_query.id,
         update.callback_query.message.chat.id,
+        update.callback_query.message.message_id ?? null,
         update.callback_query.data ?? "",
       );
     }
