@@ -34,6 +34,8 @@ jobs:
       # Через env, НЕ инлайн-интерполяцию в run: значение из внешнего события
       # не должно попадать в текст скрипта (script-injection поверхность).
       DEPLOY_SHA: ${{ github.event.deployment.sha }}
+      # Нужен gh api для проверки «этот деплой обогнан следующим» (см. слой 1).
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Smoke — канон отдаёт ИМЕННО этот деплой, страницы живы
         shell: bash
@@ -47,9 +49,8 @@ jobs:
 
           # Слой 1: ждём, пока alias начнёт отдавать НОВЫЙ деплой (окно 12×10с ≈
           # 2 мин — переключение alias может отставать от deployment_status).
-          # Редкий ложный красный: два push подряд — sha A так и не покажется,
-          # его перекрыл B; красный такого прогона читается вместе со следующим.
           pinned=""
+          served=""
           for i in $(seq 1 12); do
             body=$(curl -sS --max-time 15 "$base/api/health" || echo CURL_FAIL)
             if echo "$body" | grep -q "\"commit\":\"$DEPLOY_SHA\""; then
@@ -57,9 +58,25 @@ jobs:
               pinned=1
               break
             fi
-            echo "attempt $i: canonical does not serve $DEPLOY_SHA yet"
+            served=$(echo "$body" | grep -o '"commit":"[0-9a-f]\{7,40\}"' | head -1 | cut -d'"' -f4)
+            echo "attempt $i: canonical serves ${served:-unknown}, not $DEPLOY_SHA yet"
             [ "$i" -lt 12 ] && sleep 10
           done
+
+          # Серия быстрых пушей: пока смоук ждал свой sha, alias уже уехал на
+          # следующий коммит — этот деплой никогда не станет каноном, и ждать его
+          # бессмысленно. Такой обгон НЕ дефект: страницы проверит смоук того
+          # деплоя, что обогнал. Отличаем обгон от настоящего залипания alias'а по
+          # родству коммитов (ahead = наш sha предок отдаваемого).
+          if [ -z "$pinned" ] && [ -n "$served" ]; then
+            rel=$(gh api "repos/$GITHUB_REPOSITORY/compare/$DEPLOY_SHA...$served" --jq .status 2>/dev/null || echo unknown)
+            if [ "$rel" = "ahead" ]; then
+              echo "::notice::superseded by a newer deployment ($served) — smoke handed over to it"
+              exit 0
+            fi
+            echo "relation to served commit: $rel"
+          fi
+
           if [ -z "$pinned" ]; then
             echo "::error::canonical never served deployment $DEPLOY_SHA — alias did not switch (or health lacks the commit field)"
             exit 1
