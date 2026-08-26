@@ -23,7 +23,19 @@ export const AnalyticsEvent = {
   SprintSignup: "sprint_signup",
   CapHit: "cap_hit",
   PredictorComplete: "predictor_complete",
+  DayActive: "day_active",
+  NudgeSent: "nudge_sent",
+  NudgeOpen: "nudge_open",
 } as const;
+
+/** Канал напоминания и его повод — общий словарь для nudge_sent/nudge_open. */
+export type NudgeChannel = "in_app" | "email" | "telegram";
+export type NudgeKind =
+  | "vocab_due"
+  | "streak"
+  | "weekly_digest"
+  | "reactivation"
+  | "daily_question";
 
 /** Свойства каждого события (ключ объекта = имя события в PostHog). */
 export type EventProperties = {
@@ -107,6 +119,22 @@ export type EventProperties = {
     weak_type: string;
     band_low: number;
   };
+  /** Первая учебная активность юзера в UTC-дне (G2-3). Шлётся РОВНО раз в день —
+   *  из applyPostSubmit, где переход last_activity_date уже вычислен под row-lock,
+   *  поэтому лишних запросов и двойных событий нет. Основа D7-retention и доли
+   *  «активность 3+ дней»: до этого события вся телеметрия измеряла только
+   *  приобретение (signup/checkout), а возврат — ничем.
+   *  `days_since_last`: 1 — вчера, N>1 — вернулся после паузы, null — первый день. */
+  day_active: {
+    streak: number;
+    days_since_last: number | null;
+    returning: boolean;
+  };
+  /** Напоминание ОТПРАВЛЕНО (крон/бот). Одно событие на юзера — знаменатель
+   *  открываемости. */
+  nudge_sent: { channel: NudgeChannel; kind: NudgeKind };
+  /** Напоминание ОТКРЫТО (клик по уведомлению / кнопке в боте) — числитель. */
+  nudge_open: { channel: NudgeChannel; kind: NudgeKind };
 };
 
 /** Имена событий — производны от контракта свойств, чтобы не разъехались. */
