@@ -13,7 +13,8 @@ import { isStatefulE2eAllowed, loadE2eEnv, STATEFUL_E2E_BLOCKED_MESSAGE } from "
 // ниже — защита на случай прогона файла в обход global-setup. Тестовый
 // аккаунт переиспользуется (см. e2e/auth.ts), submit практики создаёт одну
 // строку attempt на прогон — приемлемо на этой стадии, но не гонять в цикле
-// без пауз (signupThrottle бюджет 10/час, см. auth.ts).
+// без пауз (login-троттл 10/10мин на общей таблице signup_throttle, см.
+// AUTH_THROTTLE_LIMITS в src/lib/anti-cheat.ts).
 
 test.describe("smoke", () => {
   test.beforeEach(() => {

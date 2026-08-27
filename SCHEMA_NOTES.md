@@ -133,9 +133,10 @@ Schema changes from the CLAUDE_AUDIT.md closure batch (findings detail there):
   captured at submit; `/result` reads it owner-path (fallback to the live key for
   legacy attempts). A client read would bypass the answer_key lock **and** the tier
   gate — `verify` asserts the anon denial (mirror of the `answer_key` assertion).
-- **0022 `signup_throttle`** — signup velocity-cap; SERVER-ONLY, RLS + grants revoked.
-  Stores `sha256(ip)` (not PII), one row per signup attempt; `signUp` caps sign-ups
-  per IP per hour (`SIGNUP_THROTTLE_*`) over the fail-open captcha.
+- **0022 `signup_throttle`** — shared auth/predictor velocity-cap; SERVER-ONLY, RLS +
+  grants revoked. Stores `sha256("<scope>:<ip|email>")` (not PII), one row per attempt;
+  every scope (signup/login/reset/resetEmail/predictor) goes through the advisory-locked
+  `checkIpThrottle` (limits in `AUTH_THROTTLE_LIMITS`) over the fail-open captcha.
 
 ## RLS on all tables (§6.1)
 

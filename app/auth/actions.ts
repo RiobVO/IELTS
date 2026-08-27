@@ -1,20 +1,12 @@
 "use server";
 
-import { createHash } from "node:crypto";
-import { and, eq, gte, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
-import { signupThrottle } from "@/db/schema";
 import { publicSiteUrl } from "@/env";
 import { captureServer } from "@/lib/analytics/server";
 import { sanitizeSource, SOURCE_COOKIE_NAME } from "@/lib/analytics/source";
-import {
-  exceedsSignupRate,
-  isHoneypotTripped,
-  SIGNUP_THROTTLE_WINDOW_SECONDS,
-} from "@/lib/anti-cheat";
+import { isHoneypotTripped } from "@/lib/anti-cheat";
 import { checkIpThrottle as checkAuthThrottle } from "@/lib/anti-bot/ip-throttle";
 import { verifyTurnstile } from "@/lib/anti-bot/turnstile";
 import { isEmailNotConfirmed } from "@/lib/auth/email-confirm";
@@ -99,23 +91,14 @@ export async function signUp(formData: FormData) {
   }
 
   // Signup velocity-cap (§11 anti-abuse): ограничиваем регистрации с одного IP в
-  // окне — поверх captcha (fail-open без ключей). IP из x-forwarded-for (на Vercel
-  // ставит платформа); для rate-limit достаточно — defense-in-depth, не
-  // security-граница. Храним sha256(ip), не сам адрес.
-  const h = await headers();
-  const ipRaw = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const ipHash = createHash("sha256").update(ipRaw).digest("hex");
-  const since = new Date(Date.now() - SIGNUP_THROTTLE_WINDOW_SECONDS * 1000);
-  const [recent] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(signupThrottle)
-    .where(
-      and(eq(signupThrottle.ipHash, ipHash), gte(signupThrottle.createdAt, since)),
-    );
-  if (exceedsSignupRate(recent?.n ?? 0)) {
+  // окне — поверх captcha (fail-open без ключей). Defense-in-depth, не
+  // security-граница. Атомарный COUNT→INSERT под advisory try-lock (общий
+  // checkIpThrottle) — прежний inline-путь был check-then-act без лока и
+  // пропускал конкурентный burst сверх капа (аудит 2026-07-17, minor #4).
+  // Порог и CGNAT-обоснование — AUTH_THROTTLE_LIMITS.signup.
+  if (await checkAuthThrottle("signup")) {
     fail("Too many sign-ups from your network. Please try again later.", { mode: "signup", email, ...keepNext(next) });
   }
-  await db.insert(signupThrottle).values({ ipHash });
 
   const supabase = await createClient();
   // Куда вести браузер после клика по ссылке подтверждения (актуально ТОЛЬКО когда
