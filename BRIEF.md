@@ -520,7 +520,8 @@ Claude Design; (3) выдать готовый ПРОМТ со всеми реш
    под стелс-запуск на разовую тёплую волну ~600 из 2 ТГ-каналов клиента (заливка контента
    клиентом шла параллельно — часть пунктов ушла в срочный режим). **P1 Storage-гигиена:**
    `scripts/storage-orphans.ts` вычистил 758.5 MB сирот (Storage 762→3.4 MB из 1024,
-   закрывает BACKLOG OPS-1); кап 15 MB на mp3 при импорте. **P2 QTYPE hard-block:**
+   закрывает BACKLOG OPS-1); кап 12 MB на mp3 при импорте (ужесточён с 15 той же волной,
+   код — `MAX_IMPORT_AUDIO_MB`). **P2 QTYPE hard-block:**
    publish блокируется на пустом/нераспознанном qtype, `docs/authoring-spec.md` для клиента
    (закрывает BACKLOG W2-3b). **P3 Digest-cron:** диагноз показал ложную тревогу (piggyback
    на `snapshot-ranks` by design, не регрессия) — выделен собственный крон. **P6 Pre-order +
