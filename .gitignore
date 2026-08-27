@@ -82,5 +82,5 @@ npm-debug.log*
 # Исходные HTML-тесты клиента (лицензионный материал) — рабочая папка импорта,
 # в репозиторий не попадают ни при каком `add -A`. Канон формата живёт в
 # src/lib/import/runner/fixtures/, туда и смотрят парсеры.
-"/HTML READING/"
-"/HTML LISTENING/"
+/HTML READING/
+/HTML LISTENING/
