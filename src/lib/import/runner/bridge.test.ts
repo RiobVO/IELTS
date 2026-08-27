@@ -358,3 +358,70 @@ describe("practice audio bridge — рантайм (jsdom)", () => {
     expect(mockAudio.currentTime).toBe(42); // не изменилось
   });
 });
+
+// Третья форма choose-TWO (Volume 6 Test 3, найдена 2026-08-07): чекбоксы лежат в
+// .mcq-checkbox-group, номера вопросов — диапазоном в id охватывающего блока, атрибута
+// data-mcq-group нет вовсе. Мост её не видел: ни группы, ни input[name="q25"] — и в
+// mock-режиме ответы на оба вопроса уходили ПУСТЫМИ при любом выборе.
+//
+// Ключи здесь ПО-ВОПРОСНЫЕ (25:'B', 26:'E'), а не общий набор на всю группу, поэтому
+// членам раздаются отдельные буквы: отсортированные отмеченные значения по
+// отсортированным номерам. Это и есть «answers may be given in any order» из рубрики.
+const CHECKBOX_RANGE_DOM = `
+  <div class="question" id="question-25-26">
+    <div class="question-rubric"><h3>Questions 25-26</h3><p>Choose TWO letters, A-E.</p></div>
+    <div class="question-content">
+      <div class="mcq-checkbox-group">
+        <label><input type="checkbox" name="mcq-25-26" value="A"><span>A</span></label>
+        <label><input type="checkbox" name="mcq-25-26" value="B"><span>B</span></label>
+        <label><input type="checkbox" name="mcq-25-26" value="C"><span>C</span></label>
+        <label><input type="checkbox" name="mcq-25-26" value="D"><span>D</span></label>
+        <label><input type="checkbox" name="mcq-25-26" value="E"><span>E</span></label>
+      </div>
+    </div>
+  </div>
+`;
+
+/** Ставит галочки на указанных буквах и собирает ответы. */
+function collectWithChecked(values: string[]): Record<number, string> {
+  document.body.innerHTML = CHECKBOX_RANGE_DOM;
+  for (const v of values) {
+    const box = document.querySelector<HTMLInputElement>(`input[value="${v}"]`);
+    if (box) box.checked = true;
+  }
+  const fn = new Function("document", `${READING_COLLECT}\n return __collect();`) as (
+    d: Document,
+  ) => Record<number, string>;
+  return fn(document);
+}
+
+describe("READING_COLLECT — choose TWO с номерами диапазоном в id", () => {
+  it("раздаёт буквы по вопросам, а не общий набор обоим", () => {
+    const a = collectWithChecked(["B", "E"]);
+    expect(a[25]).toBe("B");
+    expect(a[26]).toBe("E");
+  });
+
+  it("порядок нажатия не влияет — рубрика разрешает любой", () => {
+    expect(collectWithChecked(["E", "B"])[25]).toBe("B");
+    expect(collectWithChecked(["E", "B"])[26]).toBe("E");
+  });
+
+  it("частичный выбор не выдумывает второй ответ", () => {
+    const a = collectWithChecked(["C"]);
+    expect(a[25]).toBe("C");
+    expect(a[26]).toBe("");
+  });
+
+  it("ничего не отмечено — оба пустые", () => {
+    const a = collectWithChecked([]);
+    expect(a[25]).toBe("");
+    expect(a[26]).toBe("");
+  });
+
+  it("лишние галочки не роняют сбор", () => {
+    const a = collectWithChecked(["A", "B", "C"]);
+    expect(a[25]).toBe("A");
+    expect(a[26]).toBe("B");
+  });
+});

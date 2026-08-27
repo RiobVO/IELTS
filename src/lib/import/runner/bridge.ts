@@ -30,6 +30,40 @@ function __readingMultiFor(q){
   }
   return null;
 }
+// Третья форма choose-TWO (Volume 6 Test 3): чекбоксы в .mcq-checkbox-group, номера
+// вопросов — ДИАПАЗОНОМ в id охватывающего блока («question-25-26») или в name самих
+// чекбоксов («mcq-25-26»), атрибута data-mcq-group нет. Без этой ветки ни группа, ни
+// input[name="qN"] не находились, и ответы на оба вопроса уходили ПУСТЫМИ при любом
+// выборе — тихая потеря двух баллов из сорока.
+//
+// Ключи здесь ПО-ВОПРОСНЫЕ (25:'B', 26:'E'), а не общий набор на группу, поэтому членам
+// раздаются РАЗНЫЕ буквы: отсортированные отмеченные значения по отсортированным
+// номерам. Это буквальный смысл рубрики «NB Your answers may be given in any order»:
+// какой галочкой человек щёлкнул первой, роли не играет.
+function __readingRangeMultiFor(q){
+  var groups = document.querySelectorAll('.mcq-checkbox-group');
+  for (var i = 0; i < groups.length; i++){
+    // Блок с data-mcq-group грейдится общим набором — им занимается __readingMultiFor.
+    if (groups[i].closest && groups[i].closest('[data-mcq-group]')) continue;
+    var boxes = Array.prototype.slice.call(groups[i].querySelectorAll('input[type="checkbox"]'));
+    if (!boxes.length) continue;
+    var token = boxes[0].getAttribute('name') || '';
+    var host = groups[i].closest ? groups[i].closest('[id]') : null;
+    if (!/[0-9]/.test(token) && host) token = host.id || '';
+    var nums = token.match(/[0-9]+/g) || [];
+    if (!nums.length) continue;
+    var lo = parseInt(nums[0], 10), hi = parseInt(nums[nums.length - 1], 10);
+    if (hi < lo){ var sw = lo; lo = hi; hi = sw; }
+    if (hi - lo > 40) continue; // не нумерация, а случайные цифры
+    if (q < lo || q > hi) continue;
+    var checked = boxes
+      .filter(function(c){ return c.checked; })
+      .map(function(c){ return c.value; })
+      .sort();
+    return checked[q - lo] || '';
+  }
+  return null;
+}
 function __collect(){
   var a = {};
   for (var q = 1; q <= 40; q++){
@@ -43,6 +77,8 @@ function __collect(){
     if (end){ a[q] = end.getAttribute('data-ending') || ''; continue; }
     var multi = __readingMultiFor(q);
     if (multi !== null){ a[q] = multi; continue; }
+    var ranged = __readingRangeMultiFor(q);
+    if (ranged !== null){ a[q] = ranged; continue; }
     var radio = document.querySelector('input[name="q'+q+'"]:checked');
     if (radio){ a[q] = radio.value; continue; }
     // Text-fallback зеркалит getAnswer (голый input[name=qN]) — устойчивее к отсутствию
