@@ -42,6 +42,15 @@ const RUN_CAP = 300;
  *  и уйдёт ЗАВТРА первым (listNudgeTargets сортирует по давности отметки). */
 const RUN_DEADLINE_MS = 240_000;
 
+/** Отсечка ПЕРЕД отправкой (остаточный сценарий Codex-ре-ревью): дедлайн выше
+ *  проверяется до получателя, но затянувшийся pickDailyQuestion/БД могли бы сдвинуть
+ *  старт доставки к самому maxDuration — Telegram сообщение примет, а платформа
+ *  оборвёт функцию до markNudged, и завтра человек получит дубль. Отправка не
+ *  начинается позже T+265с: доставка ≤25с (fetch-таймаут callBotApi) → ≤290с,
+ *  на отметку остаётся ≥10с. Непосланный получатель не отмечен → truncated → завтра
+ *  идёт первым. */
+const SEND_CUTOFF_MS = 265_000;
+
 function authorized(request: Request): boolean {
   return isCronAuthorized(request.headers.get("authorization"), cronSecret());
 }
@@ -66,6 +75,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     let processed = 0;
     const sentEvents: Array<{ distinctId: string; properties: { channel: "telegram"; kind: NudgeKind } }> = [];
 
+    // true = бюджета «доставка+отметка» не осталось: текущий получатель НЕ отмечен,
+    // возвращается в truncated-хвост и завтра идёт первым. Бухгалтерия здесь же,
+    // чтобы у трёх send-веток не разъезжались три копии.
+    const stopBeforeSend = (): boolean => {
+      if (Date.now() - startedAt <= SEND_CUTOFF_MS) return false;
+      processed -= 1;
+      truncated = targets.length - processed;
+      return true;
+    };
+
     for (const t of targets) {
       // Дедлайн проверяем ДО получателя: полуобработанный (вопрос ушёл, отметки нет)
       // хуже пропущенного — пропущенного честно догонит завтрашний прогон.
@@ -80,11 +99,13 @@ export async function POST(request: Request): Promise<NextResponse> {
         let kind: NudgeKind | null = null;
 
         if (pick.question) {
+          if (stopBeforeSend()) break;
           result = await deliverQuestion(cfg.token, t.chatId, t.userId, pick.question);
           kind = "daily_question";
         } else if (pick.dueTotal > 0) {
           // Повторять есть что, но эти задания без пассажа не решаются — зовём на
           // сайт, а не присылаем задачу без условия.
+          if (stopBeforeSend()) break;
           result = await sendStudentMessage(
             cfg.token,
             t.chatId,
@@ -101,6 +122,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           const streak = p?.streak ?? 0;
           const lastDay = p?.lastActivity != null ? String(p.lastActivity) : null;
           if (isStreakAtRisk(streak, lastDay, today)) {
+            if (stopBeforeSend()) break;
             result = await sendStudentMessage(cfg.token, t.chatId, streakMessage(streak, practiceUrl()));
             kind = "streak";
           } else {
