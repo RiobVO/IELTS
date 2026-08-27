@@ -28,10 +28,19 @@ import type { NudgeKind } from "@/lib/analytics/events";
  * отправки, поэтому повторный прогон в тот же день никому не пишет второй раз.
  */
 export const dynamic = "force-dynamic";
+// Явный потолок функции: RUN_DEADLINE_MS (240с) обязан помещаться в лимит с запасом
+// на финализацию (batch-события, отметки), какой бы ни была платформенная умолчалка.
+export const maxDuration = 300;
 
 /** Потолок получателей за прогон: держит крон в пределах лимита времени функции
  *  (Telegram ~30 msg/s, но каждый получатель — ещё и пара запросов в БД). */
 const RUN_CAP = 300;
+
+/** Мягкий дедлайн прогона (мс): последовательная рассылка на сотни получателей может
+ *  не влезть в лимит функции, а убитая платформой лямбда не оставляет ни ответа, ни
+ *  лога. Останавливаемся сами с запасом: необработанный хвост не отмечен last_nudge_on
+ *  и уйдёт ЗАВТРА первым (listNudgeTargets сортирует по давности отметки). */
+const RUN_DEADLINE_MS = 240_000;
 
 function authorized(request: Request): boolean {
   return isCronAuthorized(request.headers.get("authorization"), cronSecret());
@@ -46,15 +55,25 @@ export async function POST(request: Request): Promise<NextResponse> {
   const today = utcDateStr(new Date());
 
   try {
+    const startedAt = Date.now();
     const targets = await listNudgeTargets(today, RUN_CAP);
     let questions = 0;
     let streaks = 0;
     let onSite = 0;
     let silent = 0;
     let unlinked = 0;
+    let truncated = 0;
+    let processed = 0;
     const sentEvents: Array<{ distinctId: string; properties: { channel: "telegram"; kind: NudgeKind } }> = [];
 
     for (const t of targets) {
+      // Дедлайн проверяем ДО получателя: полуобработанный (вопрос ушёл, отметки нет)
+      // хуже пропущенного — пропущенного честно догонит завтрашний прогон.
+      if (Date.now() - startedAt > RUN_DEADLINE_MS) {
+        truncated = targets.length - processed;
+        break;
+      }
+      processed += 1;
       try {
         const pick = await pickDailyQuestion(t.userId);
         let result: Awaited<ReturnType<typeof sendStudentMessage>> = "ok";
@@ -121,8 +140,18 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     await captureServerBatch("nudge_sent", sentEvents);
 
+    // Обрыв по дедлайну — не тихая правка охвата: фиксируем в error_log, чтобы рост
+    // хвоста было видно ДО того, как рассылка перестанет доезжать до половины людей.
+    if (truncated > 0) {
+      await logError({
+        source: "server",
+        message: `telegram nudge run hit its deadline: ${truncated} of ${targets.length} recipients postponed to tomorrow`,
+        context: { route: "/api/cron/telegram-nudge", truncated, targets: targets.length },
+      });
+    }
+
     return NextResponse.json(
-      { ok: true, targets: targets.length, questions, streaks, onSite, silent, unlinked },
+      { ok: true, targets: targets.length, questions, streaks, onSite, silent, unlinked, truncated },
       { status: 200 },
     );
   } catch (e) {

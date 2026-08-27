@@ -60,10 +60,16 @@ function readSnapshotQuestions(raw: unknown): SnapshotKeyQuestion[] {
  */
 export async function getOpenMistakes(
   userId: string,
-  opts: { limit?: number; offset?: number } = {},
+  opts: { limit?: number; offset?: number; scanCap?: number } = {},
 ): Promise<OpenMistake[]> {
   const limit = opts.limit && opts.limit > 0 ? Math.floor(opts.limit) : DEFAULT_LIMIT;
   const offset = opts.offset && opts.offset > 0 ? Math.floor(opts.offset) : 0;
+  // Кап истории задаётся вызывающим (бот-крон сканит меньше сайта), но никогда не
+  // выше общего потолка — он защищает сам запрос.
+  const scanCap =
+    opts.scanCap && opts.scanCap > 0
+      ? Math.min(Math.floor(opts.scanCap), ATTEMPT_SCAN_CAP)
+      : ATTEMPT_SCAN_CAP;
 
   // Сданные попытки + их снапшот + мета теста; параллельно — резолюции пользователя.
   // Inner join к снапшоту отсекает legacy; desc(submittedAt) — свежие сверху (важно
@@ -75,7 +81,23 @@ export async function getOpenMistakes(
         contentItemId: attempt.contentItemId,
         submittedAt: attempt.submittedAt,
         answers: attempt.answers,
-        snapshot: attemptReviewSnapshot.snapshot,
+        // Проекция снапшота ВНУТРИ SQL: деривации нужны только number/qtype/mode/accept
+        // (readSnapshotQuestions), а полный jsonb несёт ещё explanation/evidence на все
+        // 40 вопросов — на вечернем кроне это до 300 снапшотов НА КАЖДОГО из 300
+        // получателей, разница в байтах на порядок. CASE-гейт по jsonb_typeof: у
+        // битого/нестандартного снапшота (questions не массив) jsonb_array_elements
+        // упал бы ошибкой запроса — отдаём пустой список, как readSnapshotQuestions.
+        snapshot: sql<unknown>`jsonb_build_object('questions', case
+          when jsonb_typeof(${attemptReviewSnapshot.snapshot}->'questions') = 'array' then coalesce((
+            select jsonb_agg(jsonb_build_object(
+              'number', q.value->'number',
+              'qtype',  q.value->'qtype',
+              'mode',   q.value->'mode',
+              'accept', q.value->'accept'))
+            from jsonb_array_elements(${attemptReviewSnapshot.snapshot}->'questions') as q(value)
+          ), '[]'::jsonb)
+          else '[]'::jsonb
+        end)`,
         title: contentItem.title,
         section: contentItem.section,
         // Каталожное правило роутинга (has_runner) — сам runner_html не тянем (тяжёлый).
@@ -86,7 +108,7 @@ export async function getOpenMistakes(
       .innerJoin(contentItem, eq(contentItem.id, attempt.contentItemId))
       .where(and(eq(attempt.userId, userId), eq(attempt.status, "submitted")))
       .orderBy(desc(attempt.submittedAt))
-      .limit(ATTEMPT_SCAN_CAP),
+      .limit(scanCap),
     db
       .select({
         contentItemId: mistakeResolution.contentItemId,

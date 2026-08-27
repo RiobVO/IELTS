@@ -214,6 +214,9 @@ export async function listNudgeTargets(today: string, limit: number): Promise<Nu
         or(sql`${telegramLink.lastNudgeOn} is null`, ne(telegramLink.lastNudgeOn, today)),
       ),
     )
+    // Дольше всех не получавшие — первыми (NULL = никогда → в голову): при обрыве
+    // прогона по deadline/лимиту хвост не голодает системно, а догоняется завтра.
+    .orderBy(sql`${telegramLink.lastNudgeOn} asc nulls first`)
     .limit(limit);
   return rows.filter((r): r is NudgeTarget => r.chatId != null);
 }
