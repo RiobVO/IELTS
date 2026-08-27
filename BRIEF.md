@@ -527,8 +527,8 @@ Claude Design; (3) выдать готовый ПРОМТ со всеми реш
    на `snapshot-ranks` by design, не регрессия) — выделен собственный крон. **P6 Pre-order +
    тихие поломки:** guest `/pricing` видит early-bird, `preorder` несёт `source_page`,
    `signup_throttle` чистится кроном, `pg_advisory_xact_lock` в trial-гейте заменён атомарным
-   `trial_claim` (`0054`), `SIGNUP_THROTTLE_MAX` поднят 10→100/час/IP под CGNAT-волну (подпись
-   владельца). **P5 Атрибуция каналов:** `?src=<slug>` → cookie → `source` в PostHog на
+   `trial_claim` (`0054`), signup-кап поднят 10→100/час/IP под CGNAT-волну (подпись
+   владельца; ныне `AUTH_THROTTLE_LIMITS.signup`). **P5 Атрибуция каналов:** `?src=<slug>` → cookie → `source` в PostHog на
    signup. **P4 Mobile release-gate:** 3 golden path пройдены автоматикой + живым проходом
    владельца на реальном телефоне; 2 major-находки (плавающий тулбар аннотаций на тач в
    mock-режиме, широкая matching-таблица утаскивала инструкции скроллом) зачинены —
