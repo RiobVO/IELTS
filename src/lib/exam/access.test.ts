@@ -53,10 +53,6 @@ import {
 
 // (a) profile/count-запросы: .from().where() -> Promise<rows>.
 const whereChain = (rows: unknown[]) => ({ from: () => ({ where: () => Promise.resolve(rows) }) });
-// (b) hasConsumedTrial: .from().innerJoin().where().limit() -> Promise<rows>.
-const trialChain = (rows: unknown[]) => ({
-  from: () => ({ innerJoin: () => ({ where: () => ({ limit: () => Promise.resolve(rows) }) }) }),
-});
 // (c) profile FOR UPDATE (startAttempt lock): .from().where().limit().for() -> Promise<rows>.
 const lockChain = () => ({ from: () => ({ where: () => ({ limit: () => ({ for: () => Promise.resolve([]) }) }) }) });
 // (d) existing/existingUnderLock in_progress lookup: .from().where().orderBy().limit() -> Promise<rows>.
@@ -85,16 +81,16 @@ afterEach(async () => {
 describe("enforceAccess", () => {
   it("published-тест + достаточный tier -> доступ, без redirect и без запросов к БД", async () => {
     await expect(
-      enforceAccess("u1", "premium", "premium", "full_reading", "item1", "mock", false),
+      enforceAccess("u1", "premium", "premium", "mock", false),
     ).resolves.toBeUndefined();
     expect(redirectFn).not.toHaveBeenCalled();
     expect(select).not.toHaveBeenCalled();
   });
 
-  it("tier ниже required, не-trial (одиночный пассаж) -> redirect на /app/upgrade", async () => {
-    // passage_1 не входит в FULL_CATEGORIES -> trial-лейн неприменим, БД не читаем.
+  it("tier ниже required -> redirect на /app/upgrade, БД не читаем", async () => {
+    // С 0063 без trial-лейна: недостаточный тир — безусловный deny до любого запроса.
     await expect(
-      enforceAccess("u1", "basic", "premium", "passage_1", "item1", null, false),
+      enforceAccess("u1", "basic", "premium", null, false),
     ).rejects.toThrow("REDIRECT:/app/upgrade");
     expect(redirectFn).toHaveBeenCalledWith("/app/upgrade");
     expect(select).not.toHaveBeenCalled();
@@ -106,7 +102,7 @@ describe("enforceAccess", () => {
     // meetsTier(basic,basic) истинно -> ветка (a) пропущена целиком, читаем только кап.
     select.mockReturnValueOnce(whereChain([{ n: 5 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false),
+      enforceAccess("u1", "basic", "basic", "mock", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=mock");
     expect(redirectFn).toHaveBeenCalledWith("/app/practice?limit=mock");
     // Зеркало practice-ассерта ниже (см. access.ts:217) — weekly-отказ тоже обязан
@@ -117,7 +113,7 @@ describe("enforceAccess", () => {
   it("Basic practice daily-cap исчерпан -> redirect на /app/practice?limit=practice", async () => {
     select.mockReturnValueOnce(whereChain([{ n: 2 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
+      enforceAccess("u1", "basic", "basic", "practice", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=practice");
     expect(redirectFn).toHaveBeenCalledWith("/app/practice?limit=practice");
     // Отказ по капу обязан оставлять телеметрический след — иначе он невидим (§11).
@@ -127,17 +123,17 @@ describe("enforceAccess", () => {
   it("Basic practice: 1-й и 2-й старт проходят (n=0, n=1 < лимита 2), 3-й режется (n=2)", async () => {
     select.mockReturnValueOnce(whereChain([{ n: 0 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
+      enforceAccess("u1", "basic", "basic", "practice", false),
     ).resolves.toBeUndefined();
 
     select.mockReturnValueOnce(whereChain([{ n: 1 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
+      enforceAccess("u1", "basic", "basic", "practice", false),
     ).resolves.toBeUndefined();
 
     select.mockReturnValueOnce(whereChain([{ n: 2 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
+      enforceAccess("u1", "basic", "basic", "practice", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=practice");
   });
 
@@ -145,58 +141,43 @@ describe("enforceAccess", () => {
     for (const n of [0, 1, 4]) {
       select.mockReturnValueOnce(whereChain([{ n }]));
       await expect(
-        enforceAccess("u1", "basic", "basic", "full_listening", "item1", "mock", false),
+        enforceAccess("u1", "basic", "basic", "mock", false),
       ).resolves.toBeUndefined();
     }
 
     select.mockReturnValueOnce(whereChain([{ n: 5 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_listening", "item1", "mock", false),
+      enforceAccess("u1", "basic", "basic", "mock", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=mock");
   });
 
   it("Premium/Ultra не капается ни на practice, ни на mock — ветка (b) вообще не читает БД", async () => {
     await expect(
-      enforceAccess("u1", "premium", "basic", "part_1", "item1", "practice", false),
+      enforceAccess("u1", "premium", "basic", "practice", false),
     ).resolves.toBeUndefined();
     expect(select).not.toHaveBeenCalled();
 
     await expect(
-      enforceAccess("u1", "ultra", "basic", "full_listening", "item1", "mock", false),
+      enforceAccess("u1", "ultra", "basic", "mock", false),
     ).resolves.toBeUndefined();
     expect(select).not.toHaveBeenCalled();
   });
 
   it("резюм существующей попытки (mode=null) не расходует кап — ветка (b) не читает БД, даже для Basic", async () => {
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_reading", "item1", null, false),
+      enforceAccess("u1", "basic", "basic", null, false),
     ).resolves.toBeUndefined();
     expect(select).not.toHaveBeenCalled();
     expect(redirectFn).not.toHaveBeenCalled();
   });
 
-  it("trial-лейн: Basic + full-mock + trial не израсходован -> доступ (mock-кап тоже пройден)", async () => {
-    select
-      .mockReturnValueOnce(trialChain([])) // hasConsumedTrial -> ничего не найдено -> не израсходован
-      .mockReturnValueOnce(whereChain([{ n: 0 }])); // недельный mock-кап далеко не исчерпан
+  it("tier ниже required на mock-старте -> deny ДО чтения капа (redirect бросает в ветке (a))", async () => {
+    // 0063: гейт по тиру безусловный; ветка (b) с COUNT-запросом не достигается.
     await expect(
-      enforceAccess("u1", "basic", "premium", "full_reading", "item1", "mock", false),
-    ).resolves.toBeUndefined();
-    expect(redirectFn).not.toHaveBeenCalled();
-  });
-
-  // Codex-ревью волны G: регрессия «hasConsumedTrial всегда false» дала бы бесконечные
-  // бесплатные full-моки — потреблённый trial обязан приводить к deny, не только
-  // не-потреблённый к allow.
-  it("trial-лейн: Basic + full-mock + trial УЖЕ потреблён -> redirect на /app/upgrade", async () => {
-    // hasConsumedTrial находит расход (попытка на другом/сданном full-тесте) -> deny.
-    select.mockReturnValueOnce(trialChain([{ id: "a1" }]));
-    await expect(
-      enforceAccess("u1", "basic", "premium", "full_reading", "item1", "mock", false),
+      enforceAccess("u1", "basic", "premium", "mock", false),
     ).rejects.toThrow("REDIRECT:/app/upgrade");
     expect(redirectFn).toHaveBeenCalledWith("/app/upgrade");
-    // Дневной кап после deny не читается — redirect бросает до ветки (b).
-    expect(select).toHaveBeenCalledTimes(1);
+    expect(select).not.toHaveBeenCalled();
   });
 
   // G1-1 + Codex-ревью P1: soft-чек НЕ знает фактического бонуса юзера (снапшот
@@ -207,12 +188,12 @@ describe("enforceAccess", () => {
   it("mock: ранний чек не отказывает, пока расход укладывается в база+потолок бонуса", async () => {
     select.mockReturnValueOnce(whereChain([{ n: BASIC_MOCK_WEEKLY_LIMIT }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false),
+      enforceAccess("u1", "basic", "basic", "mock", false),
     ).resolves.toBeUndefined();
 
     select.mockReturnValueOnce(whereChain([{ n: BASIC_MOCK_WEEKLY_LIMIT + REFERRAL_MOCK_BONUS_MAX - 1 }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false),
+      enforceAccess("u1", "basic", "basic", "mock", false),
     ).resolves.toBeUndefined();
   });
 
@@ -221,14 +202,14 @@ describe("enforceAccess", () => {
       whereChain([{ n: BASIC_MOCK_WEEKLY_LIMIT + REFERRAL_MOCK_BONUS_MAX }]),
     );
     await expect(
-      enforceAccess("u1", "basic", "basic", "full_reading", "item1", "mock", false),
+      enforceAccess("u1", "basic", "basic", "mock", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=mock");
   });
 
   it("practice-кап потолком бонуса НЕ поднимается", async () => {
     select.mockReturnValueOnce(whereChain([{ n: BASIC_PRACTICE_DAILY_LIMIT }]));
     await expect(
-      enforceAccess("u1", "basic", "basic", "part_1", "item1", "practice", false),
+      enforceAccess("u1", "basic", "basic", "practice", false),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=practice");
   });
 
@@ -236,7 +217,7 @@ describe("enforceAccess", () => {
     // Тир заведомо недостаточен (basic < ultra) и кап заведомо исчерпан был бы —
     // bypass обязан отсечь ОБЕ проверки до первого select.
     await expect(
-      enforceAccess("u1", "basic", "ultra", "full_reading", "item1", "mock", true),
+      enforceAccess("u1", "basic", "ultra", "mock", true),
     ).resolves.toBeUndefined();
     expect(redirectFn).not.toHaveBeenCalled();
     expect(select).not.toHaveBeenCalled();
@@ -333,10 +314,10 @@ describe("startAttempt — resume-under-lock (Codex review 2026-07-17, мино�
       .mockReturnValueOnce(
         orderLimitChain([{ id: "att-under-lock", answers: { q1: "x" }, mode: "practice" }]),
       ); // existingUnderLock — найден, конкурент уже открыл этот же item
-    const result = await startAttempt("u1", "item1", "practice", false, null, "basic");
+    const result = await startAttempt("u1", "item1", "practice", null, "basic");
     expect(result).toEqual({ attemptId: "att-under-lock", answers: { q1: "x" }, mode: "practice" });
     // Ровно 2 select — cap-COUNT (был бы третьим) никогда не выполняется:
-    // резюм отсекает и trialClaim-блок, и cap-check блок целиком.
+    // резюм отсекает cap-check блок целиком.
     expect(select).toHaveBeenCalledTimes(2);
     expect(redirectFn).not.toHaveBeenCalled();
   });
@@ -355,7 +336,7 @@ describe("startAttempt — authoritative cap-COUNT (code review 2026-07-19)", ()
       .mockReturnValueOnce(orderLimitChain([])) // existingUnderLock — резюма нет, гонки не было
       .mockReturnValueOnce(whereChain([{ n: 2 }])); // cap-COUNT — лимит (2) уже исчерпан
     await expect(
-      startAttempt("u1", "item1", "practice", false, null, "basic"),
+      startAttempt("u1", "item1", "practice", null, "basic"),
     ).rejects.toThrow("REDIRECT:/app/practice?limit=practice");
     expect(redirectFn).toHaveBeenCalledWith("/app/practice?limit=practice");
     expect(captureFn).toHaveBeenCalledWith("cap_hit", "u1", {
@@ -383,7 +364,7 @@ describe("startAttempt — authoritative cap-COUNT (code review 2026-07-19)", ()
       ); // test_start-мета: db.select внутри fire-and-forget after()-колбэка openNewAttempt
     insert.mockReturnValueOnce(insertChain([{ id: "att-new" }]));
 
-    const result = await startAttempt("u1", "item1", "practice", false, null, "basic");
+    const result = await startAttempt("u1", "item1", "practice", null, "basic");
 
     // Happy-path startAttempt НЕ редиректит — возвращает StartResult; редирект на
     // страницу попытки делает уже вызывающая RSC-страница, вне этой функции.
@@ -396,11 +377,7 @@ describe("startAttempt — authoritative cap-COUNT (code review 2026-07-19)", ()
   });
 });
 
-// Не покрыто юнит-тестом (см. отчёт волны G): реальная гонка trial_claim под
-// db.transaction (startAttempt isTrial-ветка) — требует настоящей БД/advisory-семантики
-// PK-конфликта, хрупкий мок дал бы ложную уверенность без проверки реальной гонки.
-//
-// То же самое (Codex-ревью 2026-07-17, blocker) — САМА СЕРИАЛИЗАЦИЯ АВТОРИТЕТНОЙ
+// Не покрыто юнит-тестом (Codex-ревью 2026-07-17, blocker) — САМА СЕРИАЛИЗАЦИЯ АВТОРИТЕТНОЙ
 // транзакционной проверки Basic-капа внутри startAttempt (реально ли SELECT ...
 // FOR UPDATE на profile БЛОКИРУЕТ конкурента, а не просто вызывается) — мок
 // db.transaction() тут дал бы ложную уверенность, что сериализация работает,
@@ -415,6 +392,5 @@ describe("startAttempt — authoritative cap-COUNT (code review 2026-07-19)", ()
 // локом vs. cap-COUNT» — тестом startAttempt выше (минор #3); это единственные
 // чистые части логики, вынесенные/тестируемые именно ради этого без БД. Сам
 // row-lock (реально ли БЛОКИРУЕТ конкурента, а не просто вызывается) проверен
-// чтением apply-post-submit.ts (тот же паттерн, уже в проде) и остаётся
-// непокрытым юнитом до отдельного интеграционного прогона на реальной БД (как
-// для trial_claim выше).
+// чтением apply-post-submit.ts (тот же паттерн, уже в проде) и покрыт
+// интеграционно на реальной БД в test/db/attempts.db.test.ts (лок-порядок §6).

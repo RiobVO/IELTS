@@ -196,8 +196,6 @@ export default async function ReadingTestPage({
     user.id,
     userTier,
     test.tier_required as Tier,
-    test.category,
-    id,
     existing ? null : modeParam,
     isDraftPreview, // adminDraftBypass — только когда isAdmin уже подтверждён выше
   );
@@ -273,17 +271,11 @@ export default async function ReadingTestPage({
   // reveal). qtype-гейт зеркалит locateEvidence (matching_info/headings: para≈ответ).
   const locatorEligible = mode === "practice" && !audioSrc;
 
-  // Пройти enforceAccess с !meetsTier можно только по trial-лейну (§4.8) → trial-старт:
-  // H3-атомарный claim в startAttempt. Admin-draft-preview — НЕ trial (доступ дан
-  // bypass'ом, не расходом слота): forced false, иначе admin съел бы свой trial-
-  // слот QA-прогоном черновика.
-  const isTrial = !isDraftPreview && !meetsTier(userTier, test.tier_required as Tier);
-
   const [{ attemptId, answers: savedAnswers, mode: attemptMode }, annotations, locatableRows] = await Promise.all([
     // `resume` из батча выше (с mock→practice конверсией admin-preview) — резюм без
     // повторного SELECT той же строки. userTier — авторитетная Basic-кап проверка
     // теперь внутри транзакции startAttempt (не только soft-check в enforceAccess).
-    startAttempt(user.id, id, mode, isTrial, resume, userTier),
+    startAttempt(user.id, id, mode, resume, userTier),
     // Reader annotations (W2-1) — owner-path read of the user's own highlights/notes
     // for this test (RLS-safe; user-scoped). Passed to the passage pane to re-apply.
     db

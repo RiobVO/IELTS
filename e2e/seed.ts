@@ -237,8 +237,8 @@ interface SeedContent {
 }
 
 // Item 1 — атомизированный reading (БЕЗ runner_html): каталог маршрутит его на
-// /app/reading/[id]. category=passage_1 (практический, НЕ full_* → trial-лейн не
-// задевается). 5 вопросов разных типов: 2 текст-ввода (Q3/Q4), 2 MCQ (Q2/Q5), 1 tfng (Q1).
+// /app/reading/[id]. category=passage_1 (практический, не full_*). 5 вопросов
+// разных типов: 2 текст-ввода (Q3/Q4), 2 MCQ (Q2/Q5), 1 tfng (Q1).
 const ATOMIZED_READING: SeedContent = {
   id: SEED_ATOMIZED_READING_ID,
   sourceFilePath: SEED_ATOMIZED_SOURCE,
@@ -310,7 +310,7 @@ const ATOMIZED_READING: SeedContent = {
 
 // Item 2 — раннер-mock (runner_html задан): каталог маршрутит его на /app/exam/[id];
 // спеки стартуют ?mode=mock → iframe → тест bridge-протокола. category=passage_2
-// (не full_* → без trial). Два short_answer с exact-ключами, совпадающими с тем,
+// (не full_*). Два short_answer с exact-ключами, совпадающими с тем,
 // что шлёт RUNNER_MOCK_HTML (Q1=ALPHA, Q2=BETA) → детерминированный грейд 2/2.
 const RUNNER_MOCK: SeedContent = {
   id: SEED_RUNNER_MOCK_ID,
@@ -425,8 +425,8 @@ const SEED_CONTENT = [ATOMIZED_READING, RUNNER_MOCK, ADMIN_DRAFT];
  */
 async function seedOneContent(db: SeedDb, c: SeedContent): Promise<void> {
   await db.transaction(async (tx) => {
-    // Cascade: content_item → passage/question/answer_key/attempt (+ trial_claim,
-    // mistake_* по FK). Re-seed стартует с чистого item.
+    // Cascade: content_item → passage/question/answer_key/attempt (+ mistake_*
+    // по FK). Re-seed стартует с чистого item.
     await tx.delete(contentItem).where(eq(contentItem.sourceFilePath, c.sourceFilePath));
 
     const questionTypes = [...new Set(c.questions.map((q) => q.qtype as string))];

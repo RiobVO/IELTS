@@ -298,7 +298,7 @@ export function AuthScreen({ error, message, refCode, next, initialMode, initial
             <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
               <div className="auth-rise">
                 <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 4px" }}>Create your account</h1>
-                <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "0 0 22px" }}>Your first full test is free. No card.</p>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "0 0 22px" }}>Reading & Listening tests are free. No card.</p>
               </div>
 
               {(error || message || refCode) && (

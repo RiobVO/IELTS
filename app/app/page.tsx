@@ -10,7 +10,7 @@ import { getVocabDueSummary, type VocabDueSummary } from "@/lib/vocab/summary";
 import { db } from "@/db";
 import { attempt, contentItem, leaderboardEntry } from "@/db/schema";
 import { categoryLabel, qtypeLabel, LISTENING_CATEGORIES } from "@/lib/labels";
-import { FULL_CATEGORIES } from "@/lib/exam/trial";
+import { FULL_CATEGORIES } from "@/lib/exam/categories";
 import { computeBandPlan, type BandPlan, type BandPlanWeakType } from "@/lib/progress/band-plan";
 import { getExamCountdown, isInCurrentTzWeek, isSameTzDay, type ExamCountdown } from "@/lib/progress/exam-countdown";
 import { computeDailyPlan, getCatalogAvailability, getMistakesDueSummary, type DailyPlan, type DailyPlanItem } from "@/lib/progress/daily-plan";

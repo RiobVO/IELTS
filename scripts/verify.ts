@@ -33,7 +33,7 @@ const REQUIRED = [
   "DATABASE_URL",
 ] as const;
 
-const APP_TABLE_COUNT = 38; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040) + saved_word (P11 «Saved words», 0041) + mistake_review (SR, 0044) + sprint_signup (пилот-когорта, 0051) + preorder (early-bird, 0052) + trial_claim (P6 trial-lane guard, 0054) + telegram_link (student bot, 0061)
+const APP_TABLE_COUNT = 37; // 13 from §5 + payment (2D) + annotation (0013) + leaderboard_snapshot (0014) + attempt_review_snapshot (0021) + signup_throttle (0022) + writing_task/submission/feedback/feedback_debug (Writing Lab, 0023) + speaking_task/submission/feedback/feedback_debug/audio_event (Speaking Lab, 0027) + error_log (0034) + vocab_deck/vocab_card/vocab_progress (Vocabulary, 0037) + mistake_resolution (P9-rich, 0040) + saved_word (P11 «Saved words», 0041) + mistake_review (SR, 0044) + sprint_signup (пилот-когорта, 0051) + preorder (early-bird, 0052) + telegram_link (student bot, 0061); trial_claim (0054) dropped by 0063
 
 let failures = 0;
 const ok = (msg: string) => console.log(`[OK] ${msg}`);
@@ -752,9 +752,8 @@ async function main() {
   // 4h. Full-lock coverage gaps (N13, AUDIT_2026-07-02): signup_throttle (IP-хэши,
   // 0022) и leaderboard_snapshot (0014, только service_role) не ассертились — на
   // проде Supabase раздаёт широкие default-grants новым таблицам, и регресс RLS-off
-  // локальный гейт иначе не поймает. trial_claim (P6, 0054) — та же SERVER-ONLY
-  // постура (маркер расхода trial, клиенту не выдаётся): full-lock.
-  for (const t of ["signup_throttle", "leaderboard_snapshot", "trial_claim"] as const) {
+  // локальный гейт иначе не поймает.
+  for (const t of ["signup_throttle", "leaderboard_snapshot"] as const) {
     const l = await tableLock(t);
     if (l.rlsEnabled && l.noClientPolicy && l.anonDenied && l.authDenied)
       ok(`RLS — anon+authenticated SELECT on ${t} denied`);

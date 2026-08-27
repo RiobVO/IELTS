@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getProfile, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { attempt as attemptTable, contentItem } from "@/db/schema";
-import { FULL_CATEGORIES, isFullCategory, trialConsumedBy, type TrialAttemptRow } from "@/lib/exam/trial";
 import { getHeaderData } from "@/lib/notifications/header-data";
 import { getPublishedTests } from "@/lib/content/published";
 import { effectiveTier, meetsTier, mockWeeklyLimit, type Tier } from "@/lib/tiers";
@@ -117,9 +116,9 @@ export default async function PracticePage({
 
   // Профиль (тир) / submitted-попытки (weak-spots + слабый тип + best band + best
   // raw score) / in_progress (resume + прогресс строк) / оба published-списка /
-  // trial-лейн / lifetime attempted-ids — параллельно, одной волной. Прогрев шапки
+  // lifetime attempted-ids — параллельно, одной волной. Прогрев шапки
   // конкурентно (cache()'d, AppShell переиспользует).
-  const [profile, submittedRows, inProgressRes, readingTests, listeningTests, trialRows, attemptedRows] =
+  const [profile, submittedRows, inProgressRes, readingTests, listeningTests, attemptedRows] =
     await Promise.all([
       getProfile(),
       // Единое owner-чтение submitted-попыток (Drizzle обходит RLS — скоуп по user.id
@@ -150,20 +149,6 @@ export default async function PracticePage({
         .limit(100),
       getPublishedTests("reading"),
       getPublishedTests("listening"),
-      // Trial-лейн (§4.8): (content_item_id, status) попыток на полных gated-тестах.
-      // Раньше шёл серийным хопом ПОСЛЕ батча (ждал userTier), теперь в общей волне —
-      // запрос дешёвый, для non-basic результат просто отбрасывается ниже.
-      db
-        .selectDistinct({ id: attemptTable.contentItemId, status: attemptTable.status })
-        .from(attemptTable)
-        .innerJoin(contentItem, eq(contentItem.id, attemptTable.contentItemId))
-        .where(
-          and(
-            eq(attemptTable.userId, user.id),
-            ne(contentItem.tierRequired, "basic"),
-            inArray(contentItem.category, [...FULL_CATEGORIES]),
-          ),
-        ),
       // Lifetime attempted content_item_id (для секционного счётчика "Done N of M" —
       // НЕ bestRawById: тот зависит от submitted-окна (300 строк выше → slice(0,50)
       // под hero/bestBand) и несёт best raw_score для дисплея на карточке ("Done ·
@@ -189,12 +174,6 @@ export default async function PracticePage({
   // Hero/drill/bestBand считаются по старому 50-окну недавних попыток: набор
   // отсортирован desc, slice эквивалентен прежнему limit(50) отдельного запроса.
   const submitted = submittedRows.slice(0, 50);
-
-  // Trial-лейн (§4.8): Basic получает ОДИН бесплатный полный gated-тест; правило
-  // расхода per-card считает trialConsumedBy (единый источник с hasConsumedTrial).
-  // Premium/ultra проходят обычным tier-гейтом — им набор не нужен, отбрасываем.
-  const trialAttempts: TrialAttemptRow[] =
-    userTier === "basic" ? trialRows.map((r) => ({ contentItemId: r.id, status: r.status })) : [];
 
   // Weak-spots виджет (P-OwnC) — 3–5 слабейших типов по всей истории (300-окно) с
   // min-порогом надёжности (total >= 4, дефолт aggregateWeakness). Ниже порога /
@@ -263,16 +242,9 @@ export default async function PracticePage({
   const now = Date.now();
 
   const tests: PracticeTest[] = all.map(({ t, section }) => {
-    const gated = !meetsTier(userTier, t.tier_required);
-    // Trial-лейн (§4.8): Basic видит ОДИН полный gated-тест как бесплатный. Карта
-    // кликабельна, только если единственные попытки юзера на ней — in_progress (свой
-    // недосданный trial); submitted этого item или попытка на другом full → 🔒/upgrade.
-    const trialEligible =
-      gated &&
-      userTier === "basic" &&
-      isFullCategory(t.category) &&
-      !trialConsumedBy(trialAttempts, t.id);
-    const locked = gated && !trialEligible;
+    // С 0063 без trial-лейна: gated = locked (на проде весь R/L basic — ветка
+    // живёт как seam будущего пейвола).
+    const locked = !meetsTier(userTier, t.tier_required);
     const answered = answeredById.get(t.id);
     const bestRaw = bestRawById.get(t.id);
     return {
@@ -284,7 +256,6 @@ export default async function PracticePage({
       questionCount: t.question_count,
       durationMin: t.duration_seconds ? Math.round(t.duration_seconds / 60) : null,
       locked,
-      trial: trialEligible,
       href: locked ? "/app/upgrade" : examHref(t),
       progress: answered != null && t.question_count > 0 ? `Resume · ${answered} / ${t.question_count}` : null,
       done: bestRaw != null && t.question_count > 0 ? `Done · ${bestRaw} / ${t.question_count}` : null,
@@ -457,9 +428,8 @@ function buildHero({
     const matches = pool.filter((t) => t.question_types.includes(w.type));
     if (!matches.length) continue;
     const pick = matches.find((t) => meetsTier(userTier, t.tier_required)) ?? matches[0];
-    // Переиспользуем уже посчитанные locked/href из tests (учитывают trial-лейн),
-    // а не считаем tier-гейт заново — иначе hero звал бы на upgrade для доступного
-    // по trial теста. Fallback на прямой расчёт защищает от отсутствия строки.
+    // Переиспользуем уже посчитанные locked/href из tests, а не считаем tier-гейт
+    // заново. Fallback на прямой расчёт защищает от отсутствия строки.
     const row = tests.find((t) => t.id === pick.id);
     const locked = row ? row.locked : !meetsTier(userTier, pick.tier_required);
     const mins = pick.duration_seconds ? Math.round(pick.duration_seconds / 60) : null;

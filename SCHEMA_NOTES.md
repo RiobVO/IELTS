@@ -915,6 +915,9 @@ default privileges: у `authenticated` остались `REFERENCES`/`TRIGGER`/`
 
 ## 0054 — trial_claim (атомарный guard trial-лейна, замена advisory-lock)
 
+> **DROPPED миграцией 0063 (2026-08-09, W2-14):** trial-механика удалена целиком —
+> пивот 2026-07-17 сделал её недостижимой. Секция сохранена как провенанс.
+
 Additive-таблица (P6; 2026-07-11), **37-я** (`verify.ts` `APP_TABLE_COUNT` 36 → 37).
 Номер 0054, не 0053: 0053 занят `0053_referral_invitee_unique` (закоммичен параллельно,
 UNIQUE на `referral.invitee_id`, таблицу не добавляет — count остался 36).
@@ -1101,3 +1104,15 @@ AND code_expires_at > now()` гасит код в том же запросе, п
 Теперь такой импорт падает на constraint (fail-closed вместо тихой порчи). Прод
 проверен на дубли (0 групп) перед применением. Constraint-only миграция: количество
 таблиц не меняется (`APP_TABLE_COUNT` = 37), RLS-постура `passage` не тронута.
+
+## 0063 — DROP trial_claim (W2-14: trial-механика удалена)
+
+Решение владельца 2026-08-09: пивот монетизации 2026-07-17 (весь R/L
+`tier_required='basic'`, капы стартов вместо пейвола контента) сделал trial-лейн
+недостижимым — код снят той же волной (`trial.ts`, `hasConsumedTrial`, isTrial-ветка
+`startAttempt`; `FULL_CATEGORIES`/`isFullCategory` переехали в
+`src/lib/exam/categories.ts`). Таблица держала 7 исторических claim-строк (учёт до
+пивота) — решение о доступе из них не деривилось (источник всегда `attempt`), потеря
+приемлема, дампы 30д. `down.sql` — СХЕМНЫЙ rollback (структура 0054 целиком: FK,
+индекс, RLS, гранты, backfill), исторические строки не восстанавливает.
+`APP_TABLE_COUNT` 38 → **37**; Drizzle-экспортов 36 (legacy `topic` в БД остаётся).

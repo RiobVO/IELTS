@@ -9,7 +9,7 @@ import { listMigrations } from "../../scripts/migrate.ts";
  * триггеры реальной SQL-схемы на throwaway нативном PG. globalSetup уже
  * доказывает «миграции с нуля + последовательное применение» (полный
  * migrateUp на чистой схеме перед каждым прогоном) — здесь только точечные
- * инварианты: partial unique 0007, UNIQUE 0053/0054, auth-триггеры 0002/0005,
+ * инварианты: partial unique 0007, UNIQUE 0053, auth-триггеры 0002/0005,
  * FK ON DELETE-контракты, CHECK-constraints. UNIQUE(provider,
  * provider_transaction_id) уже закрыт test/db/payments.db.test.ts — не
  * дублируется здесь.
@@ -75,7 +75,7 @@ async function seedInProgressAttempt(userId: string, contentItemId: string): Pro
 
 beforeEach(async () => {
   // Полный чистый лист: TRUNCATE auth.users каскадом сносит profile → attempt/
-  // referral/trial_claim/payment; content_item отдельно (не FK-зависим от юзера).
+  // referral/payment; content_item отдельно (не FK-зависим от юзера).
   await sql`TRUNCATE auth.users, content_item, error_log CASCADE`;
 });
 
@@ -179,32 +179,6 @@ describe("0053: UNIQUE(invitee_id) на referral", () => {
         INSERT INTO referral (inviter_id, invitee_id, code, status)
         VALUES (${inviter2}, ${invitee}, 'DBTEST-CODE-2', 'registered')`,
     ).rejects.toMatchObject({ code: "23505" });
-  });
-});
-
-describe("0054: trial_claim PRIMARY KEY(user_id)", () => {
-  it("второй claim того же юзера → 23505", async () => {
-    const userId = await seedUser();
-    const itemId = await seedContentItem();
-    const item2Id = await seedContentItem();
-
-    await sql`INSERT INTO trial_claim (user_id, content_item_id) VALUES (${userId}, ${itemId})`;
-
-    await expect(
-      sql`INSERT INTO trial_claim (user_id, content_item_id) VALUES (${userId}, ${item2Id})`,
-    ).rejects.toMatchObject({ code: "23505" });
-  });
-
-  it("ON DELETE CASCADE content_item_id (0054): удаление теста освобождает claim", async () => {
-    const userId = await seedUser();
-    const itemId = await seedContentItem();
-    await sql`INSERT INTO trial_claim (user_id, content_item_id) VALUES (${userId}, ${itemId})`;
-
-    await sql`DELETE FROM content_item WHERE id = ${itemId}`;
-
-    const [row] = await sql<{ user_id: string }[]>`
-      SELECT user_id FROM trial_claim WHERE user_id = ${userId}`;
-    expect(row).toBeUndefined();
   });
 });
 

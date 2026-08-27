@@ -194,7 +194,8 @@ gitleaks запинен на commit SHA, db-backup
       (через экстракцию `finalize-submit.ts` — см. итог)
 - [x] конкурентный referral reward → начисляется один раз
 - [x] падение внутри транзакции → откат всех связанных записей (инъекции триггерами:
-      applyPostSubmit, startAttempt-trial, finalizeSubmit-после-claim)
+      applyPostSubmit, startAttempt-cap (trial-вариант снят с механикой, 0063),
+      finalizeSubmit-после-claim)
 - [x] порядок локов profile→content_item под нагрузкой → без deadlock
 - [x] повторное применение webhook/event — уже закрыт 0a-db (replay/out-of-order/
       конкурентные webhook на реальном PG), не дублирован; дыр не найдено

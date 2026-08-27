@@ -48,7 +48,8 @@ e2e на проде: импорт → publish → Playwright mock 40/40 band 9.0
 UTC-нед (суммарно R+L), Premium/Ultra безлимит; W/S платные. Авторитетный кап
 транзакционный — `startAttempt` (`src/lib/exam/access.ts`) берёт `SELECT ... FOR UPDATE`
 на `profile` первым действием (порядок локов profile→content_item). Trial-механика
-(`trial_claim`) вестигиальна — каталог открыт, tier-гейт её не триггерит.
+удалена целиком (W2-14, миграция 0063, 2026-08-09): tier-гейт стал безусловным deny,
+`FULL_CATEGORIES`/`isFullCategory` переехали в `src/lib/exam/categories.ts`.
 
 **Growth-волна 1 ЗАКРЫТА (`706a73f..9905461`, GROWTH_PLAN.md).** Виральный
 контур целиком: реферальная награда = +1 mock-старт/нед обоим (потолок +3,
@@ -253,8 +254,8 @@ the daily cap. Mock path must not change when adding practice features.
 ## Migrations & schema
 
 - `src/db/schema.ts` (Drizzle) is the **typed source of truth**: **37 DB tables** as of
-  `0055_attempt_cap_index` (index-only migration, `APP_TABLE_COUNT` unchanged at 37; `verify.ts`
-  `APP_TABLE_COUNT = 37` asserts it; schema.ts types **36** — the legacy
+  `0063_drop_trial_claim` (0061 added telegram_link → 38, 0063 dropped trial_claim → 37;
+  `verify.ts` `APP_TABLE_COUNT = 37` asserts it; schema.ts types **36** — the legacy
   `topic` table lingers in the DB, its export dropped as dead code). Keep schema.ts and the SQL in
   **lockstep**; per-table provenance + RLS in **SCHEMA_NOTES.md**.
 - Executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by
