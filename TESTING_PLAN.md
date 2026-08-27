@@ -500,7 +500,9 @@ Runbook прогона (ручной, НЕ в CI — по образцу §7):
 Правило: тронул модуль — закрой его строку. Route handlers с тестом: 7/18;
 actions: 3/16. Непокрыто (полный список аудита):
 
-- [ ] auth actions + OAuth callback
+- [~] auth actions + OAuth callback: ЧАСТИЧНО закрыто 2026-08-09 —
+      `app/auth/actions.test.ts` прибивает проводку signUp→`checkIpThrottle("signup")`
+      (стоп до `supabase.auth.signUp`); остальные actions и OAuth callback открыты
 - [ ] exam runner route + его security headers
 - [ ] payment webhook route (→ волны 0a/0b)
 - [ ] speaking evaluate route
@@ -570,3 +572,4 @@ actions: 3/16. Непокрыто (полный список аудита):
 | 4 эксплуатация | ⬜ по триггерам | — |
 | Вне волновой сетки: транзакционные инварианты студенческого бота — сьют test:db 118→130 (`telegram-pending` 10: заявка на ответ под `FOR UPDATE`, «пять одновременных нажатий → ровно один вердикт», клейм по чужому вопросу не гасит текущее ожидание; `telegram-daily-question` 8: источник = сданные попытки при пустом `mistake_review`, published-гейт, отбор решаемого в чате, приоритет SM-2). Оба файла написаны КРАСНЫМИ на живом дефекте прода (`UPDATE ... RETURNING` возвращал обнулённые поля → ноль вердиктов) | ✅ закрыт | 2026-08-07 (`efe27dc..51d86fa`) |
 | Парсинг-трек «Inspera» вне волновой сетки: сьют 1575→1662 (import 485+), golden-фикстура канона, jsdom DOM-тест bridge, ad-hoc live e2e на проде (import→publish→Playwright mock 40/40→уборка); CI-инцидент: `npm audit` гейт покраснел на транзитивной brace-expansion (high) от jsdom → закрыт non-breaking `npm audit fix` (`a213274`); оставшиеся moderate (drizzle-kit/next) ниже гейта | ✅ закрыт | 2026-07-21 (`7781435..a213274`) |
+| Вне волновой сетки: атомарность signup velocity-cap (prod-аудит 2026-07-17 minor #4) — test:db 130→132 (`signup-throttle`: конкурентный burst у границы капа → ровно один false, счёт ровно max; ×10 зелёный) + action-level тест проводки signUp→helper (`app/auth/actions.test.ts`, vitest 2062→2064) | ✅ закрыт | 2026-08-09 (`d967716`) |
