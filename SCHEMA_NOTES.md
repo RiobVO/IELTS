@@ -62,12 +62,11 @@ attempt, badge, user_badge, referral, leaderboard_entry, topic, notification`.
   the owner-read cohort (§4i loop: RLS on + anon SELECT denied) and a `mistake_review`
   `INSERT`-denied case in `clientWriteLockdown` (§6), mirroring `saved_word`.
 
-The DB has **34** tables. `verify.ts` `APP_TABLE_COUNT` must track it — bump **33 → 34**
-for `0044` (`mistake_review`; count-only this round, see above). `src/db/schema.ts` types
-**33** of them: the legacy `topic` table (migration `0000`, Phase 1)
-is unused since Phase 3 moved to `writing_task`/`speaking_task`, so its Drizzle export +
-`topic_skill` enum were dropped as dead code (#26) while the empty table lingers in the DB
-(no destructive drop). Re-add a typed export only if `topic` is ever revived.
+The DB has **36** tables (as of `0064`), and `verify.ts` `APP_TABLE_COUNT` tracks it.
+Historical note: the legacy `topic` table (migration `0000`, Phase 1) was unused since
+Phase 3 moved to `writing_task`/`speaking_task`; its Drizzle export + `topic_skill`
+enum went first (dead code, #26), the empty table itself was dropped by `0064`
+(2026-08-09) — since then the DB count equals the schema.ts export count.
 
 ## `user` → `profile`, keyed to `auth.users.id`
 
@@ -1116,3 +1115,12 @@ AND code_expires_at > now()` гасит код в том же запросе, п
 приемлема, дампы 30д. `down.sql` — СХЕМНЫЙ rollback (структура 0054 целиком: FK,
 индекс, RLS, гранты, backfill), исторические строки не восстанавливает.
 `APP_TABLE_COUNT` 38 → **37**; Drizzle-экспортов 36 (legacy `topic` в БД остаётся).
+
+## 0064 — DROP topic (легаси Phase 1)
+
+Заглушка каталога Writing/Speaking-тем из 0000_init, вытесненная реальными
+`writing_task`/`speaking_task` (0023/0027). Drizzle-экспорт и `topic_skill`-enum
+из schema.ts сняты давно (#26); сама таблица (0 строк, inbound-FK нет) дропнута
+2026-08-09 волной чистки вестигиального. `down.sql` воспроизводит структуру +
+RLS/grants/политику 0000/0001; enum `topic_skill` в БД остаётся (часть 0000_init).
+`APP_TABLE_COUNT` 37 → **36** — впервые равен числу Drizzle-экспортов.

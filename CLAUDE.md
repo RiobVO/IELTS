@@ -160,12 +160,26 @@ auth-правки (GO-with-changes, оба блокера закрыты) + фи
 test:db 132. Побочный урок: пуши волны легли в окно 14:00 UTC — тик nudge-крона 09.08
 по всем признакам съеден (известная мина, не код-баг).
 
-**Открыто:** проверить тик nudge-крона 10.08 в спокойном окне (не пушить в
-~13:50–15:00 UTC); контент-процесс W2-3
+**ПОЛНЫЙ ПРОД-ВАЙП (2026-08-09 вечер, решение владельца).** Снесено: 31 аккаунт
+(все кроме 2 админов — владелец + клиент; их счётчики обнулены), весь прогресс
+(109 попыток, W/S-сабмишены, словарный прогресс, уведомления, рефералы, шеринг),
+**весь контент-каталог R/L** (14 items; Storage: 35 сирот / 60.3 MB вычищено,
+speaking-audio уже был пуст). Целы: vocab-деки/карты, writing/speaking-задания,
+бейджи, регионы. Транзакционно, с pre/post-инвентаризацией; бэкап-дамп 03:51 UTC
+09.08 покрывает старое состояние (30 дней). **КАТАЛОГ ПУСТ — сайт без тестов до
+перезаливки клиентом** (исходники в `HTML READING|LISTENING/` и заливаются ботом).
+Той же волной: **0064** дропнула легаси-`topic` — `APP_TABLE_COUNT=36` впервые
+равен числу Drizzle-экспортов; вычищены мёртвые экспорты по knip
+(`createNotification`-одиночка удалён, 10 символов разэкспортированы,
+`domhandler` объявлен прямой зависимостью).
+
+**Открыто:** ПЕРЕЗАЛИВКА КОНТЕНТА клиентом (каталог пуст после вайпа; телеграм-бот
+импорта жив, admin-аккаунты целы); проверить тик nudge-крона 10.08 в спокойном окне
+(не пушить в ~13:50–15:00 UTC; связка бота снесена вайпом — переприязать код в
+профиле); контент-процесс W2-3
 (BACKLOG), merchant-ключи (внешний гейт платежей → волна 0b), Listening-аудио от
-клиента (4 драфта; у опубликованного C21 Test 1 озвучена только Part 1 — при этом в
-`HTML LISTENING/` лежат `P1–P4 (mp3)`, возможно полный комплект озвучки на заливку
-ботом), два `?src=`-линка в посты каналов.
+клиента (в `HTML LISTENING/` лежат `P1–P4 (mp3)`, возможно полный комплект озвучки
+C21 Test 1), два `?src=`-линка в посты каналов.
 Порядок работы: план с acceptance → «делай» → реализация.
 
 ## Commands
@@ -253,10 +267,10 @@ the daily cap. Mock path must not change when adding practice features.
 
 ## Migrations & schema
 
-- `src/db/schema.ts` (Drizzle) is the **typed source of truth**: **37 DB tables** as of
-  `0063_drop_trial_claim` (0061 added telegram_link → 38, 0063 dropped trial_claim → 37;
-  `verify.ts` `APP_TABLE_COUNT = 37` asserts it; schema.ts types **36** — the legacy
-  `topic` table lingers in the DB, its export dropped as dead code). Keep schema.ts and the SQL in
+- `src/db/schema.ts` (Drizzle) is the **typed source of truth**: **36 DB tables** as of
+  `0064_drop_topic` (0063 dropped trial_claim, 0064 dropped the legacy `topic` stub;
+  `verify.ts` `APP_TABLE_COUNT = 36` asserts it and now equals the schema.ts export
+  count — the DB↔schema drift is gone). Keep schema.ts and the SQL in
   **lockstep**; per-table provenance + RLS in **SCHEMA_NOTES.md**.
 - Executable contract is hand-authored SQL in `migrations/NNNN_name/{up,down}.sql`, applied by
   `scripts/migrate.ts` (custom up/down, `_migrations` bookkeeping). Drizzle Kit `generate` is
