@@ -7,6 +7,13 @@ import { telegramConfig, publicSiteUrl } from "@/env";
 
 const API = "https://api.telegram.org";
 
+// Потолок ожидания Bot API: Telegram отвечает за секунды, а fetch без таймаута
+// висит неограниченно. В вечерней рассылке один зависший вызов провёз бы прогон
+// мимо его дедлайна (240с) до платформенного обрыва — а обрыв МЕЖДУ отправкой и
+// markNudged означает завтрашний дубль получателю (Codex-ревью 2026-08-07).
+// 25с ≪ 60с запаса между дедлайном и maxDuration крона.
+const BOT_API_TIMEOUT_MS = 25_000;
+
 /**
  * Вызов метода Bot API ЛЮБЫМ токеном. Бросает при сетевой/логической ошибке.
  * Токен параметром, а не из env внутри: ботов теперь два — админский канал импорта
@@ -21,6 +28,7 @@ export async function callBotApi<T>(
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(BOT_API_TIMEOUT_MS),
   });
   const json = (await res.json()) as {
     ok: boolean;
