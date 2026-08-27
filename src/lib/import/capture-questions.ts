@@ -129,6 +129,73 @@ export function captureQuestions(
   });
   if (groupBad) return "";
 
+  // --- choose-TWO третьей формы (Volume 6 Test 3): .mcq-checkbox-group БЕЗ
+  // data-mcq-group, номера вопросов — ТОЛЬКО диапазоном в name чекбоксов («mcq-25-26»)
+  // или id охватывающего блока («question-25-26»). Ключи в источнике ПО-ВОПРОСНЫЕ
+  // (correctAnswers 25:'B', 26:'E'), общий mcq_set-механизм выше сломал бы грейдинг —
+  // поэтому слоты НЕ "checkbox", а "range-checkbox" + data-members: рендерер раздаёт
+  // отмеченные буквы по членам позиционно (rangeGroupToggle — зеркало моста
+  // __readingRangeMultiFor). Приоритет токена номеров зеркалит мост: name первого
+  // чекбокса, если несёт цифры, иначе id ближайшего [id]-хоста (атомайзер
+  // parse-reading-full читает id первым — на канон-файлах оба несут один диапазон).
+  // Не-эта-форма (нет цифр / одиночный номер / диапазон длиннее теста) — молча
+  // общему проходу ниже; ДЕФЕКТ формы — fail-closed "" на весь пассаж, как у
+  // mcq-block выше (частичный захват не должен пройти coverage/presence).
+  let rangeBad = false;
+  root.find(".mcq-checkbox-group").each((_, el) => {
+    if (rangeBad) return;
+    const $group = $(el);
+    // Блок с data-mcq-group обработан общим набором выше (им занимается __readingMultiFor).
+    if ($group.closest("[data-mcq-group]").length > 0) return;
+    const boxes = $group.find("input[type='checkbox']").toArray();
+    if (boxes.length === 0) return;
+    let token = $(boxes[0]).attr("name") ?? "";
+    if (!/[0-9]/.test(token)) token = $group.closest("[id]").attr("id") ?? "";
+    const nums = token.match(/\d+/g)?.map((n) => Number.parseInt(n, 10)) ?? [];
+    if (nums.length === 0) return;
+    const lo = Math.min(...nums);
+    const hi = Math.max(...nums);
+    if (hi - lo > 40) return; // не нумерация, а случайные цифры (зеркало моста/парсера)
+    if (lo === hi) return; // одиночный номер — обычный вопрос, общий проход разберётся
+    const members: number[] = [];
+    for (let n = lo; n <= hi; n++) members.push(n);
+    if (!members.every(validQ)) { rangeBad = true; return; }
+    // пересечение с mcq_set-группами или другой range-группой — битый источник
+    for (const n of members) {
+      if (groupNums.has(n)) { rangeBad = true; return; }
+    }
+    // опций меньше, чем членов — ответить на всех невозможно, форма дефектна
+    if (boxes.length < members.length) { rangeBad = true; return; }
+    // каждый чекбокс — опция группы (без своей по-вопросной адресации) с непустым
+    // уникальным value (тот же чеклист, что у mcq-block выше)
+    const seenVal = new Set<string>();
+    for (const box of boxes) {
+      const $box = $(box);
+      const ownQ = $box.attr("data-q");
+      const nm = $box.attr("name") ?? "";
+      if ((ownQ && /^\d+$/.test(ownQ)) || /^q\d+$/i.test(nm)) { rangeBad = true; return; }
+      const v = ($box.attr("value") ?? "").trim();
+      if (!v || seenVal.has(v)) { rangeBad = true; return; }
+      seenVal.add(v);
+    }
+    for (const n of members) groupNums.add(n);
+    const membersAttr = members.join(",");
+    for (const box of boxes) {
+      $(box).replaceWith(
+        `<span class="q-slot" data-q="${lo}" data-qtype="range-checkbox" data-members="${membersAttr}"` +
+          ` data-value="${esc($(box).attr("value") ?? "")}"></span>`,
+      );
+    }
+    // якоря остальных членов — внутри того же top-level блока (sibling группы), чтобы
+    // slotNumbersIn/coverage смонтировали аффордансы и увидели номера.
+    const anchors = members
+      .filter((n) => n !== lo)
+      .map((n) => `<span class="q-slot" data-q="${n}" data-qtype="group-anchor"></span>`)
+      .join("");
+    if (anchors) $group.after(anchors);
+  });
+  if (rangeBad) return "";
+
   // text gaps: заменяем целиком .blank-wrapper (чтобы убрать cdi-placeholder/флаг внутри), иначе сам input.
   // groupNums.has(n) → номер уже занят choose-TWO группой: пересечение = битый источник, fail-closed.
   root.find("input[type='text'], textarea, input:not([type])").each((_, el) => {

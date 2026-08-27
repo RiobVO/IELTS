@@ -11,6 +11,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { unionChosen } from "@/lib/exam/listening-multi";
 
 /**
  * QuestionHtml — verbatim-рендер оригинальной вёрстки вопросов (как реальный
@@ -26,6 +27,9 @@ interface SlotCtx {
   answers: Record<string, string | string[]>;
   onAnswer: (n: number, v: string) => void;
   onToggle: (n: number, letter: string) => void;
+  /** choose-TWO с по-вопросными ключами (range-checkbox слот): раздача отмеченных
+   *  букв по членам группы — позиционная, живёт в ExamRunner (rangeGroupToggle). */
+  onRangeToggle: (members: number[], letter: string) => void;
 }
 const Ctx = createContext<SlotCtx | null>(null);
 
@@ -83,7 +87,19 @@ export function parseDropOptions(raw?: string): { v: string; label: string }[] |
   }
 }
 
-function Slot({ q, qtype, value, options }: { q: number; qtype: string; value?: string; options?: string }) {
+/** Парс `data-members` range-checkbox-слота («25,26»): ≥2 уникальных валидных номера,
+ *  по возрастанию. Мусор → null (рендерер покажет инертный плейсхолдер, не крашит
+ *  панель — тот же паттерн, что parseDropOptions). Экспортируется для юнит-теста. */
+export function parseRangeMembers(raw?: string): number[] | null {
+  if (!raw) return null;
+  const nums = raw.split(",").map((s) => Number.parseInt(s.trim(), 10));
+  if (nums.length < 2) return null;
+  if (!nums.every((n) => Number.isSafeInteger(n) && n > 0)) return null;
+  if (new Set(nums).size !== nums.length) return null;
+  return [...nums].sort((a, b) => a - b);
+}
+
+function Slot({ q, qtype, value, options, members }: { q: number; qtype: string; value?: string; options?: string; members?: string }) {
   const ctx = useContext(Ctx);
   if (!ctx) return null;
   const a = ctx.answers[String(q)];
@@ -123,6 +139,28 @@ function Slot({ q, qtype, value, options }: { q: number; qtype: string; value?: 
     const sel = value != null && arr.includes(value);
     return (
       <button type="button" role="checkbox" aria-checked={sel} aria-label={`Question ${q}, option ${value}`} onClick={() => ctx.onToggle(q, value ?? "")} className="q-hit" style={S.check(sel)}>
+        {sel && <span style={S.tick}>✓</span>}
+      </button>
+    );
+  }
+  // range-checkbox (choose-TWO с ПО-ВОПРОСНЫМИ ключами, Volume 6): галочка группы,
+  // чей checked-стейт выводится из значений ВСЕХ членов (буквы розданы позиционно —
+  // rangeGroupToggle в ExamRunner), а клик раздаёт набор заново. Битые члены →
+  // инертный плейсхолдер (панель не падает), как у drop.
+  if (qtype === "range-checkbox") {
+    const groupMembers = parseRangeMembers(members);
+    if (!groupMembers) return <span className="q-drop-broken" style={S.dropBroken} aria-hidden />;
+    const sel = value != null && unionChosen(ctx.answers, groupMembers).includes(value);
+    return (
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={sel}
+        aria-label={`Questions ${groupMembers[0]}–${groupMembers[groupMembers.length - 1]}, option ${value}`}
+        onClick={() => ctx.onRangeToggle(groupMembers, value ?? "")}
+        className="q-hit"
+        style={S.check(sel)}
+      >
         {sel && <span style={S.tick}>✓</span>}
       </button>
     );
@@ -196,7 +234,7 @@ function convert(
   if (el.classList && el.classList.contains("q-slot")) {
     const q = Number(el.getAttribute("data-q"));
     if (!Number.isFinite(q)) return null;
-    return <Slot key={key} q={q} qtype={el.getAttribute("data-qtype") ?? "text"} value={el.getAttribute("data-value") ?? undefined} options={el.getAttribute("data-options") ?? undefined} />;
+    return <Slot key={key} q={q} qtype={el.getAttribute("data-qtype") ?? "text"} value={el.getAttribute("data-value") ?? undefined} options={el.getAttribute("data-options") ?? undefined} members={el.getAttribute("data-members") ?? undefined} />;
   }
   const tag = el.tagName.toLowerCase();
   if (SKIP.has(tag)) return null;
@@ -245,6 +283,7 @@ export function QuestionHtml({
   answers,
   onAnswer,
   onToggle,
+  onRangeToggle,
   fallback,
   renderAffordances,
 }: {
@@ -252,6 +291,9 @@ export function QuestionHtml({
   answers: Record<string, string | string[]>;
   onAnswer: (n: number, v: string) => void;
   onToggle: (n: number, letter: string) => void;
+  /** range-checkbox (choose-TWO с по-вопросными ключами): позиционная раздача букв
+   *  по членам группы — живёт в ExamRunner (rangeGroupToggle от answersRef). */
+  onRangeToggle: (members: number[], letter: string) => void;
   fallback: ReactNode;
   /** Practice: рендер учебных аффордансов ОДНОГО вопроса (Check/Reveal/подсказки).
    *  undefined в mock/non-practice → verbatim рисуется как прежде, без аффордансов.
@@ -296,8 +338,8 @@ export function QuestionHtml({
   // Мемо значения контекста: без него каждый ре-рендер (например тик таймера родителя
   // ExamRunner) создаёт новый объект → все Slot'ы ре-рендерятся, хотя ответы не менялись.
   const ctxValue = useMemo<SlotCtx>(
-    () => ({ answers, onAnswer, onToggle }),
-    [answers, onAnswer, onToggle],
+    () => ({ answers, onAnswer, onToggle, onRangeToggle }),
+    [answers, onAnswer, onToggle, onRangeToggle],
   );
 
   if (!mounted || blocks == null) return <>{fallback}</>;

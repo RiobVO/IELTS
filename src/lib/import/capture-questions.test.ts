@@ -454,3 +454,105 @@ describe("captureQuestions — reveal-marker fail-closed (B1)", () => {
     expect($('.q-slot[data-q="1"]').length).toBe(1);
   });
 });
+
+// Третья форма choose-TWO (Volume 6 Test 3): чекбокс-группа .mcq-checkbox-group БЕЗ
+// data-mcq-group, номера — только диапазоном в name чекбоксов / id блока, ключи в
+// источнике ПО-ВОПРОСНЫЕ (25:'B', 26:'E'). Слоты — "range-checkbox" + data-members:
+// рендерер раздаёт отмеченные буквы позиционно (rangeGroupToggle), а не пишет общий
+// набор во всех членов (mcq_set-механизм сломал бы по-вопросный exact-грейдинг).
+describe("captureQuestions — choose-TWO третьей формы (.mcq-checkbox-group, диапазон в id)", () => {
+  const rangeBlock = (id: string, name: string, letters: string[]) =>
+    `<div class="question" id="${id}">` +
+    `<div class="question-rubric"><p>Choose <strong>TWO</strong> letters.</p></div>` +
+    `<div class="question-content"><div class="mcq-checkbox-group">` +
+    letters
+      .map(
+        (v) =>
+          `<label class="mcq-checkbox-row"><input type="checkbox" name="${name}" value="${v}"><span class="opt-text"><strong>${v}</strong> opt ${v}</span></label>`,
+      )
+      .join("") +
+    `</div></div></div>`;
+
+  it("оба члена покрыты: range-checkbox-слоты на первом номере + anchor на втором", () => {
+    const out = captureQuestions([rangeBlock("question-25-26", "mcq-25-26", ["A", "B", "C", "D", "E"])]);
+    expect(out).not.toBe("");
+    expect(questionsHtmlCoversAll(out, [25, 26])).toBe(true);
+    const $ = load(out, null, false);
+    expect($('.q-slot[data-qtype="range-checkbox"]').length).toBe(5);
+    expect($('.q-slot[data-qtype="range-checkbox"][data-q="25"]').length).toBe(5);
+    // каждый слот несёт членов группы для позиционной раздачи рендерером
+    expect($('.q-slot[data-qtype="range-checkbox"][data-members="25,26"]').length).toBe(5);
+    expect($('.q-slot[data-qtype="group-anchor"][data-q="26"]').length).toBe(1);
+    expect($('.q-slot[data-value="E"]').length).toBe(1);
+  });
+
+  it("номера берутся из name чекбоксов, когда id блока их не несёт (приоритет моста)", () => {
+    const out = captureQuestions([rangeBlock("question-block", "mcq-2-3", ["A", "B", "E"])]);
+    expect(questionsHtmlCoversAll(out, [2, 3])).toBe(true);
+    const $ = load(out, null, false);
+    expect($('.q-slot[data-qtype="range-checkbox"][data-q="2"][data-members="2,3"]').length).toBe(3);
+  });
+
+  it("одиночный номер в токене — НЕ эта форма: уходит общему checkbox-проходу", () => {
+    const out = captureQuestions([rangeBlock("question-7", "mcq-7", ["A", "B"])]);
+    const $ = load(out, null, false);
+    expect($('.q-slot[data-qtype="range-checkbox"]').length).toBe(0);
+    expect($('.q-slot[data-qtype="checkbox"][data-q="7"]').length).toBe(2);
+  });
+
+  it("группа внутри [data-mcq-group] не перехватывается (ею владеет mcq_set-механизм)", () => {
+    const block =
+      `<div class="question" id="question-group-23-24"><div data-mcq-group="23-24">` +
+      `<div class="mcq-checkbox-group">` +
+      `<label class="mcq-row"><input type="checkbox" name="mcq-23-24" value="A"></label>` +
+      `</div></div></div>`;
+    const out = captureQuestions([block]);
+    const $ = load(out, null, false);
+    expect($('.q-slot[data-qtype="range-checkbox"]').length).toBe(0);
+  });
+
+  it("рядом с обычными формами: text-вопрос и range-группа покрывают пассаж вместе", () => {
+    const single = `<div class="question" id="question-24"><p>Gap <input type="text" name="q24"></p></div>`;
+    const out = captureQuestions([single, rangeBlock("question-25-26", "mcq-25-26", ["A", "B", "C"])]);
+    expect(questionsHtmlCoversAll(out, [24, 25, 26])).toBe(true);
+  });
+
+  describe("fail-closed → '' на весь пассаж", () => {
+    it("дублирующийся value чекбокса", () => {
+      expect(captureQuestions([rangeBlock("question-25-26", "mcq-25-26", ["A", "A"])])).toBe("");
+    });
+    it("пустой value чекбокса", () => {
+      expect(captureQuestions([rangeBlock("question-25-26", "mcq-25-26", ["A", ""])])).toBe("");
+    });
+    it("опций меньше, чем членов диапазона", () => {
+      expect(captureQuestions([rangeBlock("question-25-27", "mcq-25-27", ["A", "B"])])).toBe("");
+    });
+    it("номер диапазона пересекается с mcq_set-группой", () => {
+      const mcqBlock =
+        `<div class="question" id="question-group-25-26"><div class="question-content">` +
+        `<div class="mcq-block" data-mcq-group="25-26">` +
+        `<div class="mcq-q-labels"><span class="mcq-q-num-box">25</span><span class="mcq-q-num-box">26</span></div>` +
+        `<label class="mcq-row"><input type="checkbox" name="mcq-g" value="A"></label>` +
+        `<label class="mcq-row"><input type="checkbox" name="mcq-g" value="B"></label>` +
+        `</div></div></div>`;
+      expect(captureQuestions([mcqBlock, rangeBlock("question-25-26", "mcq-25-26", ["A", "B"])])).toBe("");
+    });
+    it("две range-группы с пересекающимися диапазонами", () => {
+      const out = captureQuestions([
+        rangeBlock("question-25-26", "mcq-25-26", ["A", "B"]),
+        rangeBlock("question-26-27", "mcq-26-27", ["A", "B"]),
+      ]);
+      expect(out).toBe("");
+    });
+    it("чекбокс с по-вопросной адресацией (name=qN) внутри распознанной range-группы", () => {
+      // Токен диапазона — из id блока (name первого чекбокса цифр не несёт), а второй
+      // чекбокс адресован по-вопросно: смешанная адресация = битый источник.
+      const block =
+        `<div class="question" id="question-25-26"><div class="mcq-checkbox-group">` +
+        `<label><input type="checkbox" name="mcq" value="A"></label>` +
+        `<label><input type="checkbox" name="q25" value="B"></label>` +
+        `</div></div>`;
+      expect(captureQuestions([block])).toBe("");
+    });
+  });
+});
