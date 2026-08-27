@@ -219,7 +219,7 @@ export function parseMp4Duration(buf: Uint8Array): AudioDuration | null {
 }
 
 /** Хвост «головы» файла, которого хватает на ID3-тег с обложкой + служебный кадр. */
-export const AUDIO_HEAD_BYTES = 256 * 1024;
+const AUDIO_HEAD_BYTES = 256 * 1024;
 
 /** Единая точка входа: контейнер определяется по сигнатуре, а не по расширению. */
 export function parseAudioDuration(head: Uint8Array, totalBytes: number): AudioDuration | null {

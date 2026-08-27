@@ -37,7 +37,7 @@ export const QTYPE_LABELS: Record<string, string> = {
  * не-носителей при выборе, что тренировать. Контент английский by design (IELTS —
  * англоязычный экзамен); держим простым и конкретным.
  */
-export const QTYPE_DESCRIPTIONS: Record<string, string> = {
+const QTYPE_DESCRIPTIONS: Record<string, string> = {
   tfng: "Decide if each statement agrees with the text (True), contradicts it (False), or isn't mentioned (Not Given).",
   ynng: "Decide if each statement matches the writer's views (Yes), goes against them (No), or isn't stated (Not Given).",
   mcq_single: "Pick the one correct option from a list of choices.",
@@ -72,7 +72,7 @@ export const LISTENING_CATEGORIES = [
   "full_listening",
 ] as const;
 
-export const PERIOD_LABELS: Record<string, string> = {
+const PERIOD_LABELS: Record<string, string> = {
   weekly: "This week",
   monthly: "This month",
   all_time: "All time",

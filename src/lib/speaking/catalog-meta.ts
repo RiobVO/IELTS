@@ -76,7 +76,7 @@ export function coerceDifficulty(v: unknown): SpeakingDifficulty | null {
  * the card: a Foundation card suits a lower target, a Stretch card a higher one. Pure;
  * the catalog highlights a card when the target sits inside its window.
  */
-export const difficultyBand: Record<SpeakingDifficulty, readonly [number, number]> = {
+const difficultyBand: Record<SpeakingDifficulty, readonly [number, number]> = {
   1: [5.0, 6.0],
   2: [6.0, 7.0],
   3: [7.0, 8.5],

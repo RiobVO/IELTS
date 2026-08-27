@@ -6,7 +6,7 @@ import { meetsTier, SPEAKING_MIN_TIER, type Tier } from "@/lib/tiers";
 export const MIN_TRANSCRIPT_WORDS = 40;
 
 // Daily analysis caps bound Gemini spend (audio is pricier than text → tighter).
-export const SPEAKING_DAILY_CAP_ULTRA = 10;
+const SPEAKING_DAILY_CAP_ULTRA = 10;
 export const SPEAKING_STALE_MS_DEFAULT = 2 * 60 * 1000;
 
 // Cost-amp throttle (N3, зеркало Writing #21): провал оценки не тратит preview/cap,

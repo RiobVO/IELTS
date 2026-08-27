@@ -68,7 +68,3 @@ export async function createNotifications(
     return [];
   }
 }
-
-export async function createNotification(item: NewNotification): Promise<string[]> {
-  return createNotifications([item]);
-}

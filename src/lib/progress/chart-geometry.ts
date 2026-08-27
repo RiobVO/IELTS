@@ -12,7 +12,7 @@ import type { Trajectory, TrajectoryPoint, Forecast } from "./overview";
 // Padding общий для обоих форматов графика; размеры холста (viewBox) — параметры
 // buildChartGeometry: широкий на десктопе, более квадратный в мобильном портрете
 // (чтобы график не превращался в узкую полоску на телефоне).
-export const PAD = { l: 44, r: 18, t: 18, b: 28 };
+const PAD = { l: 44, r: 18, t: 18, b: 28 };
 export const CHART_DESKTOP = { w: 680, h: 272 };
 export const CHART_MOBILE = { w: 440, h: 320 };
 

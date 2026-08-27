@@ -6,7 +6,7 @@
  */
 import { createServiceClient } from "@/lib/supabase/service";
 
-export const SPEAKING_BUCKET = "speaking-audio";
+const SPEAKING_BUCKET = "speaking-audio";
 
 /** Signed PUT so the browser uploads directly to the private bucket (short TTL). */
 export async function signedUploadUrl(path: string): Promise<{ url: string; token: string }> {
