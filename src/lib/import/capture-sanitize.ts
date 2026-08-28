@@ -1,5 +1,6 @@
 import type { CheerioAPI, Cheerio } from "cheerio";
 import type { AnyNode } from "domhandler";
+import { sanitizeInlineMapStyle } from "./map-embed-css";
 
 /**
  * Узлы, целиком вырезаемые из захваченной вопрос-панели ДО отправки на клиент.
@@ -83,61 +84,13 @@ export function scrubReservedEmbedMarkers($: CheerioAPI, root: Cheerio<AnyNode>)
 }
 
 /**
- * Санитайзер CSS, уезжающего в srcdoc map-embed'а (capture-listening шаг 6).
- * Возвращает безопасный CSS или null = «стили небезопасны, embed отменяется».
- * Закрывает векторы Codex-ревью 2026-08-11 (блокеры 2–3):
- *  - синтез `</style>` стрипом комментариев (`</sty/​**​/le>`) вырывался из тега в
- *    HTML srcdoc — после стрипа ЛЮБОЕ `</` в тексте = отказ (легитимный CSS
- *    последовательность `</` не использует);
- *  - текст ответа в `content:"…"` в обход plain-regex: разрезание строк
- *    (`"Answer" ": B"`), CSS-escape (`"\41nswer"`), var()/attr()-индирекция —
- *    значение content допускается только инертной формы (см. isInertContentValue),
- *    всё прочее переписывается в `content:none`;
- *  - `url(…)`-декларации (сетевые маяки/раздувание) выбрасываются целиком.
- * Поверх — hasAnswerText по остатку: прямой текст ответа где угодно = отказ.
+ * Текст, отрисовываемый map-фрагментом, не должен нести ответ прямым словом:
+ * `<span>Correct answer: B</span>` в нейтральной разметке карты проходил
+ * class/id-детектор и уезжал в srcdoc (ревью 2026-08-11, второй заход).
+ * Вызывающий код трактует true как утечку части (fail-closed + onLeak).
  */
-export function sanitizeEmbedCss(raw: string): string | null {
-  let css = raw.replace(/\/\*[\s\S]*?\*\//g, "");
-  if (!css.trim()) return null;
-  if (/<\//.test(css)) return null;
-  css = css.replace(/(^|[^-\w])content\s*:\s*([^;{}]*)/gi, (m, pre: string, val: string) =>
-    isInertContentValue(val) ? m : `${pre}content:none`,
-  );
-  css = css.replace(/(^|[;{])\s*[-\w]+\s*:[^;{}]*url\s*\([^;{}]*/gi, "$1");
-  if (hasAnswerText(css)) return null;
-  const out = css.trim();
-  return out ? out : null;
-}
-
-/**
- * Инертные значения `content`: none/normal либо строка ≤3 символов без букв/цифр,
- * CSS-экранов (`\41` = 'A') и амперсандов — стрелки/кавычки легитимных CSS-карт
- * (Day 6: `content:"→"`) живут, любой текст — нет.
- */
-function isInertContentValue(val: string): boolean {
-  const v = val.trim().replace(/\s*!important\s*$/i, "");
-  if (/^(none|normal)$/i.test(v)) return true;
-  const m = /^(["'])([\s\S]*)\1$/.exec(v);
-  if (!m) return false;
-  return m[2].length <= 3 && !/[A-Za-z0-9\\&"']/.test(m[2]);
-}
-
-/**
- * Инлайновый style map-фрагмента: позиции (`top:86px`) сохраняем, но режем
- * кастом-свойства (`--x:"Answer: B"` питал бы `content:var(--x)` стайлшита до его
- * перезаписи — двойная защита), `content` и `url(` (маяки). Пустой остаток → null.
- */
-function sanitizeInlineMapStyle(raw: string): string | null {
-  const kept = raw
-    .split(";")
-    .map((d) => d.trim())
-    .filter((d) => {
-      if (!d) return false;
-      const prop = d.slice(0, d.indexOf(":")).trim().toLowerCase();
-      if (!prop || prop.startsWith("--") || prop === "content") return false;
-      return !/url\s*\(/i.test(d);
-    });
-  return kept.length ? kept.join(";") : null;
+export function fragmentTextCarriesAnswer(nodes: Cheerio<AnyNode>): boolean {
+  return ANSWER_VALUE_RE.test(nodes.text());
 }
 
 /**
@@ -214,17 +167,15 @@ export function stripCapturedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void 
 export function stripMapEmbedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void {
   stripLeaksImpl($, root, {
     keepStyleAttr: true,
-    extraRemoveSelector: ", input, select, textarea, audio, video, canvas",
+    // Embed — статическая картинка: интерактив и ЛЮБОЙ внешний ресурс (сетевой маяк
+    // из img/picture/source — ревью 2026-08-11, MEDIUM) в него не едут.
+    extraRemoveSelector: ", input, select, textarea, audio, video, canvas, img, picture, source, image",
   });
-}
-
-/**
- * true, если текст несёт ответ прямым словом («Correct answer», «answer: B»,
- * «solution») — экспорт для проверки СТИЛЕЙ map-embed'а (CSS `content:"…"` мог бы
- * отрисовать ключ прямо в iframe; комментарии вызывающий код стрипает до проверки).
- */
-export function hasAnswerText(s: string): boolean {
-  return ANSWER_VALUE_RE.test(s);
+  // Остаточные ссылки на внешние ресурсы (svg use[href], a[href]) — тоже вон:
+  // легитимных внешних загрузок у CSS-рисунка нет.
+  root.find("[href], [src], [xlink\\:href]").each((_, el) => {
+    $(el).removeAttr("href").removeAttr("src").removeAttr("xlink:href");
+  });
 }
 
 function stripLeaksImpl(
