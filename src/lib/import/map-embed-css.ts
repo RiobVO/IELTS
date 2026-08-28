@@ -65,10 +65,18 @@ const VALUE_FORBIDDEN = /url\s*\(|image-set\s*\(|expression\s*\(|javascript:|dat
 
 /**
  * Структурные символы, недопустимые ВНЕ строк: `;` вне строки дописал бы соседнюю
- * декларацию при пересборке, `<`/`>` — вырвались бы из `<style>`, `@`/`{`/`}` —
- * подменили бы правило. Внутри кавычек они безобидны (`font-family:"A;B"`).
+ * декларацию при пересборке, `@`/`{`/`}` — подменили бы правило. Внутри кавычек они
+ * безобидны (`font-family:"A;B"`) — для CSS-парсера.
  */
 const VALUE_STRUCTURAL = /[;<>{}@]/;
+
+/**
+ * `<` и `>` запрещены ГДЕ УГОДНО, включая внутренность CSS-строк: HTML-парсер про
+ * кавычки CSS не знает, и `font-family:"</style><p>…"` закрывает raw-text элемент
+ * `<style>` — разметка после него проходит мимо гигиены фрагмента (ревью
+ * 2026-08-11, шестой заход, HIGH). Легитимному CSS карты они не нужны нигде.
+ */
+const ANGLE_BRACKET = /[<>]/;
 
 /**
  * Декодирование CSS-escape'ов: `\41`/`\0041 `/`\a` (hex + опциональный пробел) и
@@ -201,6 +209,7 @@ function sanitizeDeclaration(decl: string): string | null {
   if (!prop || !value) return null;
   // Остаточный слеш = вторая ступень escape'а, которую доклеит уже браузер (см. док).
   if (prop.includes("\\") || value.includes("\\")) return null;
+  if (ANGLE_BRACKET.test(prop) || ANGLE_BRACKET.test(value)) return null;
   if (VALUE_FORBIDDEN.test(value) || !structurallySafeValue(value)) return null;
   if (prop.startsWith("--")) {
     if (!/^--[\w-]+$/.test(prop) || /["']/.test(value)) return null;
@@ -283,7 +292,8 @@ function safeSelector(sel: string): string | null {
   const s = decodeCssEscapes(sel).trim();
   // Структурные символы — только ВНЕ строк: `[title="x;y"]` легитимен, а прежняя
   // сплошная проверка убивала такое правило целиком (ревью, четвёртый заход).
-  if (!s || s.includes("\\") || !structurallySafeValue(s)) return null;
+  // Угловые скобки — исключение: они запрещены и в строках (см. ANGLE_BRACKET).
+  if (!s || s.includes("\\") || ANGLE_BRACKET.test(s) || !structurallySafeValue(s)) return null;
   return s;
 }
 
@@ -393,7 +403,10 @@ export function sanitizeEmbedCss(raw: string): string | null {
   const withoutComments = stripComments(raw);
   if (!withoutComments.trim()) return null;
   const rebuilt = rebuild(withoutComments, 0).trim();
-  return rebuilt || null;
+  if (!rebuilt) return null;
+  // Пояс поверх лямок: ни один путь пересборки не имеет права вынести в srcdoc
+  // угловую скобку — что бы мы ни упустили выше, из `<style>` это не вырвется.
+  return ANGLE_BRACKET.test(rebuilt) ? null : rebuilt;
 }
 
 /**
@@ -404,5 +417,8 @@ export function sanitizeInlineMapStyle(raw: string): string | null {
   const decls = splitDeclarations(stripComments(raw))
     .map(sanitizeDeclaration)
     .filter((d): d is string => d !== null);
-  return decls.length ? decls.join(";") : null;
+  if (!decls.length) return null;
+  // Инлайн-стиль уезжает в атрибут того же документа — тот же пояс.
+  const joined = decls.join(";");
+  return ANGLE_BRACKET.test(joined) ? null : joined;
 }
