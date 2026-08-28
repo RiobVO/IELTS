@@ -3,8 +3,9 @@
 Premium IELTS prep — Reading & Listening core. See **[BRIEF.md](./BRIEF.md)** for
 the full product/engineering spec (single source of truth).
 
-> **Phase 1, steps 0–1** (scaffold + DB schema + migrations) is implemented here.
-> No auth flows, import parser, or UI yet — those are later steps in §9.
+> **Live in production.** Reading & Listening (both runners), auth, the import
+> pipeline, Vocabulary and the env-gated Writing/Speaking labs all ship. Phase
+> history is in BRIEF §9; current work is tracked in [BACKLOG.md](./BACKLOG.md).
 
 ## Stack
 
