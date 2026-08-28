@@ -71,8 +71,9 @@ Phase 3 (AI) — заморожена, последняя. Не входит в 
 
 - **Sentry source maps** — сейчас upload отключён (`sourcemaps.disable`),
   стектрейсы на бою минифицированы. Включить org/project/authToken.
-- **Weekly digest + email** — таблица `notification` и in-app центр есть; джоба
-  дайджеста + провайдер доставки писем — TODO.
+- ~~**Weekly digest + email**~~ — закрыто: таблица `notification`, in-app центр,
+  крон `/api/cron/weekly-digest` (пн 04:00 UTC) и доставка через Brevo
+  (`src/lib/email/send.ts`) на проде.
 - **Full re-grade** — version bump + пересчёт `attempt` + пометка «балл уточнён»
   (сейчас только guard от потери данных при ре-импорте).
 - **i18n** — RU/UZ (на старте EN, §10).
