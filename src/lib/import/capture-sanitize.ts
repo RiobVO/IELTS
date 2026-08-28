@@ -98,11 +98,15 @@ export function scrubReservedEmbedMarkers($: CheerioAPI, root: Cheerio<AnyNode>)
  * были `.analysis`), а не барьер против враждебного автора источника — тот владеет
  * и вопросами, и ключом, и ему не нужен скрытый канал. Порционную обфускацию
  * (`<span>Correct an</span><i>x</i><span>swer</span>`) конкатенация текста не
- * ловит по построению; компенсирующий контроль — запрет прятать содержимое в CSS
- * embed'а (map-embed-css.ts), из-за которого вставленный мусор виден студенту и
- * «ключ» перестаёт быть ключом.
+ * ловит по построению; компенсирующий контроль — запрет типовых способов прятать
+ * содержимое в CSS embed'а (map-embed-css.ts), из-за которого вставленный мусор
+ * с большой вероятностью виден студенту и «ключ» перестаёт быть ключом.
+ *
+ * Формулировки — с границами слова (ревью, четвёртый заход: без них паттерн ловил
+ * подстроки внутри длинных слов) и с типовыми заголовками забытых reveal-блоков.
  */
-const MAP_TEXT_ANSWER_RE = /correct\s*answer|answer\s*key|\banswers?\s*[:=]\s*[A-Za-z0-9]/i;
+const MAP_TEXT_ANSWER_RE =
+  /\bcorrect\s+(answers?|options?|choices?|responses?)\b|\banswer\s+keys?\b|\bmodel\s+answers?\b|\bthe\s+answer\s+is\b|\b(answers?|solutions?)\s*[:=]\s*[A-Za-z0-9]/i;
 
 export function fragmentTextCarriesAnswer(nodes: Cheerio<AnyNode>): boolean {
   // Нормализация пробелов/zero-width — разбиение подписи по узлам и переносам
@@ -200,10 +204,26 @@ export function stripMapEmbedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void 
   root.find("*").each((_, el) => {
     if (!("attribs" in el)) return;
     for (const name of Object.keys(el.attribs)) {
-      if (!MAP_EMBED_ALLOWED_ATTRS.has(name.toLowerCase())) $(el).removeAttr(name);
+      const lower = name.toLowerCase();
+      if (!MAP_EMBED_ALLOWED_ATTRS.has(lower)) {
+        $(el).removeAttr(name);
+        continue;
+      }
+      // SVG-краска допускает paint-server ссылкой (`fill="url(https://…)"`) — сетевой
+      // запрос в обход CSS-фильтра (ревью 2026-08-11, четвёртый заход, HIGH).
+      if (SVG_PAINT_ATTRS.has(lower) && !SAFE_PAINT_VALUE.test(el.attribs[name] ?? "")) {
+        $(el).removeAttr(name);
+      }
     }
   });
 }
+
+/** Атрибуты SVG, чьё значение может быть ссылкой на paint-server. */
+const SVG_PAINT_ATTRS = new Set(["fill", "stroke"]);
+
+/** Простая локальная краска: none/currentColor/имя/#hex/rgb()/hsl() — без url(). */
+const SAFE_PAINT_VALUE =
+  /^\s*(none|currentcolor|transparent|#[0-9a-f]{3,8}|[a-z]+|(rgba?|hsla?)\([\d\s.,%/-]+\))\s*$/i;
 
 /**
  * Атрибуты, переживающие сборку map-embed'а: класс (по нему матчатся правила),

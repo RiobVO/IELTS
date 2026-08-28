@@ -788,3 +788,49 @@ describe("captureListeningPart — map-embed, находки третьего з
     expect(leaks).toEqual(["map text"]);
   });
 });
+
+describe("captureListeningPart — map-embed, находки четвёртого захода ревью", () => {
+  const mapPart3 = (mapInner: string) =>
+    part(
+      `<div class="map-layout"><div class="mp">${mapInner}</div>` +
+        `<div class="map-answers"><div class="mcq map-mcq" data-q="11"><div class="stem"><span class="opt-text">Cafe</span></div>` +
+        `<label><input type="radio" name="q11" value="A">A</label>` +
+        `<label><input type="radio" name="q11" value="B">B</label></div></div></div>`,
+    );
+  const CSS3 = `.mp{position:relative}`;
+  const docOf = (out: string) => load(out, null, false)(".lst-map-embed").attr("data-map-doc") ?? "";
+
+  it("SVG paint-server ссылкой (fill=url) снимается, простая краска остаётся", () => {
+    const out = captureListeningPart(
+      mapPart3(
+        `<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="url(https://evil/p.svg#g)" stroke="currentColor"></circle>` +
+          `<rect x="0" y="0" width="4" height="4" fill="#c9cbcd"></rect></svg>`,
+      ),
+      undefined,
+      CSS3,
+    );
+    const doc = docOf(out);
+    expect(doc).not.toContain("evil");
+    expect(doc).not.toContain("url(");
+    expect(doc).toContain('stroke="currentColor"');
+    expect(doc).toContain('fill="#c9cbcd"');
+    expect(doc).toContain('viewBox="0 0 10 10"'); // геометрия карты цела
+  });
+
+  it("расширенный tripwire ловит типовые reveal-заголовки", () => {
+    for (const text of ["Answer key", "The answer is B", "Correct option: B", "Solution: B"]) {
+      const leaks: string[] = [];
+      expect(captureListeningPart(mapPart3(`<span>${text}</span>`), (t) => leaks.push(t), CSS3)).toBe("");
+      expect(leaks).toEqual(["map text"]);
+    }
+  });
+
+  it("подписи карты по-прежнему не ложно-срабатывают", () => {
+    for (const label of ["Solutions Centre", "Answers Lane", "Keys Building", "Correction House"]) {
+      const leaks: string[] = [];
+      const out = captureListeningPart(mapPart3(`<span class="blabel">${label}</span>`), (t) => leaks.push(t), CSS3);
+      expect(leaks).toEqual([]);
+      expect(docOf(out)).toContain(label);
+    }
+  });
+});
