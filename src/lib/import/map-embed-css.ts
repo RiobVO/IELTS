@@ -71,12 +71,14 @@ const VALUE_FORBIDDEN = /url\s*\(|image-set\s*\(|expression\s*\(|javascript:|dat
 const VALUE_STRUCTURAL = /[;<>{}@]/;
 
 /**
- * `<` и `>` запрещены ГДЕ УГОДНО, включая внутренность CSS-строк: HTML-парсер про
- * кавычки CSS не знает, и `font-family:"</style><p>…"` закрывает raw-text элемент
- * `<style>` — разметка после него проходит мимо гигиены фрагмента (ревью
- * 2026-08-11, шестой заход, HIGH). Легитимному CSS карты они не нужны нигде.
+ * `<` запрещён ГДЕ УГОДНО, включая внутренность CSS-строк: HTML-парсер про кавычки
+ * CSS не знает, и `font-family:"</style><p>…"` закрывает raw-text элемент `<style>` —
+ * разметка после него проходит мимо гигиены фрагмента (ревью 2026-08-11, шестой
+ * заход, HIGH). Ключевой символ здесь именно `<`: закрыть raw-text элемент без него
+ * нельзя, поэтому `>` (дочерний комбинатор `.a > .b`) остаётся легитимным — сплошной
+ * запрет обеих скобок молча выбрасывал такие правила (седьмой заход, п. 4).
  */
-const ANGLE_BRACKET = /[<>]/;
+const LT_BRACKET = /</;
 
 /**
  * Декодирование CSS-escape'ов: `\41`/`\0041 `/`\a` (hex + опциональный пробел) и
@@ -209,7 +211,9 @@ function sanitizeDeclaration(decl: string): string | null {
   if (!prop || !value) return null;
   // Остаточный слеш = вторая ступень escape'а, которую доклеит уже браузер (см. док).
   if (prop.includes("\\") || value.includes("\\")) return null;
-  if (ANGLE_BRACKET.test(prop) || ANGLE_BRACKET.test(value)) return null;
+  // В значении декларации `>` не несёт смысла — держим обе скобки под запретом;
+  // послабление до `<` касается только селекторов (комбинатор) и преамбул (range).
+  if (LT_BRACKET.test(prop) || LT_BRACKET.test(value) || /[<>]/.test(value)) return null;
   if (VALUE_FORBIDDEN.test(value) || !structurallySafeValue(value)) return null;
   if (prop.startsWith("--")) {
     if (!/^--[\w-]+$/.test(prop) || /["']/.test(value)) return null;
@@ -271,6 +275,32 @@ function structurallySafeValue(value: string): boolean {
 }
 
 /**
+ * То же для селектора, но `>` пропускается: это дочерний комбинатор, а не выход из
+ * разметки (закрыть `<style>` без `<` нельзя — им и занимается LT_BRACKET).
+ */
+function structurallySafeSelector(sel: string): boolean {
+  let quote: string | null = null;
+  let escaped = false;
+  for (const ch of sel) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") quote = ch;
+    else if (ch !== ">" && VALUE_STRUCTURAL.test(ch)) return false;
+  }
+  return quote === null && !escaped;
+}
+
+/**
  * Преамбула группирующего at-правила (`@media (max-width:700px)`) уходит в вывод
  * ЦЕЛИКОМ, поэтому обязана пройти тот же канон-контроль, что селекторы и значения:
  * раньше её проверяли лишь на `<>{}`, и остаточный escape мог стать структурным
@@ -282,18 +312,21 @@ function safeAtPrelude(prelude: string): string | null {
   if (!/^@(media|supports)\b/i.test(at)) return null;
   if (at.includes("\\") || VALUE_FORBIDDEN.test(at)) return null;
   // Ведущий `@` легитимен — структурную проверку ведём по остатку.
-  if (!structurallySafeValue(at.slice(1))) return null;
-  if (!/^@(media|supports)[a-z0-9\s():,./%_-]*$/i.test(at)) return null;
+  if (!structurallySafeSelector(at.slice(1))) return null;
+  if (!/^@(media|supports)[a-z0-9\s():,./%_>=-]*$/i.test(at)) return null;
   return at;
 }
 
-/** Селектор безопасен, если после декодирования не несёт разметку/at-правила. */
+/**
+ * Селектор безопасен, если после декодирования не несёт разметку/at-правила.
+ * `;`/`{`/`}`/`@` проверяются только ВНЕ строк (`[title="x;y"]` легитимен, ревью,
+ * четвёртый заход), `<` — везде (см. LT_BRACKET), а `>` разрешён как дочерний
+ * комбинатор (седьмой заход: сплошной запрет тихо выбрасывал `.a > .b`).
+ */
 function safeSelector(sel: string): string | null {
   const s = decodeCssEscapes(sel).trim();
-  // Структурные символы — только ВНЕ строк: `[title="x;y"]` легитимен, а прежняя
-  // сплошная проверка убивала такое правило целиком (ревью, четвёртый заход).
-  // Угловые скобки — исключение: они запрещены и в строках (см. ANGLE_BRACKET).
-  if (!s || s.includes("\\") || ANGLE_BRACKET.test(s) || !structurallySafeValue(s)) return null;
+  if (!s || s.includes("\\") || LT_BRACKET.test(s)) return null;
+  if (!structurallySafeSelector(s)) return null;
   return s;
 }
 
@@ -406,7 +439,7 @@ export function sanitizeEmbedCss(raw: string): string | null {
   if (!rebuilt) return null;
   // Пояс поверх лямок: ни один путь пересборки не имеет права вынести в srcdoc
   // угловую скобку — что бы мы ни упустили выше, из `<style>` это не вырвется.
-  return ANGLE_BRACKET.test(rebuilt) ? null : rebuilt;
+  return LT_BRACKET.test(rebuilt) ? null : rebuilt;
 }
 
 /**
@@ -420,5 +453,5 @@ export function sanitizeInlineMapStyle(raw: string): string | null {
   if (!decls.length) return null;
   // Инлайн-стиль уезжает в атрибут того же документа — тот же пояс.
   const joined = decls.join(";");
-  return ANGLE_BRACKET.test(joined) ? null : joined;
+  return LT_BRACKET.test(joined) ? null : joined;
 }
