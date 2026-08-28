@@ -84,13 +84,34 @@ export function scrubReservedEmbedMarkers($: CheerioAPI, root: Cheerio<AnyNode>)
 }
 
 /**
- * Текст, отрисовываемый map-фрагментом, не должен нести ответ прямым словом:
- * `<span>Correct answer: B</span>` в нейтральной разметке карты проходил
- * class/id-детектор и уезжал в srcdoc (ревью 2026-08-11, второй заход).
- * Вызывающий код трактует true как утечку части (fail-closed + onLeak).
+ * Тripwire на ответ, отрисованный ТЕКСТОМ карты: `<span>Correct answer: B</span>`
+ * в нейтральной разметке проходил class/id-детектор и уезжал в srcdoc (ревью
+ * 2026-08-11, второй заход). Вызывающий код трактует true как утечку части
+ * (fail-closed + onLeak).
+ *
+ * Паттерн УЖЕ общего ANSWER_VALUE_RE: тот срабатывал на легитимной подписи здания
+ * «Solutions Centre» (проба ревью, третий заход) и убивал панель всей части — на
+ * карте, где текст = названия зданий и улиц, цена ложного срабатывания выше цены
+ * пропуска. Ловим только связки, которые не появляются в подписи объекта.
+ *
+ * ГРАНИЦА ЧЕСТНО: это тripwire против СЛУЧАЙНОГО reveal-блока в файле (ровно такими
+ * были `.analysis`), а не барьер против враждебного автора источника — тот владеет
+ * и вопросами, и ключом, и ему не нужен скрытый канал. Порционную обфускацию
+ * (`<span>Correct an</span><i>x</i><span>swer</span>`) конкатенация текста не
+ * ловит по построению; компенсирующий контроль — запрет прятать содержимое в CSS
+ * embed'а (map-embed-css.ts), из-за которого вставленный мусор виден студенту и
+ * «ключ» перестаёт быть ключом.
  */
+const MAP_TEXT_ANSWER_RE = /correct\s*answer|answer\s*key|\banswers?\s*[:=]\s*[A-Za-z0-9]/i;
+
 export function fragmentTextCarriesAnswer(nodes: Cheerio<AnyNode>): boolean {
-  return ANSWER_VALUE_RE.test(nodes.text());
+  // Нормализация пробелов/zero-width — разбиение подписи по узлам и переносам
+  // не должно скрывать прямую формулировку.
+  const text = nodes
+    .text()
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\s+/g, " ");
+  return MAP_TEXT_ANSWER_RE.test(text);
 }
 
 /**
@@ -171,12 +192,31 @@ export function stripMapEmbedLeaks($: CheerioAPI, root: Cheerio<AnyNode>): void 
     // из img/picture/source — ревью 2026-08-11, MEDIUM) в него не едут.
     extraRemoveSelector: ", input, select, textarea, audio, video, canvas, img, picture, source, image",
   });
-  // Остаточные ссылки на внешние ресурсы (svg use[href], a[href]) — тоже вон:
-  // легитимных внешних загрузок у CSS-рисунка нет.
-  root.find("[href], [src], [xlink\\:href]").each((_, el) => {
-    $(el).removeAttr("href").removeAttr("src").removeAttr("xlink:href");
+  // Атрибуты фрагмента — ПО БЕЛОМУ СПИСКУ (та же модель, что у CSS в map-embed-css.ts).
+  // Точечный снос href/src/xlink:href оставлял легаси-носители ресурса: проба ревью
+  // провела маяк через `<table background="https://…">`; поимённый блоклист тут снова
+  // проигрывает (poster/srcset/data/cite/ping/…), поэтому оставляем только то, что
+  // реально рисует карту.
+  root.find("*").each((_, el) => {
+    if (!("attribs" in el)) return;
+    for (const name of Object.keys(el.attribs)) {
+      if (!MAP_EMBED_ALLOWED_ATTRS.has(name.toLowerCase())) $(el).removeAttr(name);
+    }
   });
 }
+
+/**
+ * Атрибуты, переживающие сборку map-embed'а: класс (по нему матчатся правила),
+ * инлайн-позиция, геометрия таблиц и презентационные атрибуты inline-SVG. Всё
+ * остальное — включая любой носитель URL — снимается.
+ */
+const MAP_EMBED_ALLOWED_ATTRS = new Set([
+  "class", "style", "colspan", "rowspan",
+  // inline-SVG рисунок (компас/дороги): геометрия и заливка, без ссылок
+  "viewbox", "d", "points", "x", "y", "x1", "x2", "y1", "y2", "cx", "cy", "r", "rx", "ry",
+  "width", "height", "fill", "stroke", "stroke-width", "stroke-dasharray", "stroke-linecap",
+  "stroke-linejoin", "transform", "opacity", "text-anchor", "dominant-baseline",
+]);
 
 function stripLeaksImpl(
   $: CheerioAPI,

@@ -146,3 +146,35 @@ describe("sanitizeInlineMapStyle", () => {
     expect(sanitizeInlineMapStyle(``)).toBeNull();
   });
 });
+
+// Ревью 2026-08-11, третий заход: пока в embed'е нельзя ничего спрятать, «что видит
+// сканер текста — то видит и студент», поэтому порционная обфускация ключа
+// невидимым узлом перестаёт работать.
+describe("sanitizeEmbedCss — прятать содержимое запрещено", () => {
+  it("display:none / visibility:hidden / opacity:0 / font-size:0 / color:transparent выброшены", () => {
+    const out =
+      sanitizeEmbedCss(
+        `.a{display:none;color:red}.b{visibility:hidden}.c{opacity:0}.d{font-size:0}` +
+          `.e{color:transparent}.f{text-indent:-9999px}`,
+      ) ?? "";
+    expect(out).not.toContain("display:none");
+    expect(out).not.toContain("visibility:hidden");
+    expect(out).not.toContain("opacity:0");
+    expect(out).not.toContain("font-size:0");
+    expect(out).not.toContain("color:transparent");
+    expect(out).not.toContain("text-indent:-");
+    expect(out).toContain("color:red"); // соседняя безопасная декларация цела
+  });
+
+  it("!important не обходит запрет", () => {
+    expect(sanitizeEmbedCss(`.a{display:none !important}`)).toBeNull();
+  });
+
+  it("легитимные значения тех же свойств живут", () => {
+    const out = sanitizeEmbedCss(`.a{display:grid;opacity:.85;font-size:13px;visibility:visible}`) ?? "";
+    expect(out).toContain("display:grid");
+    expect(out).toContain("opacity:.85");
+    expect(out).toContain("font-size:13px");
+    expect(out).toContain("visibility:visible");
+  });
+});
