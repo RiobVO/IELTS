@@ -228,3 +228,38 @@ describe("sanitizeEmbedCss — каноничность escape'ов и скан�
     expect(out).toContain("color:red");
   });
 });
+
+// Ревью 2026-08-11, пятый заход (HIGH): преамбула @media/@supports уходила в вывод
+// целиком, проверенная только на <>{} — остаточный escape мог стать структурным
+// разделителем уже в браузере.
+describe("sanitizeEmbedCss — преамбула @media/@supports под канон-контролем", () => {
+  const BS = String.fromCharCode(92);
+
+  it("нормальные условия проходят и содержимое фильтруется", () => {
+    const out = sanitizeEmbedCss(`@media (max-width:700px) and (min-resolution:2dppx){.mp{width:100%}}`) ?? "";
+    expect(out).toContain("@media (max-width:700px) and (min-resolution:2dppx){");
+    expect(out).toContain("width:100%");
+    expect(sanitizeEmbedCss(`@supports (display:grid){.mp{display:grid}}`) ?? "").toContain("@supports");
+  });
+
+  it("остаточный слеш в преамбуле → правило целиком отброшено", () => {
+    expect(sanitizeEmbedCss(`@media${BS}${BS}20screen{.mp{color:red}}`)).toBeNull();
+  });
+
+  it("url()/сетевые функции в преамбуле → отброшено", () => {
+    expect(sanitizeEmbedCss(`@media (min-width:1px) url(https://evil/x){.mp{color:red}}`)).toBeNull();
+  });
+
+  it("структурные символы и посторонние символы в условии → отброшено", () => {
+    expect(sanitizeEmbedCss(`@media screen;@import "https://evil/x.css"{.mp{color:red}}`)).toBeNull();
+    expect(sanitizeEmbedCss(`@media screen<x>{.mp{color:red}}`)).toBeNull();
+    expect(sanitizeEmbedCss(`@media "quoted"{.mp{color:red}}`)).toBeNull();
+  });
+
+  it("вложенный @media внутри @supports сохраняется", () => {
+    const out = sanitizeEmbedCss(`@supports (display:grid){@media (max-width:700px){.mp{color:red}}}`) ?? "";
+    expect(out).toContain("@supports (display:grid){");
+    expect(out).toContain("@media (max-width:700px){");
+    expect(out).toContain("color:red");
+  });
+});

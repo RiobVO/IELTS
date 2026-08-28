@@ -261,6 +261,23 @@ function structurallySafeValue(value: string): boolean {
   return quote === null && !escaped;
 }
 
+/**
+ * Преамбула группирующего at-правила (`@media (max-width:700px)`) уходит в вывод
+ * ЦЕЛИКОМ, поэтому обязана пройти тот же канон-контроль, что селекторы и значения:
+ * раньше её проверяли лишь на `<>{}`, и остаточный escape мог стать структурным
+ * разделителем уже в браузере (ревью 2026-08-11, пятый заход, HIGH). Сверх канона —
+ * узкая грамматика условия: буквы/цифры/пробелы/скобки и пунктуация медиа-фич.
+ */
+function safeAtPrelude(prelude: string): string | null {
+  const at = decodeCssEscapes(prelude).trim();
+  if (!/^@(media|supports)\b/i.test(at)) return null;
+  if (at.includes("\\") || VALUE_FORBIDDEN.test(at)) return null;
+  // Ведущий `@` легитимен — структурную проверку ведём по остатку.
+  if (!structurallySafeValue(at.slice(1))) return null;
+  if (!/^@(media|supports)[a-z0-9\s():,./%_-]*$/i.test(at)) return null;
+  return at;
+}
+
 /** Селектор безопасен, если после декодирования не несёт разметку/at-правила. */
 function safeSelector(sel: string): string | null {
   const s = decodeCssEscapes(sel).trim();
@@ -292,8 +309,8 @@ function rebuild(css: string, depth: number): string {
     i = close + 1;
 
     if (prelude.startsWith("@")) {
-      const at = decodeCssEscapes(prelude).trim();
-      if (/^@(media|supports)\b/i.test(at) && !/[<>{}]/.test(at)) {
+      const at = safeAtPrelude(prelude);
+      if (at) {
         const inner = rebuild(body, depth + 1);
         if (inner) out.push(`${at}{${inner}}`);
       }
