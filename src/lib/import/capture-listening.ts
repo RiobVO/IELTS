@@ -1,5 +1,11 @@
 import * as cheerio from "cheerio";
-import { findLeakMarkerToken, stripCapturedLeaks, textWithoutLeaks } from "./capture-sanitize";
+import {
+  findLeakMarkerToken,
+  hasAnswerText,
+  stripCapturedLeaks,
+  stripMapEmbedLeaks,
+  textWithoutLeaks,
+} from "./capture-sanitize";
 import type { DropOption } from "./dnd-capture";
 
 /**
@@ -34,6 +40,9 @@ import type { DropOption } from "./dnd-capture";
 export function captureListeningPart(
   html: string,
   onLeak?: (token: string) => void,
+  /** Текст док-уровневых `<style>` источника — нужен ТОЛЬКО map-embed'у (шаг 6):
+   *  CSS-рисованная карта без своего стайлшита — бессмысленная текстовая каша. */
+  styleText?: string,
 ): string {
   if (!html.trim()) return "";
   const $ = cheerio.load(`<div class="q-panel">${html}</div>`, null, false);
@@ -238,6 +247,58 @@ export function captureListeningPart(
     }
   });
   if (bad) return "";
+
+  // --- 6) CSS-рисованная карта (`.map-layout .mp`, Day 6) → sandbox-iframe embed ---
+  // Карта этого семейства — чистый CSS-рисунок: позиции живут в inline-style и в
+  // док-уровневом <style>, которые общая гигиена и QuestionHtml снимают by design →
+  // в панели оставалась текстовая каша (W2-8). Поэтому фрагмент пакуется в
+  // САМОДОСТАТОЧНЫЙ документ (её разметка + стили источника) и едет data-атрибутом
+  // embed-узла; рендерит его MapEmbed (QuestionHtml) в sandbox-iframe БЕЗ
+  // allow-scripts — стили изолированы от app-страницы, скриптов нет по построению.
+  // Гигиена фрагмента — своя (stripMapEmbedLeaks: та же строгость, но inline-style
+  // жив), leak-скан — ДО сериализации (после неё содержимое ушло бы из DOM-скана).
+  // Легаси-семейство `.map-stage` (base64-img) остаётся вырезаемым: data:-URL режем,
+  // embed целит только в CSS-рисованные карты. Без styleText поведение прежнее.
+  const embedCss = (styleText ?? "").replace(/\/\*[\s\S]*?\*\//g, "").trim();
+  if (embedCss) {
+    const MAX_MAP_DOC = 200_000;
+    // CSS мог бы отрисовать ключ прямо в iframe (`content:"Correct answer…"`) —
+    // комментарии уже отстрижены, оставшийся прямой текст ответа = нет embed'а.
+    const cssCarriesAnswer = hasAnswerText(embedCss);
+    root.find(".map-layout .mp").each((_, el) => {
+      if (bad) return;
+      const $map = $(el);
+      // Фрагмент в собственном документе: скан и стрип не трогают панель части.
+      const frag = cheerio.load(`<div class="map-layout">${$.html($map)}</div>`, null, false);
+      const fragRoot = frag(".map-layout");
+      const leakTok = findLeakMarkerToken(frag, fragRoot);
+      if (leakTok) {
+        // Утечка внутри карты = утечка в части: fail-closed, как у прочих механизмов.
+        onLeak?.(leakTok);
+        bad = true;
+        return;
+      }
+      stripMapEmbedLeaks(frag, fragRoot);
+      if (cssCarriesAnswer) {
+        $map.remove();
+        return;
+      }
+      const doc =
+        `<!doctype html><html><head><meta charset="utf-8"><style>${embedCss}` +
+        `\nhtml,body{margin:0;padding:0;background:transparent}</style></head>` +
+        `<body>${frag.html(fragRoot) ?? ""}</body></html>`;
+      if (doc.length > MAX_MAP_DOC) {
+        // Раздутый документ в questions_html не пускаем — карта просто выпадает
+        // (хуже прежней каши не станет), панель и слоты живут дальше.
+        $map.remove();
+        return;
+      }
+      const embed = $('<div class="lst-map-embed"></div>');
+      embed.attr("data-map-doc", doc);
+      $map.replaceWith(embed);
+    });
+    if (bad) return "";
+  }
 
   // Карту-картинку и любой аудио/видео-плеер части убираем до гигиены.
   root.find(".map-stage, audio, video").remove();

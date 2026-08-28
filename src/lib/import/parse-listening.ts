@@ -54,6 +54,13 @@ export async function parseListening(html: string): Promise<ParsedTest> {
   const passages: ParsedPassage[] = [];
   const questions: ParsedQuestion[] = [];
 
+  // Док-уровневые стили — map-embed'у (capture-listening шаг 6): CSS-рисованная
+  // карта без стайлшита источника — текстовая каша, embed без него не собирается.
+  const styleText = $("style")
+    .map((_, s) => $(s).html() ?? "")
+    .get()
+    .join("\n");
+
   const { parts, malformed } = resolvePartSections($, warnings);
 
   for (const { el: sec, order: part, valid } of parts) {
@@ -78,10 +85,13 @@ export async function parseListening(html: string): Promise<ParsedTest> {
       // atomized fallback. Per-part coverage is asserted below (mirrors reading). A
       // reveal-marker leak (B1) fails the capture closed and surfaces a review warning.
       questionsHtml:
-        captureListeningPart($.html($sec), (token) =>
-          warnings.push(
-            `Part ${part}: suspected answer-reveal marker ".${token}" — verbatim panel disabled, atomized fallback.`,
-          ),
+        captureListeningPart(
+          $.html($sec),
+          (token) =>
+            warnings.push(
+              `Part ${part}: suspected answer-reveal marker ".${token}" — verbatim panel disabled, atomized fallback.`,
+            ),
+          styleText,
         ) || null,
     });
 

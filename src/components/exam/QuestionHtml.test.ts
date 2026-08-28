@@ -390,3 +390,30 @@ describe("QuestionHtml — размещение аффордансов", () => {
     expect(container.querySelector("#question-1")).toBeTruthy(); // вёрстка цела
   });
 });
+
+describe("map-embed (.lst-map-embed → sandbox-iframe)", () => {
+  const embedHtml =
+    `<div class="map-layout">` +
+    `<div class="lst-map-embed" data-map-doc="<!doctype html><html><body><div class=&quot;mp&quot;>MAP-MARKER</div></body></html>"></div>` +
+    `<div class="mcq"><span class="q-slot" data-q="11" data-qtype="radio" data-value="A"></span></div>` +
+    `</div>`;
+
+  it("рендерится iframe: sandbox без allow-scripts, srcdoc несёт документ карты", () => {
+    const container = mount(embedHtml, vi.fn());
+    const frame = container.querySelector("iframe.q-map-embed") as HTMLIFrameElement | null;
+    expect(frame).toBeTruthy();
+    expect(frame?.getAttribute("sandbox")).toBe("allow-same-origin");
+    expect(frame?.getAttribute("srcdoc")).toContain("MAP-MARKER");
+    // слот рядом живёт как обычно
+    expect(container.querySelector('[role="radio"]')).toBeTruthy();
+  });
+
+  it("embed без data-map-doc → узел молча пропускается, панель не падает", () => {
+    const container = mount(
+      `<div class="lst-map-embed"></div><span class="q-slot" data-q="1" data-qtype="text"></span>`,
+      vi.fn(),
+    );
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(container.querySelector("input.q-text")).toBeTruthy();
+  });
+});
