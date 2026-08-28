@@ -430,7 +430,8 @@ function lastTopLevelSemicolon(s: string): number {
  * Стайлшит источника → безопасный CSS для srcdoc, либо null («стилей нет /
  * безопасного не осталось» — вызывающий код тогда не собирает embed).
  * Комментарии срезаются ПЕРЕД разбором (их стрип мог синтезировать `</style>`);
- * выход в HTML закрыт тем, что `<`/`>` не переживают ни селектор, ни значение.
+ * выход в HTML закрыт тем, что `<` не переживает ни селектор, ни значение, ни
+ * преамбулу (`>` легитимен как комбинатор — см. LT_BRACKET).
  */
 export function sanitizeEmbedCss(raw: string): string | null {
   const withoutComments = stripComments(raw);
@@ -438,7 +439,7 @@ export function sanitizeEmbedCss(raw: string): string | null {
   const rebuilt = rebuild(withoutComments, 0).trim();
   if (!rebuilt) return null;
   // Пояс поверх лямок: ни один путь пересборки не имеет права вынести в srcdoc
-  // угловую скобку — что бы мы ни упустили выше, из `<style>` это не вырвется.
+  // символ `<` — что бы мы ни упустили выше, из `<style>` это не вырвется.
   return LT_BRACKET.test(rebuilt) ? null : rebuilt;
 }
 
