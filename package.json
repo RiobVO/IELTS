@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
-    "@sentry/nextjs": "^10.58.0",
+    "@sentry/nextjs": "^10.75.2",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
     "@vercel/speed-insights": "^2.0.0",
